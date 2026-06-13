@@ -1,5 +1,6 @@
 import '../shared/cmsSchemaValidator.js';
 import '../shared/cmsContentLoader.js';
+import { loadNormalizedIndexCmsContent } from './indexCmsNormalizer.js';
 import { initLiquidCursor } from './liquidCursor.js';
 import { INDEX_VIDEO_CONFIG } from './indexVideoConfig.js';
 
@@ -194,9 +195,8 @@ function setMultilineTextSafe(target, value) {
   return true;
 }
 
-function applyCmsIndexContent(content) {
+function applyCmsIndexContent(indexContent, mediaOptions = {}) {
   const cms = window.cmsContentLoader;
-  const indexContent = cms?.getCmsIndexContent?.(content);
   if (!indexContent) return 0;
 
   let changed = 0;
@@ -204,7 +204,6 @@ function applyCmsIndexContent(content) {
   const experience = indexContent.experience || {};
   const guide = indexContent.guide || {};
   const contact = indexContent.contact || {};
-  const site = content?.site || {};
 
   changed += setTextContentSafe(document.querySelector('.hero-content .eyebrow'), hero.eyebrow) ? 1 : 0;
   changed += setTextContentSafe(document.getElementById('heroTitle'), hero.title) ? 1 : 0;
@@ -219,7 +218,11 @@ function applyCmsIndexContent(content) {
     });
   }
 
-  if (hero.media?.videoUrl && cms?.isSafeMediaUrl?.(hero.media.videoUrl, { allowRemoteMedia: false })) {
+  if (hero.media?.videoUrl && cms?.isSafeMediaUrl?.(hero.media.videoUrl, {
+    ...mediaOptions,
+    allowedMediaExtensions: ['mp4', 'webm', 'ogg', 'ogv', 'mov', 'm4v'],
+    disallowSignedMediaUrls: true
+  })) {
     [heroVideo, introModalVideo].forEach((video) => {
       if (!video || video.getAttribute('src') === hero.media.videoUrl) return;
       video.setAttribute('src', hero.media.videoUrl);
@@ -262,15 +265,15 @@ function applyCmsIndexContent(content) {
   const contactRows = Array.from(document.querySelectorAll('.guide-contact-strip p'));
   if (contactRows[0]) {
     changed += setTextContentSafe(contactRows[0].querySelector('span'), contact.label || 'Đơn vị thực hiện') ? 1 : 0;
-    changed += setTextContentSafe(contactRows[0].querySelector('strong'), contact.organizationName || site.organizationName) ? 1 : 0;
+    changed += setTextContentSafe(contactRows[0].querySelector('strong'), contact.organizationName) ? 1 : 0;
   }
   if (contactRows[1]) {
     changed += setTextContentSafe(contactRows[1].querySelector('span'), 'Địa chỉ') ? 1 : 0;
-    changed += setTextContentSafe(contactRows[1].querySelector('strong'), contact.address || site.address) ? 1 : 0;
+    changed += setTextContentSafe(contactRows[1].querySelector('strong'), contact.address) ? 1 : 0;
   }
   if (contactRows[2]) {
     changed += setTextContentSafe(contactRows[2].querySelector('span'), 'Điện thoại / Fax') ? 1 : 0;
-    changed += setTextContentSafe(contactRows[2].querySelector('strong'), contact.phoneFax || [site.phone, site.fax ? `Fax: ${site.fax}` : ''].filter(Boolean).join(' - ')) ? 1 : 0;
+    changed += setTextContentSafe(contactRows[2].querySelector('strong'), contact.phoneFax) ? 1 : 0;
   }
 
   return changed;
@@ -280,10 +283,18 @@ async function initCmsIndexHydration() {
   const cms = window.cmsContentLoader;
   if (!cms?.loadCmsContent) return;
   try {
-    const content = await cms.loadCmsContent({ context: 'index', timeoutMs: 1000 });
-    if (!content) return;
-    const changed = applyCmsIndexContent(content);
-    if (cms.isDebugCms?.()) console.debug('[cms] index hydrated', { changed, source: cms.getCmsSource?.() });
+    const normalized = await loadNormalizedIndexCmsContent(cms, { context: 'index', timeoutMs: 1000 });
+    if (!normalized?.index) return;
+    const changed = applyCmsIndexContent(normalized.index, normalized.mediaOptions);
+    if (cms.isDebugCms?.()) {
+      console.debug('[cms] index hydrated', {
+        changed,
+        source: normalized.source || cms.getCmsSource?.(),
+        remoteStatus: normalized.remoteStatus,
+        fallbackStatus: normalized.fallbackStatus,
+        warnings: normalized.diagnostics?.warnings || []
+      });
+    }
   } catch (error) {
     if (cms.isDebugCms?.()) console.warn('[cms] index hydration skipped', error);
   }

@@ -85,6 +85,8 @@
   let cachedSource = 'none';
   let cachedValidation = null;
   let loadPromise = null;
+  let contentSourcesCache = null;
+  let contentSourcesPromise = null;
 
   function getValidator() {
     return global.cmsSchemaValidator || {};
@@ -116,6 +118,17 @@
     return { ...DEFAULT_CONFIG, ...fromConfig, ...options };
   }
 
+  function getCmsMediaValidationOptions(configOrOptions = {}) {
+    const config = getCmsConfig(configOrOptions);
+    return {
+      allowRemoteMedia: config.allowRemoteMedia === true,
+      allowedMediaOrigins: config.allowedMediaOrigins || [],
+      allowedMediaHosts: config.allowedMediaHosts || [],
+      allowedMediaPathPrefixes: config.allowedMediaPathPrefixes || [],
+      disallowSignedMediaUrls: true
+    };
+  }
+
   function isDebugCms(config = getCmsConfig()) {
     if (config.debug === true || config.debugMerge === true) return true;
     return getSearchParams().get('debugCMS') === '1';
@@ -142,14 +155,22 @@
     }
   }
 
-  function validateContent(content, config, source) {
+  function getContentValidation(content, config) {
     const validator = getValidator();
-    const result = validator.validateCmsContent
-      ? validator.validateCmsContent(content)
+    return validator.validateCmsContent
+      ? validator.validateCmsContent(content, getCmsMediaValidationOptions(config))
       : { valid: true, errors: [], warnings: [] };
-    cachedValidation = result;
+  }
+
+  function logContentValidation(result, config, source) {
     if (result.warnings?.length) logCms('schema warning', { source, warnings: result.warnings }, 'warn', config);
     if (result.errors?.length) logCms('schema error', { source, errors: result.errors }, 'warn', config);
+  }
+
+  function validateContent(content, config, source) {
+    const result = getContentValidation(content, config);
+    cachedValidation = result;
+    logContentValidation(result, config, source);
     return result.valid === true;
   }
 
@@ -219,10 +240,103 @@
     }
   }
 
+  async function loadCmsContentSources(options = {}) {
+    const config = getCmsConfig(options);
+    if (config.enabled === false) {
+      const disabled = {
+        remoteContent: null,
+        fallbackContent: null,
+        selectedContent: null,
+        source: 'legacy',
+        remoteStatus: 'disabled',
+        fallbackStatus: 'disabled',
+        remoteValidation: null,
+        fallbackValidation: null,
+        config
+      };
+      cachedContent = null;
+      cachedSource = 'legacy';
+      cachedValidation = { valid: true, errors: [], warnings: ['CMS disabled.'] };
+      contentSourcesCache = disabled;
+      return disabled;
+    }
+
+    if (contentSourcesCache && options.forceReload !== true) return contentSourcesCache;
+    if (contentSourcesPromise && options.forceReload !== true) return contentSourcesPromise;
+
+    contentSourcesPromise = (async () => {
+      const timeoutMs = Number(options.timeoutMs || config.timeoutMs || DEFAULT_CONFIG.timeoutMs);
+      const galleryTimeoutMs = Number(options.galleryTimeoutMs || config.galleryTimeoutMs || timeoutMs);
+      const timeout = options.context === 'gallery' ? galleryTimeoutMs : timeoutMs;
+
+      async function loadSource(label, enabled, url) {
+        const cleanUrl = sanitizeText(url);
+        if (!enabled || !cleanUrl) {
+          return { content: null, status: enabled ? 'missing-url' : 'disabled', validation: null };
+        }
+        try {
+          logCms(`loading ${label}`, { url: cleanUrl }, 'debug', config);
+          const content = await fetchJsonWithTimeout(cleanUrl, timeout, config, label);
+          const validation = getContentValidation(content, config);
+          logContentValidation(validation, config, label);
+          if (validation.valid !== true) return { content: null, status: 'invalid', validation };
+          return { content, status: 'loaded', validation };
+        } catch (_) {
+          return { content: null, status: 'failed', validation: null };
+        }
+      }
+
+      const [fallbackResult, remoteResult] = await Promise.all([
+        loadSource('fallback', Boolean(sanitizeText(config.fallbackUrl)), config.fallbackUrl),
+        loadSource('remote', config.remoteEnabled === true, config.remoteUrl)
+      ]);
+
+      const selectedContent = remoteResult.content || fallbackResult.content || null;
+      const source = remoteResult.content ? 'remote' : (fallbackResult.content ? 'fallback' : 'legacy');
+      cachedContent = selectedContent;
+      cachedSource = source;
+      cachedValidation = remoteResult.content
+        ? remoteResult.validation
+        : (fallbackResult.content ? fallbackResult.validation : { valid: true, errors: [], warnings: ['Using legacy content.'] });
+
+      const result = {
+        remoteContent: remoteResult.content,
+        fallbackContent: fallbackResult.content,
+        selectedContent,
+        source,
+        remoteStatus: remoteResult.status,
+        fallbackStatus: fallbackResult.status,
+        remoteValidation: remoteResult.validation,
+        fallbackValidation: fallbackResult.validation,
+        config
+      };
+      contentSourcesCache = result;
+      logCms('content sources resolved', {
+        source,
+        remoteStatus: result.remoteStatus,
+        fallbackStatus: result.fallbackStatus
+      }, source === 'legacy' ? 'warn' : 'debug', config);
+      return result;
+    })();
+
+    try {
+      return await contentSourcesPromise;
+    } finally {
+      contentSourcesPromise = null;
+    }
+  }
+
   function getCmsContent() { return cachedContent; }
   function getCmsSource() { return cachedSource; }
   function getCmsValidation() { return cachedValidation; }
-  function clearCmsContentCache() { cachedContent = null; cachedSource = 'none'; cachedValidation = null; loadPromise = null; }
+  function clearCmsContentCache() {
+    cachedContent = null;
+    cachedSource = 'none';
+    cachedValidation = null;
+    loadPromise = null;
+    contentSourcesCache = null;
+    contentSourcesPromise = null;
+  }
 
   function getCmsIndexContent(content = cachedContent) { return content?.index || null; }
   function getCmsGateContent(content = cachedContent) { return content?.gate || null; }
@@ -488,6 +602,7 @@
 
   global.cmsContentLoader = {
     loadCmsContent,
+    loadCmsContentSources,
     getCmsContent,
     getCmsSource,
     getCmsValidation,
@@ -498,6 +613,7 @@
     clearCmsContentCache,
     isDebugCms,
     getCmsConfig,
+    getCmsMediaValidationOptions,
     sanitizeText,
     isSafeMediaUrl,
     getArtworkMediaSrc,
