@@ -113,6 +113,216 @@ let lastInteractableRoot = null;
 let lastInteractableRootAt = 0;
 let focusStaleTimerId = 0;
 
+// v6.13.014 — one reusable DOM preview; never touches the 3D video surface.
+const DOM_VIDEO_PREVIEW_QUERY_DEBUG = (() => {
+  try { return new URLSearchParams(location.search).get('debugDomVideoPreview') === '1'; }
+  catch (_) { return false; }
+})();
+const domVideoPreview = {
+  shell: null,
+  video: null,
+  title: null,
+  fallback: null,
+  targetRoot: null,
+  activeRoot: null,
+  suppressRoot: null,
+  source: '',
+  dwellTimer: 0,
+  hideTimer: 0,
+  mouseSeen: false
+};
+
+function logDomVideoPreview(eventName, root = null) {
+  if (!DOM_VIDEO_PREVIEW_QUERY_DEBUG && CONFIG.domVideoPreviewDebug !== true) return;
+  const data = root?.userData?.artData || {};
+  console.info(`[DomVideoPreview] ${eventName}${root ? ` · ${data.id || root.name || data.title || 'video'}` : ''}`);
+}
+
+function getDomVideoPreviewSource(root) {
+  const data = root?.userData?.artData || {};
+  return String(data.videoUrl || data.video_url || data.video || data.mediaUrl || data.media_url || data.src || '').trim();
+}
+
+function getDomVideoPreviewPoster(root) {
+  const data = root?.userData?.artData || {};
+  return String(data.poster || data.posterUrl || data.poster_url || data.image || data.imageUrl || data.image_url || data.thumbnail || '').trim();
+}
+
+function isDomVideoPreviewRoot(root) {
+  return Boolean(isValidArtworkRoot(root) && root.userData?.artData?.type === 'video' && getDomVideoPreviewSource(root));
+}
+
+function isDomVideoPreviewDesktopEligible() {
+  if (CONFIG.domVideoPreviewEnabled === false) return false;
+  if (CONFIG.domVideoPreviewDesktopOnly === false) return true;
+  if (domVideoPreview.mouseSeen || window.matchMedia?.('(pointer: fine)')?.matches) return true;
+  if (window.viewerMobileDevice?.isMobileViewer?.() || window.matchMedia?.('(pointer: coarse)')?.matches) return false;
+  return !('ontouchstart' in window);
+}
+
+function ensureDomVideoPreview() {
+  if (domVideoPreview.shell && domVideoPreview.video) return domVideoPreview;
+  let shell = document.getElementById('domVideoPreview');
+  if (!shell) {
+    shell = document.createElement('aside');
+    shell.id = 'domVideoPreview';
+    shell.className = 'dom-video-preview';
+    shell.setAttribute('aria-hidden', 'true');
+    shell.innerHTML = `
+      <div class="dom-video-preview__head">
+        <span>Xem trước video</span>
+        <strong class="dom-video-preview__title">Video</strong>
+      </div>
+      <div class="dom-video-preview__media">
+        <video class="dom-video-preview__video" muted playsinline preload="metadata"></video>
+        <div class="dom-video-preview__fallback">Bấm để xem video</div>
+      </div>`;
+    document.body.appendChild(shell);
+  }
+  const video = shell.querySelector('.dom-video-preview__video');
+  const title = shell.querySelector('.dom-video-preview__title');
+  const fallback = shell.querySelector('.dom-video-preview__fallback');
+  if (!video || !title || !fallback) return domVideoPreview;
+
+  video.muted = true;
+  video.defaultMuted = true;
+  video.playsInline = true;
+  video.loop = true;
+  video.controls = false;
+  video.preload = String(CONFIG.domVideoPreviewPreload || 'metadata');
+  video.setAttribute('webkit-playsinline', '');
+
+  if (video.dataset.domPreviewBound !== '1') {
+    video.dataset.domPreviewBound = '1';
+    video.addEventListener('playing', () => {
+      if (!domVideoPreview.activeRoot) return;
+      shell.classList.remove('is-fallback');
+      logDomVideoPreview('play-ok', domVideoPreview.activeRoot);
+    });
+    video.addEventListener('error', () => {
+      if (!domVideoPreview.activeRoot) return;
+      shell.classList.add('is-fallback');
+      fallback.textContent = 'Bấm để xem video';
+      logDomVideoPreview('play-rejected', domVideoPreview.activeRoot);
+    });
+  }
+
+  Object.assign(domVideoPreview, { shell, video, title, fallback });
+  return domVideoPreview;
+}
+
+function clearDomVideoPreviewTimers() {
+  if (domVideoPreview.dwellTimer) window.clearTimeout(domVideoPreview.dwellTimer);
+  if (domVideoPreview.hideTimer) window.clearTimeout(domVideoPreview.hideTimer);
+  domVideoPreview.dwellTimer = 0;
+  domVideoPreview.hideTimer = 0;
+}
+
+function finishHideDomVideoPreview(reason = 'focus-exit') {
+  const { shell, video, activeRoot } = domVideoPreview;
+  try { video?.pause(); } catch (_) {}
+  shell?.classList.remove('is-visible');
+  shell?.setAttribute('aria-hidden', 'true');
+  if (activeRoot) logDomVideoPreview('hide', activeRoot);
+  domVideoPreview.activeRoot = null;
+}
+
+function hideDomVideoPreview({ immediate = false, reason = 'focus-exit' } = {}) {
+  if (domVideoPreview.dwellTimer) window.clearTimeout(domVideoPreview.dwellTimer);
+  if (domVideoPreview.hideTimer) window.clearTimeout(domVideoPreview.hideTimer);
+  domVideoPreview.dwellTimer = 0;
+  domVideoPreview.hideTimer = 0;
+  domVideoPreview.targetRoot = null;
+  if (immediate) return finishHideDomVideoPreview(reason);
+  domVideoPreview.hideTimer = window.setTimeout(() => {
+    domVideoPreview.hideTimer = 0;
+    finishHideDomVideoPreview(reason);
+  }, Math.max(0, Number(CONFIG.domVideoPreviewExitCooldownMs || 300)));
+}
+
+function showDomVideoPreview(root) {
+  if (!isDomVideoPreviewRoot(root) || !isDomVideoPreviewDesktopEligible()) return;
+  if (modalOpen || document.body.classList.contains('viewer-scene-video-open')) return;
+
+  const state = ensureDomVideoPreview();
+  if (!state.shell || !state.video || !state.title || !state.fallback) return;
+  const data = root.userData.artData || {};
+  const source = getDomVideoPreviewSource(root);
+  const poster = getDomVideoPreviewPoster(root);
+
+  if (state.source !== source) {
+    try { state.video.pause(); } catch (_) {}
+    state.video.src = source;
+    state.video.load();
+    state.source = source;
+    logDomVideoPreview('target-change', root);
+  }
+  if (poster) state.video.poster = poster;
+  else state.video.removeAttribute('poster');
+
+  state.activeRoot = root;
+  state.title.textContent = String(data.title || data.id || 'Video');
+  state.fallback.textContent = 'Đang chuẩn bị bản xem trước…';
+  state.shell.classList.add('is-visible', 'is-fallback');
+  state.shell.setAttribute('aria-hidden', 'false');
+  logDomVideoPreview('show', root);
+
+  try {
+    const playPromise = state.video.play();
+    playPromise?.catch?.(() => {
+      if (state.activeRoot !== root) return;
+      state.shell.classList.add('is-fallback');
+      state.fallback.textContent = 'Bấm để xem video';
+      logDomVideoPreview('play-rejected', root);
+    });
+  } catch (_) {
+    state.fallback.textContent = 'Bấm để xem video';
+    logDomVideoPreview('play-rejected', root);
+  }
+}
+
+function setDomVideoPreviewTarget(root) {
+  let nextRoot = isDomVideoPreviewRoot(root) && isDomVideoPreviewDesktopEligible() ? root : null;
+  if (!nextRoot) domVideoPreview.suppressRoot = null;
+  else if (domVideoPreview.suppressRoot && domVideoPreview.suppressRoot !== nextRoot) domVideoPreview.suppressRoot = null;
+  if (nextRoot === domVideoPreview.suppressRoot) nextRoot = null;
+
+  if (nextRoot === domVideoPreview.targetRoot) {
+    if (nextRoot && domVideoPreview.activeRoot === nextRoot && domVideoPreview.hideTimer) {
+      window.clearTimeout(domVideoPreview.hideTimer);
+      domVideoPreview.hideTimer = 0;
+    }
+    return;
+  }
+
+  clearDomVideoPreviewTimers();
+  domVideoPreview.targetRoot = nextRoot;
+  if (!nextRoot) return hideDomVideoPreview();
+  if (domVideoPreview.activeRoot && domVideoPreview.activeRoot !== nextRoot) finishHideDomVideoPreview('target-change');
+  if (domVideoPreview.activeRoot === nextRoot) return showDomVideoPreview(nextRoot);
+
+  logDomVideoPreview('dwell-start', nextRoot);
+  domVideoPreview.dwellTimer = window.setTimeout(() => {
+    domVideoPreview.dwellTimer = 0;
+    if (domVideoPreview.targetRoot === nextRoot) showDomVideoPreview(nextRoot);
+  }, Math.max(100, Number(CONFIG.domVideoPreviewDwellMs || 600)));
+}
+
+function refreshDomVideoPreviewTarget() {
+  const root = modalOpen || document.body.classList.contains('viewer-scene-video-open')
+    ? null
+    : (isLocked ? currentFocusedRoot : hoveredRoot);
+  setDomVideoPreviewTarget(root);
+}
+
+window.addEventListener('pointermove', (event) => {
+  if (event.pointerType === 'mouse') domVideoPreview.mouseSeen = true;
+}, { passive: true });
+window.addEventListener('blur', () => hideDomVideoPreview({ immediate: true, reason: 'window-blur' }));
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) hideDomVideoPreview({ immediate: true, reason: 'document-hidden' });
+});
+
 function nowMs() {
   return (typeof performance !== 'undefined' && typeof performance.now === 'function') ? performance.now() : Date.now();
 }
@@ -182,6 +392,7 @@ function clearArtworkFocus(options = {}) {
   }
   crosshair?.classList?.toggle('target', false);
   if (options.hideCard !== false) updateFocusCard(null);
+  refreshDomVideoPreviewTarget();
 }
 
 function scheduleFocusStaleGuard(root) {
@@ -208,6 +419,7 @@ function setFocusedArtworkRoot(root, options = {}) {
     crosshair?.classList?.toggle('target', !modalOpen);
     if (options.updateCard !== false) updateFocusCard(root);
     scheduleFocusStaleGuard(root);
+    refreshDomVideoPreviewTarget();
     return root;
   }
 
@@ -285,6 +497,7 @@ function checkArtworkAtMouse(returnRoot = false) {
     if (hoveredRoot && hoveredRoot !== currentFocusedRoot) resetArtworkRootVisualState(hoveredRoot);
     hoveredRoot = null;
     renderer.domElement.style.cursor = 'default';
+    refreshDomVideoPreviewTarget();
     return null;
   }
   bumpViewerRaycastMetric('artwork');
@@ -293,6 +506,7 @@ function checkArtworkAtMouse(returnRoot = false) {
   hoveredRoot = nextHoveredRoot;
   if (hoveredRoot) rememberInteractableRoot(hoveredRoot);
   renderer.domElement.style.cursor = hoveredRoot ? 'pointer' : 'default';
+  refreshDomVideoPreviewTarget();
   return returnRoot ? hoveredRoot : hoveredRoot?.userData?.artData || null;
 }
 
@@ -321,6 +535,9 @@ let lastSceneVideoActivationAt = 0;
 function activateSceneVideoRoot(root) {
   const data = root?.userData?.artData || {};
   if (!root || data.type !== 'video') return false;
+
+  domVideoPreview.suppressRoot = root;
+  hideDomVideoPreview({ immediate: true, reason: 'surface-activation' });
 
   const now = performance.now();
   const doubleActivation = lastSceneVideoActivationRoot === root && (now - lastSceneVideoActivationAt) <= 420;
@@ -434,6 +651,7 @@ function openModal(root) {
   }
   if (!data.clickable) return;
 
+  hideDomVideoPreview({ immediate: true, reason: 'modal-open' });
   safeExitPointerLock();
   window.releaseAllMobileKeys?.();
   modalOpen = true;

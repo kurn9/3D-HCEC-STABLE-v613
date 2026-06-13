@@ -166,6 +166,14 @@ const CONFIG = {
   sceneVideoCinemaErrorText: 'Video chưa phát được trên thiết bị này. Vui lòng thử lại hoặc xem trên Chrome/Edge.',
   sceneVideoCinemaFallbackTimeoutMs: 6500,
 
+  // v6.13.014 — desktop DOM mini preview. This never touches the 3D video surface pipeline.
+  domVideoPreviewEnabled: true,
+  domVideoPreviewDesktopOnly: true,
+  domVideoPreviewDwellMs: 600,
+  domVideoPreviewExitCooldownMs: 300,
+  domVideoPreviewPreload: 'metadata',
+  domVideoPreviewDebug: false,
+
   // Viewer interaction raycast distances
   artworkCenterRaycastFar: 40,
   artworkMouseRaycastFar: 40,
