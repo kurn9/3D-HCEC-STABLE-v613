@@ -63,6 +63,46 @@ function getActiveViewerQualityForLoop() {
   return typeof window.getViewerQualityState === 'function' ? window.getViewerQualityState() : null;
 }
 
+function getMobileRuntimeThrottlingConfig() {
+  return CONFIG?.mobileRuntimeThrottling || {};
+}
+
+function isMobileRuntimeThrottlingActive() {
+  const cfg = getMobileRuntimeThrottlingConfig();
+  if (cfg.enabled === false) return false;
+  const quality = getActiveViewerQualityForLoop();
+  return Boolean(quality?.isMobile || window.viewerMobileDevice?.isMobileViewer?.());
+}
+
+function shouldPauseHiddenMobileWork() {
+  const cfg = getMobileRuntimeThrottlingConfig();
+  return Boolean(
+    isMobileRuntimeThrottlingActive()
+    && cfg.pauseHiddenTabWork !== false
+    && typeof document !== 'undefined'
+    && document.hidden
+  );
+}
+
+let hiddenMobileWorkPausedV613022 = false;
+
+function syncHiddenMobileWorkStateV613022() {
+  if (!isMobileRuntimeThrottlingActive() || getMobileRuntimeThrottlingConfig().pauseHiddenTabWork === false) {
+    hiddenMobileWorkPausedV613022 = false;
+    return;
+  }
+  const nextPaused = Boolean(document.hidden);
+  if (nextPaused === hiddenMobileWorkPausedV613022) return;
+  hiddenMobileWorkPausedV613022 = nextPaused;
+  const quality = getActiveViewerQualityForLoop();
+  window.__MobilePerfProbe?.mark?.(
+    nextPaused ? 'hidden-tab-throttle' : 'visible-tab-resume',
+    { profile: quality?.profileName || CONFIG?.mobile?.activeQualityProfile || 'mobile' }
+  );
+}
+
+document.addEventListener('visibilitychange', syncHiddenMobileWorkStateV613022, { passive: true });
+
 function getMobileProfileIntervalSeconds(profile, fpsValue, fallbackSeconds) {
   const fps = Number(fpsValue);
   if (Number.isFinite(fps) && fps > 0) return 1 / fps;
@@ -342,6 +382,11 @@ function animate() {
   const deltaTime = Math.min(rawDelta, maxFrameDelta);
   const now = performance.now();
   window.__MobilePerfProbe?.tick?.(now);
+  if (shouldPauseHiddenMobileWork()) {
+    if (!hiddenMobileWorkPausedV613022) syncHiddenMobileWorkStateV613022();
+    return;
+  }
+  if (hiddenMobileWorkPausedV613022) syncHiddenMobileWorkStateV613022();
   const budget = updateMeasuredFrameBudget(rawDelta, deltaTime, now);
   resetViewerPerfSegments(budget, now);
 
@@ -404,6 +449,13 @@ function animate() {
 
 let resizeRafId = 0;
 window.addEventListener('resize', () => {
+  // Mobile viewport owns the coalesced resize path in v6.13.022.
+  // Desktop retains the existing immediate rAF resize behavior.
+  if (
+    isMobileRuntimeThrottlingActive()
+    && getMobileRuntimeThrottlingConfig().resizeCoalescingEnabled !== false
+  ) return;
+
   if (resizeRafId) return;
   resizeRafId = requestAnimationFrame(() => {
     resizeRafId = 0;

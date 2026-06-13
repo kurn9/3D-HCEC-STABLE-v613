@@ -307,6 +307,18 @@ const CONFIG = {
     minDpr: 0.75
   },
 
+  // v6.13.022 — mobile-only overhead reduction.
+  // Không throttle room/avatar animation; desktop và visible-tab motion giữ nguyên.
+  mobileRuntimeThrottling: {
+    enabled: true,
+    pauseHiddenTabWork: true,
+    resizeCoalescingEnabled: true,
+    resizeTrailingMs: 180,
+    minimapPauseWhenCollapsed: true,
+    disableSceneVideoAutoplayOnMobileLow: true,
+    disableSceneVideoAutoplayOnMobileMid: true
+  },
+
   // Viewer/Intro V6.4 — mobile & tablet runtime configuration.
   mobile: {
     enabled: true,

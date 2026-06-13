@@ -10,6 +10,38 @@ let lastMiniMapFrameTime = 0;
 let smoothViewerPoint = null;
 let smoothViewerYaw = null;
 
+function getMiniMapRuntimeConfigV613022() {
+  return CONFIG?.mobileRuntimeThrottling || {};
+}
+
+function isMobileMiniMapPauseEnabledV613022() {
+  const cfg = getMiniMapRuntimeConfigV613022();
+  const quality = typeof window.getViewerQualityState === 'function' ? window.getViewerQualityState() : null;
+  return Boolean(
+    cfg.enabled !== false
+    && cfg.minimapPauseWhenCollapsed !== false
+    && (quality?.isMobile || window.viewerMobileDevice?.isMobileViewer?.())
+  );
+}
+
+function shouldPauseMiniMapLoopV613022() {
+  return Boolean(isMobileMiniMapPauseEnabledV613022() && (miniMapCollapsed || document.hidden));
+}
+
+function stopMiniMapLoopV613022(reason = 'paused') {
+  if (miniMapRafId) window.cancelAnimationFrame(miniMapRafId);
+  miniMapRafId = null;
+  if (reason === 'collapsed') {
+    window.__MobilePerfProbe?.markOnce?.('mobile-minimap-paused', { reason });
+  }
+}
+
+function startMiniMapLoopV613022() {
+  if (miniMapRafId || shouldPauseMiniMapLoopV613022()) return;
+  lastMiniMapFrameTime = 0;
+  miniMapRafId = window.requestAnimationFrame(miniMapFrame);
+}
+
 function normalizeAngle(angle) {
   let value = angle;
   while (value > Math.PI) value -= Math.PI * 2;
@@ -253,6 +285,11 @@ function getMiniMapMobileDesiredMs(baseMs, budget) {
 }
 
 function miniMapFrame(timestamp) {
+  miniMapRafId = null;
+  if (shouldPauseMiniMapLoopV613022()) {
+    if (miniMapCollapsed) stopMiniMapLoopV613022('collapsed');
+    return;
+  }
   if (!lastMiniMapFrameTime) lastMiniMapFrameTime = timestamp;
   const maxDelta = Number(CONFIG.miniMapMaxDelta) || 0.04;
   const deltaSeconds = Math.min(maxDelta, Math.max(0.001, (timestamp - lastMiniMapFrameTime) / 1000));
@@ -279,7 +316,7 @@ function miniMapFrame(timestamp) {
       }
     }
   }
-  miniMapRafId = window.requestAnimationFrame(miniMapFrame);
+  startMiniMapLoopV613022();
 }
 
 function setMiniMapCollapsed(nextCollapsed) {
@@ -296,6 +333,9 @@ function setMiniMapCollapsed(nextCollapsed) {
   if (!miniMapCollapsed) {
     resetMiniMapSmoothing();
     updateMiniMap(1 / 60);
+    startMiniMapLoopV613022();
+  } else if (isMobileMiniMapPauseEnabledV613022()) {
+    stopMiniMapLoopV613022('collapsed');
   }
 }
 
@@ -318,10 +358,21 @@ function initMiniMap() {
   if (shouldCollapseOnMobile) setMiniMapCollapsed(true);
   else updateMiniMap(1 / 60);
 
-  if (!miniMapRafId) {
-    miniMapRafId = window.requestAnimationFrame(miniMapFrame);
-  }
+  startMiniMapLoopV613022();
 }
+
+document.addEventListener('visibilitychange', () => {
+  if (!isMobileMiniMapPauseEnabledV613022()) return;
+  if (document.hidden) {
+    stopMiniMapLoopV613022('hidden');
+    return;
+  }
+  if (!miniMapCollapsed) {
+    resetMiniMapSmoothing();
+    updateMiniMap(1 / 60);
+    startMiniMapLoopV613022();
+  }
+}, { passive: true });
 
 initMiniMap();
 

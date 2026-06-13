@@ -1,8 +1,26 @@
 (function () {
   const getMobileConfig = () => (window.CONFIG && CONFIG.mobile) || {};
+  const getRuntimeConfig = () => (window.CONFIG && CONFIG.mobileRuntimeThrottling) || {};
+
+  let resizeRafId = 0;
+  let resizeTrailingTimer = 0;
+  let pendingResizeEvents = 0;
+  let pendingResizeReason = 'resize';
+  let lastAppliedWidth = 0;
+  let lastAppliedHeight = 0;
+  let lastAppliedDpr = 0;
 
   function getMobileDevice() {
     return window.viewerMobileDevice || null;
+  }
+
+  function isMobileResizeCoalescingEnabled() {
+    const cfg = getRuntimeConfig();
+    return Boolean(
+      cfg.enabled !== false
+      && cfg.resizeCoalescingEnabled !== false
+      && getMobileDevice()?.isMobileViewer?.()
+    );
   }
 
   function getViewportHeight() {
@@ -35,24 +53,86 @@
     root.style.setProperty('--safe-left', 'env(safe-area-inset-left, 0px)');
   }
 
-  function resizeViewerRenderer() {
+  function resizeViewerRenderer(options = {}) {
+    const force = options.force === true;
+    const reason = String(options.reason || pendingResizeReason || 'resize');
+    const eventCount = Math.max(1, Number(options.eventCount || pendingResizeEvents || 1));
+
     updateCssViewportVars();
     getMobileDevice()?.updateBodyClasses?.();
 
-    if (typeof camera !== 'undefined' && typeof renderer !== 'undefined' && camera && renderer) {
-      const width = window.innerWidth || document.documentElement.clientWidth || 1;
-      const height = window.innerHeight || document.documentElement.clientHeight || 1;
+    if (typeof camera === 'undefined' || typeof renderer === 'undefined' || !camera || !renderer) return false;
+
+    const width = Math.max(1, Math.round(window.innerWidth || document.documentElement.clientWidth || 1));
+    const height = Math.max(1, Math.round(window.innerHeight || document.documentElement.clientHeight || 1));
+    const dpr = getViewerPixelRatio();
+    const mobileCoalescing = isMobileResizeCoalescingEnabled();
+    const sizeChanged = width !== lastAppliedWidth || height !== lastAppliedHeight;
+    const dprChanged = Math.abs(dpr - lastAppliedDpr) > 0.001;
+
+    if (!force && mobileCoalescing && !sizeChanged && !dprChanged) return false;
+
+    if (sizeChanged || force || !mobileCoalescing) {
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
       renderer.setSize(width, height);
-      renderer.setPixelRatio(getViewerPixelRatio());
-      if (typeof updateMiniMap === 'function') updateMiniMap(1 / 60);
+      lastAppliedWidth = width;
+      lastAppliedHeight = height;
     }
+
+    if (dprChanged || force || !mobileCoalescing) {
+      const currentDpr = typeof renderer.getPixelRatio === 'function' ? renderer.getPixelRatio() : 0;
+      if (force || !mobileCoalescing || Math.abs(currentDpr - dpr) > 0.001) renderer.setPixelRatio(dpr);
+      lastAppliedDpr = dpr;
+    }
+
+    if (typeof updateMiniMap === 'function') updateMiniMap(1 / 60);
+
+    if (mobileCoalescing) {
+      window.__MobilePerfProbe?.mark?.('mobile-resize-coalesced', {
+        reason,
+        eventCount,
+        width,
+        height,
+        dpr: Number(dpr.toFixed(2))
+      });
+    }
+    return true;
   }
 
-  function scheduleResize() {
-    window.requestAnimationFrame(resizeViewerRenderer);
-    window.setTimeout(resizeViewerRenderer, 180);
+  function flushScheduledResize(reason = pendingResizeReason) {
+    const eventCount = pendingResizeEvents;
+    pendingResizeEvents = 0;
+    pendingResizeReason = 'resize';
+    resizeViewerRenderer({ reason, eventCount });
+  }
+
+  function scheduleResize(reason = 'resize') {
+    pendingResizeEvents += 1;
+    pendingResizeReason = reason || pendingResizeReason;
+
+    if (!isMobileResizeCoalescingEnabled()) {
+      window.requestAnimationFrame(() => resizeViewerRenderer({ force: true, reason }));
+      window.setTimeout(() => resizeViewerRenderer({ force: true, reason }), 180);
+      pendingResizeEvents = 0;
+      pendingResizeReason = 'resize';
+      return;
+    }
+
+    if (!resizeRafId) {
+      resizeRafId = window.requestAnimationFrame(() => {
+        resizeRafId = 0;
+        updateCssViewportVars();
+        getMobileDevice()?.updateBodyClasses?.();
+      });
+    }
+
+    if (resizeTrailingTimer) window.clearTimeout(resizeTrailingTimer);
+    const trailingMs = Math.max(150, Math.min(250, Number(getRuntimeConfig().resizeTrailingMs || 180)));
+    resizeTrailingTimer = window.setTimeout(() => {
+      resizeTrailingTimer = 0;
+      flushScheduledResize(pendingResizeReason);
+    }, trailingMs);
   }
 
   async function requestMobileLandscapeMode() {
@@ -80,19 +160,20 @@
       // Orientation lock is not guaranteed on iOS/iPadOS or without fullscreen.
     }
 
-    scheduleResize();
+    scheduleResize('landscape-request');
     window.refreshMobileOrientationOverlay?.();
     return result;
   }
 
   window.getViewerPixelRatio = getViewerPixelRatio;
-  window.resizeViewerForMobileViewport = resizeViewerRenderer;
+  window.resizeViewerForMobileViewport = () => resizeViewerRenderer({ force: true, reason: 'manual' });
+  window.scheduleViewerMobileResize = scheduleResize;
   window.requestMobileLandscapeMode = requestMobileLandscapeMode;
 
   updateCssViewportVars();
-  window.addEventListener('resize', scheduleResize, { passive: true });
-  window.addEventListener('orientationchange', scheduleResize, { passive: true });
-  window.visualViewport?.addEventListener('resize', scheduleResize, { passive: true });
+  window.addEventListener('resize', () => scheduleResize('window-resize'), { passive: true });
+  window.addEventListener('orientationchange', () => scheduleResize('orientation-change'), { passive: true });
+  window.visualViewport?.addEventListener('resize', () => scheduleResize('visual-viewport-resize'), { passive: true });
   window.visualViewport?.addEventListener('scroll', updateCssViewportVars, { passive: true });
-  window.setTimeout(resizeViewerRenderer, 0);
+  window.setTimeout(() => resizeViewerRenderer({ force: true, reason: 'startup' }), 0);
 })();

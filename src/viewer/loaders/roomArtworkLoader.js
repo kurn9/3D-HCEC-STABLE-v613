@@ -564,6 +564,27 @@ function getSceneVideoAutoplayMaxDistance() {
   return Math.max(4, Number(CONFIG?.sceneVideoAutoplayMaxDistance || fallback));
 }
 
+function shouldSkipScheduledSceneVideoAutoplayOnMobileV613022() {
+  const cfg = CONFIG?.mobileRuntimeThrottling || {};
+  if (cfg.enabled === false) return false;
+  const quality = getViewerQualityForMedia();
+  const mobile = Boolean(quality?.isMobile || window.viewerMobileDevice?.isMobileViewer?.());
+  if (!mobile) return false;
+  const profileName = String(quality?.profileName || CONFIG?.mobile?.activeQualityProfile || '').toLowerCase();
+  if (profileName === 'low') return cfg.disableSceneVideoAutoplayOnMobileLow !== false;
+  if (profileName === 'mid') return cfg.disableSceneVideoAutoplayOnMobileMid !== false;
+  return false;
+}
+
+function markMobileSceneVideoAutoplaySkippedV613022(source = 'schedule') {
+  const quality = getViewerQualityForMedia();
+  window.__MobilePerfProbe?.markOnce?.('mobile-video-autoplay-skipped', {
+    source,
+    profile: quality?.profileName || CONFIG?.mobile?.activeQualityProfile || 'mobile',
+    room: CONFIG?.currentRoomId || 'indoor'
+  });
+}
+
 function isSceneVideoRootVisible(root, margin = 0.18) {
   if (!root || !camera) return false;
   const p = root.getWorldPosition ? root.getWorldPosition(new THREE.Vector3()) : root.position.clone();
@@ -1022,6 +1043,10 @@ function enqueueVideoPreviewTexture(root, item, options = {}) {
 
 function scheduleSceneVideoAutoplay() {
   if (sceneVideoAutoplayTimer || CONFIG?.sceneVideoAutoplayAfterDelay === false) return;
+  if (shouldSkipScheduledSceneVideoAutoplayOnMobileV613022()) {
+    markMobileSceneVideoAutoplaySkippedV613022('schedule');
+    return;
+  }
   const delay = Math.max(3000, Number(CONFIG?.sceneVideoAutoplayDelayMs || 15000));
   sceneVideoAutoplayTimer = window.setTimeout(() => {
     sceneVideoAutoplayTimer = 0;
@@ -1030,6 +1055,10 @@ function scheduleSceneVideoAutoplay() {
 }
 
 function autoplaySceneVideosControlled() {
+  if (shouldSkipScheduledSceneVideoAutoplayOnMobileV613022()) {
+    markMobileSceneVideoAutoplaySkippedV613022('controlled');
+    return;
+  }
   const limit = getSceneVideoAutoplayLimit();
   if (limit <= 0 || !sceneVideoRoots.length) return;
 
