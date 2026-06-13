@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="description" content="Không gian Triển lãm 3D - sảnh triển lãm số với trải nghiệm tham quan 3D tương tác." />
+  <title>Không gian Triển lãm 3D</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="prefetch" href="./gallery.html" />
+  <link rel="prefetch" href="./styles/viewer.css" />
+  <link rel="prefetch" href="./src/viewer/main.js" />
+  <link rel="prefetch" href="./data/scene.json" />
+  <link rel="prefetch" href="./data/scene_outdoor.json" />
+  <link rel="stylesheet" href="./styles/intro.css" />
+</head>
+<body id="top">
+  <div id="portalTransition" class="portal-transition" aria-hidden="true">
+    <div class="portal-backdrop"></div>
+    <div class="portal-frame"></div>
+    <div class="portal-slit"></div>
+    <div class="portal-grid"></div>
+    <div class="portal-scan"></div>
+  </div>
+
+  <div class="page-shell">
+    <header class="site-header" data-site-header data-reveal>
+      <a class="brand" href="./index.html" aria-label="Không gian Triển lãm 3D">
+        <span class="brand-logo-wrap">
+          <img class="brand-logo" src="./assets/logos/logo_trung_tam.png" alt="Logo Trung tâm Văn hóa và Triển lãm Thành phố Hồ Chí Minh" />
+        </span>
+        <span class="brand-copy">
+          <strong>Không gian Triển lãm 3D</strong>
+          <small>Trung tâm Văn hóa và Triển lãm TP. Hồ Chí Minh</small>
+        </span>
+      </a>
+
+      <nav class="site-nav" aria-label="Điều hướng chính">
+        <a href="#top" data-scroll-top data-nav-section="intro" class="is-active">Giới thiệu</a>
+        <a href="#trai-nghiem" data-nav-section="experience">Trải nghiệm</a>
+        <a href="#huong-dan" data-nav-section="guide">Hướng dẫn</a>
+        <a class="nav-cta" href="./gallery.html">Vào triển lãm</a>
+      </nav>
+    </header>
+
+    <main class="museum-lobby-flow">
+      <section class="stage-section stage-section--intro hero museum-lobby-stage" id="gioi-thieu" aria-labelledby="heroTitle" data-intro-section="intro" data-stage-label="Giới thiệu">
+        <div class="section-boundary" aria-hidden="true"><span></span></div>
+        <div class="lobby-grid">
+          <div class="hero-content" data-reveal>
+            <div class="eyebrow">Sảnh triển lãm số</div>
+            <h1 id="heroTitle">Không gian triển lãm 3D</h1>
+            <p class="hero-lead">
+              <span>Bước vào không gian trưng bày số, nơi tác phẩm, tư liệu</span>
+              <br class="desktop-break" />
+              <span>và thuyết minh được tổ chức theo từng tuyến tham quan.</span>
+            </p>
+
+            <div class="hero-proof-grid hero-proof-strip" aria-label="Dấu ấn triển lãm số">
+              <span><strong>Không gian 3D</strong></span>
+              <span><strong>Tư liệu số</strong></span>
+              <span><strong>Đa thiết bị</strong></span>
+            </div>
+
+            <div class="hero-actions" aria-label="Hành động chính">
+              <a class="hero-action hero-action--primary" href="./gallery.html" data-liquid-surface>Tham quan triển lãm</a>
+              <a class="hero-action hero-action--secondary" href="#huong-dan">Xem hướng dẫn</a>
+            </div>
+
+            <div class="experience-note" role="note">
+              Khuyến nghị sử dụng máy tính/laptop và trình duyệt Chrome, Edge hoặc Cốc Cốc để có trải nghiệm ổn định nhất.
+            </div>
+          </div>
+
+          <div class="hero-visual" data-reveal>
+            <a class="hero-video-card museum-display-case" href="./gallery.html" aria-label="Mở video giới thiệu triển lãm" data-liquid-surface data-intro-video-open>
+              <span class="hero-media-corner hero-media-corner--top" aria-hidden="true"></span>
+              <span class="hero-media-corner hero-media-corner--bottom" aria-hidden="true"></span>
+              <div class="display-case-frame" aria-hidden="true"></div>
+              <video class="hero-video" data-index-video-player autoplay muted loop playsinline preload="auto" src="https://pub-d00970587980484399ff842b58cd1e9e.r2.dev/intro.mp4"></video>
+              <div class="video-fallback" aria-hidden="true">
+                <span>Video giới thiệu đang tải</span>
+              </div>
+              <div class="display-case-caption" aria-hidden="true">Không gian trưng bày số</div>
+            </a>
+          </div>
+        </div>
+      </section>
+
+      <section class="stage-section stage-section--experience visit-panel museum-routes" id="trai-nghiem" aria-labelledby="visitTitle" data-intro-section="experience" data-stage-label="Trải nghiệm">
+        <div class="section-boundary" aria-hidden="true"><span></span></div>
+        <div class="section-header" data-reveal>
+          <span class="section-kicker">Hành trình tham quan</span>
+          <h2 id="visitTitle">Khám phá triển lãm theo cách của bạn</h2>
+          <p>Bắt đầu từ khu vực mở để cảm nhận toàn cảnh, hoặc bước vào phòng trưng bày để theo dõi tác phẩm, tư liệu và thuyết minh theo mạch nội dung.</p>
+        </div>
+
+        <div class="route-grid" aria-label="Chọn khu vực tham quan">
+          <a class="route-card route-card--outdoor" href="./gallery.html?room=outdoor" data-reveal>
+            <div class="route-card-topline">
+              <span>Toàn cảnh</span>
+              <strong>01</strong>
+            </div>
+            <h3>Khu vực ngoài trời</h3>
+            <p>Di chuyển qua pano, cụm trưng bày và các điểm nội dung được bố trí như một tuyến tham quan mở.</p>
+            <span class="room-link"><span>Bắt đầu</span><em aria-hidden="true">→</em></span>
+          </a>
+
+          <a class="route-card route-card--indoor" href="./gallery.html?room=indoor" data-reveal>
+            <div class="route-card-topline">
+              <span>Chiều sâu nội dung</span>
+              <strong>02</strong>
+            </div>
+            <h3>Phòng trưng bày</h3>
+            <p>Theo dõi tác phẩm, tư liệu, hình ảnh và video thuyết minh trong một không gian trưng bày tập trung.</p>
+            <span class="room-link"><span>Vào xem</span><em aria-hidden="true">→</em></span>
+          </a>
+        </div>
+      </section>
+
+      <section class="stage-section stage-section--guide visitor-guide-detail museum-guide" id="huong-dan" aria-labelledby="visitorGuideTitle" data-intro-section="guide" data-stage-label="Hướng dẫn">
+        <div class="section-boundary" aria-hidden="true"><span></span></div>
+        <div class="guide-detail-heading" data-reveal>
+          <span class="section-kicker">Chỉ dẫn</span>
+          <h2 id="visitorGuideTitle">Hướng dẫn tham quan</h2>
+          <p>Nắm nhanh cách di chuyển, quan sát và mở nội dung tại các điểm trưng bày.</p>
+        </div>
+
+        <div class="journey-rail guide-journey-rail" aria-label="Quy trình tham quan" data-reveal>
+          <article>
+            <span>01</span>
+            <strong>Chọn tuyến</strong>
+            <p>Vào khu vực trong nhà hoặc ngoài trời theo mục đích tham quan.</p>
+          </article>
+          <article>
+            <span>02</span>
+            <strong>Di chuyển</strong>
+            <p>Đi qua các điểm trưng bày, xoay góc nhìn để quan sát không gian.</p>
+          </article>
+          <article>
+            <span>03</span>
+            <strong>Khám phá nội dung</strong>
+            <p>Click hoặc chạm vào điểm trưng bày để xem tác phẩm, tư liệu, thuyết minh hoặc video trình chiếu.</p>
+          </article>
+        </div>
+
+        <div class="guide-platform-grid" role="list" data-reveal>
+          <article class="guide-platform-card" role="listitem" aria-labelledby="desktopGuideTitle">
+            <div class="guide-platform-heading">
+              <span class="guide-device-icon" aria-hidden="true">
+                <svg viewBox="0 0 48 48" focusable="false"><path d="M8 10h32a3 3 0 0 1 3 3v19a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3V13a3 3 0 0 1 3-3Zm4 29h24m-12-4v4"/></svg>
+              </span>
+              <div>
+                <small>Thiết bị</small>
+                <h3 id="desktopGuideTitle">Máy tính</h3>
+              </div>
+            </div>
+            <ul class="guide-action-list">
+              <li><strong>Di chuyển:</strong> <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></li>
+              <li><strong>Chạy nhanh:</strong> giữ <kbd>Shift</kbd> khi cần đi xa.</li>
+              <li><strong>Quan sát:</strong> di chuyển chuột vừa phải để xoay góc nhìn.</li>
+              <li><strong>Tương tác:</strong> <kbd>Click</kbd> điểm trưng bày để xem nội dung.</li>
+              <li><strong>Thoát:</strong> nhấn <kbd>ESC</kbd> để đóng popup hoặc video lớn.</li>
+            </ul>
+          </article>
+
+          <article class="guide-platform-card" role="listitem" aria-labelledby="mobileGuideTitle">
+            <div class="guide-platform-heading">
+              <span class="guide-device-icon" aria-hidden="true">
+                <svg viewBox="0 0 48 48" focusable="false"><path d="M17 5h14a4 4 0 0 1 4 4v30a4 4 0 0 1-4 4H17a4 4 0 0 1-4-4V9a4 4 0 0 1 4-4Zm4 32h6"/></svg>
+              </span>
+              <div>
+                <small>Thiết bị</small>
+                <h3 id="mobileGuideTitle">Điện thoại</h3>
+              </div>
+            </div>
+            <ul class="guide-action-list">
+              <li><strong>Di chuyển:</strong> dùng joystick trên màn hình.</li>
+              <li><strong>Quan sát:</strong> vuốt màn hình để xoay góc nhìn.</li>
+              <li><strong>Tương tác:</strong> chạm điểm trưng bày để mở nội dung.</li>
+              <li><strong>Video:</strong> chạm để phát/tạm dừng, chạm đúp để xem lớn nếu thiết bị hỗ trợ.</li>
+              <li><strong>Gợi ý:</strong> nên xoay ngang thiết bị để có khung nhìn rộng hơn.</li>
+            </ul>
+          </article>
+        </div>
+
+        <div class="guide-signature-strip guide-contact-strip" data-reveal aria-label="Thông tin đơn vị thực hiện">
+          <p><span>Đơn vị thực hiện</span><strong>Trung tâm Văn hóa và Triển lãm Thành phố Hồ Chí Minh</strong></p>
+          <p><span>Địa chỉ</span><strong>178 Nam Kỳ Khởi Nghĩa, phường Xuân Hòa, Thành phố Hồ Chí Minh</strong></p>
+          <p><span>Điện thoại / Fax</span><strong>028 3930 2159 - Fax: 028 39301732</strong></p>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="introVideoModal" class="intro-video-modal" aria-hidden="true">
+    <div class="intro-video-backdrop" data-close-intro-video></div>
+    <div class="intro-video-dialog" role="dialog" aria-modal="true" aria-label="Video giới thiệu triển lãm">
+      <button class="intro-video-close" type="button" aria-label="Đóng video giới thiệu" data-close-intro-video>×</button>
+      <video class="intro-video-player" data-index-modal-video controls playsinline preload="metadata" src="https://pub-d00970587980484399ff842b58cd1e9e.r2.dev/intro.mp4"></video>
+    </div>
+  </div>
+
+  <script src="./src/intro/main.js" type="module"></script>
+</body>
+</html>

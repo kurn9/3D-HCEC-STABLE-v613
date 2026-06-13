@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Không gian Triển lãm 3D - Viewer</title>
+
+<link rel="stylesheet" href="./styles/viewer.css" />
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+</head>
+<body>
+
+<div id="status" class="glass">⏳ <strong>Đang tải</strong></div>
+<div id="loadingWrap"><div id="loadingBar"></div></div>
+<div id="viewerEntryLoading" aria-hidden="true">
+  <div class="viewer-entry-card">
+    <span class="viewer-entry-spinner" aria-hidden="true"></span>
+    <strong>Đang tải không gian triển lãm…</strong>
+    <small>Vui lòng giữ máy ngang để trải nghiệm mượt hơn.</small>
+  </div>
+</div>
+<div id="crosshair"></div>
+
+<div id="viewerBootError" class="viewer-boot-error" role="alert" aria-live="assertive" hidden>
+  <div class="viewer-boot-error__card">
+    <strong>Không tải được trình xem 3D.</strong>
+    <p>Vui lòng tải lại trang hoặc kiểm tra kết nối/dev server.</p>
+    <small id="viewerBootErrorDetail">Script viewer chưa sẵn sàng.</small>
+    <button id="viewerBootReload" type="button">Tải lại trang</button>
+  </div>
+</div>
+
+<details id="viewerJourneyNav" class="glass viewer-home-link viewer-journey-nav">
+  <summary aria-label="Mở điều hướng hành trình">
+    <span class="journey-dot" aria-hidden="true"></span>
+    <span>Hành trình</span>
+  </summary>
+  <div class="viewer-journey-menu" role="menu" aria-label="Điều hướng hành trình">
+    <a role="menuitem" href="./index.html">Về trang chủ</a>
+    <a role="menuitem" href="./gallery.html">Đổi không gian</a>
+  </div>
+</details>
+
+<div id="focusCard" class="glass">
+  <small>Tác phẩm đang ngắm</small>
+  <h4 id="focusTitle">...</h4>
+  <p id="focusSub">Click để xem chi tiết</p>
+</div>
+
+<div id="startHint" class="glass">
+  Click vào màn hình 3D để bắt đầu tham quan · WASD di chuyển · E ngồi ghế · V đổi góc nhìn
+</div>
+
+<div id="miniMapPanel" class="glass minimap-panel" aria-label="Bản đồ nhỏ">
+  <div class="minimap-head">
+    <strong>Mini map</strong>
+    <div class="minimap-actions">
+      <button id="homePositionBtn" class="minimap-icon-btn minimap-start-btn" type="button" title="Về điểm bắt đầu" aria-label="Về điểm bắt đầu">
+        <span class="minimap-start-icon" aria-hidden="true">⌂</span>
+        <span class="minimap-btn-label">Điểm bắt đầu</span>
+      </button>
+
+      <button id="mobileMapHomeBtn" class="minimap-icon-btn mobile-map-home-btn" type="button" title="Trang chủ" aria-label="Trang chủ">
+        <span aria-hidden="true">↩</span>
+      </button>
+
+      <button id="audioToggleBtn" class="minimap-icon-btn audio-icon-btn" type="button" title="Bật âm thanh" aria-label="Bật âm thanh" aria-pressed="false">
+        <span class="audio-icon" aria-hidden="true">🔇</span>
+      </button>
+
+      <button id="miniMapToggle" class="minimap-icon-btn" type="button" title="Thu gọn minimap" aria-label="Thu gọn minimap" aria-expanded="true">
+        <span aria-hidden="true">−</span>
+      </button>
+    </div>
+  </div>
+  <canvas id="miniMapCanvas" width="220" height="160"></canvas>
+  <div class="minimap-legend">
+    <span><i class="viewer-dot"></i> Bạn</span>
+    <span><i class="art-dot"></i> Tác phẩm</span>
+  </div>
+</div>
+
+<audio id="ambientAudio" preload="none" loop src="https://pub-d00970587980484399ff842b58cd1e9e.r2.dev/ambient.mp3"></audio>
+
+
+<button id="artworkListToggle" class="glass artwork-list-toggle" type="button" aria-expanded="false" aria-controls="artworkListPanel">Danh sách tác phẩm</button>
+
+<aside id="artworkListPanel" class="glass artwork-list-panel" aria-label="Danh sách tác phẩm">
+  <div class="artwork-list-head">
+    <div>
+      <small>Danh sách tác phẩm</small>
+      <h3>Tác phẩm triển lãm</h3>
+    </div>
+    <button id="artworkListClose" class="artwork-list-close" type="button" aria-label="Đóng danh sách">×</button>
+  </div>
+
+  <div class="artwork-list-controls">
+    <input id="artworkSearchInput" type="search" placeholder="Tìm tên, ID, tác giả, nhóm, chất liệu..." autocomplete="off" />
+    <select id="artworkGroupFilter" aria-label="Lọc theo nhóm">
+      <option value="">Tất cả nhóm</option>
+    </select>
+  </div>
+
+  <div id="artworkListCount" class="artwork-list-count">Đang tải danh sách...</div>
+  <div id="artworkListItems" class="artwork-list-items"></div>
+</aside>
+
+<div id="modalOverlay">
+  <div id="modalShell">
+    <div class="modal-left">
+      <div class="modal-stage" id="modalStage">
+        <div class="modal-badge" id="modalBadge">Tác phẩm</div>
+        <img id="modalImage" src="" alt="Tác phẩm" loading="lazy" decoding="async" />
+      </div>
+    </div>
+
+    <div class="modal-right">
+      <div class="modal-topbar">
+        <div class="modal-tag" id="modalTag">Chi tiết tác phẩm</div>
+        <button class="modal-close" id="modalCloseBtn" type="button" aria-label="Đóng">×</button>
+      </div>
+
+      <div class="modal-scroll">
+        <h2 id="modalTitle">Tên tác phẩm</h2>
+        <p id="modalShortDesc">Mô tả ngắn của tác phẩm.</p>
+
+        <div class="meta-grid">
+          <div class="meta-item" id="metaAuthorWrap"><small>Tác giả / đơn vị</small><div id="metaAuthor">—</div></div>
+          <div class="meta-item" id="metaYearWrap"><small>Năm</small><div id="metaYear">—</div></div>
+          <div class="meta-item" id="metaMediumWrap"><small>Chất liệu / loại hình</small><div id="metaMedium">—</div></div>
+          <div class="meta-item" id="metaRealSizeWrap"><small>Kích thước thật</small><div id="metaRealSize">—</div></div>
+        </div>
+
+        <div class="content-block">
+          <h3>Thuyết minh tác phẩm</h3>
+          <div id="modalContent">Thông tin thuyết minh đang được cập nhật.</div>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button class="modal-action primary" id="openImageBtn" type="button">Xem ảnh lớn</button>
+        <button class="modal-action" id="modalFocusBtn" type="button">Đi tới tác phẩm</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="imageLightbox" class="image-lightbox" aria-hidden="true">
+  <button id="imageLightboxClose" class="image-lightbox-close" type="button" aria-label="Đóng ảnh lớn">×</button>
+  <img id="imageLightboxImg" src="" alt="Ảnh tác phẩm phóng lớn" loading="lazy" decoding="async" />
+</div>
+
+
+<div id="wallVideoCinemaOverlay" class="wall-video-cinema" aria-hidden="true">
+  <div class="wall-video-cinema-shell" role="dialog" aria-modal="true" aria-labelledby="wallVideoCinemaTitle">
+    <div class="wall-video-cinema-topbar">
+      <div>
+        <small>Không gian trình chiếu</small>
+        <h2 id="wallVideoCinemaTitle">Video giới thiệu</h2>
+      </div>
+      <button id="wallVideoCinemaClose" class="wall-video-cinema-close" type="button" aria-label="Đóng video">×</button>
+    </div>
+
+    <div class="wall-video-cinema-stage">
+      <video id="wallVideoCinemaVideo" controls playsinline preload="none"></video>
+    </div>
+
+  </div>
+</div>
+
+
+<script>
+(() => {
+  const nav = document.getElementById('viewerJourneyNav');
+  if (!nav) return;
+
+  document.addEventListener('click', (event) => {
+    if (!nav.open || nav.contains(event.target)) return;
+    nav.open = false;
+  }, true);
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && nav.open) nav.open = false;
+  });
+
+  nav.querySelectorAll('a').forEach((link) => {
+    link.addEventListener('click', () => { nav.open = false; });
+  });
+})();
+</script>
+
+<!-- HOTFIX: Giảm bóng loáng avatar GLB xuất từ Blender/Mixamo.
+     Chỉ can thiệp material của avatar/skinned mesh, không sửa scene, tranh, UI, điều khiển. -->
+<script type="module">
+import { getRoomGateState, initPreEntryRoomGate } from './src/shared/roomGate.js';
+
+const roomGateState = getRoomGateState(window.location.search);
+
+function getErrorText(error) {
+  if (!error) return 'Không rõ lỗi.';
+  if (error.scriptUrl) return error.scriptUrl;
+  if (error.details) return String(error.details);
+  if (error.message) return String(error.message);
+  return String(error);
+}
+
+function showViewerBootError(error, context = 'viewer-boot') {
+  console.error('[viewer boot]', context, error);
+
+  const loadingWrap = document.getElementById('loadingWrap');
+  const entryLoading = document.getElementById('viewerEntryLoading');
+  const overlay = document.getElementById('viewerBootError');
+  const detail = document.getElementById('viewerBootErrorDetail');
+  const reloadButton = document.getElementById('viewerBootReload');
+
+  if (loadingWrap) loadingWrap.classList.add('hidden');
+  if (entryLoading) entryLoading.classList.add('is-hidden');
+
+  if (overlay) {
+    if (detail) detail.textContent = getErrorText(error);
+    overlay.hidden = false;
+    overlay.classList.add('is-visible');
+  }
+
+  if (reloadButton && !reloadButton.dataset.boundReload) {
+    reloadButton.dataset.boundReload = 'true';
+    reloadButton.addEventListener('click', () => window.location.reload());
+  }
+
+  document.body.classList.add('viewer-boot-failed');
+}
+
+window.addEventListener('viewer:fatal-error', (event) => {
+  showViewerBootError(event.detail || event, 'viewer-runtime');
+});
+
+try {
+  if (roomGateState.hasValidRoom) {
+    await import('./src/viewer/avatar/avatarMatteMaterialPatch.js');
+    await import('./src/viewer/main.js');
+  } else {
+    initPreEntryRoomGate({
+      mode: 'viewer',
+      targetPage: 'gallery.html'
+    });
+  }
+} catch (error) {
+  showViewerBootError(error, 'viewer-import');
+}
+</script>
+</body>
+</html>

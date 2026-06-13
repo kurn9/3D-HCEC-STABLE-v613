@@ -1,0 +1,148 @@
+{
+  "version": "V6.11.21-B6-F_J_B",
+  "generatedAt": "2026-05-31T06:28:43.998Z",
+  "root": "assets",
+  "counts": {
+    "total": 10,
+    "image": 7,
+    "video": 2,
+    "logo": 4,
+    "poster": 0,
+    "audio": 1
+  },
+  "warnings": [
+    "Skipped missing folder: assets/posters"
+  ],
+  "assets": [
+    {
+      "id": "asset_dce7a96c986f",
+      "type": "image",
+      "kind": "artwork",
+      "room": "indoor",
+      "name": "art_002.jpg",
+      "ext": ".jpg",
+      "path": "./assets/artworks/indoor/art_002.jpg",
+      "folder": "assets/artworks/indoor",
+      "sizeBytes": 148538,
+      "mtimeMs": 1779587540000,
+      "publicPath": "./assets/artworks/indoor/art_002.jpg"
+    },
+    {
+      "id": "asset_170237e9686e",
+      "type": "image",
+      "kind": "artwork",
+      "room": "outdoor",
+      "name": "art_001.jpg",
+      "ext": ".jpg",
+      "path": "./assets/artworks/outdoor/art_001.jpg",
+      "folder": "assets/artworks/outdoor",
+      "sizeBytes": 132868,
+      "mtimeMs": 1779587538000,
+      "publicPath": "./assets/artworks/outdoor/art_001.jpg"
+    },
+    {
+      "id": "asset_ce875e607281",
+      "type": "image",
+      "kind": "artwork",
+      "room": "shared",
+      "name": "art_003.jpg",
+      "ext": ".jpg",
+      "path": "./assets/artworks/shared/art_003.jpg",
+      "folder": "assets/artworks/shared",
+      "sizeBytes": 147582,
+      "mtimeMs": 1779587540000,
+      "publicPath": "./assets/artworks/shared/art_003.jpg"
+    },
+    {
+      "id": "asset_86ea32f0cfc3",
+      "type": "audio",
+      "kind": "audio",
+      "room": "root",
+      "name": "ambient.mp3",
+      "ext": ".mp3",
+      "path": "./assets/audio/ambient.mp3",
+      "folder": "assets/audio",
+      "sizeBytes": 6755522,
+      "mtimeMs": 1779579396000,
+      "publicPath": "./assets/audio/ambient.mp3"
+    },
+    {
+      "id": "asset_6d8fe12d4abe",
+      "type": "image",
+      "kind": "logo",
+      "room": "outdoor",
+      "name": "logo_trung_tam.png",
+      "ext": ".png",
+      "path": "./assets/logos/outdoor/logo_trung_tam.png",
+      "folder": "assets/logos/outdoor",
+      "sizeBytes": 199954,
+      "mtimeMs": 1753348894000,
+      "publicPath": "./assets/logos/outdoor/logo_trung_tam.png"
+    },
+    {
+      "id": "asset_88b4f74512ef",
+      "type": "image",
+      "kind": "logo",
+      "room": "outdoor",
+      "name": "neon_hcec.png",
+      "ext": ".png",
+      "path": "./assets/logos/outdoor/neon_hcec.png",
+      "folder": "assets/logos/outdoor",
+      "sizeBytes": 300644,
+      "mtimeMs": 1779466468000,
+      "publicPath": "./assets/logos/outdoor/neon_hcec.png"
+    },
+    {
+      "id": "asset_094477493a14",
+      "type": "image",
+      "kind": "logo",
+      "room": "root",
+      "name": "logo_trung_tam.png",
+      "ext": ".png",
+      "path": "./assets/logos/logo_trung_tam.png",
+      "folder": "assets/logos",
+      "sizeBytes": 199954,
+      "mtimeMs": 1753348894000,
+      "publicPath": "./assets/logos/logo_trung_tam.png"
+    },
+    {
+      "id": "asset_2fb7969d87dd",
+      "type": "image",
+      "kind": "logo",
+      "room": "root",
+      "name": "neon_hcec.png",
+      "ext": ".png",
+      "path": "./assets/logos/neon_hcec.png",
+      "folder": "assets/logos",
+      "sizeBytes": 300644,
+      "mtimeMs": 1779466468000,
+      "publicPath": "./assets/logos/neon_hcec.png"
+    },
+    {
+      "id": "asset_46662f241d5f",
+      "type": "video",
+      "kind": "video",
+      "room": "outdoor",
+      "name": "intro_h264_test.mp4",
+      "ext": ".mp4",
+      "path": "./assets/videos/outdoor/intro_h264_test.mp4",
+      "folder": "assets/videos/outdoor",
+      "sizeBytes": 56010343,
+      "mtimeMs": 1779593385551,
+      "publicPath": "./assets/videos/outdoor/intro_h264_test.mp4"
+    },
+    {
+      "id": "asset_4cd94231620b",
+      "type": "video",
+      "kind": "video",
+      "room": "root",
+      "name": "intro.mp4",
+      "ext": ".mp4",
+      "path": "./assets/videos/intro.mp4",
+      "folder": "assets/videos",
+      "sizeBytes": 33970805,
+      "mtimeMs": 1779591178000,
+      "publicPath": "./assets/videos/intro.mp4"
+    }
+  ]
+}

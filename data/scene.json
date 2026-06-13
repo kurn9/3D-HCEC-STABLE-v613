@@ -1,0 +1,157 @@
+[
+  {
+    "id": "LOGO_001",
+    "type": "logo",
+    "title": "Logo 001",
+    "description": "",
+    "author": "",
+    "year": "",
+    "material": "",
+    "realSize": "",
+    "content": "",
+    "note": "",
+    "position": [
+      10.258,
+      3.149,
+      0.169
+    ],
+    "rotation": [
+      0,
+      1.5708,
+      0
+    ],
+    "size": [
+      1.23,
+      1.23
+    ],
+    "group": "INDOOR_LOGO",
+    "frame": false,
+    "transparent": true,
+    "clickable": false,
+    "image": "./assets/logos/logo_trung_tam.png",
+    "fitMode": "contain",
+    "text": "",
+    "fontSize": 72,
+    "color": "#ffffff",
+    "backgroundColor": "transparent",
+    "fontWeight": "800",
+    "align": "center"
+  },
+  {
+    "id": "LOGO_002",
+    "type": "logo",
+    "title": "Logo 002",
+    "description": "",
+    "author": "",
+    "year": "",
+    "material": "",
+    "realSize": "",
+    "content": "",
+    "note": "",
+    "position": [
+      10.258,
+      2.118,
+      0.136
+    ],
+    "rotation": [
+      0,
+      1.5708,
+      0
+    ],
+    "size": [
+      4.062,
+      1.07
+    ],
+    "group": "INDOOR_LOGO",
+    "frame": false,
+    "transparent": true,
+    "clickable": false,
+    "image": "./assets/logos/neon_hcec.png",
+    "fitMode": "contain",
+    "text": "",
+    "fontSize": 72,
+    "color": "#ffffff",
+    "backgroundColor": "transparent",
+    "fontWeight": "800",
+    "align": "center"
+  },
+  {
+    "id": "VIDEO_001",
+    "type": "video",
+    "title": "Video 001",
+    "description": "",
+    "author": "",
+    "year": "",
+    "material": "",
+    "realSize": "",
+    "content": "",
+    "note": "",
+    "position": [
+      10.258,
+      0.061,
+      -0.034
+    ],
+    "rotation": [
+      0,
+      1.5708,
+      0
+    ],
+    "size": [
+      5.173,
+      2.91
+    ],
+    "group": "INDOOR_VIDEO",
+    "frame": true,
+    "transparent": false,
+    "clickable": true,
+    "videoUrl": "https://pub-d00970587980484399ff842b58cd1e9e.r2.dev/intro.mp4",
+    "poster": "",
+    "autoplay": true,
+    "muted": true,
+    "loop": true,
+    "controls": true,
+    "text": "",
+    "fontSize": 72,
+    "color": "#ffffff",
+    "backgroundColor": "transparent",
+    "fontWeight": "800",
+    "align": "center"
+  },
+  {
+    "id": "ART_001",
+    "type": "artwork",
+    "title": "Tranh 001",
+    "description": "",
+    "author": "",
+    "year": "",
+    "material": "",
+    "realSize": "",
+    "content": "",
+    "note": "",
+    "position": [
+      18.881,
+      0.149,
+      7.445
+    ],
+    "rotation": [
+      3.142,
+      0,
+      3.142
+    ],
+    "size": [
+      1.893,
+      1.39
+    ],
+    "group": "INDOOR_ARTWORK",
+    "frame": true,
+    "transparent": false,
+    "clickable": true,
+    "image": "./assets/artworks/indoor/art_002.jpg",
+    "text": "",
+    "fontSize": 72,
+    "color": "#ffffff",
+    "backgroundColor": "transparent",
+    "fontWeight": "800",
+    "align": "center"
+  }
+]

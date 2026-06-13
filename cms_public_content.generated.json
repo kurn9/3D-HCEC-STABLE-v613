@@ -1,0 +1,271 @@
+{
+  "schemaVersion": 1,
+  "version": "V6.11.21-B6-F_K_O_I_D",
+  "publishedAt": "2026-06-02T17:30:28Z",
+  "source": "scene-derived-local-baseline",
+  "site": {
+    "siteTitle": "Không gian triển lãm 3D",
+    "organizationName": "Trung tâm Văn hóa và Triển lãm Thành phố Hồ Chí Minh",
+    "address": "178 Nam Kỳ Khởi Nghĩa, phường Xuân Hòa, Thành phố Hồ Chí Minh",
+    "phone": "028 3930 2159",
+    "fax": "028 39301732",
+    "logoUrl": "./assets/logos/logo_trung_tam.png",
+    "defaultLanguage": "vi",
+    "siteStatus": "draft"
+  },
+  "index": {
+    "hero": {
+      "eyebrow": "Sảnh triển lãm số",
+      "title": "Không gian triển lãm 3D",
+      "lead": "Bước vào không gian trưng bày số, nơi tác phẩm, tư liệu\nvà thuyết minh được tổ chức theo từng tuyến tham quan.",
+      "items": [
+        "Không gian 3D",
+        "Tư liệu số",
+        "Đa thiết bị"
+      ],
+      "media": {
+        "caption": "Không gian trưng bày số",
+        "videoUrl": "https://pub-d00970587980484399ff842b58cd1e9e.r2.dev/intro.mp4"
+      },
+      "isVisible": true
+    },
+    "experience": {
+      "eyebrow": "Hành trình tham quan",
+      "title": "Khám phá triển lãm theo cách của bạn",
+      "lead": "Bắt đầu từ khu vực mở để cảm nhận toàn cảnh, hoặc bước vào phòng trưng bày để theo dõi tác phẩm, tư liệu và thuyết minh theo mạch nội dung.",
+      "items": [
+        {
+          "label": "Khu vực ngoài trời",
+          "title": "Khu vực ngoài trời",
+          "ctaLabel": "Bắt đầu",
+          "room_key": "outdoor",
+          "description": "Di chuyển qua pano, cụm trưng bày và các điểm nội dung được bố trí như một tuyến tham quan mở."
+        },
+        {
+          "label": "Phòng trưng bày",
+          "title": "Phòng trưng bày",
+          "ctaLabel": "Vào xem",
+          "room_key": "indoor",
+          "description": "Theo dõi tác phẩm, tư liệu, hình ảnh và video thuyết minh trong một không gian trưng bày tập trung."
+        }
+      ],
+      "isVisible": true
+    },
+    "guide": {
+      "eyebrow": "Chỉ dẫn",
+      "title": "Hướng dẫn tham quan",
+      "lead": "Nắm nhanh cách di chuyển, quan sát và mở nội dung tại các điểm trưng bày.",
+      "items": [
+        {
+          "title": "Chọn tuyến",
+          "number": "01",
+          "description": "Vào khu vực trong nhà hoặc ngoài trời theo mục đích tham quan."
+        },
+        {
+          "title": "Di chuyển",
+          "number": "02",
+          "description": "Đi qua các điểm trưng bày, xoay góc nhìn để quan sát không gian."
+        },
+        {
+          "title": "Khám phá nội dung",
+          "number": "03",
+          "description": "Click hoặc chạm vào điểm trưng bày để xem tác phẩm, tư liệu, thuyết minh hoặc video trình chiếu."
+        }
+      ],
+      "isVisible": true
+    },
+    "contact": {
+      "isVisible": true
+    }
+  },
+  "gate": {
+    "title": "Chọn không gian tham quan",
+    "description": "Chọn một lối vào để bắt đầu hành trình trong không gian triển lãm 3D.",
+    "backLabel": "← Trang chủ",
+    "rooms": {
+      "indoor": {
+        "label": "Không gian trong nhà",
+        "title": "Không gian trong nhà",
+        "ctaLabel": "Tham quan",
+        "description": "Tác phẩm, tư liệu và thuyết minh trong phòng trưng bày."
+      },
+      "outdoor": {
+        "label": "Ngoài trời",
+        "title": "Ngoài trời",
+        "ctaLabel": "Tham quan",
+        "description": "Pano, cụm trưng bày và các điểm nội dung trong không gian mở."
+      }
+    },
+    "editor": {
+      "title": "Chọn phòng cần chỉnh",
+      "ctaLabel": "Chỉnh sửa",
+      "description": "Chọn đúng khu vực trước khi mở trình chỉnh sửa để tránh cập nhật nhầm nội dung giữa các phòng."
+    },
+    "isActive": true
+  },
+  "rooms": {
+    "indoor": {
+      "meta": {
+        "roomKey": "indoor",
+        "name": "Không gian trong nhà",
+        "description": "Tác phẩm, tư liệu và thuyết minh trong phòng trưng bày.",
+        "roomType": "indoor",
+        "isActive": true,
+        "sortOrder": 0
+      },
+      "artworks": [
+        {
+          "artwork_code": "LOGO_001",
+          "id": "LOGO_001",
+          "title": "Logo 001",
+          "description": "",
+          "content": "",
+          "author": "",
+          "year": "",
+          "material": "",
+          "realSize": "",
+          "note": "",
+          "type": "logo",
+          "mediaType": "logo",
+          "room_key": "indoor",
+          "is_visible": true,
+          "sort_order": 0,
+          "image": "./assets/logos/logo_trung_tam.png",
+          "imageUrl": "./assets/logos/logo_trung_tam.png",
+          "image_url": "./assets/logos/logo_trung_tam.png"
+        },
+        {
+          "artwork_code": "LOGO_002",
+          "id": "LOGO_002",
+          "title": "Logo 002",
+          "description": "",
+          "content": "",
+          "author": "",
+          "year": "",
+          "material": "",
+          "realSize": "",
+          "note": "",
+          "type": "logo",
+          "mediaType": "logo",
+          "room_key": "indoor",
+          "is_visible": true,
+          "sort_order": 1,
+          "image": "./assets/logos/neon_hcec.png",
+          "imageUrl": "./assets/logos/neon_hcec.png",
+          "image_url": "./assets/logos/neon_hcec.png"
+        },
+        {
+          "artwork_code": "VIDEO_001",
+          "id": "VIDEO_001",
+          "title": "Video 001",
+          "description": "",
+          "content": "",
+          "author": "",
+          "year": "",
+          "material": "",
+          "realSize": "",
+          "note": "",
+          "type": "video",
+          "mediaType": "video",
+          "room_key": "indoor",
+          "is_visible": true,
+          "sort_order": 2,
+          "videoUrl": "https://pub-d00970587980484399ff842b58cd1e9e.r2.dev/intro.mp4",
+          "video_url": "https://pub-d00970587980484399ff842b58cd1e9e.r2.dev/intro.mp4"
+        },
+        {
+          "artwork_code": "ART_001",
+          "id": "ART_001",
+          "title": "Tranh 001",
+          "description": "",
+          "content": "",
+          "author": "",
+          "year": "",
+          "material": "",
+          "realSize": "",
+          "note": "",
+          "type": "artwork",
+          "mediaType": "artwork",
+          "room_key": "indoor",
+          "is_visible": true,
+          "sort_order": 3,
+          "image": "./assets/artworks/indoor/art_002.jpg",
+          "imageUrl": "./assets/artworks/indoor/art_002.jpg",
+          "image_url": "./assets/artworks/indoor/art_002.jpg"
+        }
+      ]
+    },
+    "outdoor": {
+      "meta": {
+        "roomKey": "outdoor",
+        "name": "Không gian ngoài trời",
+        "description": "Pano, cụm trưng bày và các điểm nội dung trong không gian mở.",
+        "roomType": "outdoor",
+        "isActive": true,
+        "sortOrder": 1
+      },
+      "artworks": [
+        {
+          "artwork_code": "LOGO_001",
+          "id": "LOGO_001",
+          "title": "Logo 001",
+          "description": "",
+          "content": "",
+          "author": "",
+          "year": "",
+          "material": "",
+          "realSize": "",
+          "note": "",
+          "type": "logo",
+          "mediaType": "logo",
+          "room_key": "outdoor",
+          "is_visible": true,
+          "sort_order": 0,
+          "image": "./assets/logos/outdoor/logo_trung_tam.png",
+          "imageUrl": "./assets/logos/outdoor/logo_trung_tam.png",
+          "image_url": "./assets/logos/outdoor/logo_trung_tam.png"
+        },
+        {
+          "artwork_code": "VIDEO_001",
+          "id": "VIDEO_001",
+          "title": "Video 001",
+          "description": "",
+          "content": "",
+          "author": "",
+          "year": "",
+          "material": "",
+          "realSize": "",
+          "note": "",
+          "type": "video",
+          "mediaType": "video",
+          "room_key": "outdoor",
+          "is_visible": true,
+          "sort_order": 1,
+          "videoUrl": "https://pub-d00970587980484399ff842b58cd1e9e.r2.dev/intro.mp4",
+          "video_url": "https://pub-d00970587980484399ff842b58cd1e9e.r2.dev/intro.mp4"
+        },
+        {
+          "artwork_code": "ART_001",
+          "id": "ART_001",
+          "title": "Tranh 001",
+          "description": "",
+          "content": "",
+          "author": "",
+          "year": "",
+          "material": "",
+          "realSize": "",
+          "note": "",
+          "type": "artwork",
+          "mediaType": "artwork",
+          "room_key": "outdoor",
+          "is_visible": true,
+          "sort_order": 2,
+          "image": "./assets/artworks/outdoor/art_001.jpg",
+          "imageUrl": "./assets/artworks/outdoor/art_001.jpg",
+          "image_url": "./assets/artworks/outdoor/art_001.jpg"
+        }
+      ]
+    }
+  },
+  "updatedAt": "2026-06-02T17:30:28Z"
+}

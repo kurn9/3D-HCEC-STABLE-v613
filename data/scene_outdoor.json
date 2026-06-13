@@ -1,0 +1,113 @@
+[
+  {
+    "id": "LOGO_001",
+    "type": "logo",
+    "title": "Logo 001",
+    "description": "",
+    "author": "",
+    "year": "",
+    "material": "",
+    "realSize": "",
+    "content": "",
+    "note": "",
+    "position": [
+      6.802,
+      2.764,
+      27.284
+    ],
+    "rotation": [
+      0,
+      -1.5562,
+      0
+    ],
+    "size": [
+      1.2,
+      0.75
+    ],
+    "group": "OUTDOOR_LOGO",
+    "frame": false,
+    "transparent": true,
+    "clickable": false,
+    "image": "./assets/logos/outdoor/logo_trung_tam.png",
+    "fitMode": "contain"
+  },
+  {
+    "id": "VIDEO_001",
+    "type": "video",
+    "title": "Video 001",
+    "description": "",
+    "author": "",
+    "year": "",
+    "material": "",
+    "realSize": "",
+    "content": "",
+    "note": "",
+    "position": [
+      9.337,
+      3.839,
+      27.226
+    ],
+    "rotation": [
+      0,
+      -1.5562,
+      0
+    ],
+    "size": [
+      1.48,
+      0.8
+    ],
+    "group": "OUTDOOR_VIDEO",
+    "frame": true,
+    "transparent": false,
+    "clickable": true,
+    "videoUrl": "https://pub-d00970587980484399ff842b58cd1e9e.r2.dev/intro.mp4",
+    "poster": "",
+    "autoplay": true,
+    "muted": true,
+    "loop": true,
+    "controls": true,
+    "text": "",
+    "fontSize": 72,
+    "color": "#ffffff",
+    "backgroundColor": "transparent",
+    "fontWeight": "800",
+    "align": "center"
+  },
+  {
+    "id": "ART_001",
+    "type": "artwork",
+    "title": "Tranh 001",
+    "description": "",
+    "author": "",
+    "year": "",
+    "material": "",
+    "realSize": "",
+    "content": "",
+    "note": "",
+    "position": [
+      -1.417,
+      3.165,
+      32.302
+    ],
+    "rotation": [
+      0,
+      0.0211,
+      0
+    ],
+    "size": [
+      1.2,
+      0.75
+    ],
+    "group": "OUTDOOR_ARTWORK",
+    "frame": true,
+    "transparent": false,
+    "clickable": true,
+    "image": "./assets/artworks/outdoor/art_001.jpg",
+    "text": "",
+    "fontSize": 72,
+    "color": "#ffffff",
+    "backgroundColor": "transparent",
+    "fontWeight": "800",
+    "align": "center"
+  }
+]
