@@ -521,6 +521,47 @@ function getViewerQualityForMedia() {
   return typeof window.getViewerQualityState === 'function' ? window.getViewerQualityState() : null;
 }
 
+function getMobileAssetLoadingBudgetStateV613024() {
+  const cfg = CONFIG?.mobileAssetLoadingBudget || {};
+  const quality = getViewerQualityForMedia();
+  const mobile = Boolean(quality?.isMobile || window.viewerMobileDevice?.isMobileViewer?.());
+  const rawProfileName = String(quality?.profileName || CONFIG?.mobile?.activeQualityProfile || '').toLowerCase();
+  const profileName = ['low', 'mid', 'high'].includes(rawProfileName) ? rawProfileName : 'fallback';
+  const fallbackInitialBatchSize = Math.max(1, Number(cfg.fallbackInitialBatchSize || 2));
+  const configuredInitialBatch = Number(cfg.initialBatchByProfile?.[profileName]);
+  const initialBatchSize = Number.isFinite(configuredInitialBatch)
+    ? Math.max(1, Math.round(configuredInitialBatch))
+    : fallbackInitialBatchSize;
+  const configuredVideoDelay = Number(cfg.videoFirstFrameDelayMsByProfile?.[profileName]);
+  const videoFirstFrameDelayMs = Number.isFinite(configuredVideoDelay)
+    ? Math.max(0, Math.round(configuredVideoDelay))
+    : Math.max(0, Number(cfg.videoFirstFrameDelayMsByProfile?.mid || 900));
+
+  return {
+    active: Boolean(mobile && cfg.enabled !== false),
+    config: cfg,
+    quality,
+    profileName,
+    initialBatchSize,
+    prioritizeImagesBeforeVideo: cfg.prioritizeImagesBeforeVideo !== false,
+    deferVideoFirstFrame: profileName === 'low' || profileName === 'mid'
+      ? cfg.deferVideoFirstFrameOnMobileLowMid !== false
+      : cfg.prioritizeImagesBeforeVideo !== false,
+    videoFirstFrameDelayMs
+  };
+}
+
+function markMobileAssetBudgetV613024(milestone, data = {}, options = {}) {
+  window.__MobilePerfProbe?.[options.once ? 'markOnce' : 'mark']?.(milestone, {
+    room: CONFIG?.currentRoomId || 'unknown',
+    ...data
+  });
+}
+
+function isVideoMediaRootV613024(root) {
+  return getSceneItemType(root?.userData?.artData || {}) === 'video';
+}
+
 function isSceneVideoFirstFramePreviewEnabled() {
   return CONFIG?.videoFirstFramePreviewEnabled !== false && CONFIG?.sceneVideoPreviewEnabled !== false;
 }
@@ -1253,6 +1294,169 @@ function scheduleArtworkTextureBatches(roots, options = {}) {
   window.setTimeout(loadNextBatch, delayMs);
 }
 
+function getArtworkBatchTimingV613024(options = {}) {
+  const cfg = CONFIG.mobile || {};
+  const quality = getViewerQualityForMedia();
+  const profile = quality?.isMobile ? quality.profile || {} : {};
+  const configuredBatchSize = Math.max(1, Number(options.batchSize || cfg.artworkBatchSize || 3));
+  const configuredDelayMs = Math.max(60, Number(options.delayMs || cfg.artworkBatchDelayMs || 220));
+  return {
+    batchSize: quality?.isMobile && Number.isFinite(Number(profile.artworkBatchSize))
+      ? Math.max(1, Math.min(configuredBatchSize, Number(profile.artworkBatchSize)))
+      : configuredBatchSize,
+    delayMs: quality?.isMobile && Number.isFinite(Number(profile.artworkBatchDelayMs))
+      ? Math.max(configuredDelayMs, Number(profile.artworkBatchDelayMs))
+      : configuredDelayMs
+  };
+}
+
+function settleMobileMediaBatchV613024(promises, timeoutMs) {
+  const tasks = Array.isArray(promises) ? promises : [];
+  if (!tasks.length) return Promise.resolve({ results: [], timedOut: false });
+  const maxWaitMs = Math.max(500, Number(timeoutMs || CONFIG?.mobileAssetLoadingBudget?.batchMaxWaitMs || 4500));
+
+  return new Promise((resolve) => {
+    let finished = false;
+    const complete = (payload) => {
+      if (finished) return;
+      finished = true;
+      window.clearTimeout(timerId);
+      resolve(payload);
+    };
+    const timerId = window.setTimeout(() => complete({ results: [], timedOut: true }), maxWaitMs);
+    Promise.allSettled(tasks).then((results) => complete({ results, timedOut: false }));
+  });
+}
+
+function scheduleMobileMediaBudgetBatchesV613024(roots, options = {}) {
+  const queue = Array.isArray(roots) ? roots.filter(Boolean) : [];
+  if (!queue.length) return Promise.resolve([]);
+
+  const timing = getArtworkBatchTimingV613024(options);
+  const batchSize = Math.max(1, Number(options.batchSize || timing.batchSize));
+  const delayMs = Math.max(0, Number(options.delayMs ?? timing.delayMs));
+  const initialDelayMs = Math.max(0, Number(options.initialDelayMs ?? delayMs));
+  const phase = String(options.phase || 'deferred-media');
+  let index = 0;
+  let batchNumber = 0;
+  const allResults = [];
+
+  return new Promise((resolve) => {
+    const loadNextBatch = () => {
+      if (index >= queue.length) {
+        resolve(allResults);
+        return;
+      }
+
+      const batch = queue.slice(index, index + batchSize);
+      index += batchSize;
+      batchNumber += 1;
+      markMobileAssetBudgetV613024(
+        phase === 'video-first-frame' ? 'video-first-frame-batch-start' : 'media-batch-start',
+        { phase, batch: batchNumber, items: batch.length, remaining: Math.max(0, queue.length - index) }
+      );
+
+      settleMobileMediaBatchV613024(
+        batch.map((root) => loadArtworkTextureIntoRoot(root)),
+        options.batchMaxWaitMs
+      ).then(({ results, timedOut }) => {
+        allResults.push(...results);
+        markMobileAssetBudgetV613024('media-batch-complete', {
+          phase,
+          batch: batchNumber,
+          items: batch.length,
+          fulfilled: results.filter((result) => result.status === 'fulfilled').length,
+          timedOut,
+          remaining: Math.max(0, queue.length - index)
+        });
+        if (index < queue.length) window.setTimeout(loadNextBatch, delayMs);
+        else resolve(allResults);
+      });
+    };
+
+    window.setTimeout(loadNextBatch, initialDelayMs);
+  });
+}
+
+function startMobileAssetLoadingBudgetV613024(roots) {
+  const state = getMobileAssetLoadingBudgetStateV613024();
+  if (!state.active) return false;
+
+  const stableRoots = Array.isArray(roots) ? roots.filter(Boolean) : [];
+  const nonVideoRoots = state.prioritizeImagesBeforeVideo
+    ? stableRoots.filter((root) => !isVideoMediaRootV613024(root))
+    : stableRoots.slice();
+  const videoRoots = state.prioritizeImagesBeforeVideo
+    ? stableRoots.filter((root) => isVideoMediaRootV613024(root))
+    : [];
+  const initialRoots = nonVideoRoots.slice(0, state.initialBatchSize);
+  const deferredRoots = nonVideoRoots.slice(state.initialBatchSize);
+  const timing = getArtworkBatchTimingV613024();
+
+  markMobileAssetBudgetV613024('mobile-media-budget-active', {
+    profile: state.profileName,
+    totalItems: stableRoots.length,
+    initialBatchSize: state.initialBatchSize,
+    actualInitialItems: initialRoots.length,
+    deferredMediaItems: deferredRoots.length,
+    deferredVideoItems: videoRoots.length
+  }, { once: true });
+
+  markMobileAssetBudgetV613024('media-batch-start', {
+    phase: 'initial-media',
+    batch: 1,
+    items: initialRoots.length,
+    remaining: deferredRoots.length + videoRoots.length
+  });
+
+  const initialPromise = settleMobileMediaBatchV613024(
+    initialRoots.map((root) => loadArtworkTextureIntoRoot(root)),
+    state.config.batchMaxWaitMs
+  );
+
+  initialPromise.then(({ results, timedOut }) => {
+    markMobileAssetBudgetV613024('media-batch-complete', {
+      phase: 'initial-media',
+      batch: 1,
+      items: initialRoots.length,
+      fulfilled: results.filter((result) => result.status === 'fulfilled').length,
+      timedOut,
+      remaining: deferredRoots.length + videoRoots.length
+    });
+
+    if (deferredRoots.length) {
+      markMobileAssetBudgetV613024('media-batch-deferred', {
+        phase: 'image-logo',
+        items: deferredRoots.length,
+        delayMs: timing.delayMs
+      });
+      scheduleMobileMediaBudgetBatchesV613024(deferredRoots, {
+        phase: 'image-logo',
+        initialDelayMs: timing.delayMs
+      });
+    }
+
+    if (videoRoots.length) {
+      const videoDelayMs = state.deferVideoFirstFrame
+        ? state.videoFirstFrameDelayMs
+        : timing.delayMs;
+      markMobileAssetBudgetV613024('video-first-frame-deferred', {
+        profile: state.profileName,
+        items: videoRoots.length,
+        delayMs: videoDelayMs
+      });
+      scheduleMobileMediaBudgetBatchesV613024(videoRoots, {
+        phase: 'video-first-frame',
+        batchSize: 1,
+        delayMs: Math.max(timing.delayMs, videoDelayMs),
+        initialDelayMs: videoDelayMs
+      });
+    }
+  });
+
+  return true;
+}
+
 
 function isRoomRuntimeDebugEnabled() {
   if (typeof window.isViewerRoomDebugEnabled === 'function' && window.isViewerRoomDebugEnabled()) return true;
@@ -1869,11 +2073,15 @@ async function loadArtworks() {
       if (typeof refreshArtworkList === 'function') refreshArtworkList();
       markViewerUsableSoon(`✅ <strong>Sẵn sàng tham quan</strong><br>${CONFIG.currentRoomLabel ? `Phòng: ${CONFIG.currentRoomLabel}<br>` : 'Phòng: đã load<br>'}Tác phẩm: ${roots.length}/${artworks.length}<br>${invalidCount > 0 ? `Lỗi dữ liệu: ${invalidCount}<br>` : ''}Ảnh đang tải dần trong nền.`);
 
-      const initialCount = Math.max(1, Number(CONFIG.mobile?.artworkInitialBatchSize || 8));
-      const initialRoots = roots.slice(0, initialCount);
-      const laterRoots = roots.slice(initialCount);
-      initialRoots.forEach((root) => loadArtworkTextureIntoRoot(root));
-      scheduleArtworkTextureBatches(laterRoots);
+      // v6.13.024: mobile-only progressive media budget. Root/list/object creation above
+      // remains unchanged; only the timing/order of real media loads is adjusted.
+      if (!startMobileAssetLoadingBudgetV613024(roots)) {
+        const initialCount = Math.max(1, Number(CONFIG.mobile?.artworkInitialBatchSize || 8));
+        const initialRoots = roots.slice(0, initialCount);
+        const laterRoots = roots.slice(initialCount);
+        initialRoots.forEach((root) => loadArtworkTextureIntoRoot(root));
+        scheduleArtworkTextureBatches(laterRoots);
+      }
       scheduleSceneVideoAutoplay();
       return;
     }

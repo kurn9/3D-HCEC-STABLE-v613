@@ -319,6 +319,27 @@ const CONFIG = {
     disableSceneVideoAutoplayOnMobileMid: true
   },
 
+  // v6.13.024 — mobile-only media loading budget.
+  // Chỉ điều phối thời điểm tải artwork/logo/video first-frame; không đổi binary,
+  // object contract, animation, desktop gaze, user video playback hoặc cinema.
+  mobileAssetLoadingBudget: {
+    enabled: true,
+    fallbackInitialBatchSize: 2,
+    initialBatchByProfile: {
+      low: 1,
+      mid: 2,
+      high: 3
+    },
+    prioritizeImagesBeforeVideo: true,
+    deferVideoFirstFrameOnMobileLowMid: true,
+    batchMaxWaitMs: 4500,
+    videoFirstFrameDelayMsByProfile: {
+      low: 1600,
+      mid: 900,
+      high: 400
+    }
+  },
+
   // Viewer/Intro V6.4 — mobile & tablet runtime configuration.
   mobile: {
     enabled: true,
