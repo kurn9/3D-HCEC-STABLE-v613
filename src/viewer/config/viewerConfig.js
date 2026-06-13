@@ -166,8 +166,20 @@ const CONFIG = {
   sceneVideoCinemaErrorText: 'Video chưa phát được trên thiết bị này. Vui lòng thử lại hoặc xem trên Chrome/Edge.',
   sceneVideoCinemaFallbackTimeoutMs: 6500,
 
-  // v6.13.014 — desktop DOM mini preview. This never touches the 3D video surface pipeline.
-  domVideoPreviewEnabled: true,
+  // v6.13.016 — H5 controlled surface gaze. DOM mini preview is mutually exclusive and disabled.
+  sceneVideoGazePreviewEnabled: true,
+  sceneVideoGazePreviewDesktopOnly: true,
+  sceneVideoGazeStartDelayMs: 600,
+  sceneVideoReticleStableMs: 120,
+  sceneVideoGazePauseDelayMs: 350,
+  sceneVideoFocusHysteresisMs: 400,
+  sceneVideoMinPlaySessionMs: 800,
+  sceneVideoPreventRapidToggleMs: 600,
+  sceneVideoGazePreviewDebug: false,
+  sceneVideoDomMiniPreviewEnabled: false,
+
+  // v6.13.014 DOM preview remains in source only as a disabled rollback fallback.
+  domVideoPreviewEnabled: false,
   domVideoPreviewDesktopOnly: true,
   domVideoPreviewDwellMs: 600,
   domVideoPreviewExitCooldownMs: 300,

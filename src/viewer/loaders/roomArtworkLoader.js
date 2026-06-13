@@ -92,32 +92,402 @@ function createArtworkPlaceholderTexture() {
 
 // K_O_F_E_B — video artwork surfaces must never remain in an infinite loading state.
 function applySceneVideoFallbackTexture(root, item = {}, reason = '') {
-  const mat = root?.userData?.imageMaterial;
+  ensureSceneVideoDualLayer(root, item);
+  const mat = getSceneVideoIdleMaterial(root);
   if (!root || !mat) return null;
   const texture = createScenePlaceholderTexture(item?.title || item?.id || 'Video trình chiếu', 'VIDEO');
-  texture.userData = { ...(texture.userData || {}), sceneVideoFallback: true, reason };
+  texture.userData = { ...(texture.userData || {}), sceneVideoFallback: true, sceneVideoPlaceholder: true, sceneVideoIdlePreview: true, reason };
   mat.map = texture;
   mat.needsUpdate = true;
+  hideSceneVideoLiveLayer(root, reason || 'placeholder');
   root.userData.videoFallbackTexture = texture;
+  root.userData.videoIdleTexture = texture;
   root.userData.textureFailed = false;
   // Keep textureLoaded false: this is a safe poster/placeholder, not a decoded video frame.
   if (!root.userData.videoPlayer?.video) root.userData.textureLoaded = false;
+  root.userData.videoIdleMode = 'placeholder';
+  root.userData.videoSurfaceState = reason || 'idle-preview';
   return texture;
 }
 
-function restoreSceneVideoFallbackTexture(root, item = {}, reason = '') {
-  if (!root?.userData?.imageMaterial) return false;
-  const texture = root.userData.videoPosterTexture || root.userData.videoFallbackTexture || applySceneVideoFallbackTexture(root, item, reason);
+
+function isSceneVideoLiveVideoTexture(texture) {
   if (!texture) return false;
-  root.userData.imageMaterial.map = texture;
-  root.userData.imageMaterial.needsUpdate = true;
-  root.userData.textureLoaded = false;
-  root.userData.videoSurfaceState = reason || 'placeholder';
+  if (texture.isVideoTexture === true) return true;
+  if (typeof THREE !== 'undefined' && typeof THREE.VideoTexture === 'function' && texture instanceof THREE.VideoTexture) return true;
+  return texture?.userData?.sceneVideoActiveVideoTexture === true;
+}
+
+function getSceneVideoIdleMaterial(root) {
+  return root?.userData?.sceneVideoIdleMaterial || root?.userData?.imageMaterial || null;
+}
+
+function getSceneVideoLiveMaterial(root) {
+  return root?.userData?.sceneVideoLiveMaterial || null;
+}
+
+function setSceneVideoLiveLayerVisible(root, visible = false, reason = '') {
+  if (!root?.userData) return false;
+  const liveLayer = root.userData.sceneVideoLiveLayer;
+  if (liveLayer) liveLayer.visible = Boolean(visible);
+  root.userData.sceneVideoLiveVisible = Boolean(visible);
+  if (!visible && root.userData.sceneVideoSurfaceMode !== 'cinema') {
+    root.userData.sceneVideoSurfaceMode = reason === 'manual-pause' ? 'paused' : 'idle';
+  } else if (visible) {
+    root.userData.sceneVideoSurfaceMode = reason || 'playing';
+  }
+  return Boolean(liveLayer);
+}
+
+function ensureSceneVideoDualLayer(root, item = {}) {
+  if (!root?.userData || getSceneItemType(root.userData.artData || item) !== 'video') return false;
+  const idleMesh = root.userData.imageMesh;
+  const idleMaterial = root.userData.imageMaterial;
+  if (!idleMesh || !idleMaterial) return false;
+  root.userData.sceneVideoIdleLayer = idleMesh;
+  root.userData.sceneVideoIdleMaterial = idleMaterial;
+  if (root.userData.sceneVideoLiveLayer && root.userData.sceneVideoLiveMaterial) {
+    root.userData.sceneVideoLiveLayer.userData.artRoot = root;
+    root.userData.sceneVideoLiveLayer.userData.parentVideoRoot = root;
+    return true;
+  }
+
+  const liveMaterial = new THREE.MeshBasicMaterial({
+    color: 0xffffff,
+    transparent: true,
+    opacity: 1,
+    side: THREE.DoubleSide,
+    depthTest: true,
+    depthWrite: false,
+    toneMapped: false
+  });
+  liveMaterial.userData = {
+    ...(liveMaterial.userData || {}),
+    sceneVideoLiveMaterial: true,
+    ownedBySceneVideoDualLayer: true
+  };
+
+  const liveLayer = new THREE.Mesh(idleMesh.geometry, liveMaterial);
+  liveLayer.name = `${root.name || item?.id || 'VIDEO'}_LIVE_VIDEO_LAYER`;
+  liveLayer.position.copy(idleMesh.position);
+  liveLayer.rotation.copy(idleMesh.rotation);
+  liveLayer.scale.copy(idleMesh.scale);
+  liveLayer.position.z += Math.max(0.002, Math.min(0.01, Number(CONFIG?.sceneVideoLiveLayerOffset || 0.006)));
+  liveLayer.visible = false;
+  liveLayer.renderOrder = (idleMesh.renderOrder || 0) + 1;
+  liveLayer.userData.artRoot = root;
+  liveLayer.userData.parentVideoRoot = root;
+  liveLayer.userData.isSceneVideoLiveLayer = true;
+  liveLayer.userData.itemType = 'video';
+  try { idleMesh.parent?.add(liveLayer); } catch (_) {}
+
+  root.userData.sceneVideoLiveLayer = liveLayer;
+  root.userData.sceneVideoLiveMaterial = liveMaterial;
+  root.userData.sceneVideoIdleLayer = idleMesh;
+  root.userData.sceneVideoIdleMaterial = idleMaterial;
+  root.userData.sceneVideoSurfaceMode = root.userData.sceneVideoSurfaceMode || 'idle';
+  root.userData.sceneVideoLiveVisible = false;
   return true;
+}
+
+function applySceneVideoLiveTexture(root, texture, reason = 'playing') {
+  if (!root?.userData || !texture || !isSceneVideoLiveVideoTexture(texture)) return false;
+  ensureSceneVideoDualLayer(root, root.userData.artData || {});
+  const liveMaterial = getSceneVideoLiveMaterial(root);
+  if (!liveMaterial) return false;
+  if (liveMaterial.map !== texture) {
+    liveMaterial.map = texture;
+    liveMaterial.needsUpdate = true;
+  }
+  setSceneVideoLiveLayerVisible(root, true, reason || 'playing');
+  if (reason === 'previewing') logSceneVideoGazeH5('live-layer-visible', root);
+  root.userData.videoActiveLiveTexture = texture;
+  root.userData.videoSurfaceState = reason || 'playing';
+  root.userData.textureLoaded = true;
+  return true;
+}
+
+function hideSceneVideoLiveLayer(root, reason = 'idle') {
+  if (!root?.userData) return false;
+  setSceneVideoLiveLayerVisible(root, false, reason || 'idle');
+  if (reason === 'gaze-out') logSceneVideoGazeH5('live-layer-hidden', root);
+  return true;
+}
+
+function disposeSceneVideoFrozenFrame(root, keepTexture = null) {
+  const current = root?.userData?.videoFrozenFrameTexture;
+  if (!current || current === keepTexture) return;
+  try { current.dispose?.(); } catch (_) {}
+  if (root?.userData) {
+    if (root.userData.videoFrozenFrameTexture === current) root.userData.videoFrozenFrameTexture = null;
+    if (root.userData.videoLastGoodTexture === current) root.userData.videoLastGoodTexture = null;
+    if (root.userData.videoIdleTexture === current) root.userData.videoIdleTexture = null;
+  }
+}
+
+function captureSceneVideoFrozenFrame(root, video, source = '', reason = 'capture') {
+  if (!root?.userData || !hasSceneVideoFirstFrame(video)) return null;
+  const blackResult = isLikelyBlackVideoFrame(video);
+  markSceneVideoFrameValidity(root, blackResult, `frozen-${reason}`);
+  if (!blackResult.ok || blackResult.isBlack) {
+    root.userData.videoFrozenFrameRejectedAt = performance.now();
+    root.userData.videoFrozenFrameRejectReason = blackResult.reason || 'black-frame';
+    return null;
+  }
+  const vw = Math.max(1, Number(video.videoWidth || 0));
+  const vh = Math.max(1, Number(video.videoHeight || 0));
+  if (!vw || !vh) return null;
+  const maxEdge = Math.max(256, Math.min(1024, Number(CONFIG?.sceneVideoFrozenFrameMaxEdge || 768)));
+  const scale = Math.min(1, maxEdge / Math.max(vw, vh));
+  const width = Math.max(64, Math.round(vw * scale));
+  const height = Math.max(36, Math.round(vh * scale));
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx) return null;
+  try {
+    ctx.drawImage(video, 0, 0, width, height);
+    // Re-sample the frozen canvas itself so a drawImage/browser buffer edge case cannot store a black poster.
+    const data = ctx.getImageData(0, 0, Math.min(width, 64), Math.min(height, 36)).data;
+    let lumaSum = 0;
+    let nonBlack = 0;
+    const pixels = Math.max(1, data.length / 4);
+    const nonBlackThreshold = Math.max(3, Number(CONFIG?.sceneVideoBlackFramePixelThreshold || 14));
+    for (let i = 0; i < data.length; i += 4) {
+      const luma = 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
+      lumaSum += luma;
+      if (luma >= nonBlackThreshold) nonBlack += 1;
+    }
+    const averageLuma = lumaSum / pixels;
+    const nonBlackPixelRatio = nonBlack / pixels;
+    const isBlack = averageLuma < Math.max(1, Number(CONFIG?.sceneVideoBlackFrameLumaThreshold || 10))
+      && nonBlackPixelRatio < Math.max(0.001, Number(CONFIG?.sceneVideoBlackFrameNonBlackRatio || 0.045));
+    if (isBlack) {
+      root.userData.videoFrozenFrameRejectedAt = performance.now();
+      root.userData.videoFrozenFrameRejectReason = 'frozen-canvas-black-frame';
+      return null;
+    }
+  } catch (error) {
+    root.userData.videoFrozenFrameRejectedAt = performance.now();
+    root.userData.videoFrozenFrameRejectReason = error?.message || 'frozen-frame-capture-failed';
+    return null;
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.minFilter = THREE.LinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.generateMipmaps = false;
+  texture.userData = {
+    ...(texture.userData || {}),
+    sceneVideoFrozenFrame: true,
+    sceneVideoSource: source || getSceneVideoPlayerUrl(root) || '',
+    sceneVideoFrameValid: true,
+    sceneVideoValidFrame: true,
+    sceneVideoBlackFrame: false,
+    sceneVideoIdlePreview: true,
+    sceneVideoCapturedAt: performance.now(),
+    sceneVideoReason: reason || 'capture'
+  };
+  return texture;
+}
+
+function applySceneVideoFrozenFrame(root, texture, reason = 'frozen-frame') {
+  ensureSceneVideoDualLayer(root, root?.userData?.artData || {});
+  const mat = getSceneVideoIdleMaterial(root);
+  if (!root?.userData || !mat || !texture || isSceneVideoLiveVideoTexture(texture)) return false;
+  if (!isSceneVideoTextureValidIdle(texture)) return false;
+  const previousFrozen = root.userData.videoFrozenFrameTexture;
+  if (previousFrozen && previousFrozen !== texture) {
+    try { previousFrozen.dispose?.(); } catch (_) {}
+  }
+  root.userData.videoFrozenFrameTexture = texture;
+  root.userData.videoLastGoodTexture = texture;
+  root.userData.videoIdleTexture = texture;
+  root.userData.videoIdleMode = 'frozen-frame';
+  root.userData.videoSurfaceState = reason || 'frozen-frame';
+  root.userData.sceneVideoSurfaceMode = 'idle';
+  hideSceneVideoLiveLayer(root, reason || 'frozen-frame');
+  root.userData.textureFailed = false;
+  root.userData.textureLoaded = true;
+  if (mat.map !== texture) {
+    mat.map = texture;
+    mat.needsUpdate = true;
+  }
+  return true;
+}
+
+function applySceneVideoIdlePlaceholder(root, item = {}, reason = 'placeholder') {
+  return applySceneVideoFallbackTexture(root, item, reason || 'placeholder');
+}
+
+function getSceneVideoSafeIdleTexture(root, item = {}, reason = 'idle-preview') {
+  if (!root?.userData) return null;
+  const candidates = [
+    root.userData.videoFrozenFrameTexture,
+    root.userData.videoLastGoodTexture,
+    root.userData.videoPosterTexture,
+    root.userData.videoIdleTexture,
+    root.userData.videoFallbackTexture,
+    root.userData.videoStatusTexture
+  ];
+  for (const texture of candidates) {
+    if (isSceneVideoTextureValidIdle(texture)) return texture;
+  }
+  return applySceneVideoIdlePlaceholder(root, item, reason);
+}
+
+function ensureSceneVideoIdlePreview(root, item = {}, reason = 'idle-preview') {
+  ensureSceneVideoDualLayer(root, item);
+  const mat = getSceneVideoIdleMaterial(root);
+  if (!root || !mat) return null;
+  const player = root.userData?.videoPlayer;
+  if (player?.video && player?.texture && mat.map === player.texture) {
+    const frozen = captureSceneVideoFrozenFrame(root, player.video, player.sourceUrl || item?.videoUrl || '', reason || 'idle-active-player');
+    if (frozen && applySceneVideoFrozenFrame(root, frozen, reason || 'idle-frozen-frame')) return frozen;
+    player.texture.userData = { ...(player.texture.userData || {}), sceneVideoActiveVideoTexture: true, sceneVideoIdlePreview: false };
+  }
+  const texture = getSceneVideoSafeIdleTexture(root, item, reason);
+  if (!texture) return null;
+  if (mat.map !== texture) {
+    mat.map = texture;
+    mat.needsUpdate = true;
+  }
+  root.userData.videoIdleTexture = texture;
+  root.userData.videoIdleMode = texture.userData?.sceneVideoFrozenFrame ? 'frozen-frame' : (texture.userData?.sceneVideoPoster ? 'poster' : 'placeholder');
+  root.userData.videoSurfaceState = reason || 'idle-preview';
+  root.userData.sceneVideoSurfaceMode = 'idle';
+  hideSceneVideoLiveLayer(root, reason || 'idle-preview');
+  root.userData.textureFailed = false;
+  root.userData.textureLoaded = Boolean(texture.userData?.sceneVideoFrozenFrame || texture.userData?.sceneVideoPoster);
+  return texture;
+}
+
+function restoreSceneVideoIdlePreview(root, item = {}, reason = '') {
+  const texture = ensureSceneVideoIdlePreview(root, item, reason || 'idle-preview');
+  if (!texture) return false;
+  root.userData.videoSurfaceState = reason || 'idle-preview';
+  return true;
+}
+
+function restoreSceneVideoFallbackTexture(root, item = {}, reason = '') {
+  return restoreSceneVideoIdlePreview(root, item, reason || 'placeholder');
 }
 
 function hasSceneVideoFirstFrame(video) {
   return Boolean(video && video.readyState >= 2 && Number(video.videoWidth || 0) > 0 && Number(video.videoHeight || 0) > 0);
+}
+
+function sampleSceneVideoFrameLuma(video, options = {}) {
+  if (!hasSceneVideoFirstFrame(video)) {
+    return { ok: false, reason: 'frame-not-ready', averageLuma: 0, nonBlackPixelRatio: 0 };
+  }
+  const width = Math.max(16, Math.min(64, Number(options.width || CONFIG?.sceneVideoBlackFrameSampleWidth || 48)));
+  const height = Math.max(9, Math.min(36, Number(options.height || CONFIG?.sceneVideoBlackFrameSampleHeight || 27)));
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx) return { ok: false, reason: 'sample-context-unavailable', averageLuma: 0, nonBlackPixelRatio: 0 };
+  try {
+    ctx.drawImage(video, 0, 0, width, height);
+    const data = ctx.getImageData(0, 0, width, height).data;
+    let lumaSum = 0;
+    let nonBlack = 0;
+    const nonBlackThreshold = Math.max(3, Number(options.nonBlackThreshold || CONFIG?.sceneVideoBlackFramePixelThreshold || 14));
+    for (let i = 0; i < data.length; i += 4) {
+      const luma = 0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2];
+      lumaSum += luma;
+      if (luma >= nonBlackThreshold) nonBlack += 1;
+    }
+    const pixels = Math.max(1, width * height);
+    return {
+      ok: true,
+      reason: 'sampled',
+      averageLuma: lumaSum / pixels,
+      nonBlackPixelRatio: nonBlack / pixels
+    };
+  } catch (error) {
+    return { ok: false, reason: error?.message || 'sample-failed', averageLuma: 0, nonBlackPixelRatio: 0 };
+  }
+}
+
+function isLikelyBlackVideoFrame(video, options = {}) {
+  const sample = sampleSceneVideoFrameLuma(video, options);
+  if (!sample.ok) return { ...sample, isBlack: true };
+  const lumaThreshold = Math.max(1, Number(options.lumaThreshold || CONFIG?.sceneVideoBlackFrameLumaThreshold || 10));
+  const ratioThreshold = Math.max(0.001, Number(options.nonBlackRatioThreshold || CONFIG?.sceneVideoBlackFrameNonBlackRatio || 0.045));
+  return {
+    ...sample,
+    isBlack: sample.averageLuma < lumaThreshold && sample.nonBlackPixelRatio < ratioThreshold
+  };
+}
+
+function hasSceneVideoRenderableFrame(video) {
+  if (!hasSceneVideoFirstFrame(video)) return false;
+  const result = isLikelyBlackVideoFrame(video);
+  return Boolean(result.ok && !result.isBlack);
+}
+
+function markSceneVideoFrameValidity(root, result = {}, source = '') {
+  if (!root?.userData) return;
+  root.userData.videoLastFrameValidity = {
+    ok: Boolean(result.ok),
+    isBlack: Boolean(result.isBlack),
+    averageLuma: Number(result.averageLuma || 0),
+    nonBlackPixelRatio: Number(result.nonBlackPixelRatio || 0),
+    reason: result.reason || '',
+    source,
+    checkedAt: performance.now()
+  };
+}
+
+function waitForSceneVideoNonBlackFrame(video, root = null, source = 'frame-wait', timeoutMs = 1800) {
+  return new Promise((resolve) => {
+    const startedAt = performance.now();
+    let done = false;
+    let timerId = 0;
+    let rvfcId = 0;
+    const finish = (result) => {
+      if (done) return;
+      done = true;
+      if (timerId) window.clearTimeout(timerId);
+      resolve(result);
+    };
+    const check = () => {
+      const result = isLikelyBlackVideoFrame(video);
+      if (root) markSceneVideoFrameValidity(root, result, source);
+      if (result.ok && !result.isBlack) {
+        finish({ ...result, ready: true });
+        return;
+      }
+      if (performance.now() - startedAt >= timeoutMs) {
+        finish({ ...result, ready: false, reason: result.reason || 'non-black-frame-timeout' });
+        return;
+      }
+      if (typeof video?.requestVideoFrameCallback === 'function') {
+        try { rvfcId = video.requestVideoFrameCallback(check); return; } catch (_) {}
+      }
+      window.setTimeout(check, 110);
+    };
+    timerId = window.setTimeout(() => {
+      const result = isLikelyBlackVideoFrame(video);
+      if (root) markSceneVideoFrameValidity(root, result, `${source}-timeout`);
+      finish({ ...result, ready: Boolean(result.ok && !result.isBlack), reason: result.reason || 'non-black-frame-timeout' });
+    }, timeoutMs + 80);
+    check();
+  });
+}
+
+function isSceneVideoTextureValidIdle(texture) {
+  if (!texture) return false;
+  if (isSceneVideoLiveVideoTexture(texture)) return false;
+  const ud = texture.userData || {};
+  if (ud.sceneVideoBlackFrame === true) return false;
+  if (ud.sceneVideoFrozenFrame === true && ud.sceneVideoFrameValid === true) return true;
+  if (ud.sceneVideoValidFrame === true && ud.sceneVideoActiveVideoTexture !== true) return true;
+  if (ud.sceneVideoPoster === true || ud.sceneVideoPlaceholder === true || ud.sceneVideoFallback === true || ud.sceneVideoStatus) return true;
+  return false;
 }
 
 // HOTFIX/FEATURE V6.11.1 — runtime video preview/autoplay for scene video items.
@@ -238,8 +608,154 @@ function pauseSceneVideosOutsideRange() {
     if (!player?.video || player.video.paused) return;
     const dist = camera.position.distanceTo(root.position);
     if (dist > maxDistance || !isSceneVideoRootVisible(root, 0.36)) {
-      try { player.video.pause(); } catch (_) {}
+      pauseSceneVideoSurface(root, 'outside-range');
     }
+  });
+}
+
+function getSceneVideoTimingConfig() {
+  return {
+    gazeStartDelayMs: Math.max(0, Number(CONFIG?.sceneVideoGazeStartDelayMs || 120)),
+    pauseDelayMs: Math.max(0, Number(CONFIG?.sceneVideoGazePauseDelayMs || 350)),
+    focusHysteresisMs: Math.max(0, Number(CONFIG?.sceneVideoFocusHysteresisMs || 450)),
+    minPlaySessionMs: Math.max(0, Number(CONFIG?.sceneVideoMinPlaySessionMs || 800)),
+    reticleStableMs: Math.max(0, Number(CONFIG?.sceneVideoReticleStableMs || 120)),
+    preventRapidToggleMs: Math.max(0, Number(CONFIG?.sceneVideoPreventRapidToggleMs || 600))
+  };
+}
+
+function clearSceneVideoTimer(root, key) {
+  const id = root?.userData?.[key];
+  if (id) window.clearTimeout(id);
+  if (root?.userData) root.userData[key] = 0;
+}
+
+function markSceneVideoFocusSeen(root) {
+  if (!root?.userData) return;
+  const now = performance.now();
+  if (!root.userData.sceneVideoFocusFirstSeenAt) root.userData.sceneVideoFocusFirstSeenAt = now;
+  root.userData.sceneVideoFocusLastSeenAt = now;
+}
+
+function canSceneVideoToggle(root) {
+  const timing = getSceneVideoTimingConfig();
+  const now = performance.now();
+  const last = Number(root?.userData?.sceneVideoLastToggleAt || 0);
+  if (last && now - last < timing.preventRapidToggleMs) return false;
+  if (root?.userData) root.userData.sceneVideoLastToggleAt = now;
+  return true;
+}
+
+function hasSceneVideoStableFocus(root) {
+  const timing = getSceneVideoTimingConfig();
+  const now = performance.now();
+  const firstSeen = Number(root?.userData?.sceneVideoFocusFirstSeenAt || 0);
+  return Boolean(firstSeen && now - firstSeen >= timing.reticleStableMs);
+}
+
+function getSceneVideoPlayerUrl(root) {
+  return String(root?.userData?.videoPlayer?.sourceUrl || root?.userData?.videoPlayer?.video?.currentSrc || root?.userData?.videoPlayer?.video?.src || '').trim();
+}
+
+function markSceneVideoPendingPlayIntent(root, item = {}, videoSource = '', source = 'manual') {
+  if (!root?.userData) return;
+  const now = performance.now();
+  root.userData.videoPendingPlayIntent = true;
+  root.userData.videoPendingPlaySource = source || 'manual';
+  root.userData.videoPendingPlayUrl = String(videoSource || '').trim();
+  root.userData.videoPendingPlayItemId = String(item?.id || '');
+  root.userData.videoPendingPlayAt = now;
+  root.userData.videoPendingManualIntent = /click|tap|manual/i.test(String(source || ''));
+}
+
+function isSceneVideoPendingPlayIntentValid(root, item = {}, videoSource = '') {
+  if (!root?.userData?.videoPendingPlayIntent) return false;
+  const now = performance.now();
+  const maxAge = Math.max(800, Number(CONFIG?.sceneVideoPendingPlayIntentTtlMs || 3000));
+  const at = Number(root.userData.videoPendingPlayAt || 0);
+  if (!at || now - at > maxAge) return false;
+  const pendingUrl = String(root.userData.videoPendingPlayUrl || '').trim();
+  if (pendingUrl && videoSource && pendingUrl !== videoSource) return false;
+  const pendingId = String(root.userData.videoPendingPlayItemId || '');
+  if (pendingId && item?.id && pendingId !== String(item.id)) return false;
+  if (root.userData.sceneVideoCinemaOpen === true) return false;
+  if (root.userData.videoPendingManualIntent) return true;
+  return Boolean(root.userData.sceneVideoGazeFocused || root.userData.videoSurfaceState === 'previewing' || root.userData.videoSurfaceState === 'playing');
+}
+
+function clearSceneVideoPendingPlayIntent(root) {
+  if (!root?.userData) return;
+  root.userData.videoPendingPlayIntent = false;
+  root.userData.videoPendingPlaySource = '';
+  root.userData.videoPendingPlayUrl = '';
+  root.userData.videoPendingPlayItemId = '';
+  root.userData.videoPendingPlayAt = 0;
+  root.userData.videoPendingManualIntent = false;
+}
+
+function playSceneVideoExistingPlayer(root, item = {}, videoSource = '', { forceMuted = false, source = 'pending-play' } = {}) {
+  const player = root?.userData?.videoPlayer;
+  const video = player?.video;
+  ensureSceneVideoDualLayer(root, item);
+  const liveMaterial = getSceneVideoLiveMaterial(root);
+  if (!video || !player?.texture || !liveMaterial) return Promise.resolve(false);
+  if (forceMuted || source === 'gaze') video.muted = true;
+
+  const activateTextureWhenValid = (activateSource = source) => waitForSceneVideoNonBlackFrame(
+    video,
+    root,
+    `existing-${activateSource}`,
+    Math.max(500, Number(CONFIG?.sceneVideoFrameValidationTimeoutMs || 1800))
+  ).then((frameResult) => {
+    if (!frameResult.ready) {
+      player.texture.userData = { ...(player.texture.userData || {}), sceneVideoBlackFrame: true, sceneVideoValidFrame: false };
+      restoreSceneVideoIdlePreview(root, item, `invalid-existing-frame-${frameResult.reason || 'black'}`);
+      return false;
+    }
+    player.texture.userData = {
+      ...(player.texture.userData || {}),
+      sceneVideoActiveVideoTexture: true,
+      sceneVideoIdlePreview: false,
+      sceneVideoValidFrame: true,
+      sceneVideoBlackFrame: false
+    };
+    applySceneVideoLiveTexture(root, player.texture, activateSource === 'gaze' ? 'previewing' : 'playing');
+    root.userData.textureLoaded = true;
+    root.userData.videoSurfaceState = activateSource === 'gaze' ? 'previewing' : 'playing';
+    root.userData.videoStartedAt = performance.now();
+    return true;
+  });
+
+  try {
+    const playPromise = video.play?.();
+    if (playPromise && typeof playPromise.then === 'function') {
+      return playPromise
+        .then(() => activateTextureWhenValid(source))
+        .catch((err) => {
+          logSceneVideoPreview('surface pending play rejected', { title: item?.title || item?.id || '', videoUrl: videoSource, source, reason: err?.message || 'play-rejected' }, 'warn');
+          restoreSceneVideoIdlePreview(root, item, 'pending-play-rejected');
+          if (source !== 'gaze') setStatus?.('⚠️ <strong>Click để phát video</strong><br>Trình duyệt cần thao tác trực tiếp để phát video.');
+          return false;
+        });
+    }
+    return activateTextureWhenValid(source);
+  } catch (error) {
+    logSceneVideoPreview('surface pending play failed', { title: item?.title || item?.id || '', videoUrl: videoSource, source, reason: error?.message || 'play-failed' }, 'warn');
+    restoreSceneVideoIdlePreview(root, item, 'pending-play-failed');
+    return Promise.resolve(false);
+  }
+}
+
+function resolveSceneVideoPendingPlayIntent(root, item = {}, videoSource = '', { forceMuted = false, source = 'pending-play' } = {}) {
+  if (!isSceneVideoPendingPlayIntentValid(root, item, videoSource)) {
+    clearSceneVideoPendingPlayIntent(root);
+    return Promise.resolve(false);
+  }
+  const pendingSource = root.userData.videoPendingPlaySource || source || 'pending-play';
+  clearSceneVideoPendingPlayIntent(root);
+  return playSceneVideoExistingPlayer(root, item, videoSource, {
+    forceMuted: forceMuted || pendingSource === 'gaze',
+    source: pendingSource
   });
 }
 
@@ -254,6 +770,18 @@ function drawVideoFrameToTexture(video, item) {
 
   ctx.fillStyle = '#05070c';
   ctx.fillRect(0, 0, width, height);
+
+  const blackResult = isLikelyBlackVideoFrame(video);
+  if (!blackResult.ok || blackResult.isBlack) {
+    logSceneVideoPreview('first-frame rejected as black/invalid', {
+      title: item?.title || item?.id || '',
+      videoUrl: item?.videoUrl || '',
+      averageLuma: blackResult.averageLuma,
+      nonBlackPixelRatio: blackResult.nonBlackPixelRatio,
+      reason: blackResult.reason || 'black-frame'
+    }, 'warn');
+    return null;
+  }
 
   const vw = Number(video.videoWidth || 0);
   const vh = Number(video.videoHeight || 0);
@@ -292,21 +820,23 @@ function drawVideoFrameToTexture(video, item) {
   ctx.fillText(label.slice(0, 42), 38, height - 42);
   ctx.font = '700 19px system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
   ctx.fillStyle = 'rgba(255,250,232,.72)';
-  ctx.fillText('Click để phát · nhấp đúp để xem lớn', 40, height - 92);
+  ctx.fillText('Ngắm vào để xem trước · 1 click phát/tạm dừng', 40, height - 92);
 
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.minFilter = THREE.LinearFilter;
   tex.magFilter = THREE.LinearFilter;
   tex.generateMipmaps = false;
+  tex.userData = { ...(tex.userData || {}), sceneVideoFrozenFrame: true, sceneVideoFrameValid: true, sceneVideoValidFrame: true, sceneVideoBlackFrame: false, sceneVideoIdlePreview: true, sceneVideoCapturedAt: performance.now(), sceneVideoReason: 'first-frame-preview' };
   return tex;
 }
 
 function captureVideoFramePreviewTexture(item) {
   if (!isSceneVideoFirstFramePreviewEnabled()) return Promise.resolve(null);
   if (!item?.videoUrl) return Promise.resolve(null);
-  if (sceneVideoMissingUrlCache.has(item.videoUrl)) {
-    logSceneVideoPreview('fallback: reason', { title: item?.title || item?.id || '', videoUrl: item.videoUrl, reason: 'cached-missing-video' }, 'warn');
+  const videoSource = String(item?.videoUrl || '').trim();
+  if (sceneVideoMissingUrlCache.has(videoSource)) {
+    logSceneVideoPreview('fallback: reason', { title: item?.title || item?.id || '', videoUrl: videoSource, reason: 'cached-missing-video' }, 'warn');
     return Promise.resolve(null);
   }
 
@@ -318,7 +848,7 @@ function captureVideoFramePreviewTexture(item) {
     const timeoutMs = Math.max(1800, Number(CONFIG?.videoFirstFrameTimeoutMs || CONFIG?.sceneVideoPreviewTimeoutMs || 4500));
     const debugData = {
       title: item?.title || item?.id || '',
-      videoUrl: item?.videoUrl || ''
+      videoUrl: videoSource || item?.videoUrl || ''
     };
 
     const cleanup = () => {
@@ -364,7 +894,7 @@ function captureVideoFramePreviewTexture(item) {
     const run = async () => {
       logSceneVideoPreview('start', debugData);
       try {
-        video.src = item.videoUrl;
+        video.src = videoSource;
         try { video.load?.(); } catch (_) {}
 
         await waitForVideoEvent(video, ['loadedmetadata'], Math.min(timeoutMs, 2600));
@@ -386,23 +916,32 @@ function captureVideoFramePreviewTexture(item) {
         const seekMin = Number(CONFIG?.sceneVideoPreviewSeekMin || 0.05);
         const seekMax = Number(CONFIG?.sceneVideoPreviewSeekMax || 0.35);
         const seekRatio = Number(CONFIG?.sceneVideoPreviewSeekRatio || 0.03);
-        const seekAt = Number.isFinite(configuredSeek) && configuredSeek >= 0
+        const baseSeekAt = Number.isFinite(configuredSeek) && configuredSeek >= 0
           ? configuredSeek
           : (Number.isFinite(duration) && duration > 0.2
             ? Math.min(seekMax, Math.max(seekMin, duration * seekRatio))
             : 0.05);
+        const maxTime = Math.max(0, (duration || 1.2) - 0.02);
+        const seekCandidates = [...new Set([
+          baseSeekAt,
+          Number(CONFIG?.sceneVideoFirstFrameRetrySeekA || 0.25),
+          Number(CONFIG?.sceneVideoFirstFrameRetrySeekB || 0.5),
+          Number(CONFIG?.sceneVideoFirstFrameRetrySeekC || 1.0)
+        ].filter((value) => Number.isFinite(value) && value >= 0).map((value) => Math.min(Math.max(0, value), maxTime)).map((value) => Number(value.toFixed(3))))];
 
-        try {
-          video.currentTime = Math.min(Math.max(0, seekAt), Math.max(0, (duration || seekAt + 0.1) - 0.02));
-          await waitForVideoEvent(video, ['seeked'], Math.min(timeoutMs, 2200));
-          logSceneVideoPreview('seeked', { ...debugData, currentTime: video.currentTime || 0 });
-          if (drawNow('draw-after-seek-failed')) return;
-        } catch (error) {
-          logSceneVideoPreview('seek fallback', { ...debugData, reason: error?.message || 'seeked-timeout' });
+        for (const seekAt of seekCandidates) {
+          try {
+            video.currentTime = seekAt;
+            await waitForVideoEvent(video, ['seeked'], Math.min(timeoutMs, 2200));
+            logSceneVideoPreview('seeked', { ...debugData, currentTime: video.currentTime || 0 });
+            if (drawNow(`draw-after-seek-${seekAt}-failed`)) return;
+          } catch (error) {
+            logSceneVideoPreview('seek fallback', { ...debugData, seekAt, reason: error?.message || 'seeked-timeout' });
+          }
         }
 
         try {
-          await waitForVideoEvent(video, ['loadeddata', 'canplay'], Math.min(timeoutMs, 1600));
+          await waitForVideoEvent(video, ['loadeddata', 'canplay', 'timeupdate'], Math.min(timeoutMs, 1600));
           if (drawNow('draw-after-loadeddata-failed')) return;
         } catch (_) {}
 
@@ -412,14 +951,15 @@ function captureVideoFramePreviewTexture(item) {
           window.setTimeout(() => {
             try { video.pause?.(); } catch (_) {}
             if (drawNow('draw-after-play-failed')) return;
-            finish(null, 'play-frame-not-ready');
-          }, 140);
+            finish(null, 'play-frame-not-ready-or-black');
+          }, Math.max(160, Number(CONFIG?.sceneVideoFirstFramePostPlaySampleDelayMs || 220)));
         } catch (error) {
           if (drawNow('draw-after-play-blocked-failed')) return;
           finish(null, error?.message || 'play-blocked');
         }
       } catch (error) {
-        sceneVideoMissingUrlCache.add(item.videoUrl);
+        // Do not permanently mark scene video failed after one transient first-frame timeout;
+        // indoor/outdoor must be allowed to retry when user gazes/clicks.
         finish(null, error?.message || 'metadata-failed');
       }
     };
@@ -519,7 +1059,15 @@ function getViewerTextureAnisotropy() {
 
 function applyArtworkTextureToRoot(root, texture) {
   if (!root || !texture) return;
-  const mat = root.userData?.imageMaterial;
+  const isVideoItem = getSceneItemType(root.userData?.artData) === 'video';
+  if (isVideoItem) {
+    ensureSceneVideoDualLayer(root, root.userData?.artData || {});
+    if (isSceneVideoLiveVideoTexture(texture)) {
+      texture.userData = { ...(texture.userData || {}), sceneVideoActiveVideoTexture: true, sceneVideoIdlePreview: false };
+      return;
+    }
+  }
+  const mat = isVideoItem ? getSceneVideoIdleMaterial(root) : root.userData?.imageMaterial;
   if (!mat) return;
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.anisotropy = getViewerTextureAnisotropy();
@@ -530,6 +1078,21 @@ function applyArtworkTextureToRoot(root, texture) {
   applySceneLogoFit(root, texture);
   mat.needsUpdate = true;
   root.userData.textureLoaded = true;
+  if (getSceneItemType(root.userData?.artData) === 'video') {
+    const artData = root.userData?.artData || {};
+    texture.userData = {
+      ...(texture.userData || {}),
+      sceneVideoPoster: Boolean(artData.poster && texture.userData?.sceneVideoValidFrame !== true),
+      sceneVideoBlackFrame: texture.userData?.sceneVideoBlackFrame === true ? true : false,
+      sceneVideoIdlePreview: true
+    };
+    if (texture.userData.sceneVideoBlackFrame !== true) {
+      root.userData.videoLastGoodTexture = texture;
+      root.userData.videoIdleTexture = texture;
+    } else {
+      restoreSceneVideoIdlePreview(root, artData, 'ignored-black-artwork-texture');
+    }
+  }
 }
 
 function applySceneLogoFit(root, texture) {
@@ -1537,17 +2100,27 @@ function createSceneVideoStatusTexture(item = {}, primaryText = '', secondaryTex
 }
 
 function applySceneVideoStatusTexture(root, item = {}, state = 'loading', primaryText = '', secondaryText = '') {
-  const mat = root?.userData?.imageMaterial;
+  ensureSceneVideoDualLayer(root, item);
+  const mat = getSceneVideoIdleMaterial(root);
   if (!root || !mat) return null;
+  if (state === 'loading' && CONFIG?.sceneVideoPreserveIdleDuringAttach !== false) {
+    const idle = ensureSceneVideoIdlePreview(root, item, 'video-loading-preserve-idle');
+    root.userData.videoSurfaceState = state;
+    root.userData.videoSurfaceStatusText = primaryText || '';
+    root.userData.videoSurfaceStatusHint = secondaryText || '';
+    return idle;
+  }
   const old = root.userData.videoStatusTexture;
-  if (old && old !== root.userData.videoFallbackTexture && old !== root.userData.videoPosterTexture) {
+  if (old && old !== root.userData.videoFallbackTexture && old !== root.userData.videoPosterTexture && old !== root.userData.videoLastGoodTexture && old !== root.userData.videoFrozenFrameTexture) {
     try { old.dispose?.(); } catch (_) {}
   }
   const texture = createSceneVideoStatusTexture(item, primaryText, secondaryText, state);
-  texture.userData = { ...(texture.userData || {}), sceneVideoStatus: state };
+  texture.userData = { ...(texture.userData || {}), sceneVideoStatus: state, sceneVideoIdlePreview: state !== 'loading' };
   mat.map = texture;
   mat.needsUpdate = true;
+  hideSceneVideoLiveLayer(root, `status-${state}`);
   root.userData.videoStatusTexture = texture;
+  if (state !== 'loading') root.userData.videoIdleTexture = texture;
   root.userData.videoSurfaceState = state;
   root.userData.textureLoaded = false;
   return texture;
@@ -1557,73 +2130,109 @@ function disposeSceneVideoPlayer(root) {
   const player = root?.userData?.videoPlayer;
   if (!player) return;
   try { player.video.pause(); } catch (_) {}
-  try { player.texture.dispose(); } catch (_) {}
+  hideSceneVideoLiveLayer(root, 'dispose-player');
+  const liveMaterial = getSceneVideoLiveMaterial(root);
+  if (liveMaterial?.map === player.texture) {
+    liveMaterial.map = null;
+    liveMaterial.needsUpdate = true;
+  }
+  try { player.texture?.dispose?.(); } catch (_) {}
   root.userData.videoPlayer = null;
+  root.userData.videoFrameCallbackBound = false;
 }
 
-function attachVideoTextureToRoot(root, item, { play = false, forceMuted = false } = {}) {
-  const mat = root?.userData?.imageMaterial;
-  if (!mat || !item?.videoUrl) return Promise.resolve(false);
-  if (sceneVideoMissingUrlCache.has(item.videoUrl)) {
-    restoreSceneVideoFallbackTexture(root, item, 'cached-video-error');
-    return Promise.resolve(false);
+function attachVideoTextureToRoot(root, item, { play = false, forceMuted = false, toggle = false, source = 'manual' } = {}) {
+  ensureSceneVideoDualLayer(root, item);
+  const liveMaterial = getSceneVideoLiveMaterial(root);
+  if (!liveMaterial || !item?.videoUrl) return Promise.resolve(false);
+  const videoSource = String(item?.videoUrl || '').trim();
+  if (!videoSource) return Promise.resolve(false);
+  const userInitiatedSource = /click|tap|manual/i.test(String(source || ''));
+  if (sceneVideoMissingUrlCache.has(videoSource)) {
+    if (userInitiatedSource) {
+      sceneVideoMissingUrlCache.delete(videoSource);
+      logSceneVideoGazeH5('click-retry-cleared-negative-cache', root);
+    } else {
+      if (source === 'gaze') logSceneVideoGazeH5('negative-cache-skip-for-gaze', root);
+      restoreSceneVideoIdlePreview(root, item, 'cached-video-error');
+      return Promise.resolve(false);
+    }
+  }
+
+  if (root.userData.videoAttachPromise) {
+    if (play) {
+      markSceneVideoPendingPlayIntent(root, item, videoSource, source);
+      return root.userData.videoAttachPromise.then((ok) => {
+        if (isSceneVideoPendingPlayIntentValid(root, item, videoSource)) {
+          return resolveSceneVideoPendingPlayIntent(root, item, videoSource, { forceMuted, source }).then((played) => {
+            if (played || ok) return true;
+            if (!root.userData?.videoPlayer?.video) {
+              return attachVideoTextureToRoot(root, item, { play: true, forceMuted, toggle: false, source: `${source}-retry` });
+            }
+            return false;
+          });
+        }
+        return ok;
+      });
+    }
+    return root.userData.videoAttachPromise;
   }
 
   const existingPlayer = root.userData.videoPlayer;
   if (existingPlayer?.video) {
     const video = existingPlayer.video;
-    if (!play) return Promise.resolve(true);
-    if (forceMuted) video.muted = true;
-    if (!video.paused) {
-      try { video.pause(); } catch (_) {}
-      root.userData.videoSurfaceState = 'paused';
-      setStatus?.('⏸️ <strong>Video đã tạm dừng</strong><br>Click để phát tiếp · nhấp đúp để xem lớn.');
-      return Promise.resolve(true);
-    }
-    const restoreVideoMap = () => {
-      if (existingPlayer.texture && mat.map !== existingPlayer.texture) {
-        mat.map = existingPlayer.texture;
-        mat.needsUpdate = true;
+    const existingUrl = getSceneVideoPlayerUrl(root);
+    if (existingUrl && existingUrl !== videoSource && !existingUrl.endsWith(videoSource.replace(/^\.\//, ''))) {
+      disposeSceneVideoPlayer(root);
+      ensureSceneVideoIdlePreview(root, item, 'source-changed');
+    } else {
+      if (!play) {
+        ensureSceneVideoIdlePreview(root, item, 'player-ready-idle');
+        return Promise.resolve(true);
       }
-      root.userData.textureLoaded = true;
-      root.userData.videoSurfaceState = 'playing';
-    };
-    const promise = video.play?.();
-    if (promise && typeof promise.then === 'function') {
-      return promise.then(() => {
-        restoreVideoMap();
-        return true;
-      }).catch((err) => {
-        logSceneVideoPreview('surface play rejected', { title: item?.title || item?.id || '', videoUrl: item.videoUrl, reason: err?.message || 'play-rejected' }, 'warn');
-        restoreSceneVideoFallbackTexture(root, item, 'play-rejected');
-        return false;
-      });
+      if (forceMuted) video.muted = true;
+      if (!video.paused) {
+        if (toggle) {
+          try { video.pause(); } catch (_) {}
+          const frozen = captureSceneVideoFrozenFrame(root, video, existingPlayer.sourceUrl || videoSource, 'toggle-pause');
+          if (frozen && applySceneVideoFrozenFrame(root, frozen, 'toggle-pause-frozen-frame')) {
+            if (existingPlayer.texture) existingPlayer.texture.userData = { ...(existingPlayer.texture.userData || {}), sceneVideoActiveVideoTexture: true, sceneVideoIdlePreview: false };
+          } else if (existingPlayer.texture) {
+            existingPlayer.texture.userData = { ...(existingPlayer.texture.userData || {}), sceneVideoValidFrame: false, sceneVideoBlackFrame: true, sceneVideoActiveVideoTexture: true, sceneVideoIdlePreview: false };
+            restoreSceneVideoIdlePreview(root, item, 'toggle-pause-safe-idle');
+          }
+          hideSceneVideoLiveLayer(root, 'manual-pause');
+          root.userData.videoSurfaceState = 'paused';
+          root.userData.videoPausedAt = performance.now();
+          if (source !== 'gaze') setStatus?.('⏸️ <strong>Video đã tạm dừng</strong><br>1 click phát tiếp · nhấp đúp để xem lớn.');
+        }
+        return Promise.resolve(true);
+      }
+      return playSceneVideoExistingPlayer(root, item, videoSource, { forceMuted, source });
     }
-    restoreVideoMap();
-    return Promise.resolve(true);
   }
 
-  applySceneVideoStatusTexture(
-    root,
-    item,
-    'loading',
-    CONFIG?.sceneVideoSurfaceLoadingText || 'Đang chuẩn bị video',
-    CONFIG?.sceneVideoSurfaceLoadingHint || 'Nếu trình duyệt chặn, chạm lại để phát'
-  );
+  // H2: keep the stable idle poster/placeholder visible while the surface player attaches.
+  // Do not swap to VideoTexture until the browser confirms a decoded first frame.
+  ensureSceneVideoIdlePreview(root, item, 'attach-pending-idle');
+  root.userData.videoSurfaceState = 'loading';
+  if (source !== 'warmup' && source !== 'gaze') {
+    setStatus?.('⏳ <strong>Đang chuẩn bị video</strong><br>Giữ khung chờ ổn định cho đến khi có frame đầu thật.');
+  }
 
   const video = document.createElement('video');
-  video.src = item.videoUrl;
+  video.src = videoSource;
   video.muted = forceMuted ? true : item.muted !== false;
   video.defaultMuted = video.muted;
   video.loop = item.loop !== false;
   video.playsInline = true;
-  video.preload = CONFIG?.sceneVideoSurfacePreload || 'metadata';
+  video.preload = CONFIG?.sceneVideoSurfacePreload || 'auto';
   video.crossOrigin = 'anonymous';
   video.setAttribute('playsinline', '');
   video.setAttribute('webkit-playsinline', '');
   if (video.muted) video.setAttribute('muted', '');
 
-  return new Promise((resolve) => {
+  const attachPromise = new Promise((resolve) => {
     let settled = false;
     let textureAttached = false;
     let playRejected = false;
@@ -1645,40 +2254,112 @@ function attachVideoTextureToRoot(root, item, { play = false, forceMuted = false
       cleanup();
       if (!ok) {
         try { video.pause?.(); } catch (_) {}
-        restoreSceneVideoFallbackTexture(root, item, reason || 'video-unavailable');
+        restoreSceneVideoIdlePreview(root, item, reason || 'video-unavailable');
       }
       resolve(Boolean(ok));
     };
 
-    const attachTextureIfReady = () => {
+    const bindFrameCallback = () => {
+      if (CONFIG?.sceneVideoUseRequestVideoFrameCallback === false || typeof video.requestVideoFrameCallback !== 'function' || root.userData.videoFrameCallbackBound) return;
+      root.userData.videoFrameCallbackBound = true;
+      const markDecodedFrame = () => {
+        root.userData.videoLastDecodedFrameAt = performance.now();
+        if (root.userData.videoPlayer?.video === video && !video.paused && !video.ended) {
+          try { video.requestVideoFrameCallback(markDecodedFrame); } catch (_) {}
+        }
+      };
+      try { video.requestVideoFrameCallback(markDecodedFrame); } catch (_) {}
+    };
+
+    const attachTextureIfReady = (knownFrameResult = null) => {
       if (textureAttached) return true;
       if (CONFIG?.sceneVideoAttachAfterFirstFrame !== false && !hasSceneVideoFirstFrame(video)) return false;
+      const frameResult = knownFrameResult || isLikelyBlackVideoFrame(video);
+      markSceneVideoFrameValidity(root, frameResult, `attach-${source}`);
+      if (!frameResult.ok || frameResult.isBlack) {
+        root.userData.videoBlackFrameRejectedAt = performance.now();
+        root.userData.videoBlackFrameRejectReason = frameResult.reason || 'black-frame';
+        return false;
+      }
       const tex = new THREE.VideoTexture(video);
       tex.colorSpace = THREE.SRGBColorSpace;
       tex.minFilter = THREE.LinearFilter;
       tex.magFilter = THREE.LinearFilter;
-      mat.map = tex;
-      mat.needsUpdate = true;
-      root.userData.videoPlayer = { video, texture: tex };
+      tex.userData = {
+        ...(tex.userData || {}),
+        sceneVideoActiveVideoTexture: true,
+        sceneVideoIdlePreview: false,
+        sceneVideoValidFrame: true,
+        sceneVideoBlackFrame: false
+      };
+      root.userData.videoPlayer = { video, texture: tex, sourceUrl: videoSource, createdAt: performance.now(), attachedAt: performance.now() };
+      if (video.paused && !play) {
+        const frozen = captureSceneVideoFrozenFrame(root, video, videoSource, `warmup-${source}`);
+        if (frozen) applySceneVideoFrozenFrame(root, frozen, `warmup-${source}-frozen-frame`);
+        else restoreSceneVideoIdlePreview(root, item, `warmup-${source}-idle`);
+        hideSceneVideoLiveLayer(root, `warmup-${source}`);
+      } else {
+        applySceneVideoLiveTexture(root, tex, video.paused ? 'ready' : (source === 'gaze' ? 'previewing' : 'playing'));
+      }
       root.userData.textureLoaded = true;
-      root.userData.videoSurfaceState = video.paused ? 'ready' : 'playing';
+      root.userData.videoSurfaceState = video.paused ? 'ready' : (source === 'gaze' ? 'previewing' : 'playing');
+      bindFrameCallback();
       textureAttached = true;
       return true;
     };
 
+    const maybeResolvePendingPlay = () => {
+      if (!isSceneVideoPendingPlayIntentValid(root, item, videoSource)) return Promise.resolve(false);
+      return resolveSceneVideoPendingPlayIntent(root, item, videoSource, { forceMuted, source });
+    };
+
+    let frameValidationPromise = null;
+    const attachWhenNonBlackFrameReady = (readySource = source) => {
+      if (textureAttached) return Promise.resolve(true);
+      if (frameValidationPromise) return frameValidationPromise;
+      frameValidationPromise = waitForSceneVideoNonBlackFrame(
+        video,
+        root,
+        `surface-${readySource}`,
+        Math.max(700, Number(CONFIG?.sceneVideoFrameValidationTimeoutMs || 1800))
+      ).then((frameResult) => {
+        frameValidationPromise = null;
+        if (!frameResult.ready) {
+          restoreSceneVideoIdlePreview(root, item, `black-or-invalid-frame-${frameResult.reason || 'timeout'}`);
+          return false;
+        }
+        return attachTextureIfReady(frameResult);
+      }).catch(() => {
+        frameValidationPromise = null;
+        restoreSceneVideoIdlePreview(root, item, 'frame-validation-failed');
+        return false;
+      });
+      return frameValidationPromise;
+    };
+
     const onReady = () => {
-      if (!attachTextureIfReady()) return;
-      if (!play || !video.paused) finish(true);
+      attachWhenNonBlackFrameReady('ready').then((attached) => {
+        if (!attached) return;
+        if (!play || !video.paused) finish(true);
+        else maybeResolvePendingPlay().then((played) => { if (played) finish(true); });
+      });
     };
 
     const onPlaying = () => {
-      if (attachTextureIfReady()) finish(true);
+      attachWhenNonBlackFrameReady('playing').then((attached) => {
+        if (attached) finish(true);
+      });
     };
 
     const onError = () => {
       root.userData.textureFailed = true;
-      sceneVideoMissingUrlCache.add(item.videoUrl);
-      logSceneVideoPreview('surface video error', { title: item?.title || item?.id || '', videoUrl: item.videoUrl }, 'warn');
+      // Keep local/intro retryable; a transient decode/CORS error must not poison indoor preview forever.
+      if (source !== 'gaze' && !/assets\/videos\/intro\.mp4|intro\.mp4/i.test(videoSource)) {
+        sceneVideoMissingUrlCache.add(videoSource);
+      } else if (source === 'gaze') {
+        logSceneVideoGazeH5('negative-cache-skip-for-gaze', root);
+      }
+      logSceneVideoPreview('surface video error', { title: item?.title || item?.id || '', videoUrl: videoSource }, 'warn');
       finish(false, 'video-error');
     };
 
@@ -1698,47 +2379,195 @@ function attachVideoTextureToRoot(root, item, { play = false, forceMuted = false
     video.addEventListener('error', onError, { once: true });
 
     try { video.load?.(); } catch (error) {
-      logSceneVideoPreview('surface load call failed', { title: item?.title || item?.id || '', videoUrl: item.videoUrl, reason: error?.message || 'load-call-failed' }, 'warn');
+      logSceneVideoPreview('surface load call failed', { title: item?.title || item?.id || '', videoUrl: videoSource, reason: error?.message || 'load-call-failed' }, 'warn');
       finish(false, 'load-call-failed');
       return;
     }
 
     if (play) {
+      markSceneVideoPendingPlayIntent(root, item, videoSource, source);
       const playPromise = video.play?.();
       if (playPromise && typeof playPromise.then === 'function') {
         playPromise
           .then(() => {
+            clearSceneVideoPendingPlayIntent(root);
             if (attachTextureIfReady()) finish(true);
           })
           .catch((err) => {
             playRejected = true;
-            logSceneVideoPreview('surface play rejected', { title: item?.title || item?.id || '', videoUrl: item.videoUrl, reason: err?.message || 'play-rejected' }, 'warn');
+            logSceneVideoPreview('surface play rejected', { title: item?.title || item?.id || '', videoUrl: videoSource, reason: err?.message || 'play-rejected' }, 'warn');
+            // Do not permanently fail the surface. Keep stable idle preview and allow the next click/tap to upgrade intent.
             finish(false, 'play-rejected');
           });
       } else if (attachTextureIfReady()) {
+        clearSceneVideoPendingPlayIntent(root);
         finish(true);
       }
     }
   });
+  const trackedPromise = attachPromise.finally(() => {
+    if (root.userData?.videoAttachPromise === trackedPromise) root.userData.videoAttachPromise = null;
+  });
+  root.userData.videoAttachPromise = trackedPromise;
+  return trackedPromise;
 }
 
 function toggleSceneVideoRoot(root) {
   const item = root?.userData?.artData;
   if (!root || !item || item.type !== 'video' || !item.videoUrl) return false;
+  if (!canSceneVideoToggle(root)) return true;
+  clearSceneVideoTimer(root, 'sceneVideoGazeStartTimer');
+  clearSceneVideoTimer(root, 'sceneVideoGazePauseTimer');
   const existingVideo = root.userData?.videoPlayer?.video;
   if (existingVideo && !existingVideo.paused) {
-    attachVideoTextureToRoot(root, item, { play: true }).then(() => {
+    root.userData.videoUserPlaybackActive = false;
+    logSceneVideoGazeH5('click-toggle', root, { action: 'pause' });
+    attachVideoTextureToRoot(root, item, { play: true, toggle: true, source: 'click-toggle' }).then(() => {
       setStatus('⏸️ <strong>Video đã tạm dừng</strong><br>Click để phát tiếp · nhấp đúp để xem lớn.');
     });
     return true;
   }
+  root.userData.videoUserPlaybackActive = true;
+  logSceneVideoGazeH5('click-toggle', root, { action: 'play' });
   setStatus('⏳ <strong>Đang chuẩn bị video</strong><br>Nếu trình duyệt chặn phát, thử chạm lại hoặc chạm đúp để xem lớn.');
-  attachVideoTextureToRoot(root, item, { play: true }).then((ok) => {
-    if (ok) setStatus('▶️ <strong>Video</strong><br>Click để phát/tạm dừng · nhấp đúp để xem lớn.');
-    else setStatus('⚠️ <strong>Chưa phát được video</strong><br>Surface đã giữ placeholder; chạm đúp để thử xem lớn.');
+  attachVideoTextureToRoot(root, item, { play: true, toggle: false, source: 'click-toggle' }).then((ok) => {
+    if (!ok) root.userData.videoUserPlaybackActive = false;
+    if (ok) setStatus('▶️ <strong>Video</strong><br>1 click phát/tạm dừng · nhấp đúp để xem lớn.');
+    else setStatus('⚠️ <strong>Chưa phát được video</strong><br>Trình duyệt cần thao tác để phát video; nhấp đúp để xem lớn.');
   });
   return true;
 }
+
+function pauseSceneVideoSurface(root, reason = 'pause') {
+  if (reason === 'gaze-out' && root?.userData?.videoUserPlaybackActive === true) return false;
+  const player = root?.userData?.videoPlayer;
+  if (!player?.video) return false;
+  const timing = getSceneVideoTimingConfig();
+  const now = performance.now();
+  const startedAt = Number(root?.userData?.videoStartedAt || 0);
+  if (startedAt && now - startedAt < timing.minPlaySessionMs && reason === 'gaze-out') {
+    clearSceneVideoTimer(root, 'sceneVideoGazePauseTimer');
+    root.userData.sceneVideoGazePauseTimer = window.setTimeout(() => {
+      if (!root.userData?.sceneVideoGazeFocused) pauseSceneVideoSurface(root, reason);
+    }, Math.max(80, timing.minPlaySessionMs - (now - startedAt)));
+    return true;
+  }
+  try {
+    player.video.pause();
+    root.userData.videoSurfaceState = 'paused';
+    root.userData.videoSurfacePauseReason = reason;
+    root.userData.videoPausedAt = performance.now();
+    const frozen = captureSceneVideoFrozenFrame(root, player.video, player.sourceUrl || '', `pause-${reason}`);
+    if (frozen && applySceneVideoFrozenFrame(root, frozen, `pause-${reason}-frozen-frame`)) {
+      if (player.texture) player.texture.userData = { ...(player.texture.userData || {}), sceneVideoActiveVideoTexture: true, sceneVideoIdlePreview: false };
+    } else {
+      if (player.texture) player.texture.userData = { ...(player.texture.userData || {}), sceneVideoValidFrame: false, sceneVideoBlackFrame: true, sceneVideoActiveVideoTexture: true, sceneVideoIdlePreview: false };
+      restoreSceneVideoIdlePreview(root, root.userData?.artData || {}, `pause-${reason}-restore-safe-idle`);
+    }
+    hideSceneVideoLiveLayer(root, reason === 'gaze-out' ? 'gaze-out' : 'manual-pause');
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+function pauseOtherSceneVideoSurfaces(activeRoot = null) {
+  sceneVideoRoots.forEach((root) => {
+    if (!root || root === activeRoot) return;
+    pauseSceneVideoSurface(root, 'another-video-active');
+  });
+}
+
+
+function isSceneVideoGazeH5DebugEnabled() {
+  if (CONFIG?.sceneVideoGazePreviewDebug === true) return true;
+  try { return new URLSearchParams(window.location.search || '').get('debugSceneVideoGaze') === '1'; }
+  catch (_) { return false; }
+}
+
+function logSceneVideoGazeH5(eventName, root = null, detail = null) {
+  if (!isSceneVideoGazeH5DebugEnabled()) return;
+  const item = root?.userData?.artData || {};
+  const payload = {
+    event: eventName,
+    id: item.id || root?.name || '',
+    state: root?.userData?.videoSurfaceState || '',
+    ...(detail && typeof detail === 'object' ? detail : {})
+  };
+  console.info('[SceneVideoGazeH5]', payload);
+}
+
+function isSceneVideoGazeDesktopEligible() {
+  if (CONFIG?.sceneVideoGazePreviewDesktopOnly === false) return true;
+  const quality = getViewerQualityForMedia();
+  if (window.viewerMobileDevice?.isMobileViewer?.() || quality?.isMobile || document.body?.classList?.contains('viewer-mobile')) return false;
+  const finePointer = Boolean(window.matchMedia?.('(pointer: fine)')?.matches);
+  const mouseEvidence = window.__sceneVideoGazeMouseSeen === true;
+  if (finePointer || mouseEvidence) return true;
+  const coarseOnly = Boolean(window.matchMedia?.('(pointer: coarse)')?.matches);
+  return !coarseOnly && mouseEvidence;
+}
+
+function isSceneVideoGazePreviewAllowed(root) {
+  if (CONFIG?.sceneVideoGazePreviewEnabled === false || !isSceneVideoGazeDesktopEligible()) return false;
+  const item = root?.userData?.artData;
+  if (!root || item?.type !== 'video' || !item.videoUrl) return false;
+  const maxDistance = Math.max(4, Number(CONFIG?.sceneVideoGazePreviewMaxDistance || CONFIG?.sceneVideoAutoplayMaxDistance || 18));
+  try {
+    if (camera?.position && root.position && camera.position.distanceTo(root.position) > maxDistance) return false;
+  } catch (_) {}
+  return true;
+}
+
+window.handleSceneVideoFocusRoot = function handleSceneVideoFocusRoot(root) {
+  if (!isSceneVideoGazePreviewAllowed(root)) return false;
+  const item = root.userData.artData;
+  const timing = getSceneVideoTimingConfig();
+  logSceneVideoGazeH5('focus-enter', root);
+  markSceneVideoFocusSeen(root);
+  clearSceneVideoTimer(root, 'sceneVideoGazePauseTimer');
+  root.userData.sceneVideoGazeFocused = true;
+
+  if (root.userData.sceneVideoGazeStartTimer || root.userData.videoSurfaceState === 'previewing' || root.userData.videoSurfaceState === 'playing') return true;
+
+  logSceneVideoGazeH5('dwell-scheduled', root, { delayMs: Math.max(timing.gazeStartDelayMs, timing.reticleStableMs) });
+  root.userData.sceneVideoGazeStartTimer = window.setTimeout(() => {
+    root.userData.sceneVideoGazeStartTimer = 0;
+    if (!root.userData?.sceneVideoGazeFocused || !hasSceneVideoStableFocus(root)) {
+      logSceneVideoGazeH5('dwell-cancelled', root);
+      return;
+    }
+    pauseOtherSceneVideoSurfaces(root);
+    logSceneVideoGazeH5('gaze-play-requested', root);
+    attachVideoTextureToRoot(root, item, { play: true, forceMuted: true, toggle: false, source: 'gaze' }).then((ok) => {
+      if (ok && root.userData?.sceneVideoGazeFocused) {
+        root.userData.videoSurfaceState = 'previewing';
+        logSceneVideoGazeH5('frame-valid', root);
+        logSceneVideoGazeH5('live-layer-visible', root);
+      }
+    });
+  }, Math.max(timing.gazeStartDelayMs, timing.reticleStableMs));
+  return true;
+};
+
+window.handleSceneVideoBlurRoot = function handleSceneVideoBlurRoot(root) {
+  if (!root?.userData?.sceneVideoGazeFocused && !root?.userData?.sceneVideoGazeStartTimer) return false;
+  logSceneVideoGazeH5('focus-blur', root);
+  root.userData.sceneVideoGazeFocused = false;
+  root.userData.sceneVideoFocusFirstSeenAt = 0;
+  if (root.userData.sceneVideoGazeStartTimer) logSceneVideoGazeH5('dwell-cancelled', root);
+  clearSceneVideoTimer(root, 'sceneVideoGazeStartTimer');
+  const timing = getSceneVideoTimingConfig();
+  clearSceneVideoTimer(root, 'sceneVideoGazePauseTimer');
+  logSceneVideoGazeH5('gaze-out-scheduled', root, { delayMs: Math.max(timing.pauseDelayMs, timing.focusHysteresisMs) });
+  root.userData.sceneVideoGazePauseTimer = window.setTimeout(() => {
+    root.userData.sceneVideoGazePauseTimer = 0;
+    if (!root.userData?.sceneVideoGazeFocused) {
+      pauseSceneVideoSurface(root, 'gaze-out');
+    }
+  }, Math.max(timing.pauseDelayMs, timing.focusHysteresisMs));
+  return true;
+};
 
 window.toggleSceneVideoRoot = toggleSceneVideoRoot;
 window.pauseSceneVideoRoot = function pauseSceneVideoRoot(root) {
@@ -1828,6 +2657,11 @@ function buildArtworkGroup(art, texture, options = {}) {
   imageMesh.userData.artRoot = root;
   root.userData.imageMesh = imageMesh;
   display.add(imageMesh);
+
+  if (itemType === 'video') {
+    ensureSceneVideoDualLayer(root, artData);
+    applySceneVideoIdlePlaceholder(root, artData, 'initial-placeholder-first');
+  }
 
   if (clickable) interactiveArtworkMeshes.push(imageMesh);
 

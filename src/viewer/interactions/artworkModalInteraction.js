@@ -316,7 +316,10 @@ function refreshDomVideoPreviewTarget() {
 }
 
 window.addEventListener('pointermove', (event) => {
-  if (event.pointerType === 'mouse') domVideoPreview.mouseSeen = true;
+  if (event.pointerType === 'mouse') {
+    domVideoPreview.mouseSeen = true;
+    window.__sceneVideoGazeMouseSeen = true;
+  }
 }, { passive: true });
 window.addEventListener('blur', () => hideDomVideoPreview({ immediate: true, reason: 'window-blur' }));
 document.addEventListener('visibilitychange', () => {
@@ -384,6 +387,7 @@ function resetArtworkRootVisualState(root) {
 function clearArtworkFocus(options = {}) {
   const previous = currentFocusedRoot;
   currentFocusedRoot = null;
+  if (previous) notifySceneVideoFocusChange(null, previous);
   if (previous) resetArtworkRootVisualState(previous);
   if (options.clearHover !== false && hoveredRoot === previous) hoveredRoot = null;
   if (options.keepRecent !== true) {
@@ -412,6 +416,7 @@ function scheduleFocusStaleGuard(root) {
 function setFocusedArtworkRoot(root, options = {}) {
   if (isValidArtworkRoot(root)) {
     const previous = currentFocusedRoot;
+    if (previous !== root) notifySceneVideoFocusChange(root, previous);
     if (previous && previous !== root) resetArtworkRootVisualState(previous);
     if (hoveredRoot && hoveredRoot !== root && hoveredRoot !== previous) resetArtworkRootVisualState(hoveredRoot);
     currentFocusedRoot = root;
@@ -433,6 +438,30 @@ function setFocusedArtworkRoot(root, options = {}) {
 
 function resolveArtworkTapFallback() {
   return getRecentInteractableRoot(ARTWORK_TAP_FALLBACK_MS);
+}
+
+function isSceneVideoGazeBridgeDebugEnabled() {
+  if (CONFIG?.sceneVideoGazePreviewDebug === true) return true;
+  try { return new URLSearchParams(window.location.search || '').get('debugSceneVideoGaze') === '1'; }
+  catch (_) { return false; }
+}
+
+function logSceneVideoGazeBridge(eventName, root = null) {
+  if (!isSceneVideoGazeBridgeDebugEnabled()) return;
+  const item = root?.userData?.artData || {};
+  console.info('[SceneVideoGazeH5]', { event: eventName, id: item.id || root?.name || '' });
+}
+
+function notifySceneVideoFocusChange(nextRoot, previousRoot = null) {
+  if (nextRoot === previousRoot) return;
+  if (previousRoot?.userData?.artData?.type === 'video') {
+    logSceneVideoGazeBridge('focus-bridge-blur', previousRoot);
+    window.handleSceneVideoBlurRoot?.(previousRoot);
+  }
+  if (nextRoot?.userData?.artData?.type === 'video') {
+    logSceneVideoGazeBridge('focus-bridge-enter', nextRoot);
+    window.handleSceneVideoFocusRoot?.(nextRoot);
+  }
 }
 
 
@@ -494,7 +523,10 @@ function checkArtworkAtCenter(returnRoot = false) {
 
 function checkArtworkAtMouse(returnRoot = false) {
   if (!artworksLoaded || interactiveArtworkMeshes.length === 0 || isLocked) {
-    if (hoveredRoot && hoveredRoot !== currentFocusedRoot) resetArtworkRootVisualState(hoveredRoot);
+    if (hoveredRoot && hoveredRoot !== currentFocusedRoot) {
+      notifySceneVideoFocusChange(currentFocusedRoot, hoveredRoot);
+      resetArtworkRootVisualState(hoveredRoot);
+    }
     hoveredRoot = null;
     renderer.domElement.style.cursor = 'default';
     refreshDomVideoPreviewTarget();
@@ -502,6 +534,7 @@ function checkArtworkAtMouse(returnRoot = false) {
   }
   bumpViewerRaycastMetric('artwork');
   const nextHoveredRoot = raycastArtworkRootAtNdc(mouseNdc, CONFIG.artworkMouseRaycastFar || 40);
+  if (nextHoveredRoot !== hoveredRoot) notifySceneVideoFocusChange(nextHoveredRoot, hoveredRoot);
   if (hoveredRoot && hoveredRoot !== nextHoveredRoot && hoveredRoot !== currentFocusedRoot) resetArtworkRootVisualState(hoveredRoot);
   hoveredRoot = nextHoveredRoot;
   if (hoveredRoot) rememberInteractableRoot(hoveredRoot);
@@ -545,6 +578,7 @@ function activateSceneVideoRoot(root) {
   lastSceneVideoActivationAt = now;
 
   if (doubleActivation && typeof window.openSceneVideoCinema === 'function') {
+    logSceneVideoGazeBridge('cinema-untouched', root);
     window.openSceneVideoCinema(root);
     return true;
   }
