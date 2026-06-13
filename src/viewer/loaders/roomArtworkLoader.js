@@ -472,6 +472,13 @@ function enqueueVideoPreviewTexture(root, item, options = {}) {
           root.userData.textureFailed = true;
           return false;
         }
+        // A late first-frame capture must not overwrite a committed Preview V2
+        // frame. The baseline poster/placeholder remains untouched during V2
+        // preparation; after commit, the live texture owns the surface.
+        if (isSceneVideoPreviewV2Committed(root)) {
+          try { texture.dispose?.(); } catch (_) {}
+          return true;
+        }
         applyArtworkTextureToRoot(root, texture);
         return true;
       }
@@ -499,6 +506,7 @@ function autoplaySceneVideosControlled() {
   const requireView = CONFIG?.sceneVideoAutoplayRequireView !== false;
   const candidates = sceneVideoRoots
     .filter((root) => root?.userData?.artData?.videoUrl)
+    .filter((root) => root.userData?.sceneVideoPreviewV2Owned !== true && root.userData?.sceneVideoPreviewV2Preparing !== true)
     .map((root) => ({ root, dist: camera.position.distanceTo(root.position) }))
     .filter(({ root, dist }) => dist <= maxDistance && (!requireView || isSceneVideoRootVisible(root)))
     .sort((a, b) => a.dist - b.dist)
@@ -593,16 +601,16 @@ function loadArtworkTextureIntoRoot(root) {
           artData.poster,
           (texture) => {
             logSceneVideoPreview('poster loaded', { title: artData.title || artData.id || '', poster: artData.poster || '' });
-            applyArtworkTextureToRoot(root, texture);
             root.userData.videoPosterTexture = texture;
+            if (!isSceneVideoPreviewV2Committed(root)) applyArtworkTextureToRoot(root, texture);
             resolve(true);
           },
           undefined,
           (error) => {
             logSceneVideoPreview('fallback: reason', { title: artData.title || artData.id || '', poster: artData.poster || '', reason: 'poster-load-failed', error }, 'warn');
-            restoreSceneVideoFallbackTexture(root, artData, 'poster-load-failed');
+            if (!isSceneVideoPreviewV2Committed(root)) restoreSceneVideoFallbackTexture(root, artData, 'poster-load-failed');
             enqueueVideoPreviewTexture(root, artData).then((ok) => {
-              if (!ok) restoreSceneVideoFallbackTexture(root, artData, 'preview-unavailable');
+              if (!ok && !isSceneVideoPreviewV2Committed(root)) restoreSceneVideoFallbackTexture(root, artData, 'preview-unavailable');
               resolve(ok);
             });
           }
@@ -611,7 +619,7 @@ function loadArtworkTextureIntoRoot(root) {
       return root.userData.texturePromise;
     }
     root.userData.texturePromise = enqueueVideoPreviewTexture(root, artData).then((ok) => {
-      if (!ok) restoreSceneVideoFallbackTexture(root, artData, 'preview-deferred-or-unavailable');
+      if (!ok && !isSceneVideoPreviewV2Committed(root)) restoreSceneVideoFallbackTexture(root, artData, 'preview-deferred-or-unavailable');
       return ok;
     });
     return root.userData.texturePromise;
@@ -1553,7 +1561,445 @@ function applySceneVideoStatusTexture(root, item = {}, state = 'loading', primar
   return texture;
 }
 
+// v6.13.011 — Surface Preview V2.
+// The preview path is deliberately isolated from attachVideoTextureToRoot():
+// it does not show a loading texture, does not touch the global missing-URL
+// cache, and commits a VideoTexture only after a decoded frame is available.
+let sceneVideoPreviewV2ActiveRoot = null;
+let sceneVideoPreviewV2PreparingRoot = null;
+let sceneVideoPreviewV2PreparingCount = 0;
+let sceneVideoPreviewV2CommittedCount = 0;
+
+function isSceneVideoPreviewV2DebugEnabled() {
+  if (CONFIG?.sceneVideoPreviewV2Debug === true) return true;
+  try {
+    return new URLSearchParams(window.location.search).get('debugSceneVideoPreviewV2') === '1';
+  } catch (_) {
+    return false;
+  }
+}
+
+function getSceneVideoPreviewV2RootId(root) {
+  return String(root?.userData?.artData?.id || root?.name || 'video');
+}
+
+function updateSceneVideoPreviewV2Debug(event = '', root = null, error = '') {
+  if (!isSceneVideoPreviewV2DebugEnabled()) return;
+  const player = root?.userData?.sceneVideoPreviewV2Player;
+  const activeRootId = sceneVideoPreviewV2ActiveRoot ? getSceneVideoPreviewV2RootId(sceneVideoPreviewV2ActiveRoot) : '';
+  window.__sceneVideoPreviewV2Debug = {
+    activeRootId,
+    preparing: Boolean(sceneVideoPreviewV2PreparingRoot),
+    preparingRootId: sceneVideoPreviewV2PreparingRoot ? getSceneVideoPreviewV2RootId(sceneVideoPreviewV2PreparingRoot) : '',
+    lastEvent: event,
+    lastRootId: root ? getSceneVideoPreviewV2RootId(root) : '',
+    lastError: String(error || ''),
+    previewVideoCount: sceneVideoRoots.reduce((count, itemRoot) => count + (itemRoot?.userData?.sceneVideoPreviewV2Player?.video ? 1 : 0), 0),
+    committedCount: sceneVideoPreviewV2CommittedCount,
+    playerState: player?.state || ''
+  };
+}
+
+function logSceneVideoPreviewV2(event, root = null, detail = {}, level = 'debug') {
+  updateSceneVideoPreviewV2Debug(event, root, detail?.reason || detail?.error || '');
+  if (!isSceneVideoPreviewV2DebugEnabled()) return;
+  const fn = console[level] || console.debug || console.log;
+  fn.call(console, `[SceneVideoPreviewV2] ${event}`, {
+    id: root ? getSceneVideoPreviewV2RootId(root) : '',
+    ...detail
+  });
+}
+
+function isSceneVideoPreviewV2Root(root) {
+  return Boolean(
+    root?.userData?.type === 'artworkRoot'
+    && root.userData?.artData?.type === 'video'
+    && root.userData?.artData?.videoUrl
+    && root.userData?.imageMaterial
+  );
+}
+
+function isSceneVideoPreviewV2Committed(root) {
+  const player = root?.userData?.sceneVideoPreviewV2Player;
+  return Boolean(player?.committed && player?.texture && root?.userData?.sceneVideoPreviewV2Owned === true);
+}
+
+function clearSceneVideoPreviewV2PrepareResources(candidate) {
+  if (!candidate) return;
+  window.clearTimeout(candidate.timeoutId || 0);
+  candidate.timeoutId = 0;
+  window.clearTimeout(candidate.fallbackFrameTimerId || 0);
+  candidate.fallbackFrameTimerId = 0;
+  if (candidate.frameCallbackId && typeof candidate.video?.cancelVideoFrameCallback === 'function') {
+    try { candidate.video.cancelVideoFrameCallback(candidate.frameCallbackId); } catch (_) {}
+  }
+  candidate.frameCallbackId = 0;
+  if (typeof candidate.cleanupListeners === 'function') candidate.cleanupListeners();
+  candidate.cleanupListeners = null;
+}
+
+function removeSceneVideoPreviewV2Video(candidate) {
+  const video = candidate?.video;
+  if (!video) return;
+  try { video.pause?.(); } catch (_) {}
+  try { video.removeAttribute('src'); } catch (_) {}
+  try { video.load?.(); } catch (_) {}
+  try { video.remove?.(); } catch (_) {}
+}
+
+function settleSceneVideoPreviewV2Promise(candidate, ok) {
+  if (!candidate || candidate.promiseSettled) return;
+  candidate.promiseSettled = true;
+  const resolve = candidate.resolve;
+  candidate.resolve = null;
+  if (typeof resolve === 'function') resolve(Boolean(ok));
+}
+
+function disposeSceneVideoPreviewV2(root, options = {}) {
+  const candidate = root?.userData?.sceneVideoPreviewV2Player;
+  if (!candidate) return false;
+  const mat = root.userData?.imageMaterial;
+  const restorePreviousMap = options.restorePreviousMap === true;
+
+  candidate.cancelled = true;
+  clearSceneVideoPreviewV2PrepareResources(candidate);
+  if (restorePreviousMap && candidate.committed && mat?.map === candidate.texture && candidate.previousMap) {
+    mat.map = candidate.previousMap;
+    mat.needsUpdate = true;
+  }
+  try { candidate.texture?.dispose?.(); } catch (_) {}
+  removeSceneVideoPreviewV2Video(candidate);
+
+  if (sceneVideoPreviewV2ActiveRoot === root) sceneVideoPreviewV2ActiveRoot = null;
+  if (sceneVideoPreviewV2PreparingRoot === root) {
+    sceneVideoPreviewV2PreparingRoot = null;
+    sceneVideoPreviewV2PreparingCount = Math.max(0, sceneVideoPreviewV2PreparingCount - 1);
+  }
+
+  root.userData.sceneVideoPreviewV2Player = null;
+  root.userData.sceneVideoPreviewV2Active = false;
+  root.userData.sceneVideoPreviewV2Owned = false;
+  root.userData.sceneVideoPreviewV2Preparing = false;
+  settleSceneVideoPreviewV2Promise(candidate, false);
+  logSceneVideoPreviewV2('cancel', root, { reason: options.reason || 'dispose' });
+  return true;
+}
+
+function cancelSceneVideoPreviewV2Prepare(root, options = {}) {
+  const candidate = root?.userData?.sceneVideoPreviewV2Player;
+  if (!candidate || candidate.committed) return false;
+  return disposeSceneVideoPreviewV2(root, {
+    reason: options.reason || 'prepare-cancelled',
+    restorePreviousMap: false
+  });
+}
+
+function pauseSceneVideoPreviewV2(root, options = {}) {
+  const candidate = root?.userData?.sceneVideoPreviewV2Player;
+  if (!candidate) return false;
+  if (!candidate.committed) {
+    return disposeSceneVideoPreviewV2(root, {
+      reason: options.reason || 'focus-exit-before-commit',
+      restorePreviousMap: false
+    });
+  }
+
+  try { candidate.video?.pause?.(); } catch (_) {}
+  candidate.state = 'paused';
+  root.userData.sceneVideoPreviewV2Active = false;
+  root.userData.videoSurfaceState = 'preview-v2-paused';
+  if (sceneVideoPreviewV2ActiveRoot === root) sceneVideoPreviewV2ActiveRoot = null;
+  // Keep the committed VideoTexture attached so the last decoded frame remains visible.
+  logSceneVideoPreviewV2('pause', root, { reason: options.reason || 'focus-exit' });
+  return true;
+}
+
+function releaseSceneVideoPreviewV2ForUserAction(root, options = {}) {
+  if (!root?.userData) return false;
+  const suppressMs = Math.max(1400, Number(CONFIG?.sceneVideoAttachTimeoutMs || 6500) + 500);
+  root.userData.sceneVideoPreviewV2SuppressUntil = (typeof performance !== 'undefined' ? performance.now() : Date.now()) + suppressMs;
+  const candidate = root.userData.sceneVideoPreviewV2Player;
+  if (!candidate) return false;
+
+  if (!candidate.committed) {
+    return disposeSceneVideoPreviewV2(root, {
+      reason: options.reason || 'user-action-before-commit',
+      restorePreviousMap: false
+    });
+  }
+
+  pauseSceneVideoPreviewV2(root, { reason: options.reason || 'user-action' });
+  if (options.preserveFrame === true) return true;
+
+  // Baseline click synchronously replaces the material with its loading/status
+  // texture. Dispose the background preview only after that replacement occurs.
+  window.setTimeout(() => {
+    const current = root.userData?.sceneVideoPreviewV2Player;
+    const mat = root.userData?.imageMaterial;
+    if (current !== candidate) return;
+    if (root.userData?.videoPlayer?.video || mat?.map !== candidate.texture) {
+      disposeSceneVideoPreviewV2(root, {
+        reason: options.reason || 'user-action-promoted-to-baseline',
+        restorePreviousMap: false
+      });
+    }
+  }, 0);
+  logSceneVideoPreviewV2('click-bypass-preview', root, { reason: options.reason || 'user-action' });
+  return true;
+}
+
+function prepareSceneVideoPreviewV2(root, options = {}) {
+  if (CONFIG?.sceneVideoPreviewV2Enabled === false || !isSceneVideoPreviewV2Root(root)) return Promise.resolve(false);
+  if (root.userData?.sceneVideoPreviewV2TargetActive !== true) return Promise.resolve(false);
+  if (document.body?.classList?.contains('viewer-scene-video-open')) return Promise.resolve(false);
+  if (root.userData?.videoPlayer?.video) return Promise.resolve(false);
+
+  const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+  if (now < Number(root.userData?.sceneVideoPreviewV2SuppressUntil || 0)) return Promise.resolve(false);
+
+  const existing = root.userData.sceneVideoPreviewV2Player;
+  if (existing?.committed && existing.video && existing.texture) {
+    if (sceneVideoPreviewV2ActiveRoot && sceneVideoPreviewV2ActiveRoot !== root) {
+      pauseSceneVideoPreviewV2(sceneVideoPreviewV2ActiveRoot, { reason: 'another-preview-resumed' });
+    }
+    const mat = root.userData.imageMaterial;
+    if (mat.map !== existing.texture) {
+      mat.map = existing.texture;
+      mat.needsUpdate = true;
+    }
+    existing.video.muted = true;
+    existing.video.defaultMuted = true;
+    existing.video.playsInline = true;
+    const playPromise = existing.video.play?.();
+    const onPlaying = () => {
+      existing.state = 'playing';
+      root.userData.sceneVideoPreviewV2Active = true;
+      root.userData.sceneVideoPreviewV2Owned = true;
+      root.userData.videoSurfaceState = 'preview-v2-playing';
+      sceneVideoPreviewV2ActiveRoot = root;
+      logSceneVideoPreviewV2('resume', root);
+      return true;
+    };
+    if (playPromise && typeof playPromise.then === 'function') {
+      return playPromise.then(onPlaying).catch((error) => {
+        existing.state = 'paused';
+        logSceneVideoPreviewV2('fail', root, { reason: error?.message || 'resume-play-rejected' }, 'warn');
+        return false;
+      });
+    }
+    return Promise.resolve(onPlaying());
+  }
+  if (existing?.state === 'preparing' && existing.promise) return existing.promise;
+
+  if (sceneVideoPreviewV2PreparingRoot && sceneVideoPreviewV2PreparingRoot !== root) {
+    disposeSceneVideoPreviewV2(sceneVideoPreviewV2PreparingRoot, {
+      reason: 'superseded-by-new-target',
+      restorePreviousMap: false
+    });
+  }
+  if (sceneVideoPreviewV2ActiveRoot && sceneVideoPreviewV2ActiveRoot !== root) {
+    pauseSceneVideoPreviewV2(sceneVideoPreviewV2ActiveRoot, { reason: 'new-target' });
+  }
+
+  const maxPreparing = Math.max(1, Number(CONFIG?.sceneVideoPreviewV2MaxPreparing || 1));
+  if (sceneVideoPreviewV2PreparingCount >= maxPreparing) return Promise.resolve(false);
+
+  const item = root.userData.artData;
+  const mat = root.userData.imageMaterial;
+  const video = document.createElement('video');
+  const candidate = {
+    root,
+    video,
+    texture: null,
+    previousMap: null,
+    sourceUrl: item.videoUrl,
+    sourceHref: (() => {
+      try { return new URL(item.videoUrl, document.baseURI).href; } catch (_) { return String(item.videoUrl || ''); }
+    })(),
+    state: 'preparing',
+    committed: false,
+    cancelled: false,
+    promiseSettled: false,
+    resolve: null,
+    promise: null,
+    timeoutId: 0,
+    fallbackFrameTimerId: 0,
+    frameCallbackId: 0,
+    cleanupListeners: null
+  };
+
+  candidate.promise = new Promise((resolve) => { candidate.resolve = resolve; });
+  root.userData.sceneVideoPreviewV2Player = candidate;
+  root.userData.sceneVideoPreviewV2Preparing = true;
+  root.userData.sceneVideoPreviewV2Active = false;
+  sceneVideoPreviewV2PreparingRoot = root;
+  sceneVideoPreviewV2PreparingCount += 1;
+
+  video.muted = true;
+  video.defaultMuted = true;
+  video.loop = item.loop !== false;
+  video.playsInline = true;
+  video.preload = 'auto';
+  // Mirror the existing surface-video CORS mode; this phase does not change
+  // source selection, allowlists, headers, or fallback URLs.
+  video.crossOrigin = 'anonymous';
+  video.setAttribute('muted', '');
+  video.setAttribute('playsinline', '');
+  video.setAttribute('webkit-playsinline', '');
+  video.setAttribute('aria-hidden', 'true');
+  video.tabIndex = -1;
+  video.style.display = 'none';
+  document.body.appendChild(video);
+
+  const cleanupListeners = () => {
+    video.removeEventListener('loadeddata', onPotentialFrame);
+    video.removeEventListener('canplay', onPotentialFrame);
+    video.removeEventListener('playing', onPotentialFrame);
+    video.removeEventListener('timeupdate', onPotentialFrame);
+    video.removeEventListener('error', onError);
+  };
+  candidate.cleanupListeners = cleanupListeners;
+
+  const finishPreparingState = () => {
+    if (sceneVideoPreviewV2PreparingRoot === root) {
+      sceneVideoPreviewV2PreparingRoot = null;
+      sceneVideoPreviewV2PreparingCount = Math.max(0, sceneVideoPreviewV2PreparingCount - 1);
+    }
+    root.userData.sceneVideoPreviewV2Preparing = false;
+  };
+
+  const fail = (reason = 'preview-preflight-failed') => {
+    if (candidate.cancelled || candidate.committed) return;
+    candidate.state = 'failed';
+    clearSceneVideoPreviewV2PrepareResources(candidate);
+    finishPreparingState();
+    // The current poster/first-frame map is intentionally untouched.
+    try { candidate.texture?.dispose?.(); } catch (_) {}
+    candidate.texture = null;
+    removeSceneVideoPreviewV2Video(candidate);
+    if (root.userData.sceneVideoPreviewV2Player === candidate) root.userData.sceneVideoPreviewV2Player = null;
+    root.userData.sceneVideoPreviewV2Active = false;
+    root.userData.sceneVideoPreviewV2Owned = false;
+    settleSceneVideoPreviewV2Promise(candidate, false);
+    logSceneVideoPreviewV2('fail', root, { reason }, 'warn');
+  };
+
+  const commit = () => {
+    if (candidate.cancelled || candidate.committed) return false;
+    if (root.userData.sceneVideoPreviewV2Player !== candidate) return false;
+    if (root.userData?.sceneVideoPreviewV2TargetActive !== true) {
+      fail('target-left-before-commit');
+      return false;
+    }
+    if (document.body?.classList?.contains('viewer-scene-video-open')) {
+      fail('cinema-open-before-commit');
+      return false;
+    }
+    if (root.userData?.videoPlayer?.video) {
+      fail('baseline-player-started-before-commit');
+      return false;
+    }
+    const currentHref = String(video.currentSrc || video.src || '');
+    const rootSource = String(root.userData?.artData?.videoUrl || '');
+    if (!hasSceneVideoFirstFrame(video) || !currentHref || rootSource !== candidate.sourceUrl) {
+      return false;
+    }
+
+    try {
+      const texture = new THREE.VideoTexture(video);
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.minFilter = THREE.LinearFilter;
+      texture.magFilter = THREE.LinearFilter;
+      texture.generateMipmaps = false;
+      candidate.texture = texture;
+      candidate.previousMap = mat.map;
+      candidate.committed = true;
+      candidate.state = 'playing';
+      clearSceneVideoPreviewV2PrepareResources(candidate);
+      finishPreparingState();
+      mat.map = texture;
+      mat.needsUpdate = true;
+      root.userData.textureLoaded = true;
+      root.userData.sceneVideoPreviewV2Active = true;
+      root.userData.sceneVideoPreviewV2Owned = true;
+      root.userData.videoSurfaceState = 'preview-v2-playing';
+      sceneVideoPreviewV2ActiveRoot = root;
+      sceneVideoPreviewV2CommittedCount += 1;
+      settleSceneVideoPreviewV2Promise(candidate, true);
+      logSceneVideoPreviewV2('commit', root, {
+        width: Number(video.videoWidth || 0),
+        height: Number(video.videoHeight || 0)
+      });
+      return true;
+    } catch (error) {
+      fail(error?.message || 'video-texture-create-failed');
+      return false;
+    }
+  };
+
+  const armFrameReady = () => {
+    if (candidate.cancelled || candidate.committed || candidate.frameCallbackId || candidate.fallbackFrameTimerId) return;
+    if (!hasSceneVideoFirstFrame(video)) return;
+    logSceneVideoPreviewV2('frame-ready', root, {
+      width: Number(video.videoWidth || 0),
+      height: Number(video.videoHeight || 0)
+    });
+    if (typeof video.requestVideoFrameCallback === 'function') {
+      candidate.frameCallbackId = video.requestVideoFrameCallback(() => {
+        candidate.frameCallbackId = 0;
+        commit();
+      });
+      return;
+    }
+    candidate.fallbackFrameTimerId = window.setTimeout(() => {
+      candidate.fallbackFrameTimerId = 0;
+      commit();
+    }, 80);
+  };
+
+  function onPotentialFrame() {
+    armFrameReady();
+  }
+
+  function onError() {
+    fail(video.error?.message || `media-error-${video.error?.code || 'unknown'}`);
+  }
+
+  video.addEventListener('loadeddata', onPotentialFrame);
+  video.addEventListener('canplay', onPotentialFrame);
+  video.addEventListener('playing', onPotentialFrame);
+  video.addEventListener('timeupdate', onPotentialFrame);
+  video.addEventListener('error', onError, { once: true });
+
+  const timeoutMs = Math.max(2500, Math.min(6000, Number(CONFIG?.sceneVideoPreviewV2PrepareTimeoutMs || 3500)));
+  candidate.timeoutId = window.setTimeout(() => fail('preflight-timeout'), timeoutMs);
+
+  logSceneVideoPreviewV2('prepare-start', root, { timeoutMs });
+  try {
+    video.src = item.videoUrl;
+    video.load?.();
+    const playPromise = video.play?.();
+    if (playPromise && typeof playPromise.then === 'function') {
+      playPromise.then(() => armFrameReady()).catch((error) => {
+        fail(error?.message || 'muted-play-rejected');
+      });
+    } else {
+      armFrameReady();
+    }
+  } catch (error) {
+    fail(error?.message || 'preflight-load-failed');
+  }
+
+  return candidate.promise;
+}
+
+window.prepareSceneVideoPreviewV2 = prepareSceneVideoPreviewV2;
+window.cancelSceneVideoPreviewV2Prepare = cancelSceneVideoPreviewV2Prepare;
+window.pauseSceneVideoPreviewV2 = pauseSceneVideoPreviewV2;
+window.releaseSceneVideoPreviewV2ForUserAction = releaseSceneVideoPreviewV2ForUserAction;
+
 function disposeSceneVideoPlayer(root) {
+  disposeSceneVideoPreviewV2(root, { reason: 'dispose-scene-video-player', restorePreviousMap: false });
   const player = root?.userData?.videoPlayer;
   if (!player) return;
   try { player.video.pause(); } catch (_) {}
