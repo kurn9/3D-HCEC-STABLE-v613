@@ -1855,6 +1855,11 @@ async function loadArtworks() {
     artworksLoaded = true;
     if (typeof refreshArtworkList === 'function') refreshArtworkList();
     setLoadingProgress(100);
+    window.__MobilePerfProbe?.markOnce?.('viewer-usable', {
+      room: CONFIG?.currentRoomId || 'unknown',
+      items: successCount,
+      failedItems: failCount
+    }, { snapshot: true });
     setStatus(`✅ <strong>Sẵn sàng</strong><br>${CONFIG.currentRoomLabel ? `Phòng: ${CONFIG.currentRoomLabel}<br>` : 'Phòng: đã load<br>'}Tranh / đối tượng: ${successCount}/${artworks.length}<br>${failCount > 0 ? `Lỗi ảnh: ${failCount}<br>` : ''}Click vào màn hình để bắt đầu · Bấm V để đổi góc nhìn`);
     scheduleSceneVideoAutoplay();
   } catch (error) {
@@ -2147,6 +2152,14 @@ function attachVideoTextureToRoot(root, item, { play = false, forceMuted = false
   if (!liveMaterial || !item?.videoUrl) return Promise.resolve(false);
   const videoSource = String(item?.videoUrl || '').trim();
   if (!videoSource) return Promise.resolve(false);
+  if (play) {
+    window.__MobilePerfProbe?.mark('video-play-start', {
+      itemId: item?.id || '',
+      source,
+      resource: videoSource.split('/').pop() || 'video',
+      resourceStatus: 'play-requested'
+    });
+  }
   const userInitiatedSource = /click|tap|manual/i.test(String(source || ''));
   if (sceneVideoMissingUrlCache.has(videoSource)) {
     if (userInitiatedSource) {
@@ -2360,6 +2373,14 @@ function attachVideoTextureToRoot(root, item, { play = false, forceMuted = false
         logSceneVideoGazeH5('negative-cache-skip-for-gaze', root);
       }
       logSceneVideoPreview('surface video error', { title: item?.title || item?.id || '', videoUrl: videoSource }, 'warn');
+      window.__MobilePerfProbe?.mark('video-play-error', {
+        itemId: item?.id || '',
+        source,
+        reason: 'video-error',
+        errorCode: video.error?.code || 0,
+        resource: videoSource.split('/').pop() || 'video',
+        resourceStatus: 'error'
+      });
       finish(false, 'video-error');
     };
 
@@ -2396,6 +2417,13 @@ function attachVideoTextureToRoot(root, item, { play = false, forceMuted = false
           .catch((err) => {
             playRejected = true;
             logSceneVideoPreview('surface play rejected', { title: item?.title || item?.id || '', videoUrl: videoSource, reason: err?.message || 'play-rejected' }, 'warn');
+            window.__MobilePerfProbe?.mark('video-play-error', {
+              itemId: item?.id || '',
+              source,
+              reason: err?.message || 'play-rejected',
+              resource: videoSource.split('/').pop() || 'video',
+              resourceStatus: 'play-rejected'
+            });
             // Do not permanently fail the surface. Keep stable idle preview and allow the next click/tap to upgrade intent.
             finish(false, 'play-rejected');
           });
@@ -2661,6 +2689,11 @@ function buildArtworkGroup(art, texture, options = {}) {
   if (itemType === 'video') {
     ensureSceneVideoDualLayer(root, artData);
     applySceneVideoIdlePlaceholder(root, artData, 'initial-placeholder-first');
+    window.__MobilePerfProbe?.mark('video-surface-init', {
+      itemId: artData.id || '',
+      resource: String(artData.videoUrl || '').split('/').pop() || 'video',
+      resourceStatus: 'surface-idle'
+    });
   }
 
   if (clickable) interactiveArtworkMeshes.push(imageMesh);

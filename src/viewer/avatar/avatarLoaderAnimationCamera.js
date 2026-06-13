@@ -6,6 +6,11 @@ function scheduleDeferredAvatarModelLoad(root) {
   if (!root || root.userData?.externalModelLoadScheduled) return;
   root.userData.externalModelLoadScheduled = true;
   const delay = Math.max(0, Number(CONFIG.mobile?.avatarModelDeferredLoadMs || 10000));
+  window.__MobilePerfProbe?.markOnce?.('avatar-scheduled', {
+    delayMs: delay,
+    resource: String(CONFIG.avatarModelUrl || '').split('/').pop() || 'visitor.glb',
+    resourceStatus: 'scheduled'
+  });
 
   const startLoadWhenSafe = () => {
     if (!root || root.userData?.externalModel || root.userData?.externalModelLoading) return;
@@ -318,13 +323,27 @@ function tuneAvatarMaterialRuntime(mat) {
 function loadExternalAvatarModel(root) {
   if (!CONFIG.useExternalAvatarModel || !CONFIG.avatarModelUrl || !root) {
     if (root?.userData) root.userData.externalModelLoading = false;
+    window.__MobilePerfProbe?.markOnce?.('avatar-fallback-used', { reason: 'external-avatar-disabled-or-missing-url' });
     return;
   }
+
+  window.__MobilePerfProbe?.markOnce?.('avatar-load-start', {
+    resource: String(CONFIG.avatarModelUrl || '').split('/').pop() || 'visitor.glb',
+    resourceStatus: 'loading'
+  }, { snapshot: true });
 
   gltfLoader.load(
     CONFIG.avatarModelUrl,
     (gltf) => {
       root.userData.externalModelLoading = false;
+      window.__MobilePerfProbe?.markOnce?.('avatar-load-ok', {
+        resource: String(CONFIG.avatarModelUrl || '').split('/').pop() || 'visitor.glb',
+        resourceStatus: 'loaded',
+        animations: Array.isArray(gltf.animations) ? gltf.animations.length : 0
+      }, { snapshot: true });
+      window.__MobilePerfProbe?.markOnce?.('avatar-prepare-start', {
+        animations: Array.isArray(gltf.animations) ? gltf.animations.length : 0
+      });
       const model = gltf.scene;
       model.name = 'VISITOR_AVATAR_GLB_MODEL';
 
@@ -358,6 +377,10 @@ function loadExternalAvatarModel(root) {
       modelPivot.rotation.y = CONFIG.avatarModelYawOffset;
       modelPivot.add(model);
 
+      window.__MobilePerfProbe?.markOnce?.('avatar-attach-start', {
+        prepared: Boolean(prepared?.ok),
+        meshCount: Number(prepared?.meshCount || 0)
+      }, { snapshot: true });
       root.add(modelPivot);
 
       avatarModelLoaded = !!prepared.ok;
@@ -420,6 +443,19 @@ function loadExternalAvatarModel(root) {
         forceAvatarCameraView();
 
         console.log('[Avatar GLB V24] loaded OK', prepared);
+        window.__MobilePerfProbe?.markOnce?.('avatar-attach-ok', {
+          meshCount: Number(prepared?.meshCount || 0),
+          reason: prepared?.reason || 'ok',
+          resource: String(CONFIG.avatarModelUrl || '').split('/').pop() || 'visitor.glb',
+          resourceStatus: 'attached'
+        }, { snapshot: true });
+        if (window.__MobilePerfProbe?.enabled) {
+          window.setTimeout(() => {
+            if (root?.userData?.externalModel && root?.userData?.modelPivot) {
+              window.__MobilePerfProbe?.markOnce?.('avatar-stable', { afterAttachMs: 1200 }, { snapshot: true });
+            }
+          }, 1200);
+        }
         setStatus(`✅ <strong>Sẵn sàng tham quan</strong>`);
       } else {
         console.warn('[Avatar GLB V24] load được nhưng không dùng được, giữ fallback.', {
@@ -430,6 +466,9 @@ function loadExternalAvatarModel(root) {
         if (root.userData.fallbackGroup) {
           root.userData.fallbackGroup.visible = true;
         }
+        window.__MobilePerfProbe?.markOnce?.('avatar-fallback-used', {
+          reason: prepared?.reason || 'avatar-prepare-failed'
+        }, { snapshot: true });
 
         setStatus(`⚠️ <strong>Có lỗi</strong>`);
       }
@@ -438,6 +477,11 @@ function loadExternalAvatarModel(root) {
     (error) => {
       root.userData.externalModelLoading = false;
       console.warn('Không load được avatar GLB, dùng avatar đơn giản.', error);
+      window.__MobilePerfProbe?.markOnce?.('avatar-fallback-used', {
+        reason: error?.message || 'avatar-load-error',
+        resource: String(CONFIG.avatarModelUrl || '').split('/').pop() || 'visitor.glb',
+        resourceStatus: 'error'
+      }, { snapshot: true });
       avatarModelLoaded = false;
       setStatus(`⚠️ <strong>Chưa load được avatar GLB</strong><br>Đang dùng avatar đơn giản.<br>Kiểm tra file: ${CONFIG.avatarModelUrl}<br>Mở Console để xem lỗi chi tiết.`);
     }

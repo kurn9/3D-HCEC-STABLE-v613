@@ -333,12 +333,15 @@ function updateMeasuredFrameBudget(rawDelta, deltaTime, now) {
   return budget;
 }
 
+let mobilePerfFirstRenderPendingV613021 = Boolean(window.__MobilePerfProbe?.enabled);
+
 function animate() {
   requestAnimationFrame(animate);
   const rawDelta = clock.getDelta();
   const maxFrameDelta = Math.max(0.016, Number(CONFIG.maxFrameDelta || 0.033));
   const deltaTime = Math.min(rawDelta, maxFrameDelta);
   const now = performance.now();
+  window.__MobilePerfProbe?.tick?.(now);
   const budget = updateMeasuredFrameBudget(rawDelta, deltaTime, now);
   resetViewerPerfSegments(budget, now);
 
@@ -391,6 +394,12 @@ function animate() {
   const roomAnimationDelta = CONFIG?.roomAnimationUseRawDelta === false ? deltaTime : rawDelta;
   measureViewerPerfSegment(budget, 'roomAnimationMs', () => updateRoomAnimation(roomAnimationDelta, now, budget));
   measureViewerPerfSegment(budget, 'renderMs', () => renderer.render(scene, camera));
+  if (mobilePerfFirstRenderPendingV613021) {
+    mobilePerfFirstRenderPendingV613021 = false;
+    window.__MobilePerfProbe?.markOnce?.('first-render', {
+      frameMs: Number((budget?.frameMs || 0).toFixed?.(2) || budget?.frameMs || 0)
+    }, { snapshot: true });
+  }
 }
 
 let resizeRafId = 0;
