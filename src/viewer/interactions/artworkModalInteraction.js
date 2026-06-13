@@ -117,167 +117,6 @@ function nowMs() {
   return (typeof performance !== 'undefined' && typeof performance.now === 'function') ? performance.now() : Date.now();
 }
 
-// v6.13.011 — Preview V2 focus scheduler.
-// This file only schedules dwell/exit transitions. The loader owns hidden-video
-// preflight and commits a surface texture only after a decoded frame is ready.
-let sceneVideoPreviewV2TargetRoot = null;
-let sceneVideoPreviewV2DwellTimer = 0;
-let sceneVideoPreviewV2DwellRoot = null;
-let sceneVideoPreviewV2MouseEvidence = false;
-
-window.addEventListener('pointermove', (event) => {
-  if (event?.pointerType === 'mouse') sceneVideoPreviewV2MouseEvidence = true;
-}, { passive: true });
-window.addEventListener('mousemove', () => {
-  sceneVideoPreviewV2MouseEvidence = true;
-}, { passive: true });
-
-function isSceneVideoPreviewV2InteractionDebugEnabled() {
-  if (CONFIG?.sceneVideoPreviewV2Debug === true) return true;
-  try {
-    return new URLSearchParams(window.location.search).get('debugSceneVideoPreviewV2') === '1';
-  } catch (_) {
-    return false;
-  }
-}
-
-function logSceneVideoPreviewV2Interaction(event, root = null, detail = {}, level = 'debug') {
-  if (!isSceneVideoPreviewV2InteractionDebugEnabled()) return;
-  const fn = console[level] || console.debug || console.log;
-  fn.call(console, `[SceneVideoPreviewV2] ${event}`, {
-    id: String(root?.userData?.artData?.id || root?.name || ''),
-    ...detail
-  });
-}
-
-function isSceneVideoPreviewV2Root(root) {
-  return Boolean(
-    root?.userData?.type === 'artworkRoot'
-    && root.userData?.artData?.type === 'video'
-    && root.userData?.artData?.videoUrl
-  );
-}
-
-function isSceneVideoPreviewV2DesktopEligible() {
-  if (CONFIG?.sceneVideoPreviewV2Enabled === false) return false;
-  if (CONFIG?.sceneVideoPreviewV2DesktopOnly === false) return true;
-  if (window.viewerMobileDevice?.isMobileViewer?.()) return false;
-  if (window.getViewerQualityState?.()?.isMobile) return false;
-  if (document.body?.classList?.contains('viewer-mobile')) return false;
-
-  let primaryFine = false;
-  let anyFine = false;
-  let primaryCoarse = false;
-  try {
-    primaryFine = Boolean(window.matchMedia?.('(pointer: fine)')?.matches);
-    anyFine = Boolean(window.matchMedia?.('(any-pointer: fine)')?.matches);
-    primaryCoarse = Boolean(window.matchMedia?.('(pointer: coarse)')?.matches);
-  } catch (_) {}
-
-  if (primaryFine || anyFine || sceneVideoPreviewV2MouseEvidence) return true;
-  return !primaryCoarse && sceneVideoPreviewV2MouseEvidence;
-}
-
-function clearSceneVideoPreviewV2DwellTimer() {
-  if (sceneVideoPreviewV2DwellTimer) window.clearTimeout(sceneVideoPreviewV2DwellTimer);
-  sceneVideoPreviewV2DwellTimer = 0;
-  sceneVideoPreviewV2DwellRoot = null;
-}
-
-function clearSceneVideoPreviewV2ExitTimer(root) {
-  const timerId = Number(root?.userData?.sceneVideoPreviewV2ExitTimer || 0);
-  if (timerId) window.clearTimeout(timerId);
-  if (root?.userData) root.userData.sceneVideoPreviewV2ExitTimer = 0;
-}
-
-function scheduleSceneVideoPreviewV2Pause(root, source = 'focus-exit') {
-  if (!isSceneVideoPreviewV2Root(root)) return;
-  clearSceneVideoPreviewV2ExitTimer(root);
-  // A background candidate that has not committed must be cancelled immediately
-  // on focus exit. Cooldown applies only to an already visible preview frame.
-  const cancelledPrepare = window.cancelSceneVideoPreviewV2Prepare?.(root, { reason: source }) === true;
-  if (cancelledPrepare) return;
-  const cooldownMs = Math.max(250, Math.min(1200, Number(CONFIG?.sceneVideoPreviewV2ExitCooldownMs || 350)));
-  root.userData.sceneVideoPreviewV2ExitTimer = window.setTimeout(() => {
-    root.userData.sceneVideoPreviewV2ExitTimer = 0;
-    if (sceneVideoPreviewV2TargetRoot === root) return;
-    const paused = window.pauseSceneVideoPreviewV2?.(root, { reason: source }) === true;
-    if (paused) logSceneVideoPreviewV2Interaction('pause', root, { source });
-  }, cooldownMs);
-}
-
-function scheduleSceneVideoPreviewV2Prepare(root, source = 'focus-enter') {
-  if (!isSceneVideoPreviewV2Root(root) || !isSceneVideoPreviewV2DesktopEligible()) return;
-  clearSceneVideoPreviewV2ExitTimer(root);
-  clearSceneVideoPreviewV2DwellTimer();
-
-  if (root.userData?.videoPlayer?.video) return;
-  const suppressUntil = Number(root.userData?.sceneVideoPreviewV2SuppressUntil || 0);
-  if (nowMs() < suppressUntil) return;
-
-  const dwellMs = Math.max(450, Math.min(3000, Number(CONFIG?.sceneVideoPreviewV2DwellMs || 650)));
-  sceneVideoPreviewV2DwellRoot = root;
-  logSceneVideoPreviewV2Interaction('dwell-start', root, { dwellMs, source });
-  sceneVideoPreviewV2DwellTimer = window.setTimeout(() => {
-    sceneVideoPreviewV2DwellTimer = 0;
-    sceneVideoPreviewV2DwellRoot = null;
-    if (sceneVideoPreviewV2TargetRoot !== root) return;
-    if (!isSceneVideoPreviewV2DesktopEligible()) return;
-    if (modalOpen) return;
-    if (document.body?.classList?.contains('viewer-scene-video-open')) return;
-    if (nowMs() < Number(root.userData?.sceneVideoPreviewV2SuppressUntil || 0)) return;
-    if (typeof window.prepareSceneVideoPreviewV2 !== 'function') return;
-
-    window.prepareSceneVideoPreviewV2(root, { source: 'gaze-dwell' })
-      .then((ok) => {
-        logSceneVideoPreviewV2Interaction(ok ? 'preview-play' : 'prepare-not-committed', root, { source });
-      })
-      .catch((error) => {
-        logSceneVideoPreviewV2Interaction('fail', root, { reason: error?.message || 'prepare-rejected' }, 'warn');
-      });
-  }, dwellMs);
-}
-
-function setSceneVideoPreviewV2Target(root, source = 'focus') {
-  const nextRoot = isSceneVideoPreviewV2Root(root) && isSceneVideoPreviewV2DesktopEligible() ? root : null;
-  if (sceneVideoPreviewV2TargetRoot === nextRoot) return;
-
-  const previousRoot = sceneVideoPreviewV2TargetRoot;
-  sceneVideoPreviewV2TargetRoot = nextRoot;
-  if (previousRoot?.userData) previousRoot.userData.sceneVideoPreviewV2TargetActive = false;
-  if (nextRoot?.userData) nextRoot.userData.sceneVideoPreviewV2TargetActive = true;
-  clearSceneVideoPreviewV2DwellTimer();
-  if (previousRoot) scheduleSceneVideoPreviewV2Pause(previousRoot, source);
-  if (nextRoot) scheduleSceneVideoPreviewV2Prepare(nextRoot, source);
-}
-
-function refreshSceneVideoPreviewV2Target(source = 'focus') {
-  const activeRoot = isLocked ? currentFocusedRoot : hoveredRoot;
-  setSceneVideoPreviewV2Target(activeRoot, source);
-}
-
-function releaseSceneVideoPreviewV2ForActivation(root, options = {}) {
-  clearSceneVideoPreviewV2DwellTimer();
-  clearSceneVideoPreviewV2ExitTimer(root);
-  if (sceneVideoPreviewV2TargetRoot === root) sceneVideoPreviewV2TargetRoot = null;
-  if (root?.userData) root.userData.sceneVideoPreviewV2TargetActive = false;
-  return window.releaseSceneVideoPreviewV2ForUserAction?.(root, options) === true;
-}
-
-// Pause/cancel Preview V2 for every cinema entry point, including artwork-list
-// actions that call window.openSceneVideoCinema directly. The cinema module itself
-// remains unchanged.
-if (typeof window.openSceneVideoCinema === 'function' && window.openSceneVideoCinema.__previewV2Wrapped !== true) {
-  const openSceneVideoCinemaBaseline = window.openSceneVideoCinema;
-  const openSceneVideoCinemaWithPreviewV2Guard = function openSceneVideoCinemaWithPreviewV2Guard(input) {
-    const root = input?.userData?.artData ? input : null;
-    if (root) releaseSceneVideoPreviewV2ForActivation(root, { reason: 'cinema-open', preserveFrame: true });
-    return openSceneVideoCinemaBaseline(input);
-  };
-  openSceneVideoCinemaWithPreviewV2Guard.__previewV2Wrapped = true;
-  window.openSceneVideoCinema = openSceneVideoCinemaWithPreviewV2Guard;
-}
-
 function isValidArtworkRoot(root) {
   return Boolean(root?.userData?.type === 'artworkRoot' && root.userData?.artData);
 }
@@ -343,7 +182,6 @@ function clearArtworkFocus(options = {}) {
   }
   crosshair?.classList?.toggle('target', false);
   if (options.hideCard !== false) updateFocusCard(null);
-  refreshSceneVideoPreviewV2Target('focus-clear');
 }
 
 function scheduleFocusStaleGuard(root) {
@@ -370,7 +208,6 @@ function setFocusedArtworkRoot(root, options = {}) {
     crosshair?.classList?.toggle('target', !modalOpen);
     if (options.updateCard !== false) updateFocusCard(root);
     scheduleFocusStaleGuard(root);
-    refreshSceneVideoPreviewV2Target('center-focus');
     return root;
   }
 
@@ -448,7 +285,6 @@ function checkArtworkAtMouse(returnRoot = false) {
     if (hoveredRoot && hoveredRoot !== currentFocusedRoot) resetArtworkRootVisualState(hoveredRoot);
     hoveredRoot = null;
     renderer.domElement.style.cursor = 'default';
-    refreshSceneVideoPreviewV2Target('mouse-disabled');
     return null;
   }
   bumpViewerRaycastMetric('artwork');
@@ -457,7 +293,6 @@ function checkArtworkAtMouse(returnRoot = false) {
   hoveredRoot = nextHoveredRoot;
   if (hoveredRoot) rememberInteractableRoot(hoveredRoot);
   renderer.domElement.style.cursor = hoveredRoot ? 'pointer' : 'default';
-  refreshSceneVideoPreviewV2Target('mouse-hover');
   return returnRoot ? hoveredRoot : hoveredRoot?.userData?.artData || null;
 }
 
@@ -498,9 +333,6 @@ function activateSceneVideoRoot(root) {
   }
 
   if (typeof window.toggleSceneVideoRoot === 'function') {
-    // Preview V2 never owns click playback. Release/cancel the background
-    // candidate first, then execute the unchanged baseline surface toggle.
-    releaseSceneVideoPreviewV2ForActivation(root, { reason: 'user-click', preserveFrame: false });
     const ok = window.toggleSceneVideoRoot(root);
     if (ok) setStatus('▶️ <strong>Video</strong><br>Click để phát/tạm dừng · nhấp đúp để xem lớn.');
     return ok;

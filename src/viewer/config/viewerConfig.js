@@ -146,18 +146,6 @@ const CONFIG = {
   sceneVideoPreviewSeekMin: 0.08,
   sceneVideoPreviewSeekMax: 0.35,
   sceneVideoPreviewDeferOnSpike: true,
-
-  // v6.13.011 — desktop-only Surface Preview V2.
-  // Background preflight never calls the baseline surface attach path and never
-  // replaces the current poster/first-frame until a decoded frame is ready.
-  sceneVideoPreviewV2Enabled: true,
-  sceneVideoPreviewV2DesktopOnly: true,
-  sceneVideoPreviewV2DwellMs: 650,
-  sceneVideoPreviewV2ExitCooldownMs: 350,
-  sceneVideoPreviewV2PrepareTimeoutMs: 3500,
-  sceneVideoPreviewV2Debug: false,
-  sceneVideoPreviewV2MaxPreparing: 1,
-
   sceneVideoAutoplayAfterDelay: true,
   sceneVideoAutoplayDelayMs: 15000,
   sceneVideoAutoplayMax: 2,
