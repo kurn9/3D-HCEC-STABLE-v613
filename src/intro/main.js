@@ -766,7 +766,219 @@ function initIntroVideoModal() {
   const dialog = modal.querySelector('.intro-video-dialog');
   const player = modal.querySelector('.intro-video-player');
   const closeButtons = Array.from(modal.querySelectorAll('[data-close-intro-video]'));
+  const pageShell = document.querySelector('.page-shell');
+  const focusableSelector = [
+    'a[href]',
+    'area[href]',
+    'button:not([disabled])',
+    'input:not([disabled]):not([type="hidden"])',
+    'select:not([disabled])',
+    'textarea:not([disabled])',
+    'iframe',
+    'object',
+    'embed',
+    'audio[controls]',
+    'video[controls]',
+    'summary',
+    '[contenteditable="true"]',
+    '[tabindex]:not([tabindex="-1"])'
+  ].join(',');
+
   let lastActiveElement = null;
+  let lastTriggerElement = null;
+  let focusTrapActive = false;
+  let isRedirectingFocus = false;
+  let dialogTabIndexState = null;
+  let pageShellState = null;
+  let initialFocusRafId = 0;
+
+  const focusElement = (element) => {
+    if (!(element instanceof HTMLElement)) return false;
+    try {
+      element.focus({ preventScroll: true });
+    } catch {
+      element.focus();
+    }
+    return document.activeElement === element;
+  };
+
+  const isElementAvailableForFocus = (element) => {
+    if (!(element instanceof HTMLElement)) return false;
+    if (!document.contains(element) || element.hidden) return false;
+    if (element.matches(':disabled, [aria-hidden="true"]')) return false;
+    if (element.closest('[hidden], [aria-hidden="true"], [inert]')) return false;
+
+    const style = window.getComputedStyle(element);
+    if (style.display === 'none' || style.visibility === 'hidden') return false;
+    return element.getClientRects().length > 0;
+  };
+
+  const getFocusableElements = () => {
+    if (!dialog) return [];
+    return Array.from(dialog.querySelectorAll(focusableSelector))
+      .filter(isElementAvailableForFocus);
+  };
+
+  const ensureDialogFocusFallback = () => {
+    if (!dialog) return null;
+    if (!dialogTabIndexState) {
+      dialogTabIndexState = {
+        hadAttribute: dialog.hasAttribute('tabindex'),
+        value: dialog.getAttribute('tabindex')
+      };
+    }
+    dialog.setAttribute('tabindex', '-1');
+    return dialog;
+  };
+
+  const restoreDialogTabIndex = () => {
+    if (!dialog || !dialogTabIndexState) return;
+    if (dialogTabIndexState.hadAttribute) {
+      dialog.setAttribute('tabindex', dialogTabIndexState.value ?? '-1');
+    } else {
+      dialog.removeAttribute('tabindex');
+    }
+    dialogTabIndexState = null;
+  };
+
+  const focusModalBoundary = (preferLast = false) => {
+    const focusableElements = getFocusableElements();
+    const target = focusableElements.length
+      ? focusableElements[preferLast ? focusableElements.length - 1 : 0]
+      : ensureDialogFocusFallback();
+    return focusElement(target);
+  };
+
+  const isolateBackground = () => {
+    if (!(pageShell instanceof HTMLElement) || pageShellState) return;
+
+    pageShellState = {
+      hadInertAttribute: pageShell.hasAttribute('inert'),
+      inertValue: 'inert' in pageShell ? Boolean(pageShell.inert) : false,
+      hadAriaHidden: pageShell.hasAttribute('aria-hidden'),
+      ariaHiddenValue: pageShell.getAttribute('aria-hidden')
+    };
+
+    if ('inert' in pageShell) pageShell.inert = true;
+    else pageShell.setAttribute('inert', '');
+    pageShell.setAttribute('aria-hidden', 'true');
+  };
+
+  const restoreBackground = () => {
+    if (!(pageShell instanceof HTMLElement) || !pageShellState) return;
+
+    if ('inert' in pageShell) pageShell.inert = pageShellState.inertValue;
+    if (pageShellState.hadInertAttribute) pageShell.setAttribute('inert', '');
+    else pageShell.removeAttribute('inert');
+
+    if (pageShellState.hadAriaHidden) {
+      pageShell.setAttribute('aria-hidden', pageShellState.ariaHiddenValue ?? 'true');
+    } else {
+      pageShell.removeAttribute('aria-hidden');
+    }
+
+    pageShellState = null;
+  };
+
+  const handleModalFocusIn = (event) => {
+    if (!focusTrapActive || !modal.classList.contains('is-open')) return;
+    if (modal.contains(event.target) || isRedirectingFocus) return;
+
+    isRedirectingFocus = true;
+    focusModalBoundary(false);
+    isRedirectingFocus = false;
+  };
+
+  const handleModalKeydown = (event) => {
+    if (!focusTrapActive || !modal.classList.contains('is-open')) return;
+
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closeModal();
+      return;
+    }
+
+    if (event.key !== 'Tab') return;
+
+    const focusableElements = getFocusableElements();
+    if (!focusableElements.length) {
+      event.preventDefault();
+      focusModalBoundary(false);
+      return;
+    }
+
+    const firstFocusable = focusableElements[0];
+    const lastFocusable = focusableElements[focusableElements.length - 1];
+    const activeElement = document.activeElement;
+
+    if (!modal.contains(activeElement)) {
+      event.preventDefault();
+      focusElement(event.shiftKey ? lastFocusable : firstFocusable);
+      return;
+    }
+
+    if (event.shiftKey && activeElement === firstFocusable) {
+      event.preventDefault();
+      focusElement(lastFocusable);
+      return;
+    }
+
+    if (!event.shiftKey && activeElement === lastFocusable) {
+      event.preventDefault();
+      focusElement(firstFocusable);
+    }
+  };
+
+  const focusInitialModalElement = () => {
+    const closeButton = modal.querySelector('.intro-video-close');
+    const focusTarget = isElementAvailableForFocus(closeButton)
+      ? closeButton
+      : getFocusableElements()[0] || ensureDialogFocusFallback();
+    return focusElement(focusTarget);
+  };
+
+  const activateFocusTrap = () => {
+    if (focusTrapActive) return;
+    focusTrapActive = true;
+    document.addEventListener('keydown', handleModalKeydown, true);
+    document.addEventListener('focusin', handleModalFocusIn, true);
+
+    isolateBackground();
+
+    const focusDeadline = performance.now() + 700;
+    const tryInitialFocus = () => {
+      initialFocusRafId = 0;
+      if (!focusTrapActive || !modal.classList.contains('is-open')) return;
+      if (focusInitialModalElement()) return;
+      if (performance.now() < focusDeadline) {
+        initialFocusRafId = window.requestAnimationFrame(tryInitialFocus);
+      }
+    };
+    tryInitialFocus();
+  };
+
+  const deactivateFocusTrap = () => {
+    if (initialFocusRafId) {
+      window.cancelAnimationFrame(initialFocusRafId);
+      initialFocusRafId = 0;
+    }
+    if (focusTrapActive) {
+      document.removeEventListener('keydown', handleModalKeydown, true);
+      document.removeEventListener('focusin', handleModalFocusIn, true);
+      focusTrapActive = false;
+    }
+    isRedirectingFocus = false;
+    restoreBackground();
+    restoreDialogTabIndex();
+  };
+
+  const restoreOpeningFocus = () => {
+    const restoreTarget = [lastActiveElement, lastTriggerElement]
+      .find(isElementAvailableForFocus);
+    if (restoreTarget) focusElement(restoreTarget);
+    lastActiveElement = null;
+    lastTriggerElement = null;
+  };
 
   const openModal = (event) => {
     if (event.defaultPrevented) return;
@@ -776,7 +988,13 @@ function initIntroVideoModal() {
     }
 
     event.preventDefault();
+    if (modal.classList.contains('is-open')) {
+      focusModalBoundary(false);
+      return;
+    }
+
     lastActiveElement = document.activeElement;
+    lastTriggerElement = event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
     modal.classList.add('is-open');
     modal.setAttribute('aria-hidden', 'false');
     document.body.classList.add('is-video-modal-open');
@@ -825,13 +1043,13 @@ function initIntroVideoModal() {
       }
     }
 
-    window.setTimeout(() => {
-      modal.querySelector('.intro-video-close')?.focus?.({ preventScroll: true });
-    }, 40);
+    activateFocusTrap();
   };
 
-  const closeModal = () => {
+  function closeModal() {
     if (!modal.classList.contains('is-open')) return;
+
+    deactivateFocusTrap();
     modal.classList.remove('is-open');
     modal.setAttribute('aria-hidden', 'true');
     document.body.classList.remove('is-video-modal-open');
@@ -842,10 +1060,8 @@ function initIntroVideoModal() {
       heroVideo.play?.().catch(() => {});
     }
 
-    if (lastActiveElement && typeof lastActiveElement.focus === 'function') {
-      lastActiveElement.focus({ preventScroll: true });
-    }
-  };
+    restoreOpeningFocus();
+  }
 
   openers.forEach((opener) => {
     opener.addEventListener('click', openModal);
@@ -872,10 +1088,6 @@ function initIntroVideoModal() {
 
   modal.addEventListener('click', (event) => {
     if (event.target?.matches?.('[data-close-intro-video]')) closeModal();
-  });
-
-  document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape') closeModal();
   });
 
   dialog?.addEventListener('click', (event) => event.stopPropagation());
