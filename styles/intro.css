@@ -1993,64 +1993,64 @@ html {
   }
 }
 
-/* v6.14.003 — Heritage Portal Infinity / Portal Center Stage + Infinity Flow.
+/* v6.14.005 — Dynamic Infinity Gate Orbit.
    Scoped to the featured section; no global hero, nav, route or guide overrides. */
-.heritage-portal[hidden] {
+.infinity-gate[hidden] {
   display: none !important;
 }
 
 .stage-section--featured {
-  width: min(1600px, calc(100vw - clamp(28px, 6vw, 148px)));
-  padding: clamp(42px, 6vh, 78px) 0 clamp(46px, 6.5vh, 88px);
+  width: min(1680px, calc(100vw - clamp(28px, 6vw, 148px)));
+  padding: clamp(42px, 6vh, 78px) 0 clamp(48px, 7vh, 94px);
   isolation: isolate;
 }
 
 .stage-section--featured::before {
   content: "";
   position: absolute;
-  inset: -24px calc(clamp(22px, 5vw, 90px) * -1) -28px;
+  inset: -28px calc(clamp(22px, 5vw, 94px) * -1) -34px;
   z-index: -3;
   pointer-events: none;
-  border-block: 1px solid rgba(232, 192, 109, .11);
+  border-block: 1px solid rgba(232, 192, 109, .105);
   background:
-    radial-gradient(ellipse at 50% 48%, rgba(232, 192, 109, .10), transparent 38%),
-    radial-gradient(ellipse at 12% 62%, rgba(143, 217, 255, .055), transparent 31%),
-    radial-gradient(ellipse at 88% 36%, rgba(143, 217, 255, .045), transparent 28%),
-    linear-gradient(180deg, rgba(255,255,255,.018), rgba(4,8,15,.22) 55%, rgba(255,255,255,.012));
-  -webkit-mask-image: linear-gradient(180deg, transparent, #000 12%, #000 88%, transparent);
-  mask-image: linear-gradient(180deg, transparent, #000 12%, #000 88%, transparent);
+    radial-gradient(ellipse at 50% 45%, rgba(232, 192, 109, .105), transparent 36%),
+    radial-gradient(ellipse at 16% 66%, rgba(117, 198, 238, .052), transparent 30%),
+    radial-gradient(ellipse at 84% 31%, rgba(117, 198, 238, .045), transparent 28%),
+    linear-gradient(180deg, rgba(255,255,255,.016), rgba(3,8,15,.24) 56%, rgba(255,255,255,.01));
+  -webkit-mask-image: linear-gradient(180deg, transparent, #000 11%, #000 90%, transparent);
+  mask-image: linear-gradient(180deg, transparent, #000 11%, #000 90%, transparent);
 }
 
 .stage-section--featured::after {
   content: "";
   position: absolute;
-  left: 12%;
-  right: 12%;
+  left: 10%;
+  right: 10%;
   bottom: calc(var(--section-gap) * -0.18);
-  height: clamp(28px, 4vh, 50px);
+  height: clamp(30px, 4.5vh, 56px);
   z-index: -2;
   pointer-events: none;
-  opacity: .68;
+  opacity: .65;
   background:
-    linear-gradient(180deg, transparent, rgba(3,7,13,.84) 52%, transparent),
-    linear-gradient(90deg, transparent, rgba(232,192,109,.20), rgba(143,217,255,.055), transparent);
+    linear-gradient(180deg, transparent, rgba(3,7,13,.86) 52%, transparent),
+    linear-gradient(90deg, transparent, rgba(232,192,109,.18), rgba(117,198,238,.05), transparent);
 }
 
-.heritage-portal-header {
+.infinity-gate-header {
   position: relative;
   z-index: 3;
   display: grid;
   justify-items: center;
   max-width: 1040px;
-  margin: 0 auto clamp(24px, 3.4vw, 46px);
+  margin: 0 auto clamp(24px, 3.2vw, 44px);
   text-align: center;
 }
 
-.heritage-portal-header .section-kicker {
+.infinity-gate-header .section-kicker {
   margin-bottom: 12px;
 }
 
-.heritage-portal-header h2 {
+.infinity-gate-header h2 {
   max-width: 1000px;
   margin: 0;
   font-size: clamp(42px, 4.8vw, 78px);
@@ -2060,7 +2060,7 @@ html {
   text-wrap: balance;
 }
 
-.heritage-portal-header p {
+.infinity-gate-header p {
   position: relative;
   max-width: 820px;
   margin: clamp(14px, 1.8vw, 22px) 0 0;
@@ -2072,8 +2072,8 @@ html {
   text-wrap: balance;
 }
 
-.heritage-portal-header p::before,
-.heritage-portal-header p::after {
+.infinity-gate-header p::before,
+.infinity-gate-header p::after {
   content: "";
   position: absolute;
   top: 50%;
@@ -2082,291 +2082,390 @@ html {
   background: linear-gradient(90deg, transparent, rgba(232,192,109,.62));
 }
 
-.heritage-portal-header p::before {
-  left: 0;
-}
+.infinity-gate-header p::before { left: 0; }
+.infinity-gate-header p::after { right: 0; transform: rotate(180deg); }
 
-.heritage-portal-header p::after {
-  right: 0;
-  transform: rotate(180deg);
-}
-
-.heritage-portal-stage {
+.infinity-gate-stage {
+  --orbit-radius: clamp(190px, 19vw, 330px);
+  --orbit-transition: 860ms cubic-bezier(.22,.74,.22,1);
   position: relative;
   z-index: 2;
-  min-height: clamp(470px, 48vw, 720px);
+  min-height: clamp(520px, 51vw, 760px);
   overflow: hidden;
-  border: 1px solid rgba(255,255,255,.095);
-  border-radius: clamp(24px, 2.3vw, 40px);
+  border: 1px solid rgba(255,255,255,.09);
+  border-radius: clamp(26px, 2.4vw, 42px);
   outline: none;
   background:
-    linear-gradient(180deg, rgba(255,255,255,.032), transparent 20%, rgba(0,0,0,.24) 86%),
-    radial-gradient(ellipse at 50% 34%, rgba(232,192,109,.105), transparent 36%),
-    radial-gradient(ellipse at 50% 82%, rgba(143,217,255,.042), transparent 38%),
-    rgba(4, 9, 17, .90);
+    linear-gradient(180deg, rgba(255,255,255,.028), transparent 19%, rgba(0,0,0,.28) 88%),
+    radial-gradient(ellipse at 50% 43%, rgba(232,192,109,.09), transparent 34%),
+    radial-gradient(ellipse at 50% 84%, rgba(117,198,238,.05), transparent 42%),
+    repeating-linear-gradient(90deg, transparent 0 12.4%, rgba(232,192,109,.018) 12.5%, transparent 12.6%),
+    rgba(3, 8, 16, .93);
   box-shadow:
-    0 38px 118px rgba(0,0,0,.42),
-    inset 0 1px 0 rgba(255,255,255,.055),
-    inset 0 -44px 90px rgba(0,0,0,.22);
-  perspective: 1600px;
+    0 42px 126px rgba(0,0,0,.44),
+    inset 0 1px 0 rgba(255,255,255,.052),
+    inset 0 -52px 100px rgba(0,0,0,.25);
+  perspective: 1500px;
   transform-style: preserve-3d;
 }
 
-.heritage-portal-stage::before {
+.infinity-gate-stage::before {
   content: "";
   position: absolute;
   inset: 0;
   z-index: 1;
   pointer-events: none;
-  opacity: .55;
+  opacity: .62;
   background:
-    linear-gradient(90deg, transparent 0 9%, rgba(232,192,109,.042) 9.1%, transparent 9.3%, transparent 90.7%, rgba(143,217,255,.035) 90.9%, transparent 91%),
-    linear-gradient(180deg, rgba(255,255,255,.028), transparent 18%);
+    linear-gradient(90deg, transparent 0 8%, rgba(232,192,109,.038) 8.1%, transparent 8.25%, transparent 91.75%, rgba(117,198,238,.03) 91.9%, transparent 92%),
+    linear-gradient(180deg, rgba(255,255,255,.026), transparent 17%);
 }
 
-.heritage-portal-stage::after {
+.infinity-gate-stage::after {
   content: "";
   position: absolute;
-  left: 11%;
-  right: 11%;
-  bottom: 0;
-  z-index: 7;
-  height: 19%;
+  left: 8%;
+  right: 8%;
+  bottom: -1px;
+  z-index: 12;
+  height: 18%;
   pointer-events: none;
-  opacity: .7;
-  background: radial-gradient(ellipse at 50% 100%, rgba(232,192,109,.14), transparent 68%);
+  opacity: .72;
+  background: radial-gradient(ellipse at 50% 100%, rgba(232,192,109,.13), transparent 70%);
 }
 
-.heritage-portal-stage:focus-visible {
+.infinity-gate-stage:focus-visible {
   outline: 2px solid rgba(232,192,109,.78);
   outline-offset: 5px;
 }
 
-.heritage-portal-slides {
+.infinity-gate-core {
+  position: absolute;
+  left: 50%;
+  top: 48%;
+  z-index: 2;
+  width: min(62%, 850px);
+  height: 82%;
+  pointer-events: none;
+  border-radius: 50% 50% 45% 45% / 48% 48% 44% 44%;
+  transform: translate3d(-50%, -50%, -110px);
+  transform-style: preserve-3d;
+  background:
+    radial-gradient(ellipse at 50% 48%, rgba(8,18,31,.18) 0 27%, rgba(5,12,22,.78) 60%, rgba(2,6,12,.96) 100%),
+    linear-gradient(180deg, rgba(117,198,238,.035), transparent 36%, rgba(232,192,109,.035));
+  box-shadow:
+    0 0 110px rgba(232,192,109,.10),
+    inset 0 0 96px rgba(0,0,0,.62),
+    inset 0 0 0 1px rgba(232,192,109,.12);
+}
+
+.infinity-gate-core::before,
+.infinity-gate-core::after {
+  content: "";
+  position: absolute;
+  border: 1px solid rgba(232,192,109,.12);
+  border-radius: inherit;
+  inset: 7%;
+}
+
+.infinity-gate-core::after {
+  inset: 15%;
+  border-color: rgba(117,198,238,.075);
+  box-shadow: inset 0 0 54px rgba(117,198,238,.035);
+}
+
+.infinity-gate-depth {
+  position: absolute;
+  inset: 24% 18% 17%;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, rgba(117,198,238,.075), rgba(4,10,19,.64) 48%, rgba(1,4,9,.94) 74%);
+  box-shadow:
+    0 0 58px rgba(117,198,238,.08),
+    inset 0 0 72px rgba(0,0,0,.72);
+}
+
+.infinity-gate-light {
+  position: absolute;
+  left: 17%;
+  right: 17%;
+  bottom: 7%;
+  height: 18%;
+  border-radius: 50%;
+  opacity: .7;
+  background: radial-gradient(ellipse, rgba(232,192,109,.20), rgba(232,192,109,.035) 44%, transparent 72%);
+}
+
+.infinity-gate-orbit {
   position: absolute;
   inset: 0;
   z-index: 3;
-  overflow: hidden;
+  pointer-events: none;
   transform-style: preserve-3d;
-  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 8%, #000 92%, transparent 100%);
-  mask-image: linear-gradient(90deg, transparent 0, #000 8%, #000 92%, transparent 100%);
 }
 
-.heritage-portal-card {
-  --slot-x: 0%;
-  --slot-scale: 1;
-  --slot-opacity: 1;
-  --slot-rotate: 0deg;
-  --slot-depth: 0px;
-  --slot-z: 5;
+.infinity-gate-orbit-line,
+.infinity-gate-orbit-glow {
   position: absolute;
   left: 50%;
+  top: 49%;
+  width: min(86%, 1280px);
+  aspect-ratio: 2.6 / 1;
+  border-radius: 50%;
+  transform: translate3d(-50%, -50%, -40px) rotateX(66deg) rotateZ(-3deg);
+}
+
+.infinity-gate-orbit-line {
+  border: 1px solid rgba(232,192,109,.25);
+  box-shadow:
+    0 0 22px rgba(232,192,109,.08),
+    inset 0 0 30px rgba(117,198,238,.035);
+}
+
+.infinity-gate-orbit-line::before,
+.infinity-gate-orbit-line::after {
+  content: "";
+  position: absolute;
   top: 50%;
-  z-index: var(--slot-z);
-  width: min(74%, 980px);
-  aspect-ratio: 4 / 3;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(255,223,157,.72);
+  box-shadow: 0 0 14px rgba(232,192,109,.45);
+  transform: translateY(-50%);
+}
+
+.infinity-gate-orbit-line::before { left: -3px; }
+.infinity-gate-orbit-line::after { right: -3px; }
+
+.infinity-gate-orbit-glow {
+  border: 20px solid transparent;
+  box-shadow: 0 0 52px rgba(117,198,238,.045), inset 0 0 48px rgba(232,192,109,.035);
+  opacity: .72;
+}
+
+.infinity-gate-slides {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  overflow: visible;
+  transform-style: preserve-3d;
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 4%, #000 96%, transparent 100%);
+  mask-image: linear-gradient(90deg, transparent 0, #000 4%, #000 96%, transparent 100%);
+}
+
+.infinity-gate-card {
+  --orbit-angle: 0deg;
+  --orbit-counter-angle: 0deg;
+  --orbit-y: 0px;
+  --orbit-scale: 1;
+  --orbit-opacity: 1;
+  --orbit-yaw: 0deg;
+  --orbit-layer: 10;
+  --media-ratio: 1.3333;
+  position: absolute;
+  left: 50%;
+  top: 47%;
+  z-index: var(--orbit-layer);
+  width: min(54%, 820px);
+  aspect-ratio: var(--media-ratio);
   margin: 0;
   overflow: hidden;
   border: 1px solid rgba(255,255,255,.11);
-  border-radius: clamp(16px, 1.7vw, 28px);
-  opacity: var(--slot-opacity);
-  background:
-    linear-gradient(145deg, rgba(232,192,109,.08), rgba(143,217,255,.035)),
-    #080d16;
-  box-shadow: 0 32px 92px rgba(0,0,0,.42), inset 0 1px 0 rgba(255,255,255,.055);
+  border-radius: clamp(15px, 1.5vw, 25px);
+  opacity: var(--orbit-opacity);
+  background: #07101c;
+  box-shadow:
+    0 30px 86px rgba(0,0,0,.42),
+    inset 0 1px 0 rgba(255,255,255,.055);
   transform:
-    translate3d(calc(-50% + var(--slot-x)), -50%, var(--slot-depth))
-    rotateY(var(--slot-rotate))
-    scale(var(--slot-scale));
+    translate3d(-50%, -50%, 0)
+    rotateY(var(--orbit-angle))
+    translateZ(var(--orbit-radius))
+    rotateY(var(--orbit-counter-angle))
+    translateY(var(--orbit-y))
+    rotateY(var(--orbit-yaw))
+    scale(var(--orbit-scale));
   transform-origin: 50% 50%;
+  transform-style: preserve-3d;
+  backface-visibility: hidden;
   transition:
-    transform .82s cubic-bezier(.22,.74,.22,1),
-    opacity .70s ease,
-    border-color .55s ease,
-    box-shadow .70s ease;
-  will-change: transform, opacity;
+    transform var(--orbit-transition),
+    opacity 680ms ease,
+    width 520ms cubic-bezier(.22,.74,.22,1),
+    aspect-ratio 520ms cubic-bezier(.22,.74,.22,1),
+    border-color 420ms ease,
+    box-shadow 620ms ease;
   pointer-events: none;
 }
 
-.heritage-portal-card::before {
+.infinity-gate-card.is-wide { width: min(65%, 930px); }
+.infinity-gate-card.is-landscape { width: min(54%, 820px); }
+.infinity-gate-card.is-square { width: min(43%, 650px); }
+.infinity-gate-card.is-portrait { width: min(32%, 480px); }
+
+.infinity-gate-card.is-active {
+  border-color: rgba(232,192,109,.34);
+  box-shadow:
+    0 38px 118px rgba(0,0,0,.52),
+    0 0 0 1px rgba(232,192,109,.065),
+    0 0 54px rgba(232,192,109,.10),
+    inset 0 1px 0 rgba(255,255,255,.075);
+  pointer-events: auto;
+  will-change: transform, opacity;
+}
+
+.infinity-gate-card.is-near {
+  border-color: rgba(232,192,109,.19);
+  will-change: transform, opacity;
+}
+
+.infinity-gate-card.is-far,
+.infinity-gate-card.is-back {
+  border-color: rgba(255,255,255,.055);
+}
+
+.infinity-gate-card::before {
   content: "";
   position: absolute;
-  inset: clamp(7px, .8vw, 12px);
-  z-index: 3;
+  inset: clamp(7px, .75vw, 11px);
+  z-index: 4;
   pointer-events: none;
-  border: 1px solid rgba(232,192,109,.16);
-  border-radius: calc(clamp(16px, 1.7vw, 28px) - 7px);
+  border: 1px solid rgba(232,192,109,.13);
+  border-radius: calc(clamp(15px, 1.5vw, 25px) - 6px);
 }
 
-.heritage-portal-card::after {
+.infinity-gate-card::after {
   content: "";
   position: absolute;
   inset: 0;
-  z-index: 2;
+  z-index: 3;
   pointer-events: none;
   background:
-    linear-gradient(180deg, rgba(0,0,0,.03), transparent 48%, rgba(0,0,0,.46)),
-    linear-gradient(112deg, rgba(255,255,255,.11), transparent 20%, transparent 76%, rgba(232,192,109,.075));
+    linear-gradient(180deg, rgba(0,0,0,.02), transparent 53%, rgba(0,0,0,.34)),
+    linear-gradient(116deg, rgba(255,255,255,.095), transparent 18%, transparent 77%, rgba(232,192,109,.06));
 }
 
-.heritage-portal-card.is-slot-active {
-  --slot-x: 0%;
-  --slot-scale: 1;
-  --slot-opacity: 1;
-  --slot-rotate: 0deg;
-  --slot-depth: 42px;
-  --slot-z: 5;
-  border-color: rgba(232,192,109,.28);
-  box-shadow:
-    0 38px 110px rgba(0,0,0,.48),
-    0 0 0 1px rgba(232,192,109,.06),
-    inset 0 1px 0 rgba(255,255,255,.07);
+.infinity-gate-media-matte {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background:
+    radial-gradient(ellipse at 50% 46%, rgba(117,198,238,.07), transparent 48%),
+    linear-gradient(145deg, rgba(232,192,109,.08), rgba(5,12,22,.94) 52%, rgba(117,198,238,.035));
 }
 
-.heritage-portal-card.is-slot-prev {
-  --slot-x: -64%;
-  --slot-scale: .73;
-  --slot-opacity: .44;
-  --slot-rotate: 8deg;
-  --slot-depth: -84px;
-  --slot-z: 3;
+.infinity-gate-media-matte::after {
+  content: "";
+  position: absolute;
+  inset: 10%;
+  border: 1px solid rgba(232,192,109,.075);
+  border-radius: 18px;
 }
 
-.heritage-portal-card.is-slot-next {
-  --slot-x: 64%;
-  --slot-scale: .73;
-  --slot-opacity: .44;
-  --slot-rotate: -8deg;
-  --slot-depth: -84px;
-  --slot-z: 3;
-}
-
-.heritage-portal-card.is-slot-far-prev {
-  --slot-x: -106%;
-  --slot-scale: .55;
-  --slot-opacity: .16;
-  --slot-rotate: 12deg;
-  --slot-depth: -150px;
-  --slot-z: 2;
-}
-
-.heritage-portal-card.is-slot-far-next {
-  --slot-x: 106%;
-  --slot-scale: .55;
-  --slot-opacity: .16;
-  --slot-rotate: -12deg;
-  --slot-depth: -150px;
-  --slot-z: 2;
-}
-
-.heritage-portal-image {
+.infinity-gate-image {
+  position: relative;
+  z-index: 1;
   width: 100%;
   height: 100%;
-  object-fit: cover;
   object-position: center;
   opacity: 0;
-  transform: scale(1.006);
-  transition: opacity .46s ease, transform .82s cubic-bezier(.22,.74,.22,1);
+  transform: scale(1.008);
+  transition: opacity 420ms ease, transform var(--orbit-transition);
 }
 
-.heritage-portal-card.is-loaded .heritage-portal-image {
+.infinity-gate-card.is-landscape .infinity-gate-image,
+.infinity-gate-card.is-square .infinity-gate-image {
+  object-fit: cover;
+}
+
+.infinity-gate-card.is-wide .infinity-gate-image,
+.infinity-gate-card.is-portrait .infinity-gate-image {
+  object-fit: contain;
+}
+
+.infinity-gate-card.is-loaded .infinity-gate-image {
   opacity: 1;
   transform: scale(1);
 }
 
-.heritage-portal-card.has-media-error {
+.infinity-gate-card.has-media-error {
   opacity: 0;
 }
 
-.heritage-portal-card-sheen {
+.infinity-gate-card-glass {
   position: absolute;
   inset: 0;
-  z-index: 1;
+  z-index: 2;
   pointer-events: none;
-  background: radial-gradient(ellipse at 52% 6%, rgba(255,231,176,.11), transparent 45%);
+  background: radial-gradient(ellipse at 50% 3%, rgba(255,231,176,.10), transparent 43%);
   mix-blend-mode: screen;
 }
 
-.heritage-portal-frame {
+.infinity-gate-front-rim {
   position: absolute;
   left: 50%;
-  top: 50%;
-  z-index: 6;
-  width: min(calc(74% + 22px), 1002px);
-  aspect-ratio: 4 / 3;
+  top: 48%;
+  z-index: 9;
+  width: min(65%, 900px);
+  height: 86%;
   pointer-events: none;
-  border: 1px solid rgba(232,192,109,.34);
-  border-radius: clamp(20px, 2vw, 32px);
+  border: 1px solid rgba(232,192,109,.37);
+  border-radius: 50% 50% 45% 45% / 48% 48% 43% 43%;
   box-shadow:
-    0 0 0 10px rgba(232,192,109,.018),
-    0 0 0 11px rgba(255,255,255,.035),
-    0 0 62px rgba(232,192,109,.12),
-    inset 0 0 56px rgba(232,192,109,.035);
-  transform: translate(-50%, -50%) translateZ(64px);
+    0 0 0 9px rgba(232,192,109,.014),
+    0 0 0 10px rgba(255,255,255,.026),
+    0 0 64px rgba(232,192,109,.12),
+    inset 0 0 54px rgba(232,192,109,.028);
+  transform: translate3d(-50%, -50%, 105px);
 }
 
-.heritage-portal-frame::before,
-.heritage-portal-frame::after,
-.heritage-portal-frame span::before,
-.heritage-portal-frame span::after {
+.infinity-gate-front-rim::before,
+.infinity-gate-front-rim::after,
+.infinity-gate-front-rim span::before,
+.infinity-gate-front-rim span::after {
   content: "";
   position: absolute;
-  width: clamp(34px, 4.6vw, 72px);
-  height: clamp(34px, 4.6vw, 72px);
-  border-color: rgba(232,192,109,.75);
+  width: clamp(30px, 4vw, 64px);
+  height: clamp(30px, 4vw, 64px);
+  border-color: rgba(232,192,109,.72);
   border-style: solid;
-  filter: drop-shadow(0 0 12px rgba(232,192,109,.18));
+  filter: drop-shadow(0 0 10px rgba(232,192,109,.16));
 }
 
-.heritage-portal-frame::before {
-  left: -2px;
-  top: -2px;
-  border-width: 2px 0 0 2px;
-  border-radius: 18px 0 0 0;
+.infinity-gate-front-rim::before {
+  left: 4%; top: 5%; border-width: 2px 0 0 2px; border-radius: 48px 0 0 0;
+}
+.infinity-gate-front-rim::after {
+  right: 4%; top: 5%; border-width: 2px 2px 0 0; border-radius: 0 48px 0 0;
+}
+.infinity-gate-front-rim span::before {
+  left: 4%; bottom: 5%; border-width: 0 0 2px 2px; border-radius: 0 0 0 36px;
+}
+.infinity-gate-front-rim span::after {
+  right: 4%; bottom: 5%; border-width: 0 2px 2px 0; border-radius: 0 0 36px 0;
 }
 
-.heritage-portal-frame::after {
-  right: -2px;
-  top: -2px;
-  border-width: 2px 2px 0 0;
-  border-radius: 0 18px 0 0;
-}
-
-.heritage-portal-frame span::before {
-  left: -2px;
-  bottom: -2px;
-  border-width: 0 0 2px 2px;
-  border-radius: 0 0 0 18px;
-}
-
-.heritage-portal-frame span::after {
-  right: -2px;
-  bottom: -2px;
-  border-width: 0 2px 2px 0;
-  border-radius: 0 0 18px 0;
-}
-
-.heritage-portal-overlay {
+.infinity-gate-plaque {
   position: absolute;
   left: 50%;
-  bottom: clamp(18px, 2.5vw, 34px);
-  z-index: 10;
+  bottom: clamp(16px, 2vw, 28px);
+  z-index: 14;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: clamp(10px, 1.5vw, 20px);
-  width: min(66%, 860px);
-  min-height: 58px;
-  padding: 10px 12px 10px 16px;
-  border: 1px solid rgba(255,255,255,.12);
+  gap: clamp(9px, 1.3vw, 18px);
+  width: min(58%, 790px);
+  min-height: 52px;
+  padding: 8px 10px 8px 15px;
+  border: 1px solid rgba(255,255,255,.105);
   border-radius: 999px;
   color: var(--text);
-  background: rgba(4,9,16,.78);
-  box-shadow: 0 18px 44px rgba(0,0,0,.32), inset 0 1px 0 rgba(255,255,255,.055);
-  transform: translateX(-50%) translateZ(82px);
+  background: rgba(3,8,15,.83);
+  box-shadow: 0 16px 42px rgba(0,0,0,.34), inset 0 1px 0 rgba(255,255,255,.05);
+  transform: translateX(-50%);
 }
 
-.heritage-portal-counter {
+.infinity-gate-counter {
   color: rgba(232,192,109,.92);
   font-size: 11px;
   font-weight: 800;
@@ -2374,140 +2473,135 @@ html {
   white-space: nowrap;
 }
 
-.heritage-portal-overlay strong {
+.infinity-gate-plaque strong {
   min-width: 0;
   overflow: hidden;
   color: rgba(247,244,237,.92);
-  font-size: clamp(14px, 1.2vw, 18px);
+  font-size: clamp(14px, 1.15vw, 18px);
   font-weight: 680;
-  letter-spacing: -.01em;
+  letter-spacing: -.012em;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.heritage-portal-cta {
+.infinity-gate-cta {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 38px;
-  padding: 0 16px;
-  border: 1px solid rgba(232,192,109,.38);
+  min-height: 34px;
+  padding: 0 14px;
+  border: 1px solid rgba(232,192,109,.35);
   border-radius: 999px;
-  color: rgba(255,226,164,.96);
-  background: rgba(232,192,109,.075);
-  font-size: 11.5px;
-  font-weight: 800;
+  color: rgba(255,226,164,.94);
+  background: rgba(232,192,109,.055);
+  font-size: 11px;
+  font-weight: 760;
+  text-decoration: none;
   white-space: nowrap;
-  transition: color .22s ease, background .22s ease, border-color .22s ease, transform .22s ease;
+  transition: color .22s ease, border-color .22s ease, background .22s ease;
 }
 
-.heritage-portal-cta[hidden],
-.heritage-portal-controls[hidden],
-.heritage-portal-indicators[hidden] {
+.infinity-gate-cta[hidden],
+.infinity-gate-controls[hidden],
+.infinity-gate-dots[hidden] {
   display: none !important;
 }
 
-.heritage-portal-cta:hover,
-.heritage-portal-cta:focus-visible {
-  color: #070b12;
-  border-color: rgba(255,224,157,.82);
-  background: linear-gradient(135deg, #efcb7b, #c99737);
+.infinity-gate-cta:hover,
+.infinity-gate-cta:focus-visible {
+  color: #fff1c8;
+  border-color: rgba(232,192,109,.62);
+  background: rgba(232,192,109,.10);
   outline: none;
-  transform: translateY(-1px);
 }
 
-.heritage-portal-controls {
+.infinity-gate-controls {
   position: absolute;
-  inset: 50% clamp(12px, 2.8vw, 48px) auto;
-  z-index: 11;
+  left: clamp(12px, 2vw, 30px);
+  right: clamp(12px, 2vw, 30px);
+  top: 48%;
+  z-index: 15;
   display: flex;
+  align-items: center;
   justify-content: space-between;
   pointer-events: none;
   transform: translateY(-50%);
 }
 
-.heritage-portal-controls button {
-  width: clamp(46px, 4.4vw, 58px);
-  height: clamp(46px, 4.4vw, 58px);
-  display: grid;
-  place-items: center;
-  border: 1px solid rgba(255,255,255,.13);
-  border-radius: 999px;
-  color: rgba(247,244,237,.88);
-  background: rgba(4,9,16,.70);
-  box-shadow: 0 14px 38px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.055);
+.infinity-gate-controls button {
+  width: 48px;
+  height: 48px;
+  border: 1px solid rgba(255,255,255,.11);
+  border-radius: 50%;
+  color: rgba(247,244,237,.82);
+  background: rgba(3,8,15,.78);
+  box-shadow: 0 14px 34px rgba(0,0,0,.30), inset 0 1px 0 rgba(255,255,255,.045);
   cursor: pointer;
   pointer-events: auto;
   transition: color .22s ease, border-color .22s ease, background .22s ease, transform .22s ease;
 }
 
-.heritage-portal-controls button:hover,
-.heritage-portal-controls button:focus-visible {
+.infinity-gate-controls button:hover,
+.infinity-gate-controls button:focus-visible {
   color: rgba(255,226,164,.98);
   border-color: rgba(232,192,109,.58);
-  background: rgba(232,192,109,.11);
+  background: rgba(232,192,109,.105);
   outline: none;
   transform: scale(1.045);
 }
 
-.heritage-portal-indicators {
+.infinity-gate-dots {
   position: relative;
   z-index: 3;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 2px;
   min-height: 48px;
-  margin-top: clamp(16px, 2vw, 26px);
+  margin-top: clamp(12px, 1.7vw, 22px);
 }
 
-.heritage-portal-indicator {
+.infinity-gate-dot {
   position: relative;
-  min-width: 42px;
-  height: 34px;
-  padding: 0 10px;
-  border: 1px solid rgba(255,255,255,.085);
-  border-radius: 999px;
-  color: rgba(247,244,237,.46);
-  background: rgba(255,255,255,.025);
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: .11em;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: inherit;
+  background: transparent;
   cursor: pointer;
-  transition: color .24s ease, border-color .24s ease, background .24s ease, transform .24s ease;
 }
 
-.heritage-portal-indicator::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  bottom: -7px;
-  width: 0;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(232,192,109,.9), transparent);
-  transform: translateX(-50%);
-  transition: width .30s ease;
+.infinity-gate-dot span {
+  width: 6px;
+  height: 6px;
+  border: 1px solid rgba(247,244,237,.42);
+  border-radius: 50%;
+  background: rgba(255,255,255,.04);
+  box-shadow: 0 0 0 0 rgba(232,192,109,0);
+  transition: width .25s ease, height .25s ease, border-color .25s ease, background .25s ease, box-shadow .25s ease;
 }
 
-.heritage-portal-indicator:hover,
-.heritage-portal-indicator:focus-visible,
-.heritage-portal-indicator.is-active {
-  color: rgba(255,226,164,.98);
-  border-color: rgba(232,192,109,.34);
-  background: rgba(232,192,109,.075);
-  outline: none;
+.infinity-gate-dot:hover span,
+.infinity-gate-dot:focus-visible span,
+.infinity-gate-dot.is-active span {
+  width: 10px;
+  height: 10px;
+  border-color: rgba(255,226,164,.88);
+  background: rgba(232,192,109,.72);
+  box-shadow: 0 0 0 5px rgba(232,192,109,.08), 0 0 18px rgba(232,192,109,.18);
 }
 
-.heritage-portal-indicator:focus-visible {
-  box-shadow: 0 0 0 3px rgba(232,192,109,.13);
+.infinity-gate-dot:focus-visible {
+  outline: 2px solid rgba(232,192,109,.62);
+  outline-offset: -5px;
 }
 
-.heritage-portal-indicator.is-active::after {
-  width: 24px;
-}
-
-.heritage-portal-sr-only {
+.infinity-gate-sr-only {
   position: absolute !important;
   width: 1px !important;
   height: 1px !important;
@@ -2519,325 +2613,277 @@ html {
   border: 0 !important;
 }
 
+.infinity-gate[data-featured-layout="static-single"] .infinity-gate-orbit,
+.infinity-gate[data-featured-layout="reduced-motion"] .infinity-gate-orbit {
+  opacity: .42;
+}
+
+.infinity-gate[data-featured-layout="shuttle-two"] .infinity-gate-stage {
+  --orbit-radius: clamp(150px, 15vw, 250px);
+}
+
 @media (min-width: 1900px) {
   .stage-section--featured {
-    width: min(1740px, calc(100vw - 14vw));
+    width: min(1780px, calc(100vw - 13vw));
   }
 
-  .heritage-portal-stage {
-    min-height: 720px;
+  .infinity-gate-stage {
+    min-height: 760px;
+    --orbit-radius: 350px;
   }
 }
 
-@media (max-height: 820px) and (min-width: 901px) {
+@media (max-height: 820px) and (min-width: 1025px) {
   .stage-section--featured {
-    padding-block: 30px 38px;
+    padding-block: 28px 38px;
   }
 
-  .heritage-portal-header {
-    margin-bottom: 20px;
+  .infinity-gate-header {
+    margin-bottom: 18px;
   }
 
-  .heritage-portal-header h2 {
+  .infinity-gate-header h2 {
     font-size: clamp(38px, 4vw, 58px);
   }
 
-  .heritage-portal-stage {
-    min-height: 500px;
+  .infinity-gate-stage {
+    min-height: 470px;
+    --orbit-radius: clamp(160px, 16vw, 250px);
   }
 
-  .heritage-portal-card {
-    width: min(68%, 760px);
-  }
+  .infinity-gate-card.is-wide { width: min(56%, 720px); }
+  .infinity-gate-card.is-landscape { width: min(47%, 650px); }
+  .infinity-gate-card.is-square { width: min(38%, 520px); }
+  .infinity-gate-card.is-portrait { width: min(28%, 390px); }
 
-  .heritage-portal-frame {
-    width: min(calc(68% + 20px), 780px);
-  }
-
-  .heritage-portal-overlay {
-    bottom: 16px;
+  .infinity-gate-plaque {
+    bottom: 12px;
   }
 }
 
 @media (max-width: 1180px) {
-  .heritage-portal-card {
-    width: min(78%, 900px);
+  .infinity-gate-stage {
+    --orbit-radius: clamp(165px, 18vw, 260px);
   }
 
-  .heritage-portal-frame {
-    width: min(calc(78% + 20px), 920px);
-  }
-
-  .heritage-portal-overlay {
-    width: min(72%, 780px);
-  }
+  .infinity-gate-front-rim { width: min(70%, 820px); }
+  .infinity-gate-plaque { width: min(65%, 750px); }
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1024px) {
   .stage-section--featured {
     width: var(--stage-w);
     max-width: calc(100vw - 20px);
-    padding: 34px 0 40px;
+    padding: 34px 0 42px;
     overflow-x: clip;
   }
 
-  .heritage-portal-header {
+  .infinity-gate-header {
     margin-bottom: 22px;
   }
 
-  .heritage-portal-header h2 {
-    font-size: clamp(36px, 8vw, 56px);
+  .infinity-gate-header h2 {
+    font-size: clamp(36px, 7vw, 56px);
   }
 
-  .heritage-portal-stage {
-    min-height: clamp(420px, 76vw, 620px);
-    border-radius: 26px;
-    perspective: 1100px;
+  .infinity-gate-stage {
+    min-height: clamp(500px, 72vw, 650px);
+    border-radius: 28px;
+    perspective: 1250px;
+    --orbit-radius: clamp(145px, 19vw, 220px);
   }
 
-  .heritage-portal-card {
-    width: min(84%, 720px);
-  }
+  .infinity-gate-core { width: 70%; height: 84%; }
+  .infinity-gate-front-rim { width: 73%; height: 87%; }
+  .infinity-gate-orbit-line,
+  .infinity-gate-orbit-glow { width: 94%; }
 
-  .heritage-portal-frame {
-    width: min(calc(84% + 16px), 736px);
-  }
+  .infinity-gate-card.is-wide { width: min(70%, 760px); }
+  .infinity-gate-card.is-landscape { width: min(61%, 680px); }
+  .infinity-gate-card.is-square { width: min(49%, 550px); }
+  .infinity-gate-card.is-portrait { width: min(37%, 410px); }
 
-  .heritage-portal-card.is-slot-prev {
-    --slot-x: -72%;
-    --slot-scale: .68;
-    --slot-opacity: .34;
-    --slot-rotate: 6deg;
-  }
-
-  .heritage-portal-card.is-slot-next {
-    --slot-x: 72%;
-    --slot-scale: .68;
-    --slot-opacity: .34;
-    --slot-rotate: -6deg;
-  }
-
-  .heritage-portal-card.is-slot-far-prev,
-  .heritage-portal-card.is-slot-far-next {
-    display: none;
-  }
-
-  .heritage-portal-overlay {
-    width: min(76%, 650px);
+  .infinity-gate-plaque {
+    width: min(72%, 690px);
     grid-template-columns: auto minmax(0, 1fr);
   }
 
-  .heritage-portal-cta {
+  .infinity-gate-cta {
     grid-column: 1 / -1;
     justify-self: center;
-    min-height: 36px;
-  }
-
-  .heritage-portal-controls {
-    inset-inline: 10px;
   }
 }
 
-@media (max-width: 640px) {
+@media (max-width: 700px) {
   .stage-section--featured {
-    padding: 28px 0 34px;
+    padding: 28px 0 36px;
   }
 
-  .heritage-portal-header {
+  .infinity-gate-header {
     margin-bottom: 18px;
   }
 
-  .heritage-portal-header .section-kicker {
+  .infinity-gate-header .section-kicker {
     margin-bottom: 9px;
   }
 
-  .heritage-portal-header h2 {
+  .infinity-gate-header h2 {
     font-size: clamp(32px, 10vw, 44px);
   }
 
-  .heritage-portal-header p {
+  .infinity-gate-header p {
     margin-top: 12px;
     padding-inline: 22px;
     font-size: 14px;
   }
 
-  .heritage-portal-header p::before,
-  .heritage-portal-header p::after {
+  .infinity-gate-header p::before,
+  .infinity-gate-header p::after {
     width: 14px;
   }
 
-  .heritage-portal-stage {
-    min-height: clamp(390px, 104vw, 540px);
-    border-radius: 20px;
+  .infinity-gate-stage {
+    min-height: clamp(500px, 122vw, 640px);
+    border-radius: 22px;
+    perspective: 980px;
+    --orbit-radius: clamp(88px, 23vw, 132px);
   }
 
-  .heritage-portal-card {
-    width: 88%;
-    border-radius: 15px;
+  .infinity-gate-core { width: 84%; height: 79%; top: 46%; }
+  .infinity-gate-front-rim { width: 88%; height: 82%; top: 46%; }
+  .infinity-gate-orbit-line,
+  .infinity-gate-orbit-glow { top: 46%; width: 108%; }
+
+  .infinity-gate-card { top: 45%; }
+  .infinity-gate-card.is-wide { width: 86%; }
+  .infinity-gate-card.is-landscape { width: 80%; }
+  .infinity-gate-card.is-square { width: 68%; }
+  .infinity-gate-card.is-portrait { width: 54%; }
+
+  .infinity-gate-controls {
+    left: 8px;
+    right: 8px;
+    top: 45%;
   }
 
-  .heritage-portal-frame {
-    width: calc(88% + 12px);
-    border-radius: 18px;
-  }
-
-  .heritage-portal-card.is-slot-prev {
-    --slot-x: -78%;
-    --slot-scale: .65;
-    --slot-opacity: .24;
-  }
-
-  .heritage-portal-card.is-slot-next {
-    --slot-x: 78%;
-    --slot-scale: .65;
-    --slot-opacity: .24;
-  }
-
-  .heritage-portal-controls {
-    top: auto;
-    left: 12px;
-    right: 12px;
-    bottom: 74px;
-    transform: none;
-  }
-
-  .heritage-portal-controls button {
+  .infinity-gate-controls button {
     width: 44px;
     height: 44px;
   }
 
-  .heritage-portal-overlay {
-    bottom: 14px;
-    width: calc(100% - 28px);
-    min-height: 52px;
+  .infinity-gate-plaque {
+    bottom: 12px;
+    width: calc(100% - 24px);
+    min-height: 50px;
     gap: 8px 12px;
     padding: 8px 10px 8px 13px;
   }
 
-  .heritage-portal-overlay strong {
+  .infinity-gate-plaque strong {
     font-size: 14px;
   }
 
-  .heritage-portal-cta {
-    min-height: 34px;
-    padding-inline: 13px;
-    font-size: 11px;
+  .infinity-gate-cta {
+    min-height: 32px;
+    padding-inline: 12px;
+    font-size: 10.5px;
   }
 
-  .heritage-portal-indicators {
-    gap: 6px;
-    margin-top: 14px;
-  }
-
-  .heritage-portal-indicator {
-    min-width: 38px;
-    height: 32px;
-    padding-inline: 8px;
+  .infinity-gate-dots {
+    margin-top: 8px;
+    gap: 0;
   }
 }
 
 @media (max-width: 390px) {
-  .heritage-portal-stage {
-    min-height: clamp(360px, 108vw, 450px);
+  .infinity-gate-stage {
+    min-height: clamp(470px, 128vw, 545px);
+    --orbit-radius: 82px;
   }
 
-  .heritage-portal-card {
-    width: 93%;
-  }
+  .infinity-gate-card.is-wide { width: 91%; }
+  .infinity-gate-card.is-landscape { width: 86%; }
+  .infinity-gate-card.is-square { width: 72%; }
+  .infinity-gate-card.is-portrait { width: 58%; }
 
-  .heritage-portal-frame {
-    width: calc(93% + 10px);
-  }
-
-  .heritage-portal-card:not(.is-slot-active) {
-    display: none;
-  }
-
-  .heritage-portal-overlay {
+  .infinity-gate-plaque {
     grid-template-columns: auto minmax(0, 1fr);
   }
 
-  .heritage-portal-counter {
+  .infinity-gate-counter {
     font-size: 10px;
   }
 }
 
 @media (max-width: 920px) and (orientation: landscape), (max-height: 560px) and (max-width: 920px) {
   .stage-section--featured {
-    padding: 22px 0 26px;
+    padding: 20px 0 26px;
   }
 
-  .heritage-portal-header {
-    margin-bottom: 14px;
+  .infinity-gate-header {
+    margin-bottom: 12px;
   }
 
-  .heritage-portal-header .section-kicker {
-    margin-bottom: 7px;
+  .infinity-gate-header .section-kicker {
+    margin-bottom: 6px;
   }
 
-  .heritage-portal-header h2 {
-    font-size: clamp(28px, 5.4vw, 40px);
+  .infinity-gate-header h2 {
+    font-size: clamp(28px, 5.2vw, 40px);
   }
 
-  .heritage-portal-header p {
-    margin-top: 8px;
+  .infinity-gate-header p {
+    margin-top: 7px;
     font-size: 12.5px;
   }
 
-  .heritage-portal-stage {
-    min-height: clamp(300px, 72svh, 380px);
+  .infinity-gate-stage {
+    min-height: clamp(300px, 75svh, 390px);
+    --orbit-radius: clamp(90px, 14vw, 145px);
   }
 
-  .heritage-portal-card {
-    width: min(66%, 560px);
+  .infinity-gate-core { width: 62%; height: 91%; }
+  .infinity-gate-front-rim { width: 65%; height: 94%; }
+
+  .infinity-gate-card.is-wide { width: min(58%, 540px); }
+  .infinity-gate-card.is-landscape { width: min(49%, 460px); }
+  .infinity-gate-card.is-square { width: min(39%, 370px); }
+  .infinity-gate-card.is-portrait { width: min(29%, 275px); }
+
+  .infinity-gate-plaque {
+    bottom: 7px;
+    min-height: 42px;
+    padding-block: 5px;
   }
 
-  .heritage-portal-frame {
-    width: min(calc(66% + 12px), 572px);
-  }
-
-  .heritage-portal-overlay {
-    bottom: 10px;
-    min-height: 44px;
-    padding-block: 6px;
-  }
-
-  .heritage-portal-controls {
-    top: 50%;
-    bottom: auto;
-    transform: translateY(-50%);
-  }
-
-  .heritage-portal-controls button {
-    width: 40px;
-    height: 40px;
-  }
-
-  .heritage-portal-indicators {
-    min-height: 38px;
-    margin-top: 8px;
-  }
+  .infinity-gate-controls { top: 48%; }
+  .infinity-gate-controls button { width: 40px; height: 40px; }
+  .infinity-gate-dots { min-height: 40px; margin-top: 4px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .heritage-portal-card,
-  .heritage-portal-image,
-  .heritage-portal-controls button,
-  .heritage-portal-cta,
-  .heritage-portal-indicator,
-  .heritage-portal-indicator::after {
+  .infinity-gate-card,
+  .infinity-gate-image,
+  .infinity-gate-controls button,
+  .infinity-gate-cta,
+  .infinity-gate-dot span {
     transition: none !important;
   }
 
-  .heritage-portal-stage {
+  .infinity-gate-stage {
     perspective: none;
   }
 
-  .heritage-portal-card:not(.is-slot-active) {
+  .infinity-gate-card:not(.is-active) {
     display: none;
   }
 
-  .heritage-portal-card.is-slot-active {
-    transform: translate3d(-50%, -50%, 0);
+  .infinity-gate-card.is-active {
+    transform: translate3d(-50%, -50%, 0) !important;
+  }
+
+  .infinity-gate-orbit-line,
+  .infinity-gate-orbit-glow {
+    transform: translate3d(-50%, -50%, 0) rotateX(68deg);
   }
 }

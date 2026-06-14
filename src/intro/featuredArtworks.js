@@ -1,18 +1,25 @@
-// v6.14.003 — Heritage Portal Infinity / Portal Center Stage + Infinity Flow.
-// DOM-only, CMS-driven, idempotent and isolated from Viewer, CMS Admin and cursor runtime.
+// v6.14.005 — Dynamic Infinity Gate Orbit renderer.
+// DOM/CSS 3D only: no canvas, WebGL, external carousel library or continuous animation loop.
 
-const MAX_RENDERED_ITEMS = 8;
-const MAX_DESKTOP_IMAGE_NODES = 5;
-const MAX_COMPACT_IMAGE_NODES = 3;
+const MAX_SOURCE_ITEMS = 12;
+const MAX_VISUAL_ITEMS = 8;
+const MAX_DESKTOP_IMAGE_NODES = 8;
+const MAX_TABLET_IMAGE_NODES = 5;
+const MAX_MOBILE_IMAGE_NODES = 3;
 const DEFAULT_AUTOPLAY_MS = 4200;
 const MIN_VISUAL_AUTOPLAY_MS = 3800;
 const MAX_VISUAL_AUTOPLAY_MS = 4800;
 const USER_PAUSE_MS = 12000;
 const IMAGE_EXTENSIONS = Object.freeze(['jpg', 'jpeg', 'png', 'webp', 'avif', 'gif']);
+const ASPECT_CLASSES = Object.freeze(['is-wide', 'is-landscape', 'is-square', 'is-portrait']);
 const controllers = new WeakMap();
 
 function getText(value, fallback = '') {
   return typeof value === 'string' && value.trim() ? value.trim() : fallback;
+}
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
 }
 
 function clampAutoplay(value) {
@@ -49,6 +56,7 @@ function normalizeItems(featuredData, options = {}) {
   const seenIds = new Set();
 
   return featuredData.items
+    .slice(0, MAX_SOURCE_ITEMS)
     .filter((item) => item && typeof item === 'object' && item.visible !== false)
     .map((item, index) => {
       const title = getText(item.title);
@@ -63,11 +71,13 @@ function normalizeItems(featuredData, options = {}) {
         imageUrl,
         alt: getText(item.alt, title),
         room: ['indoor', 'outdoor'].includes(room) ? room : '',
-        ctaLabel: getText(item.ctaLabel, 'Xem trong không gian 3D')
+        ctaLabel: getText(item.ctaLabel, 'Xem trong không gian 3D'),
+        ratio: 4 / 3,
+        ratioClass: 'is-landscape'
       };
     })
     .filter(Boolean)
-    .slice(0, MAX_RENDERED_ITEMS);
+    .slice(0, MAX_VISUAL_ITEMS);
 }
 
 function modulo(value, length) {
@@ -75,45 +85,37 @@ function modulo(value, length) {
   return ((value % length) + length) % length;
 }
 
-function getSlotAssignments(itemCount, activeIndex, compact) {
-  if (itemCount <= 0) return [];
-  if (itemCount === 1) return [{ index: 0, slot: 'active' }];
-  if (itemCount === 2) {
-    return [
-      { index: activeIndex, slot: 'active' },
-      { index: modulo(activeIndex + 1, itemCount), slot: 'next' }
-    ];
-  }
+function normalizeAngle(value) {
+  return modulo(value + 180, 360) - 180;
+}
 
-  const definitions = compact || itemCount === 3
-    ? [
-        { offset: -1, slot: 'prev' },
-        { offset: 0, slot: 'active' },
-        { offset: 1, slot: 'next' }
-      ]
-    : itemCount === 4
-      ? [
-          { offset: -1, slot: 'prev' },
-          { offset: 0, slot: 'active' },
-          { offset: 1, slot: 'next' },
-          { offset: 2, slot: 'far-next' }
-        ]
-      : [
-          { offset: -2, slot: 'far-prev' },
-          { offset: -1, slot: 'prev' },
-          { offset: 0, slot: 'active' },
-          { offset: 1, slot: 'next' },
-          { offset: 2, slot: 'far-next' }
-        ];
+function getCircularOffset(index, activeIndex, count) {
+  if (count <= 1) return 0;
+  let offset = modulo(index - activeIndex, count);
+  if (offset > count / 2) offset -= count;
+  if (count % 2 === 0 && offset === count / 2) offset = count / 2;
+  return offset;
+}
 
-  const seen = new Set();
-  return definitions.reduce((result, definition) => {
-    const index = modulo(activeIndex + definition.offset, itemCount);
-    if (seen.has(index)) return result;
-    seen.add(index);
-    result.push({ index, slot: definition.slot });
-    return result;
-  }, []);
+function getShortestStepDelta(currentIndex, targetIndex, count, preferredDirection = 1) {
+  if (count <= 1) return 0;
+  const forward = modulo(targetIndex - currentIndex, count);
+  if (forward === 0) return 0;
+  const backward = forward - count;
+  if (Math.abs(forward) === Math.abs(backward)) return preferredDirection < 0 ? backward : forward;
+  return Math.abs(forward) < Math.abs(backward) ? forward : backward;
+}
+
+function classifyImageRatio(width, height) {
+  const ratio = Number(width) > 0 && Number(height) > 0 ? Number(width) / Number(height) : 4 / 3;
+  if (ratio >= 1.65) return { ratio, ratioClass: 'is-wide' };
+  if (ratio > 1.12) return { ratio, ratioClass: 'is-landscape' };
+  if (ratio >= 0.88) return { ratio, ratioClass: 'is-square' };
+  return { ratio, ratioClass: 'is-portrait' };
+}
+
+function safeClosest(node, selector) {
+  return node && typeof node.closest === 'function' ? node.closest(selector) : null;
 }
 
 class FeaturedArtworksController {
@@ -122,6 +124,10 @@ class FeaturedArtworksController {
     this.options = options;
     this.items = [];
     this.activeIndex = 0;
+    this.previousActiveIndex = 0;
+    this.rotationStep = 0;
+    this.lastDirection = 1;
+    this.shuttleDirection = 1;
     this.failedIds = new Set();
     this.cardById = new Map();
     this.timerId = 0;
@@ -129,11 +135,12 @@ class FeaturedArtworksController {
     this.visibilityCheckTimerId = 0;
     this.userPauseUntil = 0;
     this.isInViewport = false;
-    this.isHovering = false;
-    this.hasFocusWithin = false;
+    this.isInteractionHover = false;
     this.mediaReady = false;
+    this.lastPauseReason = '';
     this.reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)') || null;
-    this.compactLayout = window.matchMedia?.('(max-width: 900px)') || null;
+    this.mobileLayout = window.matchMedia?.('(max-width: 700px)') || null;
+    this.tabletLayout = window.matchMedia?.('(max-width: 1024px)') || null;
     this.debug = isDebugEnabled(options);
 
     this.nodes = {
@@ -180,44 +187,39 @@ class FeaturedArtworksController {
       this.goTo(targetIndex, 'user');
     });
 
-    this.section.addEventListener('pointerenter', (event) => {
+    this.section.addEventListener('pointerover', (event) => {
       if (event.pointerType === 'touch') return;
-      this.isHovering = true;
-      this.schedule();
+      const pauseTarget = safeClosest(event.target, '[data-featured-interactive], .infinity-gate-card.is-active');
+      if (!pauseTarget || !this.section.contains(pauseTarget)) return;
+      this.isInteractionHover = true;
+      this.schedule('interaction-hover');
     }, { passive: true });
 
-    this.section.addEventListener('pointerleave', (event) => {
+    this.section.addEventListener('pointerout', (event) => {
       if (event.pointerType === 'touch') return;
-      this.isHovering = false;
-      this.schedule();
+      const fromTarget = safeClosest(event.target, '[data-featured-interactive], .infinity-gate-card.is-active');
+      if (!fromTarget) return;
+      const toTarget = safeClosest(event.relatedTarget, '[data-featured-interactive], .infinity-gate-card.is-active');
+      if (toTarget && this.section.contains(toTarget)) return;
+      this.isInteractionHover = false;
+      this.schedule('interaction-leave');
     }, { passive: true });
 
-    this.section.addEventListener('focusin', () => {
-      this.hasFocusWithin = true;
-      this.schedule();
-    });
-
-    this.section.addEventListener('focusout', (event) => {
-      if (event.relatedTarget && this.section.contains(event.relatedTarget)) return;
-      this.hasFocusWithin = false;
-      this.schedule();
-    });
-
-    document.addEventListener('visibilitychange', () => this.schedule(), { passive: true });
+    document.addEventListener('visibilitychange', () => this.schedule('visibilitychange'), { passive: true });
 
     if ('IntersectionObserver' in window) {
       this.viewportObserver = new IntersectionObserver((entries) => {
         const entry = entries[0];
-        const nextVisible = Boolean(entry?.isIntersecting && entry.intersectionRatio >= 0.12);
+        const nextVisible = Boolean(entry?.isIntersecting && entry.intersectionRatio >= 0.10);
         if (nextVisible !== this.isInViewport) {
           this.isInViewport = nextVisible;
           if (nextVisible) {
             this.mediaReady = true;
-            this.renderSlots();
+            this.renderOrbit('viewport-enter');
           }
         }
-        this.schedule();
-      }, { threshold: [0, 0.12, 0.3, 0.6], rootMargin: '10% 0px 10% 0px' });
+        this.schedule(nextVisible ? 'viewport-enter' : 'viewport-exit');
+      }, { threshold: [0, 0.10, 0.25, 0.55], rootMargin: '14% 0px 14% 0px' });
       this.viewportObserver.observe(this.section);
     } else {
       this.isInViewport = true;
@@ -225,18 +227,23 @@ class FeaturedArtworksController {
     }
 
     const handleMotionChange = () => {
-      this.renderSlots();
-      this.schedule();
+      this.renderOrbit('motion-change');
+      this.schedule('motion-change');
     };
     if (this.reducedMotion?.addEventListener) this.reducedMotion.addEventListener('change', handleMotionChange);
     else this.reducedMotion?.addListener?.(handleMotionChange);
 
-    const handleCompactChange = () => this.renderSlots();
-    if (this.compactLayout?.addEventListener) this.compactLayout.addEventListener('change', handleCompactChange);
-    else this.compactLayout?.addListener?.(handleCompactChange);
+    const handleLayoutChange = () => {
+      this.renderOrbit('layout-change');
+      this.schedule('layout-change');
+    };
+    [this.mobileLayout, this.tabletLayout].forEach((query) => {
+      if (query?.addEventListener) query.addEventListener('change', handleLayoutChange);
+      else query?.addListener?.(handleLayoutChange);
+    });
 
     if ('MutationObserver' in window && document.body) {
-      this.modalObserver = new MutationObserver(() => this.schedule());
+      this.modalObserver = new MutationObserver(() => this.schedule('modal-state'));
       this.modalObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] });
     }
   }
@@ -251,8 +258,13 @@ class FeaturedArtworksController {
     this.resetCards();
 
     const enabled = featuredData?.enabled === true;
+    const sourceCount = Array.isArray(featuredData?.items) ? featuredData.items.length : 0;
     this.items = enabled ? normalizeItems(featuredData, this.options) : [];
     this.activeIndex = 0;
+    this.previousActiveIndex = 0;
+    this.rotationStep = 0;
+    this.lastDirection = 1;
+    this.shuttleDirection = 1;
 
     if (!enabled) {
       this.hide('disabled');
@@ -267,6 +279,7 @@ class FeaturedArtworksController {
     this.section.hidden = false;
     this.section.dataset.featuredState = 'ready';
     this.section.dataset.featuredCount = String(this.items.length);
+    this.section.dataset.featuredCapped = sourceCount > this.items.length ? '1' : '0';
     this.nodes.carousel?.setAttribute('aria-label', `Tác phẩm tiêu biểu — ${this.items.length} tác phẩm`);
 
     this.setText(this.nodes.kicker, featuredData.kicker, 'Tuyển chọn từ không gian trưng bày');
@@ -278,15 +291,18 @@ class FeaturedArtworksController {
     );
 
     this.autoplayMs = clampAutoplay(featuredData.autoplayMs);
-    this.buildIndicators();
+    this.buildDots();
     this.updateControlVisibility();
-    this.render(0, { source: 'init' });
+    this.render(0, { source: 'init', preserveRotation: true });
     this.queueVisibilityCheck();
-    this.schedule();
+    this.schedule('init');
     this.log('initialized', {
-      items: this.items.length,
-      autoplayMs: this.autoplayMs,
-      imageNodeBudget: this.getImageNodeBudget()
+      sourceCount,
+      itemCount: this.items.length,
+      capped: sourceCount > this.items.length,
+      layoutMode: this.getLayoutMode(),
+      visualCount: this.getNodeBudget(),
+      autoplayMs: this.autoplayMs
     });
     return this.getState('ready');
   }
@@ -296,6 +312,7 @@ class FeaturedArtworksController {
       visible: !this.section.hidden && this.items.length > 0,
       itemCount: this.items.length,
       autoplay: this.canAutoplay(),
+      layoutMode: this.getLayoutMode(),
       reason
     };
   }
@@ -311,6 +328,7 @@ class FeaturedArtworksController {
     this.section.hidden = true;
     this.section.dataset.featuredState = reason;
     this.section.dataset.featuredCount = '0';
+    this.section.dataset.featuredLayout = 'hidden';
     this.nodes.rail?.replaceChildren();
     this.log(`hidden: ${reason}`);
   }
@@ -327,16 +345,16 @@ class FeaturedArtworksController {
       if (this.section.hidden || this.isInViewport || typeof this.section.getBoundingClientRect !== 'function') return;
       const rect = this.section.getBoundingClientRect();
       const viewportHeight = window.innerHeight || document.documentElement?.clientHeight || 0;
-      if (rect.bottom >= -80 && rect.top <= viewportHeight + 80) {
+      if (rect.bottom >= -100 && rect.top <= viewportHeight + 100) {
         this.isInViewport = true;
         this.mediaReady = true;
-        this.renderSlots();
-        this.schedule();
+        this.renderOrbit('visibility-fallback');
+        this.schedule('visibility-fallback');
       }
     }, 0);
   }
 
-  buildIndicators() {
+  buildDots() {
     const rail = this.nodes.rail;
     if (!rail) return;
     rail.replaceChildren();
@@ -344,10 +362,13 @@ class FeaturedArtworksController {
     this.items.forEach((item, index) => {
       const button = document.createElement('button');
       button.type = 'button';
-      button.className = 'heritage-portal-indicator';
+      button.className = 'infinity-gate-dot';
       button.dataset.featuredIndex = String(index);
+      button.dataset.featuredInteractive = '';
       button.setAttribute('aria-label', `Xem tác phẩm ${String(index + 1).padStart(2, '0')}: ${item.title}`);
-      button.textContent = String(index + 1).padStart(2, '0');
+      const visual = document.createElement('span');
+      visual.setAttribute('aria-hidden', 'true');
+      button.appendChild(visual);
       button.addEventListener('click', () => this.goTo(index, 'user'));
       rail.appendChild(button);
     });
@@ -359,26 +380,79 @@ class FeaturedArtworksController {
     if (this.nodes.rail) this.nodes.rail.hidden = !hasMultiple;
   }
 
-  getImageNodeBudget() {
-    return this.compactLayout?.matches ? MAX_COMPACT_IMAGE_NODES : MAX_DESKTOP_IMAGE_NODES;
+  getLayoutMode() {
+    const count = this.items.length;
+    if (!count) return 'hidden';
+    if (this.reducedMotion?.matches) return 'reduced-motion';
+    if (count === 1) return 'static-single';
+    if (count === 2) return 'shuttle-two';
+    if (this.mobileLayout?.matches) return 'mobile-compact';
+    if (count <= 5) return 'compact-orbit';
+    return 'full-orbit';
+  }
+
+  getNodeBudget() {
+    if (this.items.length <= 1 || this.reducedMotion?.matches) return 1;
+    if (this.mobileLayout?.matches) return Math.min(MAX_MOBILE_IMAGE_NODES, this.items.length);
+    if (this.tabletLayout?.matches) return Math.min(MAX_TABLET_IMAGE_NODES, this.items.length);
+    return Math.min(MAX_DESKTOP_IMAGE_NODES, this.items.length);
+  }
+
+  getRenderedIndices() {
+    const count = this.items.length;
+    const budget = this.getNodeBudget();
+    if (budget >= count) return Array.from({ length: count }, (_, index) => index);
+
+    const result = [this.activeIndex];
+    for (let distance = 1; result.length < budget; distance += 1) {
+      const previous = modulo(this.activeIndex - distance, count);
+      if (!result.includes(previous)) result.push(previous);
+      if (result.length >= budget) break;
+      const next = modulo(this.activeIndex + distance, count);
+      if (!result.includes(next)) result.push(next);
+    }
+    return result;
   }
 
   move(direction, source = 'user') {
     if (this.items.length < 2) return;
-    this.goTo(modulo(this.activeIndex + direction, this.items.length), source);
+    const normalizedDirection = direction < 0 ? -1 : 1;
+    if (this.items.length === 2) this.shuttleDirection *= -1;
+    this.lastDirection = normalizedDirection;
+    this.rotationStep += normalizedDirection;
+    this.render(modulo(this.rotationStep, this.items.length), { source, preserveRotation: true });
+    if (source === 'user') {
+      this.userPauseUntil = Date.now() + USER_PAUSE_MS;
+      this.announceManualSelection();
+    }
+    this.schedule(source);
   }
 
   goTo(index, source = 'user') {
     if (!Number.isInteger(index) || index < 0 || index >= this.items.length) return;
+    if (index === this.activeIndex) {
+      if (source === 'user') {
+        this.userPauseUntil = Date.now() + USER_PAUSE_MS;
+        this.schedule('same-item-user');
+      }
+      return;
+    }
+
+    const delta = getShortestStepDelta(this.activeIndex, index, this.items.length, this.lastDirection);
+    this.lastDirection = delta < 0 ? -1 : 1;
+    if (this.items.length === 2) this.shuttleDirection *= -1;
+    this.rotationStep += delta;
     if (source === 'user') this.userPauseUntil = Date.now() + USER_PAUSE_MS;
-    this.render(index, { source });
+    this.render(index, { source, preserveRotation: true });
     if (source === 'user') this.announceManualSelection();
-    this.schedule();
+    this.schedule(source);
   }
 
-  render(index, { source = 'autoplay' } = {}) {
+  render(index, { source = 'autoplay', preserveRotation = false } = {}) {
     if (!this.items.length) return;
+    this.previousActiveIndex = this.activeIndex;
     this.activeIndex = modulo(index, this.items.length);
+    if (!preserveRotation) this.rotationStep = this.activeIndex;
     const item = this.items[this.activeIndex];
     const numberText = String(this.activeIndex + 1).padStart(2, '0');
     const countText = String(this.items.length).padStart(2, '0');
@@ -386,10 +460,17 @@ class FeaturedArtworksController {
     this.setText(this.nodes.counter, `${numberText} / ${countText}`);
     this.setText(this.nodes.itemTitle, item.title);
     this.updateCta(item);
-    this.updateIndicators();
-    this.renderSlots();
+    this.updateDots();
+    this.renderOrbit(source);
     this.section.dataset.featuredActive = item.id;
-    this.log('render', { source, index: this.activeIndex, id: item.id });
+    this.section.dataset.featuredRotationStep = String(this.rotationStep);
+    this.log('render', {
+      source,
+      index: this.activeIndex,
+      id: item.id,
+      rotationStep: this.rotationStep,
+      layoutMode: this.getLayoutMode()
+    });
   }
 
   updateCta(item) {
@@ -398,14 +479,16 @@ class FeaturedArtworksController {
     if (!item.room) {
       cta.hidden = true;
       cta.removeAttribute('href');
+      cta.removeAttribute('data-featured-interactive');
       return;
     }
     cta.hidden = false;
+    cta.dataset.featuredInteractive = '';
     cta.href = `./gallery.html?room=${encodeURIComponent(item.room)}`;
     cta.textContent = item.ctaLabel;
   }
 
-  updateIndicators() {
+  updateDots() {
     this.nodes.rail?.querySelectorAll('[data-featured-index]').forEach((button, buttonIndex) => {
       const isActive = buttonIndex === this.activeIndex;
       button.classList.toggle('is-active', isActive);
@@ -416,84 +499,192 @@ class FeaturedArtworksController {
 
   createCard(item) {
     const card = document.createElement('figure');
-    card.className = 'heritage-portal-card';
+    card.className = 'infinity-gate-card is-landscape';
     card.dataset.featuredItemId = item.id;
 
+    const matte = document.createElement('span');
+    matte.className = 'infinity-gate-media-matte';
+    matte.setAttribute('aria-hidden', 'true');
+
     const image = document.createElement('img');
-    image.className = 'heritage-portal-image';
-    image.width = 1276;
-    image.height = 956;
+    image.className = 'infinity-gate-image';
+    image.width = 1200;
+    image.height = 900;
     image.loading = 'lazy';
     image.decoding = 'async';
     image.draggable = false;
 
-    const sheen = document.createElement('span');
-    sheen.className = 'heritage-portal-card-sheen';
-    sheen.setAttribute('aria-hidden', 'true');
+    const glass = document.createElement('span');
+    glass.className = 'infinity-gate-card-glass';
+    glass.setAttribute('aria-hidden', 'true');
 
-    card.append(image, sheen);
+    card.append(matte, image, glass);
     this.cardById.set(item.id, card);
     return card;
   }
 
-  renderSlots() {
+  applyAspectRatio(card, item, width, height) {
+    const { ratio, ratioClass } = classifyImageRatio(width, height);
+    item.ratio = ratio;
+    item.ratioClass = ratioClass;
+    ASPECT_CLASSES.forEach((name) => card.classList.remove(name));
+    card.classList.add(ratioClass);
+    const visualRatio = clamp(ratio, 0.70, 1.82);
+    card.style?.setProperty?.('--media-ratio', visualRatio.toFixed(4));
+    card.dataset.mediaRatio = ratio.toFixed(4);
+    card.dataset.mediaRatioClass = ratioClass;
+    this.log('image ratio', { id: item.id, ratio, ratioClass });
+  }
+
+  getOrbitGeometry(itemIndex, layoutMode) {
+    const count = this.items.length;
+    if (count <= 1 || layoutMode === 'reduced-motion') {
+      return { rawAngle: 0, normalizedAngle: 0 };
+    }
+
+    if (count === 2) {
+      const isActive = itemIndex === this.activeIndex;
+      const angle = isActive ? 0 : this.shuttleDirection * 72;
+      return { rawAngle: angle, normalizedAngle: angle };
+    }
+
+    if (layoutMode === 'mobile-compact' || (this.tabletLayout?.matches && count > MAX_TABLET_IMAGE_NODES)) {
+      const offset = getCircularOffset(itemIndex, this.activeIndex, count);
+      const spacing = layoutMode === 'mobile-compact' ? 70 : 54;
+      const angle = offset * spacing;
+      return { rawAngle: angle, normalizedAngle: normalizeAngle(angle) };
+    }
+
+    const stepAngle = 360 / count;
+    const rawAngle = (itemIndex - this.rotationStep) * stepAngle;
+    return { rawAngle, normalizedAngle: normalizeAngle(rawAngle) };
+  }
+
+  updateCardGeometry(card, item, itemIndex, layoutMode) {
+    const { rawAngle, normalizedAngle } = this.getOrbitGeometry(itemIndex, layoutMode);
+    const radians = normalizedAngle * (Math.PI / 180);
+    const depth = Math.cos(radians);
+    const side = Math.sin(radians);
+    const isActive = itemIndex === this.activeIndex;
+    const absAngle = Math.abs(normalizedAngle);
+    const sparseOrbit = this.items.length <= 3;
+
+    let opacity = isActive ? 1 : 0.14 + ((depth + 1) / 2) * 0.66;
+    let scale = isActive ? 1 : 0.58 + ((depth + 1) / 2) * 0.34;
+    if (sparseOrbit && !isActive) {
+      opacity = Math.max(opacity, 0.42);
+      scale = Math.max(scale, 0.72);
+    }
+    if (layoutMode === 'mobile-compact' && !isActive) {
+      opacity = Math.max(opacity, 0.34);
+      scale = Math.max(scale, 0.70);
+    }
+    if (layoutMode === 'reduced-motion' && !isActive) opacity = 0;
+
+    const y = isActive ? -4 : Math.round((1 - depth) * 12 + Math.abs(side) * 7);
+    const yaw = isActive ? 0 : Math.round(side * -10);
+    const layer = Math.round((depth + 1) * 50) + (isActive ? 100 : 10);
+
+    card.style?.setProperty?.('--orbit-angle', `${rawAngle.toFixed(3)}deg`);
+    card.style?.setProperty?.('--orbit-counter-angle', `${(-rawAngle).toFixed(3)}deg`);
+    card.style?.setProperty?.('--orbit-y', `${y}px`);
+    card.style?.setProperty?.('--orbit-scale', scale.toFixed(4));
+    card.style?.setProperty?.('--orbit-opacity', opacity.toFixed(4));
+    card.style?.setProperty?.('--orbit-yaw', `${yaw}deg`);
+    card.style?.setProperty?.('--orbit-layer', String(layer));
+
+    card.classList.toggle('is-active', isActive);
+    card.classList.toggle('is-near', !isActive && absAngle <= 78);
+    card.classList.toggle('is-far', !isActive && absAngle > 78 && absAngle <= 138);
+    card.classList.toggle('is-back', !isActive && absAngle > 138);
+    card.dataset.orbitAngle = normalizedAngle.toFixed(2);
+    card.dataset.orbitPosition = isActive ? 'active' : absAngle <= 78 ? 'near' : absAngle <= 138 ? 'far' : 'back';
+    card.style.zIndex = String(layer);
+    card.setAttribute('aria-hidden', isActive ? 'false' : 'true');
+
+    if (isActive) {
+      card.setAttribute('role', 'group');
+      card.setAttribute('aria-label', `${String(itemIndex + 1).padStart(2, '0')} trên ${String(this.items.length).padStart(2, '0')}: ${item.title}`);
+    } else {
+      card.removeAttribute('role');
+      card.removeAttribute('aria-label');
+    }
+
+    return { isActive, absAngle, depth };
+  }
+
+  ensureImage(card, item, geometry) {
+    const image = card.querySelector('img');
+    if (!image) return;
+
+    image.dataset.itemId = item.id;
+    image.alt = geometry.isActive ? item.alt : '';
+    image.setAttribute('aria-hidden', geometry.isActive ? 'false' : 'true');
+    image.fetchPriority = geometry.isActive ? 'high' : 'low';
+
+    image.onerror = () => {
+      if (image.dataset.itemId !== item.id) return;
+      this.handleImageFailure(item.id);
+    };
+    image.onload = () => {
+      if (image.dataset.itemId !== item.id) return;
+      this.applyAspectRatio(card, item, image.naturalWidth, image.naturalHeight);
+      card.classList.add('is-loaded');
+      card.classList.remove('has-media-error');
+    };
+
+    const shouldLoad = this.mediaReady && (
+      geometry.isActive ||
+      geometry.absAngle <= 132 ||
+      this.items.length <= 5 ||
+      this.mobileLayout?.matches
+    );
+
+    if (shouldLoad && image.getAttribute('src') !== item.imageUrl) {
+      card.classList.remove('is-loaded');
+      image.setAttribute('src', item.imageUrl);
+    } else if (shouldLoad && image.complete && image.naturalWidth > 0) {
+      this.applyAspectRatio(card, item, image.naturalWidth, image.naturalHeight);
+      card.classList.add('is-loaded');
+    } else if (item.ratioClass) {
+      this.applyAspectRatio(card, item, item.ratio * 1000, 1000);
+    }
+  }
+
+  renderOrbit(source = 'render') {
     const slides = this.nodes.slides;
     if (!slides || !this.items.length || this.section.hidden) return;
 
-    const compact = this.compactLayout?.matches === true;
-    const assignments = getSlotAssignments(this.items.length, this.activeIndex, compact)
-      .slice(0, this.getImageNodeBudget());
-    const visibleIds = new Set(assignments.map(({ index }) => this.items[index]?.id).filter(Boolean));
+    const layoutMode = this.getLayoutMode();
+    const renderedIndices = this.getRenderedIndices();
+    const renderedIds = new Set(renderedIndices.map((index) => this.items[index]?.id).filter(Boolean));
 
     for (const [itemId, card] of this.cardById.entries()) {
-      if (visibleIds.has(itemId)) continue;
+      if (renderedIds.has(itemId)) continue;
       card.remove();
       this.cardById.delete(itemId);
     }
 
-    assignments.forEach(({ index, slot }) => {
-      const item = this.items[index];
+    renderedIndices.forEach((itemIndex) => {
+      const item = this.items[itemIndex];
       if (!item) return;
       const card = this.cardById.get(item.id) || this.createCard(item);
-      const image = card.querySelector('img');
-      const isActive = slot === 'active';
-
-      card.className = `heritage-portal-card is-slot-${slot}`;
-      card.dataset.featuredIndex = String(index);
-      card.setAttribute('aria-hidden', isActive ? 'false' : 'true');
-      if (isActive) {
-        card.setAttribute('role', 'group');
-        card.setAttribute('aria-label', `${String(index + 1).padStart(2, '0')} trên ${String(this.items.length).padStart(2, '0')}: ${item.title}`);
-      } else {
-        card.removeAttribute('role');
-        card.removeAttribute('aria-label');
-      }
-
-      if (image) {
-        image.dataset.itemId = item.id;
-        image.alt = isActive ? item.alt : '';
-        image.setAttribute('aria-hidden', isActive ? 'false' : 'true');
-        image.onerror = () => {
-          if (image.dataset.itemId !== item.id) return;
-          this.handleImageFailure(item.id);
-        };
-        image.onload = () => {
-          if (image.dataset.itemId !== item.id) return;
-          card.classList.add('is-loaded');
-          card.classList.remove('has-media-error');
-        };
-        if (this.mediaReady && image.getAttribute('src') !== item.imageUrl) {
-          card.classList.remove('is-loaded');
-          image.setAttribute('src', item.imageUrl);
-        } else if (this.mediaReady && image.complete && image.naturalWidth > 0) {
-          card.classList.add('is-loaded');
-        }
-      }
-
+      const geometry = this.updateCardGeometry(card, item, itemIndex, layoutMode);
+      this.ensureImage(card, item, geometry);
       slides.appendChild(card);
     });
 
-    slides.dataset.featuredVisibleSlots = String(assignments.length);
+    this.section.dataset.featuredLayout = layoutMode;
+    this.section.dataset.featuredVisualCount = String(renderedIndices.length);
+    slides.dataset.featuredVisibleSlots = String(renderedIndices.length);
+    slides.dataset.featuredLayout = layoutMode;
+    this.log('orbit layout', {
+      source,
+      layoutMode,
+      renderedIndices,
+      activeIndex: this.activeIndex,
+      rotationStep: this.rotationStep
+    });
   }
 
   handleImageFailure(itemId) {
@@ -502,6 +693,7 @@ class FeaturedArtworksController {
     const failedIndex = this.items.findIndex((item) => item.id === itemId);
     if (failedIndex < 0) return;
 
+    const activeIdBeforeFailure = this.items[this.activeIndex]?.id;
     const failedCard = this.cardById.get(itemId);
     failedCard?.classList.add('has-media-error');
     failedCard?.remove();
@@ -513,15 +705,19 @@ class FeaturedArtworksController {
       return;
     }
 
-    if (failedIndex < this.activeIndex) this.activeIndex -= 1;
-    if (this.activeIndex >= this.items.length) this.activeIndex = 0;
+    const preservedIndex = activeIdBeforeFailure && activeIdBeforeFailure !== itemId
+      ? this.items.findIndex((item) => item.id === activeIdBeforeFailure)
+      : Math.min(failedIndex, this.items.length - 1);
+    this.activeIndex = Math.max(0, preservedIndex);
+    this.previousActiveIndex = this.activeIndex;
+    this.rotationStep = this.activeIndex;
 
     this.section.dataset.featuredCount = String(this.items.length);
     this.nodes.carousel?.setAttribute('aria-label', `Tác phẩm tiêu biểu — ${this.items.length} tác phẩm`);
-    this.buildIndicators();
+    this.buildDots();
     this.updateControlVisibility();
-    this.render(this.activeIndex, { source: 'media-recovery' });
-    this.schedule();
+    this.render(this.activeIndex, { source: 'media-recovery', preserveRotation: true });
+    this.schedule('media-recovery');
     this.log('image removed after failure', { id: itemId, remaining: this.items.length });
   }
 
@@ -536,18 +732,20 @@ class FeaturedArtworksController {
     return document.body?.classList.contains('is-video-modal-open') === true;
   }
 
+  getPauseReason() {
+    if (this.items.length < 2) return 'single-item';
+    if (this.section.hidden) return 'section-hidden';
+    if (this.reducedMotion?.matches) return 'reduced-motion';
+    if (!this.isInViewport) return 'offscreen';
+    if (document.hidden) return 'tab-hidden';
+    if (this.isModalOpen()) return 'video-modal';
+    if (this.isInteractionHover) return 'interaction-hover';
+    if (Date.now() < this.userPauseUntil) return 'manual-pause';
+    return '';
+  }
+
   canAutoplay() {
-    return Boolean(
-      this.items.length > 1 &&
-      !this.section.hidden &&
-      !this.reducedMotion?.matches &&
-      this.isInViewport &&
-      !document.hidden &&
-      !this.isHovering &&
-      !this.hasFocusWithin &&
-      !this.isModalOpen() &&
-      Date.now() >= this.userPauseUntil
-    );
+    return this.getPauseReason() === '';
   }
 
   clearTimers() {
@@ -559,37 +757,34 @@ class FeaturedArtworksController {
     this.visibilityCheckTimerId = 0;
   }
 
-  schedule() {
+  schedule(trigger = 'schedule') {
     window.clearTimeout(this.timerId);
     window.clearTimeout(this.resumeTimerId);
     this.timerId = 0;
     this.resumeTimerId = 0;
 
-    if (this.items.length < 2 || this.section.hidden || this.reducedMotion?.matches) return;
-    if (
-      !this.isInViewport ||
-      document.hidden ||
-      this.isHovering ||
-      this.hasFocusWithin ||
-      this.isModalOpen()
-    ) return;
-
-    const pauseRemaining = this.userPauseUntil - Date.now();
-    if (pauseRemaining > 0) {
-      this.resumeTimerId = window.setTimeout(() => this.schedule(), pauseRemaining + 24);
-      return;
+    const pauseReason = this.getPauseReason();
+    if (pauseReason !== this.lastPauseReason) {
+      this.lastPauseReason = pauseReason;
+      this.log('autoplay state', { trigger, pauseReason: pauseReason || 'running' });
     }
 
-    if (!this.canAutoplay()) return;
+    if (pauseReason === 'manual-pause') {
+      const pauseRemaining = Math.max(0, this.userPauseUntil - Date.now());
+      this.resumeTimerId = window.setTimeout(() => this.schedule('manual-pause-ended'), pauseRemaining + 24);
+      return;
+    }
+    if (pauseReason) return;
+
     this.timerId = window.setTimeout(() => {
-      this.goTo(modulo(this.activeIndex + 1, this.items.length), 'autoplay');
+      this.move(1, 'autoplay');
     }, this.autoplayMs);
   }
 }
 
 export function initFeaturedArtworks(section, featuredData, options = {}) {
   if (!(section instanceof HTMLElement)) {
-    return { visible: false, itemCount: 0, autoplay: false, reason: 'section-missing' };
+    return { visible: false, itemCount: 0, autoplay: false, layoutMode: 'hidden', reason: 'section-missing' };
   }
 
   let controller = controllers.get(section);
@@ -601,7 +796,10 @@ export function initFeaturedArtworks(section, featuredData, options = {}) {
 }
 
 export {
-  MAX_RENDERED_ITEMS,
+  MAX_SOURCE_ITEMS,
+  MAX_VISUAL_ITEMS,
   MAX_DESKTOP_IMAGE_NODES,
-  MAX_COMPACT_IMAGE_NODES
+  MAX_TABLET_IMAGE_NODES,
+  MAX_MOBILE_IMAGE_NODES,
+  classifyImageRatio
 };
