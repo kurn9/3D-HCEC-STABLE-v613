@@ -1993,8 +1993,8 @@ html {
   }
 }
 
-/* v6.14.006 — Continuous Orbit Motion + Mobile Parity.
-   Scoped to the featured section; no global hero, nav, route or guide overrides. */
+/* v6.14.008 — True Continuous Orbit Engine.
+   Scoped to the featured section; controlled rAF owns orbit transforms. */
 .infinity-gate[hidden] {
   display: none !important;
 }
@@ -2087,7 +2087,7 @@ html {
 
 .infinity-gate-stage {
   --orbit-radius: clamp(190px, 19vw, 330px);
-  --orbit-transition: 1050ms cubic-bezier(.32,.05,.18,1);
+  --orbit-transition: 0ms linear;
   position: relative;
   z-index: 2;
   min-height: clamp(520px, 51vw, 760px);
@@ -2289,12 +2289,10 @@ html {
   transform-style: preserve-3d;
   backface-visibility: hidden;
   transition:
-    transform var(--orbit-transition),
-    opacity 880ms ease,
     width 520ms cubic-bezier(.22,.74,.22,1),
     aspect-ratio 520ms cubic-bezier(.22,.74,.22,1),
-    border-color 420ms ease,
-    box-shadow 620ms ease;
+    border-color 260ms ease,
+    box-shadow 420ms ease;
   pointer-events: none;
 }
 
@@ -2311,12 +2309,10 @@ html {
     0 0 54px rgba(232,192,109,.10),
     inset 0 1px 0 rgba(255,255,255,.075);
   pointer-events: auto;
-  will-change: transform, opacity;
 }
 
 .infinity-gate-card.is-near {
   border-color: rgba(232,192,109,.19);
-  will-change: transform, opacity;
 }
 
 .infinity-gate-card.is-far,
@@ -2370,7 +2366,7 @@ html {
   object-position: center;
   opacity: 0;
   transform: scale(1.008);
-  transition: opacity 420ms ease, transform var(--orbit-transition);
+  transition: opacity 420ms ease, transform 420ms cubic-bezier(.22,.74,.22,1);
 }
 
 .infinity-gate-card.is-landscape .infinity-gate-image,
@@ -2614,37 +2610,47 @@ html {
   border: 0 !important;
 }
 
-@keyframes infinity-gate-orbit-pulse {
-  0% { opacity: .66; transform: translate3d(-50%, -50%, -40px) rotateX(66deg) rotateZ(-3deg) scale(.985); }
-  48% { opacity: .98; transform: translate3d(-50%, -50%, -40px) rotateX(66deg) rotateZ(-3deg) scale(1.018); }
-  100% { opacity: .82; transform: translate3d(-50%, -50%, -40px) rotateX(66deg) rotateZ(-3deg) scale(1); }
-}
-
-@keyframes infinity-gate-core-breathe {
-  0% { opacity: .68; transform: scale(.96); }
-  50% { opacity: .98; transform: scale(1.045); }
-  100% { opacity: .7; transform: scale(1); }
-}
-
-.infinity-gate.is-orbit-moving .infinity-gate-card {
+.infinity-gate.is-orbit-running .infinity-gate-card.is-active,
+.infinity-gate.is-orbit-running .infinity-gate-card.is-near {
   will-change: transform, opacity;
 }
 
-.infinity-gate.is-orbit-moving .infinity-gate-orbit-glow {
-  animation: infinity-gate-orbit-pulse 1120ms cubic-bezier(.32,.05,.18,1) both;
+.infinity-gate-orbit-glow,
+.infinity-gate-light,
+.infinity-gate-front-rim {
+  transition: opacity 320ms ease, border-color 320ms ease, box-shadow 420ms ease;
 }
 
-.infinity-gate.is-orbit-moving .infinity-gate-light {
-  animation: infinity-gate-core-breathe 1120ms cubic-bezier(.32,.05,.18,1) both;
+.infinity-gate.is-orbit-running .infinity-gate-orbit-glow {
+  opacity: .94;
+  box-shadow: 0 0 58px rgba(117,198,238,.055), inset 0 0 54px rgba(232,192,109,.048);
 }
 
-.infinity-gate.is-orbit-moving .infinity-gate-front-rim {
-  border-color: rgba(232,192,109,.58);
+.infinity-gate.is-orbit-running .infinity-gate-light {
+  opacity: .80;
+}
+
+.infinity-gate.is-orbit-running .infinity-gate-front-rim {
+  border-color: rgba(232,192,109,.54);
   box-shadow:
     0 0 0 9px rgba(232,192,109,.018),
-    0 0 0 10px rgba(255,255,255,.032),
-    0 0 86px rgba(232,192,109,.22),
-    inset 0 0 58px rgba(232,192,109,.045);
+    0 0 0 10px rgba(255,255,255,.030),
+    0 0 82px rgba(232,192,109,.20),
+    inset 0 0 56px rgba(232,192,109,.040);
+}
+
+.infinity-gate.is-orbit-paused .infinity-gate-orbit-glow {
+  opacity: .72;
+}
+
+.infinity-gate.is-manual-snap .infinity-gate-card {
+  transition:
+    transform 320ms cubic-bezier(.22,.74,.22,1),
+    opacity 240ms ease,
+    width 320ms cubic-bezier(.22,.74,.22,1),
+    aspect-ratio 320ms cubic-bezier(.22,.74,.22,1),
+    border-color 220ms ease,
+    box-shadow 320ms ease;
 }
 
 .infinity-gate[data-featured-layout="static-single"] .infinity-gate-orbit,

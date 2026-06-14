@@ -1,5 +1,5 @@
-// v6.14.006 — Continuous Orbit Motion + Mobile Parity.
-// DOM/CSS 3D only: no canvas, WebGL, external carousel library or continuous frame loop.
+// v6.14.008 — True Continuous Orbit Engine.
+// Controlled requestAnimationFrame; DOM/CSS 3D only. No canvas, WebGL or external library.
 
 const MAX_SOURCE_ITEMS = 12;
 const MAX_VISUAL_ITEMS = 8;
@@ -9,12 +9,17 @@ const MAX_MOBILE_IMAGE_NODES = 3;
 const DEFAULT_AUTOPLAY_MS = 3000;
 const MIN_VISUAL_AUTOPLAY_MS = 2600;
 const MAX_VISUAL_AUTOPLAY_MS = 4200;
-const MAX_EFFECTIVE_STEP_DELAY_MS = 3200;
-const ORBIT_TRANSITION_MS = 1050;
-const ORBIT_MOVING_CLASS_MS = 1120;
+const ORBIT_TRANSITION_MS = 0;
 const USER_PAUSE_MS = 12000;
+const KEYBOARD_FOCUS_GRACE_MS = 1600;
+const MANUAL_SNAP_MS = 320;
+const RESIZE_DEBOUNCE_MS = 90;
+const MOBILE_FRAME_INTERVAL_MS = 1000 / 30;
+const MAX_FRAME_DELTA_MS = 80;
+const DEBUG_FRAME_LOG_INTERVAL_MS = 1000;
 const IMAGE_EXTENSIONS = Object.freeze(['jpg', 'jpeg', 'png', 'webp', 'avif', 'gif']);
 const ASPECT_CLASSES = Object.freeze(['is-wide', 'is-landscape', 'is-square', 'is-portrait']);
+const POSITION_CLASSES = Object.freeze(['is-near', 'is-far', 'is-back']);
 const controllers = new WeakMap();
 
 function getText(value, fallback = '') {
@@ -92,14 +97,6 @@ function normalizeAngle(value) {
   return modulo(value + 180, 360) - 180;
 }
 
-function getCircularOffset(index, activeIndex, count) {
-  if (count <= 1) return 0;
-  let offset = modulo(index - activeIndex, count);
-  if (offset > count / 2) offset -= count;
-  if (count % 2 === 0 && offset === count / 2) offset = count / 2;
-  return offset;
-}
-
 function getShortestStepDelta(currentIndex, targetIndex, count, preferredDirection = 1) {
   if (count <= 1) return 0;
   const forward = modulo(targetIndex - currentIndex, count);
@@ -126,26 +123,47 @@ class FeaturedArtworksController {
     this.section = section;
     this.options = options;
     this.items = [];
+    this.visibleItems = this.items;
     this.activeIndex = 0;
     this.previousActiveIndex = 0;
-    this.rotationStep = 0;
+    this.phaseSteps = 0;
     this.lastDirection = 1;
-    this.shuttleDirection = 1;
     this.failedIds = new Set();
     this.cardById = new Map();
-    this.timerId = 0;
+    this.renderedEntries = [];
+
+    this.rafId = 0;
+    this.lastFrameTime = 0;
+    this.isOrbitRunning = false;
     this.resumeTimerId = 0;
     this.visibilityCheckTimerId = 0;
-    this.orbitMotionTimerId = 0;
+    this.resizeTimerId = 0;
+    this.manualSnapTimerId = 0;
     this.userPauseUntil = 0;
+    this.keyboardPauseUntil = 0;
+
     this.isInViewport = false;
-    this.isInteractionHover = false;
+    this.isDocumentVisible = !document.hidden;
+    this.isVideoModalOpen = this.isModalOpen();
+    this.isKeyboardInteracting = false;
+    this.isPointerFineHovering = false;
+    this.isReducedMotion = false;
+    this.frameSkipMobile = false;
+    this.layoutMode = 'hidden';
     this.mediaReady = false;
+    this.destroyed = false;
     this.lastPauseReason = '';
+    this.lastInputModality = 'pointer';
+    this.lastDebugFrameAt = 0;
+
     this.reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)') || null;
     this.mobileLayout = window.matchMedia?.('(max-width: 700px)') || null;
     this.tabletLayout = window.matchMedia?.('(max-width: 1024px)') || null;
+    this.fineHover = window.matchMedia?.('(hover: hover) and (pointer: fine)') || null;
+    this.isReducedMotion = Boolean(this.reducedMotion?.matches);
+    this.frameSkipMobile = Boolean(this.mobileLayout?.matches);
     this.debug = isDebugEnabled(options);
+    this.onAnimationFrame = this.onAnimationFrame.bind(this);
 
     this.nodes = {
       carousel: section.querySelector('[data-featured-carousel]'),
@@ -180,6 +198,8 @@ class FeaturedArtworksController {
     next?.addEventListener('click', () => this.move(1, 'user'));
 
     carousel?.addEventListener('keydown', (event) => {
+      this.lastInputModality = 'keyboard';
+      this.isKeyboardInteracting = true;
       if (!this.items.length) return;
       let targetIndex = null;
       if (event.key === 'ArrowLeft') targetIndex = modulo(this.activeIndex - 1, this.items.length);
@@ -191,25 +211,59 @@ class FeaturedArtworksController {
       this.goTo(targetIndex, 'user');
     });
 
+    carousel?.addEventListener('keyup', () => {
+      this.isKeyboardInteracting = false;
+      this.syncEngineState('keyboard-keyup');
+    });
+
+    this.section.addEventListener('focusin', () => {
+      if (this.lastInputModality !== 'keyboard') return;
+      this.keyboardPauseUntil = Date.now() + KEYBOARD_FOCUS_GRACE_MS;
+      this.scheduleResumeCheck('keyboard-focus');
+      this.syncEngineState('keyboard-focus');
+    });
+
+    this.section.addEventListener('pointerdown', (event) => {
+      this.lastInputModality = 'pointer';
+      if (event.pointerType === 'touch') {
+        this.isPointerFineHovering = false;
+        this.syncEngineState('touch-pointerdown');
+      }
+    }, { passive: true });
+
     this.section.addEventListener('pointerover', (event) => {
-      if (event.pointerType === 'touch') return;
+      if (!this.fineHover?.matches || !['mouse', 'pen'].includes(event.pointerType)) return;
       const pauseTarget = safeClosest(event.target, '[data-featured-interactive], .infinity-gate-card.is-active');
       if (!pauseTarget || !this.section.contains(pauseTarget)) return;
-      this.isInteractionHover = true;
-      this.schedule('interaction-hover');
+      this.isPointerFineHovering = true;
+      this.syncEngineState('fine-hover-enter');
     }, { passive: true });
 
     this.section.addEventListener('pointerout', (event) => {
-      if (event.pointerType === 'touch') return;
+      if (!this.fineHover?.matches || !['mouse', 'pen'].includes(event.pointerType)) return;
       const fromTarget = safeClosest(event.target, '[data-featured-interactive], .infinity-gate-card.is-active');
       if (!fromTarget) return;
       const toTarget = safeClosest(event.relatedTarget, '[data-featured-interactive], .infinity-gate-card.is-active');
       if (toTarget && this.section.contains(toTarget)) return;
-      this.isInteractionHover = false;
-      this.schedule('interaction-leave');
+      this.isPointerFineHovering = false;
+      this.syncEngineState('fine-hover-leave');
     }, { passive: true });
 
-    document.addEventListener('visibilitychange', () => this.schedule('visibilitychange'), { passive: true });
+    document.addEventListener('visibilitychange', () => {
+      this.isDocumentVisible = document.visibilityState === 'visible' && !document.hidden;
+      this.syncEngineState('visibilitychange');
+    }, { passive: true });
+
+    window.addEventListener('pagehide', () => {
+      this.isDocumentVisible = false;
+      this.syncEngineState('pagehide');
+    }, { passive: true });
+
+    window.addEventListener('pageshow', () => {
+      this.isDocumentVisible = !document.hidden;
+      this.lastFrameTime = 0;
+      this.syncEngineState('pageshow');
+    }, { passive: true });
 
     if ('IntersectionObserver' in window) {
       this.viewportObserver = new IntersectionObserver((entries) => {
@@ -219,10 +273,11 @@ class FeaturedArtworksController {
           this.isInViewport = nextVisible;
           if (nextVisible) {
             this.mediaReady = true;
-            this.renderOrbit('viewport-enter');
+            this.reconcileCards('viewport-enter');
+            this.paintOrbitFrame();
           }
         }
-        this.schedule(nextVisible ? 'viewport-enter' : 'viewport-exit');
+        this.syncEngineState(nextVisible ? 'viewport-enter' : 'viewport-exit');
       }, { threshold: [0, 0.10, 0.25, 0.55], rootMargin: '14% 0px 14% 0px' });
       this.viewportObserver.observe(this.section);
     } else {
@@ -231,23 +286,41 @@ class FeaturedArtworksController {
     }
 
     const handleMotionChange = () => {
-      this.renderOrbit('motion-change');
-      this.schedule('motion-change');
+      this.isReducedMotion = Boolean(this.reducedMotion?.matches);
+      if (this.isReducedMotion) this.phaseSteps = Math.round(this.phaseSteps);
+      this.refreshLayout('motion-change');
     };
     if (this.reducedMotion?.addEventListener) this.reducedMotion.addEventListener('change', handleMotionChange);
     else this.reducedMotion?.addListener?.(handleMotionChange);
 
-    const handleLayoutChange = () => {
-      this.renderOrbit('layout-change');
-      this.schedule('layout-change');
+    const handleCapabilityChange = () => {
+      if (!this.fineHover?.matches) this.isPointerFineHovering = false;
+      this.syncEngineState('pointer-capability-change');
     };
+    if (this.fineHover?.addEventListener) this.fineHover.addEventListener('change', handleCapabilityChange);
+    else this.fineHover?.addListener?.(handleCapabilityChange);
+
+    const handleLayoutChange = () => this.refreshLayout('media-query-change');
     [this.mobileLayout, this.tabletLayout].forEach((query) => {
       if (query?.addEventListener) query.addEventListener('change', handleLayoutChange);
       else query?.addListener?.(handleLayoutChange);
     });
 
+    const handleViewportChange = () => {
+      window.clearTimeout(this.resizeTimerId);
+      this.resizeTimerId = window.setTimeout(() => {
+        this.resizeTimerId = 0;
+        this.refreshLayout('viewport-resize');
+      }, RESIZE_DEBOUNCE_MS);
+    };
+    window.addEventListener('resize', handleViewportChange, { passive: true });
+    window.addEventListener('orientationchange', handleViewportChange, { passive: true });
+
     if ('MutationObserver' in window && document.body) {
-      this.modalObserver = new MutationObserver(() => this.schedule('modal-state'));
+      this.modalObserver = new MutationObserver(() => {
+        this.isVideoModalOpen = this.isModalOpen();
+        this.syncEngineState('modal-state');
+      });
       this.modalObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] });
     }
   }
@@ -255,20 +328,24 @@ class FeaturedArtworksController {
   update(featuredData, options = {}) {
     this.options = { ...this.options, ...options };
     this.debug = isDebugEnabled(this.options);
-    this.clearTimers();
+    this.stopOrbitEngine('update');
+    this.clearAuxiliaryTimers();
     this.failedIds.clear();
     this.userPauseUntil = 0;
+    this.keyboardPauseUntil = 0;
+    this.isKeyboardInteracting = false;
+    this.isPointerFineHovering = false;
     this.mediaReady = this.isInViewport || !('IntersectionObserver' in window);
     this.resetCards();
 
     const enabled = featuredData?.enabled === true;
     const sourceCount = Array.isArray(featuredData?.items) ? featuredData.items.length : 0;
     this.items = enabled ? normalizeItems(featuredData, this.options) : [];
+    this.visibleItems = this.items;
     this.activeIndex = 0;
     this.previousActiveIndex = 0;
-    this.rotationStep = 0;
+    this.phaseSteps = 0;
     this.lastDirection = 1;
-    this.shuttleDirection = 1;
 
     if (!enabled) {
       this.hide('disabled');
@@ -295,20 +372,24 @@ class FeaturedArtworksController {
     );
 
     this.autoplayMs = clampAutoplay(featuredData.autoplayMs);
+    this.itemPeriodMs = this.autoplayMs;
     this.buildDots();
     this.updateControlVisibility();
-    this.render(0, { source: 'init', preserveRotation: true });
+    this.layoutMode = this.getLayoutMode();
+    this.frameSkipMobile = Boolean(this.mobileLayout?.matches);
+    this.reconcileCards('init');
+    this.syncActivePresentation('init', false);
+    this.paintOrbitFrame();
     this.queueVisibilityCheck();
-    this.schedule('init');
+    this.syncEngineState('init');
     this.log('initialized', {
       sourceCount,
       itemCount: this.items.length,
       capped: sourceCount > this.items.length,
-      layoutMode: this.getLayoutMode(),
+      layoutMode: this.layoutMode,
       visualCount: this.getNodeBudget(),
-      autoplayMs: this.autoplayMs,
-      effectiveAutoplayDelayMs: this.getEffectiveAutoplayDelay(),
-      orbitTransitionMs: ORBIT_TRANSITION_MS
+      itemPeriodMs: this.itemPeriodMs,
+      fpsMode: this.frameSkipMobile ? 30 : 60
     });
     return this.getState('ready');
   }
@@ -317,7 +398,9 @@ class FeaturedArtworksController {
     return {
       visible: !this.section.hidden && this.items.length > 0,
       itemCount: this.items.length,
-      autoplay: this.canAutoplay(),
+      autoplay: this.shouldOrbitRun(),
+      orbitRunning: this.isOrbitRunning,
+      phaseSteps: this.phaseSteps,
       layoutMode: this.getLayoutMode(),
       reason
     };
@@ -329,7 +412,8 @@ class FeaturedArtworksController {
   }
 
   hide(reason) {
-    this.clearTimers();
+    this.stopOrbitEngine(reason);
+    this.clearAuxiliaryTimers();
     this.resetCards();
     this.section.hidden = true;
     this.section.dataset.featuredState = reason;
@@ -341,6 +425,7 @@ class FeaturedArtworksController {
 
   resetCards() {
     this.cardById.clear();
+    this.renderedEntries = [];
     this.nodes.slides?.replaceChildren();
   }
 
@@ -354,8 +439,9 @@ class FeaturedArtworksController {
       if (rect.bottom >= -100 && rect.top <= viewportHeight + 100) {
         this.isInViewport = true;
         this.mediaReady = true;
-        this.renderOrbit('visibility-fallback');
-        this.schedule('visibility-fallback');
+        this.reconcileCards('visibility-fallback');
+        this.paintOrbitFrame();
+        this.syncEngineState('visibility-fallback');
       }
     }, 0);
   }
@@ -389,7 +475,7 @@ class FeaturedArtworksController {
   getLayoutMode() {
     const count = this.items.length;
     if (!count) return 'hidden';
-    if (this.reducedMotion?.matches) return 'reduced-motion';
+    if (this.isReducedMotion) return 'reduced-motion';
     if (count === 1) return 'static-single';
     if (count === 2) return 'shuttle-two';
     if (this.mobileLayout?.matches) return 'mobile-compact';
@@ -398,7 +484,7 @@ class FeaturedArtworksController {
   }
 
   getNodeBudget() {
-    if (this.items.length <= 1 || this.reducedMotion?.matches) return 1;
+    if (this.items.length <= 1 || this.isReducedMotion) return 1;
     if (this.mobileLayout?.matches) return Math.min(MAX_MOBILE_IMAGE_NODES, this.items.length);
     if (this.tabletLayout?.matches) return Math.min(MAX_TABLET_IMAGE_NODES, this.items.length);
     return Math.min(MAX_DESKTOP_IMAGE_NODES, this.items.length);
@@ -420,102 +506,71 @@ class FeaturedArtworksController {
     return result;
   }
 
-  getEffectiveAutoplayDelay() {
-    const transitionAdjustedDelay = this.autoplayMs - ORBIT_TRANSITION_MS;
-    return clamp(transitionAdjustedDelay, MIN_VISUAL_AUTOPLAY_MS, MAX_EFFECTIVE_STEP_DELAY_MS);
-  }
-
-  startOrbitMotion(direction, source = 'autoplay') {
-    window.clearTimeout(this.orbitMotionTimerId);
-    this.orbitMotionTimerId = 0;
-
-    if (this.reducedMotion?.matches || this.items.length < 2) {
-      this.section.classList.remove('is-orbit-moving');
-      this.section.removeAttribute('data-featured-orbit-direction');
-      return;
-    }
-
-    const normalizedDirection = direction < 0 ? 'reverse' : 'forward';
-    this.section.classList.remove('is-orbit-moving');
-    this.section.dataset.featuredOrbitDirection = normalizedDirection;
-    // Restart the finite transition pulse even when the user clicks repeatedly.
-    void this.section.offsetWidth;
-    this.section.classList.add('is-orbit-moving');
-    this.section.dataset.featuredMotionSource = source;
-
-    this.orbitMotionTimerId = window.setTimeout(() => {
-      this.orbitMotionTimerId = 0;
-      this.section.classList.remove('is-orbit-moving');
-      this.section.removeAttribute('data-featured-motion-source');
-    }, ORBIT_MOVING_CLASS_MS);
+  refreshLayout(source) {
+    this.lastFrameTime = 0;
+    this.isReducedMotion = Boolean(this.reducedMotion?.matches);
+    this.frameSkipMobile = Boolean(this.mobileLayout?.matches);
+    this.layoutMode = this.getLayoutMode();
+    this.reconcileCards(source);
+    this.syncActivePresentation(source, false);
+    this.paintOrbitFrame();
+    this.syncEngineState(source);
   }
 
   move(direction, source = 'user') {
     if (this.items.length < 2) return;
     const normalizedDirection = direction < 0 ? -1 : 1;
-    if (this.items.length === 2) this.shuttleDirection *= -1;
+    const basePhase = Math.round(this.phaseSteps);
+    const targetPhase = basePhase + normalizedDirection;
     this.lastDirection = normalizedDirection;
-    this.startOrbitMotion(normalizedDirection, source);
-    this.rotationStep += normalizedDirection;
-    this.render(modulo(this.rotationStep, this.items.length), { source, preserveRotation: true });
-    if (source === 'user') {
-      this.userPauseUntil = Date.now() + USER_PAUSE_MS;
-      this.announceManualSelection();
-    }
-    this.schedule(source);
+    this.applyManualPhase(targetPhase, source);
   }
 
   goTo(index, source = 'user') {
     if (!Number.isInteger(index) || index < 0 || index >= this.items.length) return;
-    if (index === this.activeIndex) {
+    const basePhase = Math.round(this.phaseSteps);
+    const currentIndex = modulo(basePhase, this.items.length);
+    if (index === currentIndex) {
       if (source === 'user') {
         this.userPauseUntil = Date.now() + USER_PAUSE_MS;
-        this.schedule('same-item-user');
+        this.announceManualSelection();
+        this.scheduleResumeCheck('same-item-user');
+        this.syncEngineState('same-item-user');
       }
       return;
     }
 
-    const delta = getShortestStepDelta(this.activeIndex, index, this.items.length, this.lastDirection);
+    const delta = getShortestStepDelta(currentIndex, index, this.items.length, this.lastDirection);
     this.lastDirection = delta < 0 ? -1 : 1;
-    this.startOrbitMotion(this.lastDirection, source);
-    if (this.items.length === 2) this.shuttleDirection *= -1;
-    this.rotationStep += delta;
-    if (source === 'user') this.userPauseUntil = Date.now() + USER_PAUSE_MS;
-    this.render(index, { source, preserveRotation: true });
-    if (source === 'user') this.announceManualSelection();
-    this.schedule(source);
+    this.applyManualPhase(basePhase + delta, source);
   }
 
-  render(index, { source = 'autoplay', preserveRotation = false } = {}) {
-    if (!this.items.length) return;
-    this.previousActiveIndex = this.activeIndex;
-    this.activeIndex = modulo(index, this.items.length);
-    if (!preserveRotation) this.rotationStep = this.activeIndex;
-    const item = this.items[this.activeIndex];
-    const numberText = String(this.activeIndex + 1).padStart(2, '0');
-    const countText = String(this.items.length).padStart(2, '0');
+  applyManualPhase(targetPhase, source = 'user') {
+    this.stopOrbitEngine('manual-action');
+    this.phaseSteps = targetPhase;
+    this.activeIndex = modulo(Math.round(this.phaseSteps), this.items.length);
+    this.userPauseUntil = source === 'user' ? Date.now() + USER_PAUSE_MS : this.userPauseUntil;
+    this.startManualSnapClass();
+    this.reconcileCards(source);
+    this.syncActivePresentation(source, source === 'user');
+    this.paintOrbitFrame();
+    this.scheduleResumeCheck(source);
+    this.syncEngineState(source);
+  }
 
-    this.setText(this.nodes.counter, `${numberText} / ${countText}`);
-    this.setText(this.nodes.itemTitle, item.title);
-    this.updateCta(item);
-    this.updateDots();
-    this.renderOrbit(source);
-    this.section.dataset.featuredActive = item.id;
-    this.section.dataset.featuredRotationStep = String(this.rotationStep);
-    this.section.dataset.featuredAutoplayDelay = String(this.getEffectiveAutoplayDelay());
-    this.log('render', {
-      source,
-      index: this.activeIndex,
-      id: item.id,
-      rotationStep: this.rotationStep,
-      layoutMode: this.getLayoutMode()
-    });
+  startManualSnapClass() {
+    window.clearTimeout(this.manualSnapTimerId);
+    this.section.classList.add('is-manual-snap');
+    this.manualSnapTimerId = window.setTimeout(() => {
+      this.manualSnapTimerId = 0;
+      this.section.classList.remove('is-manual-snap');
+    }, MANUAL_SNAP_MS + 40);
   }
 
   updateCta(item) {
     const cta = this.nodes.cta;
     if (!cta) return;
-    if (!item.room) {
+    if (!item?.room) {
       cta.hidden = true;
       cta.removeAttribute('href');
       cta.removeAttribute('data-featured-interactive');
@@ -575,37 +630,83 @@ class FeaturedArtworksController {
     this.log('image ratio', { id: item.id, ratio, ratioClass });
   }
 
-  getOrbitGeometry(itemIndex, layoutMode) {
+  ensureImage(card, item) {
+    const image = card.querySelector('img');
+    if (!image) return;
+
+    image.dataset.itemId = item.id;
+    image.onerror = () => {
+      if (image.dataset.itemId !== item.id) return;
+      this.handleImageFailure(item.id);
+    };
+    image.onload = () => {
+      if (image.dataset.itemId !== item.id) return;
+      this.applyAspectRatio(card, item, image.naturalWidth, image.naturalHeight);
+      card.classList.add('is-loaded');
+      card.classList.remove('has-media-error');
+    };
+
+    if (this.mediaReady && image.getAttribute('src') !== item.imageUrl) {
+      card.classList.remove('is-loaded');
+      image.setAttribute('src', item.imageUrl);
+    } else if (this.mediaReady && image.complete && image.naturalWidth > 0) {
+      this.applyAspectRatio(card, item, image.naturalWidth, image.naturalHeight);
+      card.classList.add('is-loaded');
+    } else if (item.ratioClass) {
+      this.applyAspectRatio(card, item, item.ratio * 1000, 1000);
+    }
+  }
+
+  reconcileCards(source = 'reconcile') {
+    const slides = this.nodes.slides;
+    if (!slides || !this.items.length || this.section.hidden) return;
+
+    this.layoutMode = this.getLayoutMode();
+    const renderedIndices = this.getRenderedIndices();
+    const renderedIds = new Set(renderedIndices.map((index) => this.items[index]?.id).filter(Boolean));
+
+    for (const [itemId, card] of this.cardById.entries()) {
+      if (renderedIds.has(itemId)) continue;
+      card.remove();
+      this.cardById.delete(itemId);
+    }
+
+    this.renderedEntries = renderedIndices.map((itemIndex) => {
+      const item = this.items[itemIndex];
+      if (!item) return null;
+      const card = this.cardById.get(item.id) || this.createCard(item);
+      card.dataset.featuredItemIndex = String(itemIndex);
+      this.ensureImage(card, item);
+      if (!card.isConnected) slides.appendChild(card);
+      return { itemIndex, item, card };
+    }).filter(Boolean);
+
+    this.section.dataset.featuredLayout = this.layoutMode;
+    this.section.dataset.featuredVisualCount = String(this.renderedEntries.length);
+    slides.dataset.featuredVisibleSlots = String(this.renderedEntries.length);
+    slides.dataset.featuredLayout = this.layoutMode;
+    this.log('orbit reconcile', {
+      source,
+      layoutMode: this.layoutMode,
+      renderedIndices,
+      activeIndex: this.activeIndex,
+      phaseSteps: Number(this.phaseSteps.toFixed(4))
+    });
+  }
+
+  getOrbitGeometry(itemIndex) {
     const count = this.items.length;
-    if (count <= 1 || layoutMode === 'reduced-motion') {
+    if (count <= 1 || this.layoutMode === 'reduced-motion') {
       return { rawAngle: 0, normalizedAngle: 0 };
     }
-
-    if (count === 2) {
-      const isActive = itemIndex === this.activeIndex;
-      const angle = isActive ? 0 : this.shuttleDirection * 72;
-      return { rawAngle: angle, normalizedAngle: angle };
-    }
-
-    if (layoutMode === 'mobile-compact' && count > 5) {
-      const offset = getCircularOffset(itemIndex, this.activeIndex, count);
-      const angle = offset * 82;
-      return { rawAngle: angle, normalizedAngle: normalizeAngle(angle) };
-    }
-
-    if (this.tabletLayout?.matches && count > MAX_TABLET_IMAGE_NODES) {
-      const offset = getCircularOffset(itemIndex, this.activeIndex, count);
-      const angle = offset * 62;
-      return { rawAngle: angle, normalizedAngle: normalizeAngle(angle) };
-    }
-
     const stepAngle = 360 / count;
-    const rawAngle = (itemIndex - this.rotationStep) * stepAngle;
+    const rawAngle = (itemIndex - this.phaseSteps) * stepAngle;
     return { rawAngle, normalizedAngle: normalizeAngle(rawAngle) };
   }
 
-  updateCardGeometry(card, item, itemIndex, layoutMode) {
-    const { rawAngle, normalizedAngle } = this.getOrbitGeometry(itemIndex, layoutMode);
+  paintCardGeometry(entry) {
+    const { card, itemIndex } = entry;
+    const { rawAngle, normalizedAngle } = this.getOrbitGeometry(itemIndex);
     const radians = normalizedAngle * (Math.PI / 180);
     const depth = Math.cos(radians);
     const side = Math.sin(radians);
@@ -619,115 +720,95 @@ class FeaturedArtworksController {
       opacity = Math.max(opacity, 0.56);
       scale = Math.max(scale, 0.74);
     }
-    if (layoutMode === 'mobile-compact' && !isActive) {
+    if (this.layoutMode === 'mobile-compact' && !isActive) {
       opacity = Math.max(opacity, 0.52);
       scale = Math.max(scale, 0.68);
     }
-    if (layoutMode === 'reduced-motion' && !isActive) opacity = 0;
+    if (this.layoutMode === 'reduced-motion' && !isActive) opacity = 0;
 
     const y = isActive ? -4 : Math.round((1 - depth) * 12 + Math.abs(side) * 7);
     const yaw = isActive ? 0 : Math.round(side * -16);
     const layer = Math.round((depth + 1) * 50) + (isActive ? 100 : 10);
 
-    card.style?.setProperty?.('--orbit-angle', `${rawAngle.toFixed(3)}deg`);
-    card.style?.setProperty?.('--orbit-counter-angle', `${(-rawAngle).toFixed(3)}deg`);
-    card.style?.setProperty?.('--orbit-y', `${y}px`);
-    card.style?.setProperty?.('--orbit-scale', scale.toFixed(4));
-    card.style?.setProperty?.('--orbit-opacity', opacity.toFixed(4));
-    card.style?.setProperty?.('--orbit-yaw', `${yaw}deg`);
-    card.style?.setProperty?.('--orbit-layer', String(layer));
-
-    card.classList.toggle('is-active', isActive);
-    card.classList.toggle('is-near', !isActive && absAngle <= 78);
-    card.classList.toggle('is-far', !isActive && absAngle > 78 && absAngle <= 138);
-    card.classList.toggle('is-back', !isActive && absAngle > 138);
-    card.dataset.orbitAngle = normalizedAngle.toFixed(2);
-    card.dataset.orbitPosition = isActive ? 'active' : absAngle <= 78 ? 'near' : absAngle <= 138 ? 'far' : 'back';
+    card.style.setProperty('--orbit-angle', `${rawAngle.toFixed(3)}deg`);
+    card.style.setProperty('--orbit-counter-angle', `${(-rawAngle).toFixed(3)}deg`);
+    card.style.setProperty('--orbit-y', `${y}px`);
+    card.style.setProperty('--orbit-scale', scale.toFixed(4));
+    card.style.setProperty('--orbit-opacity', opacity.toFixed(4));
+    card.style.setProperty('--orbit-yaw', `${yaw}deg`);
+    card.style.setProperty('--orbit-layer', String(layer));
     card.style.zIndex = String(layer);
-    card.setAttribute('aria-hidden', isActive ? 'false' : 'true');
 
-    if (isActive) {
-      card.setAttribute('role', 'group');
-      card.setAttribute('aria-label', `${String(itemIndex + 1).padStart(2, '0')} trên ${String(this.items.length).padStart(2, '0')}: ${item.title}`);
-    } else {
-      card.removeAttribute('role');
-      card.removeAttribute('aria-label');
+    const position = isActive ? 'active' : absAngle <= 78 ? 'near' : absAngle <= 138 ? 'far' : 'back';
+    if (card.dataset.orbitPosition !== position) {
+      POSITION_CLASSES.forEach((name) => card.classList.remove(name));
+      if (position !== 'active') card.classList.add(`is-${position}`);
+      card.dataset.orbitPosition = position;
     }
 
-    return { isActive, absAngle, depth };
+    if (this.debug) card.dataset.orbitAngle = normalizedAngle.toFixed(2);
   }
 
-  ensureImage(card, item, geometry) {
-    const image = card.querySelector('img');
-    if (!image) return;
-
-    image.dataset.itemId = item.id;
-    image.alt = geometry.isActive ? item.alt : '';
-    image.setAttribute('aria-hidden', geometry.isActive ? 'false' : 'true');
-    image.fetchPriority = geometry.isActive ? 'high' : 'low';
-
-    image.onerror = () => {
-      if (image.dataset.itemId !== item.id) return;
-      this.handleImageFailure(item.id);
-    };
-    image.onload = () => {
-      if (image.dataset.itemId !== item.id) return;
-      this.applyAspectRatio(card, item, image.naturalWidth, image.naturalHeight);
-      card.classList.add('is-loaded');
-      card.classList.remove('has-media-error');
-    };
-
-    const shouldLoad = this.mediaReady && (
-      geometry.isActive ||
-      geometry.absAngle <= 132 ||
-      this.items.length <= 5 ||
-      this.mobileLayout?.matches
-    );
-
-    if (shouldLoad && image.getAttribute('src') !== item.imageUrl) {
-      card.classList.remove('is-loaded');
-      image.setAttribute('src', item.imageUrl);
-    } else if (shouldLoad && image.complete && image.naturalWidth > 0) {
-      this.applyAspectRatio(card, item, image.naturalWidth, image.naturalHeight);
-      card.classList.add('is-loaded');
-    } else if (item.ratioClass) {
-      this.applyAspectRatio(card, item, item.ratio * 1000, 1000);
-    }
+  paintOrbitFrame() {
+    for (const entry of this.renderedEntries) this.paintCardGeometry(entry);
   }
 
-  renderOrbit(source = 'render') {
-    const slides = this.nodes.slides;
-    if (!slides || !this.items.length || this.section.hidden) return;
+  getNearestFrontItemIndex() {
+    if (!this.items.length) return 0;
+    return modulo(Math.round(this.phaseSteps), this.items.length);
+  }
 
-    const layoutMode = this.getLayoutMode();
-    const renderedIndices = this.getRenderedIndices();
-    const renderedIds = new Set(renderedIndices.map((index) => this.items[index]?.id).filter(Boolean));
+  syncActiveFromPhase(source = 'orbit') {
+    const nextIndex = this.getNearestFrontItemIndex();
+    if (nextIndex === this.activeIndex) return false;
+    this.previousActiveIndex = this.activeIndex;
+    this.activeIndex = nextIndex;
+    this.reconcileCards(source);
+    this.syncActivePresentation(source, false);
+    return true;
+  }
 
-    for (const [itemId, card] of this.cardById.entries()) {
-      if (renderedIds.has(itemId)) continue;
-      card.remove();
-      this.cardById.delete(itemId);
+  syncActivePresentation(source = 'render', announce = false) {
+    if (!this.items.length) return;
+    const item = this.items[this.activeIndex];
+    if (!item) return;
+    const numberText = String(this.activeIndex + 1).padStart(2, '0');
+    const countText = String(this.items.length).padStart(2, '0');
+
+    this.setText(this.nodes.counter, `${numberText} / ${countText}`);
+    this.setText(this.nodes.itemTitle, item.title);
+    this.updateCta(item);
+    this.updateDots();
+    this.section.dataset.featuredActive = item.id;
+    this.section.dataset.featuredPhase = this.phaseSteps.toFixed(4);
+    this.section.dataset.featuredItemPeriod = String(this.itemPeriodMs || DEFAULT_AUTOPLAY_MS);
+
+    for (const entry of this.renderedEntries) {
+      const isActive = entry.itemIndex === this.activeIndex;
+      const { card, item: entryItem } = entry;
+      const image = card.querySelector('img');
+      card.classList.toggle('is-active', isActive);
+      card.setAttribute('aria-hidden', isActive ? 'false' : 'true');
+      if (isActive) {
+        card.setAttribute('role', 'group');
+        card.setAttribute('aria-label', `${String(this.activeIndex + 1).padStart(2, '0')} trên ${countText}: ${entryItem.title}`);
+      } else {
+        card.removeAttribute('role');
+        card.removeAttribute('aria-label');
+      }
+      if (image) {
+        image.alt = isActive ? entryItem.alt : '';
+        image.setAttribute('aria-hidden', isActive ? 'false' : 'true');
+        image.fetchPriority = isActive ? 'high' : 'low';
+      }
     }
 
-    renderedIndices.forEach((itemIndex) => {
-      const item = this.items[itemIndex];
-      if (!item) return;
-      const card = this.cardById.get(item.id) || this.createCard(item);
-      const geometry = this.updateCardGeometry(card, item, itemIndex, layoutMode);
-      this.ensureImage(card, item, geometry);
-      slides.appendChild(card);
-    });
-
-    this.section.dataset.featuredLayout = layoutMode;
-    this.section.dataset.featuredVisualCount = String(renderedIndices.length);
-    slides.dataset.featuredVisibleSlots = String(renderedIndices.length);
-    slides.dataset.featuredLayout = layoutMode;
-    this.log('orbit layout', {
+    if (announce) this.announceManualSelection();
+    this.log('active crossing', {
       source,
-      layoutMode,
-      renderedIndices,
-      activeIndex: this.activeIndex,
-      rotationStep: this.rotationStep
+      index: this.activeIndex,
+      id: item.id,
+      phaseSteps: Number(this.phaseSteps.toFixed(4))
     });
   }
 
@@ -737,12 +818,14 @@ class FeaturedArtworksController {
     const failedIndex = this.items.findIndex((item) => item.id === itemId);
     if (failedIndex < 0) return;
 
+    this.stopOrbitEngine('media-failure');
     const activeIdBeforeFailure = this.items[this.activeIndex]?.id;
     const failedCard = this.cardById.get(itemId);
     failedCard?.classList.add('has-media-error');
     failedCard?.remove();
     this.cardById.delete(itemId);
     this.items.splice(failedIndex, 1);
+    this.visibleItems = this.items;
 
     if (!this.items.length) {
       this.hide('all-media-failed');
@@ -754,14 +837,17 @@ class FeaturedArtworksController {
       : Math.min(failedIndex, this.items.length - 1);
     this.activeIndex = Math.max(0, preservedIndex);
     this.previousActiveIndex = this.activeIndex;
-    this.rotationStep = this.activeIndex;
+    this.phaseSteps = this.activeIndex;
+    this.lastFrameTime = 0;
 
     this.section.dataset.featuredCount = String(this.items.length);
     this.nodes.carousel?.setAttribute('aria-label', `Tác phẩm tiêu biểu — ${this.items.length} tác phẩm`);
     this.buildDots();
     this.updateControlVisibility();
-    this.render(this.activeIndex, { source: 'media-recovery', preserveRotation: true });
-    this.schedule('media-recovery');
+    this.reconcileCards('media-recovery');
+    this.syncActivePresentation('media-recovery', false);
+    this.paintOrbitFrame();
+    this.syncEngineState('media-recovery');
     this.log('image removed after failure', { id: itemId, remaining: this.items.length });
   }
 
@@ -777,63 +863,164 @@ class FeaturedArtworksController {
   }
 
   getPauseReason() {
+    if (this.destroyed) return 'destroyed';
     if (this.items.length < 2) return 'single-item';
     if (this.section.hidden) return 'section-hidden';
-    if (this.reducedMotion?.matches) return 'reduced-motion';
+    if (this.isReducedMotion) return 'reduced-motion';
     if (!this.isInViewport) return 'offscreen';
-    if (document.hidden) return 'tab-hidden';
-    if (this.isModalOpen()) return 'video-modal';
-    if (this.isInteractionHover) return 'interaction-hover';
+    if (!this.isDocumentVisible || document.hidden) return 'tab-hidden';
+    if (this.isVideoModalOpen || this.isModalOpen()) return 'video-modal';
+    if (this.isPointerFineHovering) return 'fine-hover';
+    if (this.isKeyboardInteracting) return 'keyboard-interaction';
+    if (Date.now() < this.keyboardPauseUntil) return 'keyboard-focus-grace';
     if (Date.now() < this.userPauseUntil) return 'manual-pause';
+    if (typeof window.requestAnimationFrame !== 'function') return 'raf-unavailable';
     return '';
   }
 
-  canAutoplay() {
+  shouldOrbitRun() {
     return this.getPauseReason() === '';
   }
 
-  clearTimers() {
-    window.clearTimeout(this.timerId);
+  scheduleResumeCheck(trigger) {
     window.clearTimeout(this.resumeTimerId);
-    window.clearTimeout(this.visibilityCheckTimerId);
-    window.clearTimeout(this.orbitMotionTimerId);
-    this.timerId = 0;
     this.resumeTimerId = 0;
-    this.visibilityCheckTimerId = 0;
-    this.orbitMotionTimerId = 0;
-    this.section.classList.remove('is-orbit-moving');
-    this.section.removeAttribute('data-featured-motion-source');
+    const nextTime = Math.max(this.userPauseUntil, this.keyboardPauseUntil);
+    const remaining = nextTime - Date.now();
+    if (remaining <= 0) return;
+    this.resumeTimerId = window.setTimeout(() => {
+      this.resumeTimerId = 0;
+      this.syncEngineState(`${trigger}-ended`);
+    }, remaining + 24);
   }
 
-  schedule(trigger = 'schedule') {
-    window.clearTimeout(this.timerId);
-    window.clearTimeout(this.resumeTimerId);
-    this.timerId = 0;
-    this.resumeTimerId = 0;
+  updateEngineClasses(pauseReason) {
+    const running = this.isOrbitRunning && !pauseReason;
+    this.section.classList.toggle('is-orbit-running', running);
+    this.section.classList.toggle('is-orbit-paused', !running && this.items.length > 1);
+    this.section.classList.toggle('is-manual-paused', Date.now() < this.userPauseUntil);
+    this.section.classList.toggle('is-reduced-motion', this.isReducedMotion);
+    this.section.classList.toggle('is-mobile-orbit', Boolean(this.mobileLayout?.matches));
+    if (pauseReason) this.section.dataset.featuredPauseReason = pauseReason;
+    else this.section.removeAttribute('data-featured-pause-reason');
+    this.section.dataset.featuredRaf = running ? 'running' : 'stopped';
+    this.section.dataset.featuredFpsMode = this.frameSkipMobile ? '30' : '60';
+  }
 
+  syncEngineState(trigger = 'sync') {
+    this.isDocumentVisible = document.visibilityState === 'visible' && !document.hidden;
+    this.isVideoModalOpen = this.isModalOpen();
+    this.isReducedMotion = Boolean(this.reducedMotion?.matches);
     const pauseReason = this.getPauseReason();
+
+    if (pauseReason === 'manual-pause' || pauseReason === 'keyboard-focus-grace') {
+      this.scheduleResumeCheck(pauseReason);
+    }
+
+    if (pauseReason) this.stopOrbitEngine(pauseReason);
+    else this.startOrbitEngine(trigger);
+
+    this.updateEngineClasses(pauseReason);
     if (pauseReason !== this.lastPauseReason) {
       this.lastPauseReason = pauseReason;
-      this.log('autoplay state', { trigger, pauseReason: pauseReason || 'running' });
+      this.log('orbit state', {
+        trigger,
+        state: pauseReason || 'running',
+        phaseSteps: Number(this.phaseSteps.toFixed(4)),
+        fpsMode: this.frameSkipMobile ? 30 : 60,
+        layoutMode: this.layoutMode
+      });
     }
+  }
 
-    if (pauseReason === 'manual-pause') {
-      const pauseRemaining = Math.max(0, this.userPauseUntil - Date.now());
-      this.resumeTimerId = window.setTimeout(() => this.schedule('manual-pause-ended'), pauseRemaining + 24);
+  startOrbitEngine(trigger = 'start') {
+    if (this.rafId || this.isOrbitRunning || !this.shouldOrbitRun()) return;
+    this.isOrbitRunning = true;
+    this.lastFrameTime = 0;
+    this.rafId = window.requestAnimationFrame(this.onAnimationFrame);
+    this.log('rAF started', { trigger, itemPeriodMs: this.itemPeriodMs, layoutMode: this.layoutMode });
+  }
+
+  stopOrbitEngine(reason = 'stop') {
+    if (this.rafId) window.cancelAnimationFrame(this.rafId);
+    const wasRunning = this.isOrbitRunning || Boolean(this.rafId);
+    this.rafId = 0;
+    this.lastFrameTime = 0;
+    this.isOrbitRunning = false;
+    if (wasRunning) this.log('rAF stopped', { reason, phaseSteps: Number(this.phaseSteps.toFixed(4)) });
+  }
+
+  onAnimationFrame(timestamp) {
+    this.rafId = 0;
+    const pauseReason = this.getPauseReason();
+    if (pauseReason) {
+      this.stopOrbitEngine(pauseReason);
+      this.updateEngineClasses(pauseReason);
       return;
     }
-    if (pauseReason) return;
 
-    const autoplayDelay = this.getEffectiveAutoplayDelay();
-    this.timerId = window.setTimeout(() => {
-      this.move(1, 'autoplay');
-    }, autoplayDelay);
+    if (!this.lastFrameTime) {
+      this.lastFrameTime = timestamp;
+      this.rafId = window.requestAnimationFrame(this.onAnimationFrame);
+      return;
+    }
+
+    const elapsed = timestamp - this.lastFrameTime;
+    if (this.frameSkipMobile && elapsed < MOBILE_FRAME_INTERVAL_MS) {
+      this.rafId = window.requestAnimationFrame(this.onAnimationFrame);
+      return;
+    }
+
+    this.lastFrameTime = timestamp;
+    const deltaMs = clamp(elapsed, 0, MAX_FRAME_DELTA_MS);
+    const period = Math.max(MIN_VISUAL_AUTOPLAY_MS, Number(this.itemPeriodMs) || DEFAULT_AUTOPLAY_MS);
+    this.phaseSteps += deltaMs / period;
+
+    if (Math.abs(this.phaseSteps) > this.items.length * 1000) {
+      this.phaseSteps = modulo(this.phaseSteps, this.items.length);
+    }
+
+    this.syncActiveFromPhase('continuous-orbit');
+    this.paintOrbitFrame();
+
+    if (this.debug && timestamp - this.lastDebugFrameAt >= DEBUG_FRAME_LOG_INTERVAL_MS) {
+      this.lastDebugFrameAt = timestamp;
+      this.section.dataset.featuredPhase = this.phaseSteps.toFixed(4);
+      this.log('orbit frame', {
+        phaseSteps: Number(this.phaseSteps.toFixed(4)),
+        activeIndex: this.activeIndex,
+        itemCount: this.items.length,
+        fpsMode: this.frameSkipMobile ? 30 : 60
+      });
+    }
+
+    this.rafId = window.requestAnimationFrame(this.onAnimationFrame);
+  }
+
+  clearAuxiliaryTimers() {
+    window.clearTimeout(this.resumeTimerId);
+    window.clearTimeout(this.visibilityCheckTimerId);
+    window.clearTimeout(this.resizeTimerId);
+    window.clearTimeout(this.manualSnapTimerId);
+    this.resumeTimerId = 0;
+    this.visibilityCheckTimerId = 0;
+    this.resizeTimerId = 0;
+    this.manualSnapTimerId = 0;
+    this.section.classList.remove('is-manual-snap');
   }
 }
 
 export function initFeaturedArtworks(section, featuredData, options = {}) {
   if (!(section instanceof HTMLElement)) {
-    return { visible: false, itemCount: 0, autoplay: false, layoutMode: 'hidden', reason: 'section-missing' };
+    return {
+      visible: false,
+      itemCount: 0,
+      autoplay: false,
+      orbitRunning: false,
+      phaseSteps: 0,
+      layoutMode: 'hidden',
+      reason: 'section-missing'
+    };
   }
 
   let controller = controllers.get(section);
@@ -854,5 +1041,6 @@ export {
   MIN_VISUAL_AUTOPLAY_MS,
   MAX_VISUAL_AUTOPLAY_MS,
   ORBIT_TRANSITION_MS,
+  MOBILE_FRAME_INTERVAL_MS,
   classifyImageRatio
 };
