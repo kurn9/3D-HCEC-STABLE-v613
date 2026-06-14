@@ -1,4 +1,4 @@
-// v6.14.010 — Continuous Geometry + Mobile Runtime Debug.
+// v6.14.012 — Mobile Portrait/Landscape Orbit Polish.
 // Controlled requestAnimationFrame; DOM/CSS 3D only. No canvas, WebGL or external library.
 
 const MAX_SOURCE_ITEMS = 12;
@@ -6,6 +6,7 @@ const MAX_VISUAL_ITEMS = 8;
 const MAX_DESKTOP_IMAGE_NODES = 8;
 const MAX_TABLET_IMAGE_NODES = 5;
 const MAX_MOBILE_IMAGE_NODES = 3;
+const MAX_MOBILE_LANDSCAPE_IMAGE_NODES = 4;
 const DEFAULT_AUTOPLAY_MS = 3000;
 const MIN_VISUAL_AUTOPLAY_MS = 2600;
 const MAX_VISUAL_AUTOPLAY_MS = 4200;
@@ -177,10 +178,13 @@ class FeaturedArtworksController {
 
     this.reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)') || null;
     this.mobileLayout = window.matchMedia?.('(max-width: 700px)') || null;
+    this.phoneLandscapeLayout = window.matchMedia?.(
+      '(orientation: landscape) and (max-height: 560px) and (max-width: 920px)'
+    ) || null;
     this.tabletLayout = window.matchMedia?.('(max-width: 1024px)') || null;
     this.fineHover = window.matchMedia?.('(hover: hover) and (pointer: fine)') || null;
     this.isReducedMotion = Boolean(this.reducedMotion?.matches);
-    this.frameSkipMobile = Boolean(this.mobileLayout?.matches);
+    this.frameSkipMobile = this.isMobilePerformanceMode();
     this.debug = isDebugEnabled(options);
     this.onAnimationFrame = this.onAnimationFrame.bind(this);
 
@@ -404,7 +408,7 @@ class FeaturedArtworksController {
     else this.fineHover?.addListener?.(handleCapabilityChange);
 
     const handleLayoutChange = () => this.refreshLayout('media-query-change');
-    [this.mobileLayout, this.tabletLayout].forEach((query) => {
+    [this.mobileLayout, this.phoneLandscapeLayout, this.tabletLayout].forEach((query) => {
       if (query?.addEventListener) query.addEventListener('change', handleLayoutChange);
       else query?.addListener?.(handleLayoutChange);
     });
@@ -483,7 +487,7 @@ class FeaturedArtworksController {
     this.buildDots();
     this.updateControlVisibility();
     this.layoutMode = this.getLayoutMode();
-    this.frameSkipMobile = Boolean(this.mobileLayout?.matches);
+    this.frameSkipMobile = this.isMobilePerformanceMode();
     this.reconcileCards('init');
     this.syncActivePresentation('init', false);
     this.paintOrbitFrame();
@@ -583,19 +587,31 @@ class FeaturedArtworksController {
     if (this.nodes.rail) this.nodes.rail.hidden = !hasMultiple;
   }
 
+  isPhoneLandscapeMode() {
+    return Boolean(this.phoneLandscapeLayout?.matches);
+  }
+
+  isMobilePerformanceMode() {
+    return Boolean(this.mobileLayout?.matches || this.isPhoneLandscapeMode());
+  }
+
   getLayoutMode() {
     const count = this.items.length;
     if (!count) return 'hidden';
     if (this.isReducedMotion) return 'reduced-motion';
     if (count === 1) return 'static-single';
+    if (this.isPhoneLandscapeMode()) return 'mobile-landscape-compact';
+    if (this.mobileLayout?.matches) return 'mobile-portrait-compact';
     if (count === 2) return 'shuttle-two';
-    if (this.mobileLayout?.matches) return 'mobile-compact';
     if (count <= 5) return 'compact-orbit';
     return 'full-orbit';
   }
 
   getNodeBudget() {
     if (this.items.length <= 1 || this.isReducedMotion) return 1;
+    if (this.isPhoneLandscapeMode()) {
+      return Math.min(MAX_MOBILE_LANDSCAPE_IMAGE_NODES, this.items.length);
+    }
     if (this.mobileLayout?.matches) return Math.min(MAX_MOBILE_IMAGE_NODES, this.items.length);
     if (this.tabletLayout?.matches) return Math.min(MAX_TABLET_IMAGE_NODES, this.items.length);
     return Math.min(MAX_DESKTOP_IMAGE_NODES, this.items.length);
@@ -620,7 +636,7 @@ class FeaturedArtworksController {
   refreshLayout(source) {
     this.lastFrameTime = 0;
     this.isReducedMotion = Boolean(this.reducedMotion?.matches);
-    this.frameSkipMobile = Boolean(this.mobileLayout?.matches);
+    this.frameSkipMobile = this.isMobilePerformanceMode();
     this.layoutMode = this.getLayoutMode();
     this.reconcileCards(source);
     this.syncActivePresentation(source, false);
@@ -853,14 +869,40 @@ class FeaturedArtworksController {
     const prominence = smoothstep01(frontness);
     const absAngle = Math.abs(normalizedAngle);
     const sparseOrbit = this.items.length <= 3;
-    const mobileOrbit = this.layoutMode === 'mobile-compact';
+    const mobilePortrait = this.layoutMode === 'mobile-portrait-compact';
+    const mobileLandscape = this.layoutMode === 'mobile-landscape-compact';
+    const mobileOrbit = mobilePortrait || mobileLandscape;
 
-    const minOpacity = sparseOrbit ? 0.54 : mobileOrbit ? 0.46 : 0.20;
-    const minScale = sparseOrbit ? 0.72 : mobileOrbit ? 0.64 : 0.55;
+    let minOpacity = sparseOrbit ? 0.54 : mobileOrbit ? 0.46 : 0.20;
+    let minScale = sparseOrbit ? 0.72 : mobileOrbit ? 0.64 : 0.55;
+    let backY = 22;
+    let frontY = -4;
+    let sideLift = 4;
+    let yawStrength = 18;
+    let yawFrontReduction = 0.58;
+
+    if (mobilePortrait) {
+      minOpacity = sparseOrbit ? 0.62 : 0.54;
+      minScale = sparseOrbit ? 0.68 : 0.64;
+      backY = 13;
+      frontY = -3;
+      sideLift = 2.5;
+      yawStrength = 24;
+      yawFrontReduction = 0.54;
+    } else if (mobileLandscape) {
+      minOpacity = sparseOrbit ? 0.60 : 0.52;
+      minScale = sparseOrbit ? 0.65 : 0.61;
+      backY = 9;
+      frontY = -2;
+      sideLift = 2;
+      yawStrength = 27;
+      yawFrontReduction = 0.50;
+    }
+
     const opacity = lerp(minOpacity, 1, prominence);
     const scale = lerp(minScale, 1, prominence);
-    const y = lerp(22, -4, prominence) + (Math.abs(side) * 4);
-    const yaw = side * -18 * (1 - (prominence * 0.58));
+    const y = lerp(backY, frontY, prominence) + (Math.abs(side) * sideLift);
+    const yaw = side * -yawStrength * (1 - (prominence * yawFrontReduction));
     const layer = 100 + Math.round(prominence * 900);
 
     card.style.setProperty('--orbit-angle', `${rawAngle.toFixed(3)}deg`);
@@ -1056,7 +1098,10 @@ class FeaturedArtworksController {
     this.section.classList.toggle('is-orbit-paused', !running && this.items.length > 1);
     this.section.classList.toggle('is-manual-paused', Date.now() < this.userPauseUntil);
     this.section.classList.toggle('is-reduced-motion', this.isReducedMotion);
-    this.section.classList.toggle('is-mobile-orbit', Boolean(this.mobileLayout?.matches));
+    const mobilePerformanceMode = this.isMobilePerformanceMode();
+    this.section.classList.toggle('is-mobile-orbit', mobilePerformanceMode);
+    this.section.classList.toggle('is-mobile-portrait-orbit', this.layoutMode === 'mobile-portrait-compact');
+    this.section.classList.toggle('is-mobile-landscape-orbit', this.layoutMode === 'mobile-landscape-compact');
     if (pauseReason) this.section.dataset.featuredPauseReason = pauseReason;
     else this.section.removeAttribute('data-featured-pause-reason');
     this.section.dataset.featuredRaf = running ? 'running' : 'stopped';
@@ -1186,6 +1231,7 @@ export {
   MAX_DESKTOP_IMAGE_NODES,
   MAX_TABLET_IMAGE_NODES,
   MAX_MOBILE_IMAGE_NODES,
+  MAX_MOBILE_LANDSCAPE_IMAGE_NODES,
   DEFAULT_AUTOPLAY_MS,
   MIN_VISUAL_AUTOPLAY_MS,
   MAX_VISUAL_AUTOPLAY_MS,
