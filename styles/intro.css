@@ -4046,3 +4046,257 @@ kbd {
         transparent 100%) center / 100% 1px no-repeat;
   }
 }
+
+/* v6.14.024 — Micro Interaction Premium Layer.
+   Scope: CSS-only press, focus and pointer-capability polish.
+   Layout, rhythm, material, entrance, cursor and Featured orbit logic remain unchanged. */
+
+/* Shared focus material for focusable elements that previously relied on browser defaults. */
+.brand:focus-visible,
+.intro-video-close:focus-visible {
+  outline: 2px solid var(--material-focus-ring);
+  outline-offset: 4px;
+}
+
+.brand:focus-visible {
+  border-radius: var(--material-radius-pill);
+}
+
+.intro-video-close:focus-visible {
+  border-color: var(--material-border-active);
+  box-shadow: 0 0 0 4px rgba(232, 192, 109, .075), 0 12px 30px rgba(0, 0, 0, .30);
+}
+
+/* Keep static information surfaces visually calm; they are not controls. */
+.hero-proof-grid.hero-proof-strip span:hover {
+  color: var(--material-text-secondary);
+  border-color: var(--material-border-default);
+  background: rgba(255, 255, 255, .022);
+}
+
+.hero-proof-grid.hero-proof-strip span:hover::after {
+  transform: translateX(-110%);
+}
+
+.guide-journey-rail article:hover,
+.guide-platform-card:hover {
+  transform: none;
+  border-color: var(--material-border-subtle);
+  background: rgba(4, 9, 16, .46);
+}
+
+.guide-journey-rail article:hover span {
+  border-color: rgba(232, 192, 109, .15);
+  background: linear-gradient(135deg, rgba(232, 192, 109, .17), rgba(255, 255, 255, .035));
+  box-shadow: none;
+}
+
+.guide-platform-card:hover .guide-device-icon {
+  color: var(--accent);
+  border-color: rgba(232, 192, 109, .15);
+  background: linear-gradient(135deg, rgba(232, 192, 109, .17), rgba(255, 255, 255, .035));
+}
+
+/* Limit elevated hover feedback to devices that genuinely support precise hover. */
+@media (hover: hover) and (pointer: fine) {
+  .intro-video-close {
+    transition: transform .18s ease, color .18s ease, border-color .18s ease, background .18s ease, box-shadow .18s ease;
+  }
+
+  .intro-video-close:not(:focus-visible):not(:active):hover {
+    transform: translateY(-1px);
+    color: #fff1c8;
+    border-color: var(--material-border-active);
+    background: rgba(232, 192, 109, .11);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, .30);
+  }
+}
+
+/* Neutralize persistent hover states on touch and hybrid coarse-pointer input. */
+@media (hover: none), (pointer: coarse) {
+  .site-nav a:not(.nav-cta):not(.is-active):not(:focus-visible):not(:active):hover {
+    color: rgba(247, 244, 237, .84);
+    border-color: transparent;
+    background: transparent;
+    transform: none;
+  }
+
+  .site-nav a.is-active:not(:focus-visible):not(:active):hover {
+    color: var(--text);
+    border-color: rgba(232, 192, 109, .18);
+    background: linear-gradient(180deg, rgba(232, 192, 109, .050), rgba(255, 255, 255, .035));
+    transform: none;
+  }
+
+  .site-nav .nav-cta:not(:focus-visible):not(:active):hover {
+    color: var(--material-gold-ink);
+    border-color: rgba(255, 255, 255, .18);
+    background: linear-gradient(135deg, var(--material-gold-highlight), var(--material-gold-deep));
+    box-shadow: 0 14px 34px rgba(201, 151, 55, .21), inset 0 1px 0 rgba(255, 255, 255, .28);
+    transform: none;
+  }
+
+  .hero-action:not(:focus-visible):not(:active):hover {
+    transform: none;
+  }
+
+  .hero-action:not(:focus-visible):not(:active):hover::before {
+    transform: translateX(-108%);
+  }
+
+  .hero-action--primary:not(:focus-visible):not(:active):hover {
+    color: var(--material-gold-ink);
+    border-color: rgba(255, 255, 255, .18);
+    background: linear-gradient(135deg, var(--material-gold-highlight), var(--material-gold-deep));
+    box-shadow: 0 16px 42px rgba(201, 151, 55, .17), inset 0 1px 0 rgba(255, 255, 255, .36);
+  }
+
+  .hero-action--secondary:not(:focus-visible):not(:active):hover {
+    color: rgba(247, 244, 237, .86);
+    border-color: var(--material-border-default);
+    background: var(--material-surface-subtle);
+    box-shadow: var(--material-shadow-surface);
+  }
+
+  .museum-display-case:not(:focus-visible):not(:active):hover {
+    transform: translateY(0) rotateY(var(--tilt-y, 0deg)) rotateX(var(--tilt-x, 0deg));
+    border-color: var(--material-border-warm);
+    box-shadow: var(--material-shadow-hero);
+  }
+
+  .museum-display-case:not(:focus-visible):not(:active):hover .hero-media-corner {
+    opacity: .72;
+    border-color: rgba(232, 192, 109, .48);
+  }
+
+  .museum-display-case:not(:focus-visible):not(:active):hover .hero-media-corner--top,
+  .museum-display-case:not(:focus-visible):not(:active):hover .hero-media-corner--bottom {
+    transform: none;
+  }
+
+  .museum-display-case:not(:focus-visible):not(:active):hover .display-case-frame::before {
+    transform: skewX(-18deg) translateX(-120%);
+    opacity: 0;
+  }
+
+  .route-card:not(:focus-visible):not(:active):hover {
+    transform: none;
+    border-color: var(--material-border-default);
+    background-position: 0 0;
+    box-shadow: var(--material-shadow-surface);
+  }
+
+  .route-card:not(:focus-visible):not(:active):hover::after {
+    transform: translateX(-120%);
+  }
+
+  .route-card:not(:focus-visible):not(:active):hover .route-card-topline span {
+    color: rgba(232, 192, 109, .88);
+  }
+
+  .route-card:not(:focus-visible):not(:active):hover .route-card-topline strong {
+    color: rgba(247, 244, 237, .52);
+  }
+
+  .route-card:not(:focus-visible):not(:active):hover .room-link em {
+    transform: none;
+  }
+
+  .route-card:not(:focus-visible):not(:active):hover .room-link::after {
+    transform: translateX(-120%);
+  }
+
+  .infinity-gate-cta:not(:focus-visible):not(:active):hover {
+    color: rgba(245, 214, 132, .94);
+    border-color: var(--material-border-warm);
+    background: var(--material-gold-subtle);
+    transform: none;
+  }
+
+  .infinity-gate-controls button:not(:focus-visible):not(:active):hover {
+    color: rgba(247, 244, 237, .84);
+    border-color: var(--material-border-default);
+    background: rgba(4, 9, 16, .80);
+    box-shadow: var(--material-shadow-surface);
+    transform: none;
+  }
+
+  .infinity-gate-dot:not(.is-active):not(:focus-visible):not(:active):hover span {
+    width: 6px;
+    height: 6px;
+    border-color: rgba(247, 244, 237, .38);
+    background: rgba(255, 255, 255, .035);
+    box-shadow: none;
+  }
+
+  .intro-video-close:not(:focus-visible):not(:active):hover {
+    transform: none;
+  }
+}
+
+/* Tactile press feedback for genuine links and controls only. */
+.brand,
+.infinity-gate-cta,
+.infinity-gate-dot,
+.intro-video-close {
+  transition: transform .18s ease, color .18s ease, border-color .18s ease, background .18s ease, box-shadow .18s ease;
+}
+
+.brand:active {
+  transform: translateY(1px) scale(.992);
+}
+
+.site-nav a:active,
+.site-nav .nav-cta:active,
+.hero-action:active {
+  transform: translateY(1px) scale(.985);
+}
+
+.route-card:active {
+  transform: translateY(-1px) scale(.996);
+  box-shadow: 0 22px 66px rgba(0, 0, 0, .34), inset 0 1px 0 rgba(255, 255, 255, .055);
+}
+
+.infinity-gate-cta:active {
+  transform: translateY(1px) scale(.98);
+}
+
+.infinity-gate-controls button:active,
+.infinity-gate-dot:active,
+.intro-video-close:active {
+  transform: scale(.94);
+}
+
+.museum-display-case:active {
+  filter: brightness(.97);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .brand,
+  .site-nav a,
+  .hero-action,
+  .museum-display-case,
+  .route-card,
+  .infinity-gate-cta,
+  .infinity-gate-controls button,
+  .infinity-gate-dot,
+  .intro-video-close {
+    transition: none;
+  }
+
+  .brand:active,
+  .site-nav a:active,
+  .site-nav .nav-cta:active,
+  .hero-action:active,
+  .route-card:active,
+  .infinity-gate-cta:active,
+  .infinity-gate-controls button:active,
+  .infinity-gate-dot:active,
+  .intro-video-close:active {
+    transform: none;
+  }
+
+  .museum-display-case:active {
+    filter: none;
+  }
+}
