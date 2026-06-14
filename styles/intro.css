@@ -1993,7 +1993,7 @@ html {
   }
 }
 
-/* v6.14.005 — Dynamic Infinity Gate Orbit.
+/* v6.14.006 — Continuous Orbit Motion + Mobile Parity.
    Scoped to the featured section; no global hero, nav, route or guide overrides. */
 .infinity-gate[hidden] {
   display: none !important;
@@ -2087,7 +2087,7 @@ html {
 
 .infinity-gate-stage {
   --orbit-radius: clamp(190px, 19vw, 330px);
-  --orbit-transition: 860ms cubic-bezier(.22,.74,.22,1);
+  --orbit-transition: 1050ms cubic-bezier(.32,.05,.18,1);
   position: relative;
   z-index: 2;
   min-height: clamp(520px, 51vw, 760px);
@@ -2151,10 +2151,10 @@ html {
   transform: translate3d(-50%, -50%, -110px);
   transform-style: preserve-3d;
   background:
-    radial-gradient(ellipse at 50% 48%, rgba(8,18,31,.18) 0 27%, rgba(5,12,22,.78) 60%, rgba(2,6,12,.96) 100%),
+    radial-gradient(ellipse at 50% 48%, rgba(12,27,45,.24) 0 24%, rgba(5,12,22,.76) 58%, rgba(2,6,12,.96) 100%),
     linear-gradient(180deg, rgba(117,198,238,.035), transparent 36%, rgba(232,192,109,.035));
   box-shadow:
-    0 0 110px rgba(232,192,109,.10),
+    0 0 124px rgba(232,192,109,.14),
     inset 0 0 96px rgba(0,0,0,.62),
     inset 0 0 0 1px rgba(232,192,109,.12);
 }
@@ -2215,9 +2215,9 @@ html {
 }
 
 .infinity-gate-orbit-line {
-  border: 1px solid rgba(232,192,109,.25);
+  border: 1px solid rgba(232,192,109,.34);
   box-shadow:
-    0 0 22px rgba(232,192,109,.08),
+    0 0 28px rgba(232,192,109,.13),
     inset 0 0 30px rgba(117,198,238,.035);
 }
 
@@ -2240,7 +2240,7 @@ html {
 .infinity-gate-orbit-glow {
   border: 20px solid transparent;
   box-shadow: 0 0 52px rgba(117,198,238,.045), inset 0 0 48px rgba(232,192,109,.035);
-  opacity: .72;
+  opacity: .82;
 }
 
 .infinity-gate-slides {
@@ -2290,7 +2290,7 @@ html {
   backface-visibility: hidden;
   transition:
     transform var(--orbit-transition),
-    opacity 680ms ease,
+    opacity 880ms ease,
     width 520ms cubic-bezier(.22,.74,.22,1),
     aspect-ratio 520ms cubic-bezier(.22,.74,.22,1),
     border-color 420ms ease,
@@ -2409,14 +2409,15 @@ html {
   width: min(65%, 900px);
   height: 86%;
   pointer-events: none;
-  border: 1px solid rgba(232,192,109,.37);
+  border: 1px solid rgba(232,192,109,.46);
   border-radius: 50% 50% 45% 45% / 48% 48% 43% 43%;
   box-shadow:
     0 0 0 9px rgba(232,192,109,.014),
     0 0 0 10px rgba(255,255,255,.026),
-    0 0 64px rgba(232,192,109,.12),
+    0 0 74px rgba(232,192,109,.16),
     inset 0 0 54px rgba(232,192,109,.028);
   transform: translate3d(-50%, -50%, 105px);
+  transition: border-color 420ms ease, box-shadow 680ms ease;
 }
 
 .infinity-gate-front-rim::before,
@@ -2613,6 +2614,39 @@ html {
   border: 0 !important;
 }
 
+@keyframes infinity-gate-orbit-pulse {
+  0% { opacity: .66; transform: translate3d(-50%, -50%, -40px) rotateX(66deg) rotateZ(-3deg) scale(.985); }
+  48% { opacity: .98; transform: translate3d(-50%, -50%, -40px) rotateX(66deg) rotateZ(-3deg) scale(1.018); }
+  100% { opacity: .82; transform: translate3d(-50%, -50%, -40px) rotateX(66deg) rotateZ(-3deg) scale(1); }
+}
+
+@keyframes infinity-gate-core-breathe {
+  0% { opacity: .68; transform: scale(.96); }
+  50% { opacity: .98; transform: scale(1.045); }
+  100% { opacity: .7; transform: scale(1); }
+}
+
+.infinity-gate.is-orbit-moving .infinity-gate-card {
+  will-change: transform, opacity;
+}
+
+.infinity-gate.is-orbit-moving .infinity-gate-orbit-glow {
+  animation: infinity-gate-orbit-pulse 1120ms cubic-bezier(.32,.05,.18,1) both;
+}
+
+.infinity-gate.is-orbit-moving .infinity-gate-light {
+  animation: infinity-gate-core-breathe 1120ms cubic-bezier(.32,.05,.18,1) both;
+}
+
+.infinity-gate.is-orbit-moving .infinity-gate-front-rim {
+  border-color: rgba(232,192,109,.58);
+  box-shadow:
+    0 0 0 9px rgba(232,192,109,.018),
+    0 0 0 10px rgba(255,255,255,.032),
+    0 0 86px rgba(232,192,109,.22),
+    inset 0 0 58px rgba(232,192,109,.045);
+}
+
 .infinity-gate[data-featured-layout="static-single"] .infinity-gate-orbit,
 .infinity-gate[data-featured-layout="reduced-motion"] .infinity-gate-orbit {
   opacity: .42;
@@ -2743,22 +2777,22 @@ html {
   }
 
   .infinity-gate-stage {
-    min-height: clamp(500px, 122vw, 640px);
+    min-height: clamp(490px, 116vw, 610px);
     border-radius: 22px;
-    perspective: 980px;
-    --orbit-radius: clamp(88px, 23vw, 132px);
+    perspective: 1120px;
+    --orbit-radius: clamp(132px, 36vw, 172px);
   }
 
-  .infinity-gate-core { width: 84%; height: 79%; top: 46%; }
-  .infinity-gate-front-rim { width: 88%; height: 82%; top: 46%; }
+  .infinity-gate-core { width: 88%; height: 80%; top: 46%; }
+  .infinity-gate-front-rim { width: 91%; height: 84%; top: 46%; }
   .infinity-gate-orbit-line,
-  .infinity-gate-orbit-glow { top: 46%; width: 108%; }
+  .infinity-gate-orbit-glow { top: 46%; width: 116%; }
 
   .infinity-gate-card { top: 45%; }
-  .infinity-gate-card.is-wide { width: 86%; }
-  .infinity-gate-card.is-landscape { width: 80%; }
-  .infinity-gate-card.is-square { width: 68%; }
-  .infinity-gate-card.is-portrait { width: 54%; }
+  .infinity-gate-card.is-wide { width: 79%; }
+  .infinity-gate-card.is-landscape { width: 74%; }
+  .infinity-gate-card.is-square { width: 62%; }
+  .infinity-gate-card.is-portrait { width: 49%; }
 
   .infinity-gate-controls {
     left: 8px;
@@ -2797,14 +2831,14 @@ html {
 
 @media (max-width: 390px) {
   .infinity-gate-stage {
-    min-height: clamp(470px, 128vw, 545px);
-    --orbit-radius: 82px;
+    min-height: clamp(470px, 121vw, 550px);
+    --orbit-radius: clamp(128px, 36vw, 144px);
   }
 
-  .infinity-gate-card.is-wide { width: 91%; }
-  .infinity-gate-card.is-landscape { width: 86%; }
-  .infinity-gate-card.is-square { width: 72%; }
-  .infinity-gate-card.is-portrait { width: 58%; }
+  .infinity-gate-card.is-wide { width: 82%; }
+  .infinity-gate-card.is-landscape { width: 78%; }
+  .infinity-gate-card.is-square { width: 66%; }
+  .infinity-gate-card.is-portrait { width: 52%; }
 
   .infinity-gate-plaque {
     grid-template-columns: auto minmax(0, 1fr);
@@ -2839,7 +2873,7 @@ html {
 
   .infinity-gate-stage {
     min-height: clamp(300px, 75svh, 390px);
-    --orbit-radius: clamp(90px, 14vw, 145px);
+    --orbit-radius: clamp(118px, 20vw, 170px);
   }
 
   .infinity-gate-core { width: 62%; height: 91%; }
@@ -2863,6 +2897,8 @@ html {
 
 @media (prefers-reduced-motion: reduce) {
   .infinity-gate-card,
+  .infinity-gate-orbit-glow,
+  .infinity-gate-light,
   .infinity-gate-image,
   .infinity-gate-controls button,
   .infinity-gate-cta,

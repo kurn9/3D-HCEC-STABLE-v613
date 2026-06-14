@@ -1,14 +1,17 @@
-// v6.14.005 — Dynamic Infinity Gate Orbit renderer.
-// DOM/CSS 3D only: no canvas, WebGL, external carousel library or continuous animation loop.
+// v6.14.006 — Continuous Orbit Motion + Mobile Parity.
+// DOM/CSS 3D only: no canvas, WebGL, external carousel library or continuous frame loop.
 
 const MAX_SOURCE_ITEMS = 12;
 const MAX_VISUAL_ITEMS = 8;
 const MAX_DESKTOP_IMAGE_NODES = 8;
 const MAX_TABLET_IMAGE_NODES = 5;
 const MAX_MOBILE_IMAGE_NODES = 3;
-const DEFAULT_AUTOPLAY_MS = 4200;
-const MIN_VISUAL_AUTOPLAY_MS = 3800;
-const MAX_VISUAL_AUTOPLAY_MS = 4800;
+const DEFAULT_AUTOPLAY_MS = 3000;
+const MIN_VISUAL_AUTOPLAY_MS = 2600;
+const MAX_VISUAL_AUTOPLAY_MS = 4200;
+const MAX_EFFECTIVE_STEP_DELAY_MS = 3200;
+const ORBIT_TRANSITION_MS = 1050;
+const ORBIT_MOVING_CLASS_MS = 1120;
 const USER_PAUSE_MS = 12000;
 const IMAGE_EXTENSIONS = Object.freeze(['jpg', 'jpeg', 'png', 'webp', 'avif', 'gif']);
 const ASPECT_CLASSES = Object.freeze(['is-wide', 'is-landscape', 'is-square', 'is-portrait']);
@@ -133,6 +136,7 @@ class FeaturedArtworksController {
     this.timerId = 0;
     this.resumeTimerId = 0;
     this.visibilityCheckTimerId = 0;
+    this.orbitMotionTimerId = 0;
     this.userPauseUntil = 0;
     this.isInViewport = false;
     this.isInteractionHover = false;
@@ -302,7 +306,9 @@ class FeaturedArtworksController {
       capped: sourceCount > this.items.length,
       layoutMode: this.getLayoutMode(),
       visualCount: this.getNodeBudget(),
-      autoplayMs: this.autoplayMs
+      autoplayMs: this.autoplayMs,
+      effectiveAutoplayDelayMs: this.getEffectiveAutoplayDelay(),
+      orbitTransitionMs: ORBIT_TRANSITION_MS
     });
     return this.getState('ready');
   }
@@ -414,11 +420,42 @@ class FeaturedArtworksController {
     return result;
   }
 
+  getEffectiveAutoplayDelay() {
+    const transitionAdjustedDelay = this.autoplayMs - ORBIT_TRANSITION_MS;
+    return clamp(transitionAdjustedDelay, MIN_VISUAL_AUTOPLAY_MS, MAX_EFFECTIVE_STEP_DELAY_MS);
+  }
+
+  startOrbitMotion(direction, source = 'autoplay') {
+    window.clearTimeout(this.orbitMotionTimerId);
+    this.orbitMotionTimerId = 0;
+
+    if (this.reducedMotion?.matches || this.items.length < 2) {
+      this.section.classList.remove('is-orbit-moving');
+      this.section.removeAttribute('data-featured-orbit-direction');
+      return;
+    }
+
+    const normalizedDirection = direction < 0 ? 'reverse' : 'forward';
+    this.section.classList.remove('is-orbit-moving');
+    this.section.dataset.featuredOrbitDirection = normalizedDirection;
+    // Restart the finite transition pulse even when the user clicks repeatedly.
+    void this.section.offsetWidth;
+    this.section.classList.add('is-orbit-moving');
+    this.section.dataset.featuredMotionSource = source;
+
+    this.orbitMotionTimerId = window.setTimeout(() => {
+      this.orbitMotionTimerId = 0;
+      this.section.classList.remove('is-orbit-moving');
+      this.section.removeAttribute('data-featured-motion-source');
+    }, ORBIT_MOVING_CLASS_MS);
+  }
+
   move(direction, source = 'user') {
     if (this.items.length < 2) return;
     const normalizedDirection = direction < 0 ? -1 : 1;
     if (this.items.length === 2) this.shuttleDirection *= -1;
     this.lastDirection = normalizedDirection;
+    this.startOrbitMotion(normalizedDirection, source);
     this.rotationStep += normalizedDirection;
     this.render(modulo(this.rotationStep, this.items.length), { source, preserveRotation: true });
     if (source === 'user') {
@@ -440,6 +477,7 @@ class FeaturedArtworksController {
 
     const delta = getShortestStepDelta(this.activeIndex, index, this.items.length, this.lastDirection);
     this.lastDirection = delta < 0 ? -1 : 1;
+    this.startOrbitMotion(this.lastDirection, source);
     if (this.items.length === 2) this.shuttleDirection *= -1;
     this.rotationStep += delta;
     if (source === 'user') this.userPauseUntil = Date.now() + USER_PAUSE_MS;
@@ -464,6 +502,7 @@ class FeaturedArtworksController {
     this.renderOrbit(source);
     this.section.dataset.featuredActive = item.id;
     this.section.dataset.featuredRotationStep = String(this.rotationStep);
+    this.section.dataset.featuredAutoplayDelay = String(this.getEffectiveAutoplayDelay());
     this.log('render', {
       source,
       index: this.activeIndex,
@@ -548,10 +587,15 @@ class FeaturedArtworksController {
       return { rawAngle: angle, normalizedAngle: angle };
     }
 
-    if (layoutMode === 'mobile-compact' || (this.tabletLayout?.matches && count > MAX_TABLET_IMAGE_NODES)) {
+    if (layoutMode === 'mobile-compact' && count > 5) {
       const offset = getCircularOffset(itemIndex, this.activeIndex, count);
-      const spacing = layoutMode === 'mobile-compact' ? 70 : 54;
-      const angle = offset * spacing;
+      const angle = offset * 82;
+      return { rawAngle: angle, normalizedAngle: normalizeAngle(angle) };
+    }
+
+    if (this.tabletLayout?.matches && count > MAX_TABLET_IMAGE_NODES) {
+      const offset = getCircularOffset(itemIndex, this.activeIndex, count);
+      const angle = offset * 62;
       return { rawAngle: angle, normalizedAngle: normalizeAngle(angle) };
     }
 
@@ -569,20 +613,20 @@ class FeaturedArtworksController {
     const absAngle = Math.abs(normalizedAngle);
     const sparseOrbit = this.items.length <= 3;
 
-    let opacity = isActive ? 1 : 0.14 + ((depth + 1) / 2) * 0.66;
-    let scale = isActive ? 1 : 0.58 + ((depth + 1) / 2) * 0.34;
+    let opacity = isActive ? 1 : 0.24 + ((depth + 1) / 2) * 0.62;
+    let scale = isActive ? 1 : 0.56 + ((depth + 1) / 2) * 0.36;
     if (sparseOrbit && !isActive) {
-      opacity = Math.max(opacity, 0.42);
-      scale = Math.max(scale, 0.72);
+      opacity = Math.max(opacity, 0.56);
+      scale = Math.max(scale, 0.74);
     }
     if (layoutMode === 'mobile-compact' && !isActive) {
-      opacity = Math.max(opacity, 0.34);
-      scale = Math.max(scale, 0.70);
+      opacity = Math.max(opacity, 0.52);
+      scale = Math.max(scale, 0.68);
     }
     if (layoutMode === 'reduced-motion' && !isActive) opacity = 0;
 
     const y = isActive ? -4 : Math.round((1 - depth) * 12 + Math.abs(side) * 7);
-    const yaw = isActive ? 0 : Math.round(side * -10);
+    const yaw = isActive ? 0 : Math.round(side * -16);
     const layer = Math.round((depth + 1) * 50) + (isActive ? 100 : 10);
 
     card.style?.setProperty?.('--orbit-angle', `${rawAngle.toFixed(3)}deg`);
@@ -752,9 +796,13 @@ class FeaturedArtworksController {
     window.clearTimeout(this.timerId);
     window.clearTimeout(this.resumeTimerId);
     window.clearTimeout(this.visibilityCheckTimerId);
+    window.clearTimeout(this.orbitMotionTimerId);
     this.timerId = 0;
     this.resumeTimerId = 0;
     this.visibilityCheckTimerId = 0;
+    this.orbitMotionTimerId = 0;
+    this.section.classList.remove('is-orbit-moving');
+    this.section.removeAttribute('data-featured-motion-source');
   }
 
   schedule(trigger = 'schedule') {
@@ -776,9 +824,10 @@ class FeaturedArtworksController {
     }
     if (pauseReason) return;
 
+    const autoplayDelay = this.getEffectiveAutoplayDelay();
     this.timerId = window.setTimeout(() => {
       this.move(1, 'autoplay');
-    }, this.autoplayMs);
+    }, autoplayDelay);
   }
 }
 
@@ -801,5 +850,9 @@ export {
   MAX_DESKTOP_IMAGE_NODES,
   MAX_TABLET_IMAGE_NODES,
   MAX_MOBILE_IMAGE_NODES,
+  DEFAULT_AUTOPLAY_MS,
+  MIN_VISUAL_AUTOPLAY_MS,
+  MAX_VISUAL_AUTOPLAY_MS,
+  ORBIT_TRANSITION_MS,
   classifyImageRatio
 };
