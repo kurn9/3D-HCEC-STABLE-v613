@@ -1,4 +1,4 @@
-// v6.14.000 — Canonical CMS index contract normalizer.
+// v6.14.003 — Canonical CMS index contract normalizer (featured exhibitionTitle extension).
 // Keeps schema aliasing, validation and fallback merging outside intro/main.js.
 
 const IMAGE_EXTENSIONS = Object.freeze(['jpg', 'jpeg', 'png', 'webp', 'avif', 'gif']);
@@ -35,6 +35,7 @@ const DEFAULT_INDEX_CONTENT = Object.freeze({
     enabled: false,
     kicker: 'Tuyển chọn từ không gian trưng bày',
     title: 'Tác phẩm tiêu biểu',
+    exhibitionTitle: '',
     lead: 'Những điểm nhấn hình ảnh được tuyển chọn trong không gian triển lãm.',
     autoplayMs: 4200,
     items: Object.freeze([])
@@ -67,6 +68,7 @@ function getTextLimits() {
     eyebrow: 120,
     kicker: 120,
     title: 240,
+    exhibitionTitle: 220,
     lead: 900,
     recommendation: 600,
     caption: 240,
@@ -121,6 +123,7 @@ function cloneDefaults() {
       enabled: DEFAULT_INDEX_CONTENT.featuredArtworks.enabled,
       kicker: DEFAULT_INDEX_CONTENT.featuredArtworks.kicker,
       title: DEFAULT_INDEX_CONTENT.featuredArtworks.title,
+      exhibitionTitle: DEFAULT_INDEX_CONTENT.featuredArtworks.exhibitionTitle,
       lead: DEFAULT_INDEX_CONTENT.featuredArtworks.lead,
       autoplayMs: DEFAULT_INDEX_CONTENT.featuredArtworks.autoplayMs,
       items: []
@@ -412,6 +415,7 @@ function applyIndexLayer(target, content, mediaOptions, diagnostics, sourceLabel
     else if (featured.enabled !== undefined) addWarning(diagnostics, `${featuredPath}.enabled ignored because it is not boolean.`);
     applyText(target.featuredArtworks, 'kicker', featured, ['kicker', 'eyebrow'], textLimits.kicker, diagnostics, featuredPath);
     applyText(target.featuredArtworks, 'title', featured, ['title'], textLimits.title, diagnostics, featuredPath);
+    applyText(target.featuredArtworks, 'exhibitionTitle', featured, ['exhibitionTitle'], textLimits.exhibitionTitle, diagnostics, featuredPath);
     applyText(target.featuredArtworks, 'lead', featured, ['lead'], textLimits.lead, diagnostics, featuredPath);
 
     if (featured.autoplayMs !== undefined) {

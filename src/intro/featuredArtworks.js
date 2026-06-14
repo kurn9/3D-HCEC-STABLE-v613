@@ -1,10 +1,12 @@
-// v6.14.001 — CMS-driven Museum Showcase / Spotlight Rail for the index page.
-// The module is intentionally DOM-only, idempotent and independent from Viewer/CMS Admin.
+// v6.14.003 — Heritage Portal Infinity / Portal Center Stage + Infinity Flow.
+// DOM-only, CMS-driven, idempotent and isolated from Viewer, CMS Admin and cursor runtime.
 
 const MAX_RENDERED_ITEMS = 8;
+const MAX_DESKTOP_IMAGE_NODES = 5;
+const MAX_COMPACT_IMAGE_NODES = 3;
 const DEFAULT_AUTOPLAY_MS = 4200;
-const MIN_AUTOPLAY_MS = 3600;
-const MAX_AUTOPLAY_MS = 5600;
+const MIN_VISUAL_AUTOPLAY_MS = 3800;
+const MAX_VISUAL_AUTOPLAY_MS = 4800;
 const USER_PAUSE_MS = 12000;
 const IMAGE_EXTENSIONS = Object.freeze(['jpg', 'jpeg', 'png', 'webp', 'avif', 'gif']);
 const controllers = new WeakMap();
@@ -16,7 +18,7 @@ function getText(value, fallback = '') {
 function clampAutoplay(value) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return DEFAULT_AUTOPLAY_MS;
-  return Math.min(MAX_AUTOPLAY_MS, Math.max(MIN_AUTOPLAY_MS, Math.round(parsed)));
+  return Math.min(MAX_VISUAL_AUTOPLAY_MS, Math.max(MIN_VISUAL_AUTOPLAY_MS, Math.round(parsed)));
 }
 
 function isLocalImageUrl(value) {
@@ -44,29 +46,74 @@ function normalizeItems(featuredData, options = {}) {
   const isSafeImageUrl = typeof options.isSafeImageUrl === 'function'
     ? options.isSafeImageUrl
     : isLocalImageUrl;
+  const seenIds = new Set();
 
   return featuredData.items
     .filter((item) => item && typeof item === 'object' && item.visible !== false)
     .map((item, index) => {
       const title = getText(item.title);
       const imageUrl = getText(item.imageUrl);
-      if (!title || !imageUrl || !isSafeImageUrl(imageUrl)) return null;
+      const id = getText(item.id, `featured_${index + 1}`);
+      if (!title || !imageUrl || !id || seenIds.has(id) || !isSafeImageUrl(imageUrl)) return null;
+      seenIds.add(id);
+      const room = getText(item.room).toLowerCase();
       return {
-        id: getText(item.id, `featured_${index + 1}`),
+        id,
         title,
-        subtitle: getText(item.subtitle),
-        description: getText(item.description),
         imageUrl,
         alt: getText(item.alt, title),
-        room: ['indoor', 'outdoor'].includes(getText(item.room).toLowerCase())
-          ? getText(item.room).toLowerCase()
-          : '',
-        artworkId: getText(item.artworkId),
+        room: ['indoor', 'outdoor'].includes(room) ? room : '',
         ctaLabel: getText(item.ctaLabel, 'Xem trong không gian 3D')
       };
     })
     .filter(Boolean)
     .slice(0, MAX_RENDERED_ITEMS);
+}
+
+function modulo(value, length) {
+  if (!length) return 0;
+  return ((value % length) + length) % length;
+}
+
+function getSlotAssignments(itemCount, activeIndex, compact) {
+  if (itemCount <= 0) return [];
+  if (itemCount === 1) return [{ index: 0, slot: 'active' }];
+  if (itemCount === 2) {
+    return [
+      { index: activeIndex, slot: 'active' },
+      { index: modulo(activeIndex + 1, itemCount), slot: 'next' }
+    ];
+  }
+
+  const definitions = compact || itemCount === 3
+    ? [
+        { offset: -1, slot: 'prev' },
+        { offset: 0, slot: 'active' },
+        { offset: 1, slot: 'next' }
+      ]
+    : itemCount === 4
+      ? [
+          { offset: -1, slot: 'prev' },
+          { offset: 0, slot: 'active' },
+          { offset: 1, slot: 'next' },
+          { offset: 2, slot: 'far-next' }
+        ]
+      : [
+          { offset: -2, slot: 'far-prev' },
+          { offset: -1, slot: 'prev' },
+          { offset: 0, slot: 'active' },
+          { offset: 1, slot: 'next' },
+          { offset: 2, slot: 'far-next' }
+        ];
+
+  const seen = new Set();
+  return definitions.reduce((result, definition) => {
+    const index = modulo(activeIndex + definition.offset, itemCount);
+    if (seen.has(index)) return result;
+    seen.add(index);
+    result.push({ index, slot: definition.slot });
+    return result;
+  }, []);
 }
 
 class FeaturedArtworksController {
@@ -76,33 +123,33 @@ class FeaturedArtworksController {
     this.items = [];
     this.activeIndex = 0;
     this.failedIds = new Set();
+    this.cardById = new Map();
     this.timerId = 0;
     this.resumeTimerId = 0;
-    this.renderToken = 0;
+    this.visibilityCheckTimerId = 0;
     this.userPauseUntil = 0;
     this.isInViewport = false;
     this.isHovering = false;
     this.hasFocusWithin = false;
+    this.mediaReady = false;
     this.reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)') || null;
+    this.compactLayout = window.matchMedia?.('(max-width: 900px)') || null;
     this.debug = isDebugEnabled(options);
 
     this.nodes = {
       carousel: section.querySelector('[data-featured-carousel]'),
       kicker: section.querySelector('[data-featured-kicker]'),
       title: section.querySelector('[data-featured-title]'),
-      lead: section.querySelector('[data-featured-lead]'),
-      stage: section.querySelector('[data-featured-stage]'),
-      image: section.querySelector('[data-featured-image]'),
-      number: section.querySelector('[data-featured-number]'),
-      count: section.querySelector('[data-featured-count]'),
+      exhibitionTitle: section.querySelector('[data-featured-exhibition-title]'),
+      slides: section.querySelector('[data-featured-slides]'),
+      counter: section.querySelector('[data-featured-counter]'),
       itemTitle: section.querySelector('[data-featured-item-title]'),
-      subtitle: section.querySelector('[data-featured-subtitle]'),
-      description: section.querySelector('[data-featured-description]'),
       cta: section.querySelector('[data-featured-cta]'),
       prev: section.querySelector('[data-featured-prev]'),
       next: section.querySelector('[data-featured-next]'),
       controls: section.querySelector('[data-featured-controls]'),
-      rail: section.querySelector('[data-featured-rail]')
+      rail: section.querySelector('[data-featured-rail]'),
+      status: section.querySelector('[data-featured-status]')
     };
 
     this.bindEvents();
@@ -124,11 +171,11 @@ class FeaturedArtworksController {
     carousel?.addEventListener('keydown', (event) => {
       if (!this.items.length) return;
       let targetIndex = null;
-      if (event.key === 'ArrowLeft') targetIndex = this.findAvailableIndex(this.activeIndex, -1);
-      if (event.key === 'ArrowRight') targetIndex = this.findAvailableIndex(this.activeIndex, 1);
-      if (event.key === 'Home') targetIndex = this.findFirstAvailableIndex();
-      if (event.key === 'End') targetIndex = this.findLastAvailableIndex();
-      if (targetIndex === null || targetIndex < 0) return;
+      if (event.key === 'ArrowLeft') targetIndex = modulo(this.activeIndex - 1, this.items.length);
+      if (event.key === 'ArrowRight') targetIndex = modulo(this.activeIndex + 1, this.items.length);
+      if (event.key === 'Home') targetIndex = 0;
+      if (event.key === 'End') targetIndex = this.items.length - 1;
+      if (targetIndex === null || targetIndex === this.activeIndex) return;
       event.preventDefault();
       this.goTo(targetIndex, 'user');
     });
@@ -161,17 +208,32 @@ class FeaturedArtworksController {
     if ('IntersectionObserver' in window) {
       this.viewportObserver = new IntersectionObserver((entries) => {
         const entry = entries[0];
-        this.isInViewport = Boolean(entry?.isIntersecting && entry.intersectionRatio >= 0.18);
+        const nextVisible = Boolean(entry?.isIntersecting && entry.intersectionRatio >= 0.12);
+        if (nextVisible !== this.isInViewport) {
+          this.isInViewport = nextVisible;
+          if (nextVisible) {
+            this.mediaReady = true;
+            this.renderSlots();
+          }
+        }
         this.schedule();
-      }, { threshold: [0, 0.18, 0.35, 0.6], rootMargin: '6% 0px 6% 0px' });
+      }, { threshold: [0, 0.12, 0.3, 0.6], rootMargin: '10% 0px 10% 0px' });
       this.viewportObserver.observe(this.section);
     } else {
       this.isInViewport = true;
+      this.mediaReady = true;
     }
 
-    const handleMotionChange = () => this.schedule();
+    const handleMotionChange = () => {
+      this.renderSlots();
+      this.schedule();
+    };
     if (this.reducedMotion?.addEventListener) this.reducedMotion.addEventListener('change', handleMotionChange);
     else this.reducedMotion?.addListener?.(handleMotionChange);
+
+    const handleCompactChange = () => this.renderSlots();
+    if (this.compactLayout?.addEventListener) this.compactLayout.addEventListener('change', handleCompactChange);
+    else this.compactLayout?.addListener?.(handleCompactChange);
 
     if ('MutationObserver' in window && document.body) {
       this.modalObserver = new MutationObserver(() => this.schedule());
@@ -185,6 +247,8 @@ class FeaturedArtworksController {
     this.clearTimers();
     this.failedIds.clear();
     this.userPauseUntil = 0;
+    this.mediaReady = this.isInViewport || !('IntersectionObserver' in window);
+    this.resetCards();
 
     const enabled = featuredData?.enabled === true;
     this.items = enabled ? normalizeItems(featuredData, this.options) : [];
@@ -207,14 +271,23 @@ class FeaturedArtworksController {
 
     this.setText(this.nodes.kicker, featuredData.kicker, 'Tuyển chọn từ không gian trưng bày');
     this.setText(this.nodes.title, featuredData.title, 'Tác phẩm tiêu biểu');
-    this.setText(this.nodes.lead, featuredData.lead, 'Những điểm nhấn hình ảnh được tuyển chọn trong không gian triển lãm.');
+    this.setText(
+      this.nodes.exhibitionTitle,
+      featuredData.exhibitionTitle,
+      getText(featuredData.title, 'Tác phẩm tiêu biểu')
+    );
 
     this.autoplayMs = clampAutoplay(featuredData.autoplayMs);
-    this.buildRail();
+    this.buildIndicators();
     this.updateControlVisibility();
-    this.render(0, { immediate: true });
+    this.render(0, { source: 'init' });
+    this.queueVisibilityCheck();
     this.schedule();
-    this.log('initialized', { items: this.items.length, autoplayMs: this.autoplayMs });
+    this.log('initialized', {
+      items: this.items.length,
+      autoplayMs: this.autoplayMs,
+      imageNodeBudget: this.getImageNodeBudget()
+    });
     return this.getState('ready');
   }
 
@@ -234,13 +307,36 @@ class FeaturedArtworksController {
 
   hide(reason) {
     this.clearTimers();
+    this.resetCards();
     this.section.hidden = true;
     this.section.dataset.featuredState = reason;
     this.section.dataset.featuredCount = '0';
+    this.nodes.rail?.replaceChildren();
     this.log(`hidden: ${reason}`);
   }
 
-  buildRail() {
+  resetCards() {
+    this.cardById.clear();
+    this.nodes.slides?.replaceChildren();
+  }
+
+  queueVisibilityCheck() {
+    window.clearTimeout(this.visibilityCheckTimerId);
+    this.visibilityCheckTimerId = window.setTimeout(() => {
+      this.visibilityCheckTimerId = 0;
+      if (this.section.hidden || this.isInViewport || typeof this.section.getBoundingClientRect !== 'function') return;
+      const rect = this.section.getBoundingClientRect();
+      const viewportHeight = window.innerHeight || document.documentElement?.clientHeight || 0;
+      if (rect.bottom >= -80 && rect.top <= viewportHeight + 80) {
+        this.isInViewport = true;
+        this.mediaReady = true;
+        this.renderSlots();
+        this.schedule();
+      }
+    }, 0);
+  }
+
+  buildIndicators() {
     const rail = this.nodes.rail;
     if (!rail) return;
     rail.replaceChildren();
@@ -248,19 +344,10 @@ class FeaturedArtworksController {
     this.items.forEach((item, index) => {
       const button = document.createElement('button');
       button.type = 'button';
-      button.className = 'featured-rail-item';
+      button.className = 'heritage-portal-indicator';
       button.dataset.featuredIndex = String(index);
       button.setAttribute('aria-label', `Xem tác phẩm ${String(index + 1).padStart(2, '0')}: ${item.title}`);
-
-      const number = document.createElement('span');
-      number.className = 'featured-rail-number';
-      number.textContent = String(index + 1).padStart(2, '0');
-
-      const title = document.createElement('span');
-      title.className = 'featured-rail-title';
-      title.textContent = item.title;
-
-      button.append(number, title);
+      button.textContent = String(index + 1).padStart(2, '0');
       button.addEventListener('click', () => this.goTo(index, 'user'));
       rail.appendChild(button);
     });
@@ -272,107 +359,177 @@ class FeaturedArtworksController {
     if (this.nodes.rail) this.nodes.rail.hidden = !hasMultiple;
   }
 
-  findFirstAvailableIndex() {
-    return this.items.findIndex((item) => !this.failedIds.has(item.id));
-  }
-
-  findLastAvailableIndex() {
-    for (let index = this.items.length - 1; index >= 0; index -= 1) {
-      if (!this.failedIds.has(this.items[index].id)) return index;
-    }
-    return -1;
-  }
-
-  findAvailableIndex(startIndex, direction = 1) {
-    if (!this.items.length) return -1;
-    for (let step = 1; step <= this.items.length; step += 1) {
-      const candidate = (startIndex + (step * direction) + this.items.length) % this.items.length;
-      if (!this.failedIds.has(this.items[candidate].id)) return candidate;
-    }
-    return -1;
+  getImageNodeBudget() {
+    return this.compactLayout?.matches ? MAX_COMPACT_IMAGE_NODES : MAX_DESKTOP_IMAGE_NODES;
   }
 
   move(direction, source = 'user') {
-    const nextIndex = this.findAvailableIndex(this.activeIndex, direction);
-    if (nextIndex >= 0) this.goTo(nextIndex, source);
+    if (this.items.length < 2) return;
+    this.goTo(modulo(this.activeIndex + direction, this.items.length), source);
   }
 
   goTo(index, source = 'user') {
     if (!Number.isInteger(index) || index < 0 || index >= this.items.length) return;
-    if (this.failedIds.has(this.items[index].id)) return;
     if (source === 'user') this.userPauseUntil = Date.now() + USER_PAUSE_MS;
-    this.render(index);
+    this.render(index, { source });
+    if (source === 'user') this.announceManualSelection();
     this.schedule();
   }
 
-  render(index, { immediate = false } = {}) {
-    const item = this.items[index];
-    if (!item) return;
-    this.activeIndex = index;
-    const token = ++this.renderToken;
-    const numberText = String(index + 1).padStart(2, '0');
+  render(index, { source = 'autoplay' } = {}) {
+    if (!this.items.length) return;
+    this.activeIndex = modulo(index, this.items.length);
+    const item = this.items[this.activeIndex];
+    const numberText = String(this.activeIndex + 1).padStart(2, '0');
     const countText = String(this.items.length).padStart(2, '0');
 
-    this.setText(this.nodes.number, numberText);
-    this.setText(this.nodes.count, countText);
+    this.setText(this.nodes.counter, `${numberText} / ${countText}`);
     this.setText(this.nodes.itemTitle, item.title);
-    this.setText(this.nodes.subtitle, item.subtitle);
-    this.setText(this.nodes.description, item.description);
-    this.nodes.subtitle?.toggleAttribute('hidden', !item.subtitle);
-    this.nodes.description?.toggleAttribute('hidden', !item.description);
+    this.updateCta(item);
+    this.updateIndicators();
+    this.renderSlots();
+    this.section.dataset.featuredActive = item.id;
+    this.log('render', { source, index: this.activeIndex, id: item.id });
+  }
 
+  updateCta(item) {
     const cta = this.nodes.cta;
-    if (cta) {
-      if (item.room) {
-        cta.hidden = false;
-        cta.href = `./gallery.html?room=${encodeURIComponent(item.room)}`;
-        cta.textContent = item.ctaLabel;
-        if (item.artworkId) cta.dataset.artworkId = item.artworkId;
-        else delete cta.dataset.artworkId;
-      } else {
-        cta.hidden = true;
-        cta.removeAttribute('href');
-        delete cta.dataset.artworkId;
-      }
+    if (!cta) return;
+    if (!item.room) {
+      cta.hidden = true;
+      cta.removeAttribute('href');
+      return;
     }
+    cta.hidden = false;
+    cta.href = `./gallery.html?room=${encodeURIComponent(item.room)}`;
+    cta.textContent = item.ctaLabel;
+  }
 
+  updateIndicators() {
     this.nodes.rail?.querySelectorAll('[data-featured-index]').forEach((button, buttonIndex) => {
-      const isActive = buttonIndex === index;
+      const isActive = buttonIndex === this.activeIndex;
       button.classList.toggle('is-active', isActive);
       if (isActive) button.setAttribute('aria-current', 'true');
       else button.removeAttribute('aria-current');
     });
+  }
 
-    const image = this.nodes.image;
-    const stage = this.nodes.stage;
-    if (!image || !stage) return;
-    stage.classList.add('is-loading');
-    if (!immediate) stage.classList.add('is-changing');
+  createCard(item) {
+    const card = document.createElement('figure');
+    card.className = 'heritage-portal-card';
+    card.dataset.featuredItemId = item.id;
 
-    image.onload = () => {
-      if (token !== this.renderToken) return;
-      stage.classList.remove('is-loading', 'is-changing', 'has-media-error');
-    };
-    image.onerror = () => {
-      if (token !== this.renderToken) return;
-      this.failedIds.add(item.id);
-      stage.classList.remove('is-loading', 'is-changing');
-      stage.classList.add('has-media-error');
-      this.log('image failed', { id: item.id, imageUrl: item.imageUrl });
-      const nextIndex = this.findAvailableIndex(index, 1);
-      if (nextIndex < 0 || nextIndex === index) {
-        this.hide('all-media-failed');
-        return;
-      }
-      this.render(nextIndex);
-      this.schedule();
-    };
-
-    image.alt = item.alt;
+    const image = document.createElement('img');
+    image.className = 'heritage-portal-image';
+    image.width = 1276;
+    image.height = 956;
     image.loading = 'lazy';
     image.decoding = 'async';
-    if (image.getAttribute('src') !== item.imageUrl) image.setAttribute('src', item.imageUrl);
-    else if (image.complete && image.naturalWidth > 0) image.onload();
+    image.draggable = false;
+
+    const sheen = document.createElement('span');
+    sheen.className = 'heritage-portal-card-sheen';
+    sheen.setAttribute('aria-hidden', 'true');
+
+    card.append(image, sheen);
+    this.cardById.set(item.id, card);
+    return card;
+  }
+
+  renderSlots() {
+    const slides = this.nodes.slides;
+    if (!slides || !this.items.length || this.section.hidden) return;
+
+    const compact = this.compactLayout?.matches === true;
+    const assignments = getSlotAssignments(this.items.length, this.activeIndex, compact)
+      .slice(0, this.getImageNodeBudget());
+    const visibleIds = new Set(assignments.map(({ index }) => this.items[index]?.id).filter(Boolean));
+
+    for (const [itemId, card] of this.cardById.entries()) {
+      if (visibleIds.has(itemId)) continue;
+      card.remove();
+      this.cardById.delete(itemId);
+    }
+
+    assignments.forEach(({ index, slot }) => {
+      const item = this.items[index];
+      if (!item) return;
+      const card = this.cardById.get(item.id) || this.createCard(item);
+      const image = card.querySelector('img');
+      const isActive = slot === 'active';
+
+      card.className = `heritage-portal-card is-slot-${slot}`;
+      card.dataset.featuredIndex = String(index);
+      card.setAttribute('aria-hidden', isActive ? 'false' : 'true');
+      if (isActive) {
+        card.setAttribute('role', 'group');
+        card.setAttribute('aria-label', `${String(index + 1).padStart(2, '0')} trên ${String(this.items.length).padStart(2, '0')}: ${item.title}`);
+      } else {
+        card.removeAttribute('role');
+        card.removeAttribute('aria-label');
+      }
+
+      if (image) {
+        image.dataset.itemId = item.id;
+        image.alt = isActive ? item.alt : '';
+        image.setAttribute('aria-hidden', isActive ? 'false' : 'true');
+        image.onerror = () => {
+          if (image.dataset.itemId !== item.id) return;
+          this.handleImageFailure(item.id);
+        };
+        image.onload = () => {
+          if (image.dataset.itemId !== item.id) return;
+          card.classList.add('is-loaded');
+          card.classList.remove('has-media-error');
+        };
+        if (this.mediaReady && image.getAttribute('src') !== item.imageUrl) {
+          card.classList.remove('is-loaded');
+          image.setAttribute('src', item.imageUrl);
+        } else if (this.mediaReady && image.complete && image.naturalWidth > 0) {
+          card.classList.add('is-loaded');
+        }
+      }
+
+      slides.appendChild(card);
+    });
+
+    slides.dataset.featuredVisibleSlots = String(assignments.length);
+  }
+
+  handleImageFailure(itemId) {
+    if (this.failedIds.has(itemId)) return;
+    this.failedIds.add(itemId);
+    const failedIndex = this.items.findIndex((item) => item.id === itemId);
+    if (failedIndex < 0) return;
+
+    const failedCard = this.cardById.get(itemId);
+    failedCard?.classList.add('has-media-error');
+    failedCard?.remove();
+    this.cardById.delete(itemId);
+    this.items.splice(failedIndex, 1);
+
+    if (!this.items.length) {
+      this.hide('all-media-failed');
+      return;
+    }
+
+    if (failedIndex < this.activeIndex) this.activeIndex -= 1;
+    if (this.activeIndex >= this.items.length) this.activeIndex = 0;
+
+    this.section.dataset.featuredCount = String(this.items.length);
+    this.nodes.carousel?.setAttribute('aria-label', `Tác phẩm tiêu biểu — ${this.items.length} tác phẩm`);
+    this.buildIndicators();
+    this.updateControlVisibility();
+    this.render(this.activeIndex, { source: 'media-recovery' });
+    this.schedule();
+    this.log('image removed after failure', { id: itemId, remaining: this.items.length });
+  }
+
+  announceManualSelection() {
+    const status = this.nodes.status;
+    const item = this.items[this.activeIndex];
+    if (!status || !item) return;
+    status.textContent = `Đã chọn tác phẩm ${String(this.activeIndex + 1).padStart(2, '0')} trên ${String(this.items.length).padStart(2, '0')}: ${item.title}.`;
   }
 
   isModalOpen() {
@@ -396,8 +553,10 @@ class FeaturedArtworksController {
   clearTimers() {
     window.clearTimeout(this.timerId);
     window.clearTimeout(this.resumeTimerId);
+    window.clearTimeout(this.visibilityCheckTimerId);
     this.timerId = 0;
     this.resumeTimerId = 0;
+    this.visibilityCheckTimerId = 0;
   }
 
   schedule() {
@@ -407,6 +566,13 @@ class FeaturedArtworksController {
     this.resumeTimerId = 0;
 
     if (this.items.length < 2 || this.section.hidden || this.reducedMotion?.matches) return;
+    if (
+      !this.isInViewport ||
+      document.hidden ||
+      this.isHovering ||
+      this.hasFocusWithin ||
+      this.isModalOpen()
+    ) return;
 
     const pauseRemaining = this.userPauseUntil - Date.now();
     if (pauseRemaining > 0) {
@@ -416,9 +582,7 @@ class FeaturedArtworksController {
 
     if (!this.canAutoplay()) return;
     this.timerId = window.setTimeout(() => {
-      const nextIndex = this.findAvailableIndex(this.activeIndex, 1);
-      if (nextIndex >= 0 && nextIndex !== this.activeIndex) this.goTo(nextIndex, 'autoplay');
-      else this.schedule();
+      this.goTo(modulo(this.activeIndex + 1, this.items.length), 'autoplay');
     }, this.autoplayMs);
   }
 }
@@ -436,4 +600,8 @@ export function initFeaturedArtworks(section, featuredData, options = {}) {
   return controller.update(featuredData, options);
 }
 
-export { MAX_RENDERED_ITEMS };
+export {
+  MAX_RENDERED_ITEMS,
+  MAX_DESKTOP_IMAGE_NODES,
+  MAX_COMPACT_IMAGE_NODES
+};

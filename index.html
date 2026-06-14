@@ -89,7 +89,7 @@
       </section>
 
       <section
-        class="stage-section stage-section--featured museum-showcase"
+        class="stage-section stage-section--featured heritage-portal"
         id="tac-pham-tieu-bieu"
         aria-labelledby="featuredTitle"
         data-intro-section="featured"
@@ -98,57 +98,41 @@
         hidden>
         <div class="section-boundary" aria-hidden="true"><span></span></div>
 
-        <div class="featured-section-header" data-reveal>
+        <div class="heritage-portal-header" data-reveal>
           <span class="section-kicker" data-featured-kicker>Tuyển chọn từ không gian trưng bày</span>
           <h2 id="featuredTitle" data-featured-title>Tác phẩm tiêu biểu</h2>
-          <p data-featured-lead>Những điểm nhấn hình ảnh được tuyển chọn trong không gian triển lãm.</p>
+          <p data-featured-exhibition-title>Không gian văn hóa và triển lãm số</p>
         </div>
 
         <div
-          class="featured-showcase-shell"
+          class="heritage-portal-stage"
           data-featured-carousel
           data-reveal
           role="region"
           aria-roledescription="carousel"
           aria-label="Tác phẩm tiêu biểu"
           tabindex="0">
-          <figure class="featured-stage" data-featured-stage>
-            <div class="featured-media-frame">
-              <img
-                class="featured-image"
-                data-featured-image
-                alt=""
-                width="1600"
-                height="1000"
-                loading="lazy"
-                decoding="async" />
-              <span class="featured-media-glow" aria-hidden="true"></span>
-              <span class="featured-media-line featured-media-line--top" aria-hidden="true"></span>
-              <span class="featured-media-line featured-media-line--bottom" aria-hidden="true"></span>
-              <span class="featured-media-index" aria-hidden="true">
-                <strong data-featured-number>01</strong>
-                <i></i>
-                <span data-featured-count>01</span>
-              </span>
-            </div>
-          </figure>
-
-          <div class="featured-caption">
-            <div class="featured-caption-topline">
-              <span>Điểm nhấn trưng bày</span>
-              <div class="featured-controls" data-featured-controls>
-                <button type="button" data-featured-prev aria-label="Tác phẩm trước">←</button>
-                <button type="button" data-featured-next aria-label="Tác phẩm tiếp theo">→</button>
-              </div>
-            </div>
-            <h3 data-featured-item-title>Tác phẩm tiêu biểu</h3>
-            <p class="featured-subtitle" data-featured-subtitle hidden></p>
-            <p class="featured-description" data-featured-description hidden></p>
-            <a class="featured-cta" data-featured-cta href="./gallery.html" hidden>Xem trong không gian 3D</a>
+          <div class="heritage-portal-frame" aria-hidden="true">
+            <span></span>
           </div>
+
+          <div class="heritage-portal-slides" data-featured-slides></div>
+
+          <div class="heritage-portal-overlay">
+            <span class="heritage-portal-counter" data-featured-counter>01 / 01</span>
+            <strong data-featured-item-title>Tác phẩm tiêu biểu</strong>
+            <a class="heritage-portal-cta" data-featured-cta href="./gallery.html" hidden>Xem trong không gian 3D</a>
+          </div>
+
+          <div class="heritage-portal-controls" data-featured-controls>
+            <button type="button" data-featured-prev aria-label="Tác phẩm trước">←</button>
+            <button type="button" data-featured-next aria-label="Tác phẩm tiếp theo">→</button>
+          </div>
+
+          <p class="heritage-portal-sr-only" data-featured-status aria-live="polite"></p>
         </div>
 
-        <div class="featured-rail" data-featured-rail data-reveal aria-label="Chọn tác phẩm"></div>
+        <div class="heritage-portal-indicators" data-featured-rail data-reveal aria-label="Chọn tác phẩm"></div>
       </section>
 
       <section class="stage-section stage-section--experience visit-panel museum-routes" id="trai-nghiem" aria-labelledby="visitTitle" data-intro-section="experience" data-stage-label="Trải nghiệm">

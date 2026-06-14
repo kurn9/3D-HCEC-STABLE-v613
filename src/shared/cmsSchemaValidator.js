@@ -1,4 +1,4 @@
-// v6.14.000 — CMS schema/media safety validator with index-contract validation.
+// v6.14.003 — CMS schema/media safety validator with featured exhibitionTitle validation.
 // Dependency-free; safe to load as a classic script or ES module.
 (function initCmsSchemaValidator(global) {
   if (global.cmsSchemaValidator) return;
@@ -22,6 +22,7 @@
     eyebrow: 120,
     kicker: 120,
     title: 240,
+    exhibitionTitle: 220,
     lead: 900,
     recommendation: 600,
     caption: 240,
@@ -307,6 +308,7 @@
       if (featured.enabled !== undefined && typeof featured.enabled !== 'boolean') result.errors.push(`${featuredPath}.enabled must be a boolean.`);
       pushTextValidation(result, `${featuredPath}.kicker`, featured.kicker ?? featured.eyebrow, INDEX_TEXT_LIMITS.kicker);
       pushTextValidation(result, `${featuredPath}.title`, featured.title, INDEX_TEXT_LIMITS.title);
+      pushTextValidation(result, `${featuredPath}.exhibitionTitle`, featured.exhibitionTitle, INDEX_TEXT_LIMITS.exhibitionTitle);
       pushTextValidation(result, `${featuredPath}.lead`, featured.lead, INDEX_TEXT_LIMITS.lead);
       if (featured.autoplayMs !== undefined) {
         const autoplayMs = Number(featured.autoplayMs);
