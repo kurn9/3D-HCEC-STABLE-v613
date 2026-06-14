@@ -94,12 +94,48 @@
       "phoneFax": "028 3930 2159 - Fax: 028 39301732"
     },
     "featuredArtworks": {
-      "enabled": false,
+      "enabled": true,
       "kicker": "Tuyển chọn từ không gian trưng bày",
       "title": "Tác phẩm tiêu biểu",
       "lead": "Những điểm nhấn hình ảnh được tuyển chọn trong không gian triển lãm.",
       "autoplayMs": 4200,
-      "items": []
+      "items": [
+        {
+          "id": "featured_local_001",
+          "title": "Dấu ấn đô thị",
+          "subtitle": "Tư liệu và không gian trình chiếu",
+          "description": "Một lát cắt thị giác về ký ức đô thị trong không gian triển lãm số.",
+          "imageUrl": "./assets/artworks/indoor/art_002.jpg",
+          "alt": "Không gian trưng bày với tư liệu hình ảnh về đô thị Thành phố Hồ Chí Minh",
+          "room": "indoor",
+          "artworkId": "ART_001",
+          "ctaLabel": "Xem trong không gian 3D",
+          "visible": true
+        },
+        {
+          "id": "featured_local_002",
+          "title": "Trục ký ức",
+          "subtitle": "Không gian trình chiếu tư liệu",
+          "description": "Hình ảnh tư liệu được tổ chức theo chiều sâu, tạo điểm nhìn tập trung cho hành trình tham quan.",
+          "imageUrl": "./assets/artworks/outdoor/art_001.jpg",
+          "alt": "Không gian trình chiếu tư liệu với hình ảnh đường phố và kiến trúc đô thị",
+          "room": "outdoor",
+          "artworkId": "ART_001",
+          "ctaLabel": "Xem trong không gian 3D",
+          "visible": true
+        },
+        {
+          "id": "featured_local_003",
+          "title": "Nhịp điệu trưng bày",
+          "subtitle": "Không gian nghệ thuật",
+          "description": "Các lớp hình ảnh, ánh sáng và hiện vật cùng tạo nên nhịp điệu của một phòng triển lãm đương đại.",
+          "imageUrl": "./assets/artworks/shared/art_003.jpg",
+          "alt": "Phòng triển lãm với nhiều tác phẩm, màn hình trình chiếu và hiện vật trưng bày",
+          "room": "indoor",
+          "ctaLabel": "Xem trong không gian 3D",
+          "visible": true
+        }
+      ]
     }
   },
   "gate": {

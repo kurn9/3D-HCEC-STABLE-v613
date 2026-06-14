@@ -1,6 +1,7 @@
 import '../shared/cmsSchemaValidator.js';
 import '../shared/cmsContentLoader.js';
 import { loadNormalizedIndexCmsContent } from './indexCmsNormalizer.js';
+import { initFeaturedArtworks } from './featuredArtworks.js';
 import { initLiquidCursor } from './liquidCursor.js';
 import { INDEX_VIDEO_CONFIG } from './indexVideoConfig.js';
 
@@ -204,6 +205,7 @@ function applyCmsIndexContent(indexContent, mediaOptions = {}) {
   const experience = indexContent.experience || {};
   const guide = indexContent.guide || {};
   const contact = indexContent.contact || {};
+  const featuredArtworks = indexContent.featuredArtworks || {};
 
   changed += setTextContentSafe(document.querySelector('.hero-content .eyebrow'), hero.eyebrow) ? 1 : 0;
   changed += setTextContentSafe(document.getElementById('heroTitle'), hero.title) ? 1 : 0;
@@ -275,6 +277,20 @@ function applyCmsIndexContent(indexContent, mediaOptions = {}) {
     changed += setTextContentSafe(contactRows[2].querySelector('span'), 'Điện thoại / Fax') ? 1 : 0;
     changed += setTextContentSafe(contactRows[2].querySelector('strong'), contact.phoneFax) ? 1 : 0;
   }
+
+  const featuredResult = initFeaturedArtworks(
+    document.querySelector('[data-featured-showcase]'),
+    featuredArtworks,
+    {
+      debug: cms?.isDebugCms?.() === true,
+      isSafeImageUrl: (url) => Boolean(cms?.isSafeMediaUrl?.(url, {
+        ...mediaOptions,
+        allowedMediaExtensions: ['jpg', 'jpeg', 'png', 'webp', 'avif', 'gif'],
+        disallowSignedMediaUrls: true
+      }))
+    }
+  );
+  if (featuredResult.visible) changed += 1;
 
   return changed;
 }
@@ -508,10 +524,12 @@ function initHeaderOffsetRuntime() {
 }
 
 const navStateLinks = Array.from(document.querySelectorAll('[data-nav-section]'));
+const NAV_ACTIVE_ALIAS = Object.freeze({ featured: 'experience' });
 
 function setActiveNav(sectionName) {
+  const activeSection = NAV_ACTIVE_ALIAS[sectionName] || sectionName;
   navStateLinks.forEach((link) => {
-    link.classList.toggle('is-active', link.dataset.navSection === sectionName);
+    link.classList.toggle('is-active', link.dataset.navSection === activeSection);
   });
 }
 
