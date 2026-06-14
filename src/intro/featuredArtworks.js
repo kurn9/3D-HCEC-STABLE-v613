@@ -1,4 +1,4 @@
-// v6.14.008 — True Continuous Orbit Engine.
+// v6.14.010 — Continuous Geometry + Mobile Runtime Debug.
 // Controlled requestAnimationFrame; DOM/CSS 3D only. No canvas, WebGL or external library.
 
 const MAX_SOURCE_ITEMS = 12;
@@ -16,7 +16,8 @@ const MANUAL_SNAP_MS = 320;
 const RESIZE_DEBOUNCE_MS = 90;
 const MOBILE_FRAME_INTERVAL_MS = 1000 / 30;
 const MAX_FRAME_DELTA_MS = 80;
-const DEBUG_FRAME_LOG_INTERVAL_MS = 1000;
+const DEBUG_PANEL_UPDATE_INTERVAL_MS = 1000;
+const ACTIVE_CROSSING_HYSTERESIS_STEPS = 0.06;
 const IMAGE_EXTENSIONS = Object.freeze(['jpg', 'jpeg', 'png', 'webp', 'avif', 'gif']);
 const ASPECT_CLASSES = Object.freeze(['is-wide', 'is-landscape', 'is-square', 'is-portrait']);
 const POSITION_CLASSES = Object.freeze(['is-near', 'is-far', 'is-back']);
@@ -50,10 +51,19 @@ function isDebugEnabled(options = {}) {
   if (options.debug === true) return true;
   try {
     const params = new URLSearchParams(window.location.search);
-    return params.get('debugFeatured') === '1' || params.get('debugCMS') === '1';
+    return params.get('debugFeatured') === '1';
   } catch {
     return false;
   }
+}
+
+function lerp(start, end, amount) {
+  return start + (end - start) * amount;
+}
+
+function smoothstep01(value) {
+  const t = clamp(value, 0, 1);
+  return t * t * (3 - (2 * t));
 }
 
 function normalizeItems(featuredData, options = {}) {
@@ -126,11 +136,13 @@ class FeaturedArtworksController {
     this.visibleItems = this.items;
     this.activeIndex = 0;
     this.previousActiveIndex = 0;
+    this.activePhaseStep = 0;
     this.phaseSteps = 0;
     this.lastDirection = 1;
     this.failedIds = new Set();
     this.cardById = new Map();
     this.renderedEntries = [];
+    this.lastRenderedIds = [];
 
     this.rafId = 0;
     this.lastFrameTime = 0;
@@ -139,6 +151,7 @@ class FeaturedArtworksController {
     this.visibilityCheckTimerId = 0;
     this.resizeTimerId = 0;
     this.manualSnapTimerId = 0;
+    this.debugTimerId = 0;
     this.userPauseUntil = 0;
     this.keyboardPauseUntil = 0;
 
@@ -154,7 +167,13 @@ class FeaturedArtworksController {
     this.destroyed = false;
     this.lastPauseReason = '';
     this.lastInputModality = 'pointer';
-    this.lastDebugFrameAt = 0;
+    this.lastDebugUpdateAt = 0;
+    this.lastFrameDelta = 0;
+    this.paintCount = 0;
+    this.sectionRatio = 0;
+    this.visibilitySource = 'init';
+    this.debugPanel = null;
+    this.debugOutput = null;
 
     this.reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)') || null;
     this.mobileLayout = window.matchMedia?.('(max-width: 700px)') || null;
@@ -181,6 +200,7 @@ class FeaturedArtworksController {
       status: section.querySelector('[data-featured-status]')
     };
 
+    this.configureDebugPanel();
     this.bindEvents();
     section.dataset.featuredInitialized = '1';
   }
@@ -189,6 +209,84 @@ class FeaturedArtworksController {
     if (!this.debug) return;
     if (detail === undefined) console.debug(`[FeaturedArtworks] ${message}`);
     else console.debug(`[FeaturedArtworks] ${message}`, detail);
+  }
+
+  configureDebugPanel() {
+    if (!this.debug) {
+      window.clearTimeout(this.debugTimerId);
+      this.debugTimerId = 0;
+      this.debugPanel?.remove();
+      this.debugPanel = null;
+      this.debugOutput = null;
+      return;
+    }
+
+    if (!this.debugPanel) {
+      const panel = document.createElement('aside');
+      panel.className = 'featured-runtime-debug';
+      panel.dataset.featuredDebugPanel = '';
+      panel.setAttribute('aria-hidden', 'true');
+
+      const heading = document.createElement('strong');
+      heading.textContent = 'Featured Orbit Runtime';
+      const output = document.createElement('pre');
+      output.dataset.featuredDebugOutput = '';
+      panel.append(heading, output);
+      document.body?.appendChild(panel);
+      this.debugPanel = panel;
+      this.debugOutput = output;
+    }
+
+    this.scheduleDebugTick();
+    this.updateDebugPanel(true);
+  }
+
+  scheduleDebugTick() {
+    if (!this.debug || this.debugTimerId) return;
+    this.debugTimerId = window.setTimeout(() => {
+      this.debugTimerId = 0;
+      this.updateDebugPanel(true);
+      this.scheduleDebugTick();
+    }, DEBUG_PANEL_UPDATE_INTERVAL_MS);
+  }
+
+  updateDebugPanel(force = false) {
+    if (!this.debug || !this.debugOutput) return;
+    const now = Date.now();
+    if (!force && now - this.lastDebugUpdateAt < DEBUG_PANEL_UPDATE_INTERVAL_MS) return;
+    this.lastDebugUpdateAt = now;
+
+    const pauseReason = this.getPauseReason() || 'none';
+    const manualRemaining = Math.max(0, this.userPauseUntil - now);
+    const keyboardRemaining = Math.max(0, this.keyboardPauseUntil - now);
+    const lines = [
+      `raf: ${this.isOrbitRunning ? 'running' : 'stopped'}`,
+      `pauseReason: ${pauseReason}`,
+      `phaseSteps: ${Number(this.phaseSteps || 0).toFixed(4)}`,
+      `activeIndex: ${this.activeIndex}`,
+      `itemCount: ${this.items.length}`,
+      `renderedCount: ${this.renderedEntries.length}`,
+      `isInViewport: ${this.isInViewport}`,
+      `sectionRatio: ${this.sectionRatio >= 0 ? this.sectionRatio.toFixed(3) : 'fallback'}`,
+      `visibilitySource: ${this.visibilitySource}`,
+      `documentVisible: ${this.isDocumentVisible && !document.hidden}`,
+      `reducedMotion: ${this.isReducedMotion}`,
+      `modalOpen: ${this.isVideoModalOpen || this.isModalOpen()}`,
+      `pointerHover: ${this.isPointerFineHovering}`,
+      `manualPauseRemaining: ${Math.ceil(manualRemaining / 1000)}s`,
+      `keyboardPauseRemaining: ${Math.ceil(keyboardRemaining / 1000)}s`,
+      `fpsMode: ${this.frameSkipMobile ? 30 : 60}`,
+      `layoutMode: ${this.layoutMode}`,
+      `lastInputModality: ${this.lastInputModality}`,
+      `fineHover: ${Boolean(this.fineHover?.matches)}`,
+      `lastFrameDelta: ${Number(this.lastFrameDelta || 0).toFixed(2)}ms`,
+      `paintCount: ${this.paintCount}`
+    ];
+    this.debugOutput.textContent = lines.join('\n');
+    this.section.dataset.featuredPhase = this.phaseSteps.toFixed(4);
+    this.section.dataset.featuredSemanticStep = String(this.activePhaseStep);
+    this.section.dataset.featuredDebugRaf = this.isOrbitRunning ? 'running' : 'stopped';
+    this.section.dataset.featuredDebugPauseReason = pauseReason;
   }
 
   bindEvents() {
@@ -268,7 +366,9 @@ class FeaturedArtworksController {
     if ('IntersectionObserver' in window) {
       this.viewportObserver = new IntersectionObserver((entries) => {
         const entry = entries[0];
-        const nextVisible = Boolean(entry?.isIntersecting && entry.intersectionRatio >= 0.10);
+        this.sectionRatio = Number(entry?.intersectionRatio) || 0;
+        this.visibilitySource = 'intersection-observer';
+        const nextVisible = Boolean(entry?.isIntersecting && this.sectionRatio >= 0.10);
         if (nextVisible !== this.isInViewport) {
           this.isInViewport = nextVisible;
           if (nextVisible) {
@@ -278,11 +378,14 @@ class FeaturedArtworksController {
           }
         }
         this.syncEngineState(nextVisible ? 'viewport-enter' : 'viewport-exit');
+        this.updateDebugPanel(true);
       }, { threshold: [0, 0.10, 0.25, 0.55], rootMargin: '14% 0px 14% 0px' });
       this.viewportObserver.observe(this.section);
     } else {
       this.isInViewport = true;
       this.mediaReady = true;
+      this.sectionRatio = 1;
+      this.visibilitySource = 'no-intersection-observer';
     }
 
     const handleMotionChange = () => {
@@ -328,6 +431,7 @@ class FeaturedArtworksController {
   update(featuredData, options = {}) {
     this.options = { ...this.options, ...options };
     this.debug = isDebugEnabled(this.options);
+    this.configureDebugPanel();
     this.stopOrbitEngine('update');
     this.clearAuxiliaryTimers();
     this.failedIds.clear();
@@ -344,8 +448,11 @@ class FeaturedArtworksController {
     this.visibleItems = this.items;
     this.activeIndex = 0;
     this.previousActiveIndex = 0;
+    this.activePhaseStep = 0;
     this.phaseSteps = 0;
     this.lastDirection = 1;
+    this.paintCount = 0;
+    this.lastFrameDelta = 0;
 
     if (!enabled) {
       this.hide('disabled');
@@ -421,11 +528,13 @@ class FeaturedArtworksController {
     this.section.dataset.featuredLayout = 'hidden';
     this.nodes.rail?.replaceChildren();
     this.log(`hidden: ${reason}`);
+    this.updateDebugPanel(true);
   }
 
   resetCards() {
     this.cardById.clear();
     this.renderedEntries = [];
+    this.lastRenderedIds = [];
     this.nodes.slides?.replaceChildren();
   }
 
@@ -437,6 +546,8 @@ class FeaturedArtworksController {
       const rect = this.section.getBoundingClientRect();
       const viewportHeight = window.innerHeight || document.documentElement?.clientHeight || 0;
       if (rect.bottom >= -100 && rect.top <= viewportHeight + 100) {
+        this.visibilitySource = 'visibility-fallback';
+        this.sectionRatio = -1;
         this.isInViewport = true;
         this.mediaReady = true;
         this.reconcileCards('visibility-fallback');
@@ -490,17 +601,17 @@ class FeaturedArtworksController {
     return Math.min(MAX_DESKTOP_IMAGE_NODES, this.items.length);
   }
 
-  getRenderedIndices() {
+  getRenderedIndices(activeIndex = this.activeIndex) {
     const count = this.items.length;
     const budget = this.getNodeBudget();
     if (budget >= count) return Array.from({ length: count }, (_, index) => index);
 
-    const result = [this.activeIndex];
+    const result = [activeIndex];
     for (let distance = 1; result.length < budget; distance += 1) {
-      const previous = modulo(this.activeIndex - distance, count);
+      const previous = modulo(activeIndex - distance, count);
       if (!result.includes(previous)) result.push(previous);
       if (result.length >= budget) break;
-      const next = modulo(this.activeIndex + distance, count);
+      const next = modulo(activeIndex + distance, count);
       if (!result.includes(next)) result.push(next);
     }
     return result;
@@ -514,13 +625,14 @@ class FeaturedArtworksController {
     this.reconcileCards(source);
     this.syncActivePresentation(source, false);
     this.paintOrbitFrame();
+    this.queueVisibilityCheck();
     this.syncEngineState(source);
   }
 
   move(direction, source = 'user') {
     if (this.items.length < 2) return;
     const normalizedDirection = direction < 0 ? -1 : 1;
-    const basePhase = Math.round(this.phaseSteps);
+    const basePhase = this.activePhaseStep;
     const targetPhase = basePhase + normalizedDirection;
     this.lastDirection = normalizedDirection;
     this.applyManualPhase(targetPhase, source);
@@ -528,8 +640,8 @@ class FeaturedArtworksController {
 
   goTo(index, source = 'user') {
     if (!Number.isInteger(index) || index < 0 || index >= this.items.length) return;
-    const basePhase = Math.round(this.phaseSteps);
-    const currentIndex = modulo(basePhase, this.items.length);
+    const basePhase = this.activePhaseStep;
+    const currentIndex = this.activeIndex;
     if (index === currentIndex) {
       if (source === 'user') {
         this.userPauseUntil = Date.now() + USER_PAUSE_MS;
@@ -548,10 +660,14 @@ class FeaturedArtworksController {
   applyManualPhase(targetPhase, source = 'user') {
     this.stopOrbitEngine('manual-action');
     this.phaseSteps = targetPhase;
-    this.activeIndex = modulo(Math.round(this.phaseSteps), this.items.length);
+    this.activePhaseStep = Math.round(targetPhase);
+    this.activeIndex = modulo(this.activePhaseStep, this.items.length);
     this.userPauseUntil = source === 'user' ? Date.now() + USER_PAUSE_MS : this.userPauseUntil;
     this.startManualSnapClass();
-    this.reconcileCards(source);
+    const nextRenderedIndices = this.getRenderedIndices(this.activeIndex);
+    if (this.hasRenderedSetChanged(nextRenderedIndices)) {
+      this.reconcileCards(source, nextRenderedIndices);
+    }
     this.syncActivePresentation(source, source === 'user');
     this.paintOrbitFrame();
     this.scheduleResumeCheck(source);
@@ -657,13 +773,34 @@ class FeaturedArtworksController {
     }
   }
 
-  reconcileCards(source = 'reconcile') {
+  getRenderedIds(renderedIndices) {
+    return renderedIndices.map((index) => this.items[index]?.id).filter(Boolean);
+  }
+
+  hasRenderedSetChanged(renderedIndices) {
+    const nextIds = this.getRenderedIds(renderedIndices);
+    if (nextIds.length !== this.lastRenderedIds.length) return true;
+    const currentIds = new Set(this.lastRenderedIds);
+    return nextIds.some((id) => !currentIds.has(id));
+  }
+
+  reconcileCards(source = 'reconcile', renderedIndices = this.getRenderedIndices()) {
     const slides = this.nodes.slides;
-    if (!slides || !this.items.length || this.section.hidden) return;
+    if (!slides || !this.items.length || this.section.hidden) return false;
 
     this.layoutMode = this.getLayoutMode();
-    const renderedIndices = this.getRenderedIndices();
-    const renderedIds = new Set(renderedIndices.map((index) => this.items[index]?.id).filter(Boolean));
+    const renderedIdsList = this.getRenderedIds(renderedIndices);
+    const renderedIds = new Set(renderedIdsList);
+    const setChanged = this.hasRenderedSetChanged(renderedIndices);
+
+    if (!setChanged) {
+      for (const entry of this.renderedEntries) this.ensureImage(entry.card, entry.item);
+      this.section.dataset.featuredLayout = this.layoutMode;
+      this.section.dataset.featuredVisualCount = String(this.renderedEntries.length);
+      slides.dataset.featuredVisibleSlots = String(this.renderedEntries.length);
+      slides.dataset.featuredLayout = this.layoutMode;
+      return false;
+    }
 
     for (const [itemId, card] of this.cardById.entries()) {
       if (renderedIds.has(itemId)) continue;
@@ -680,6 +817,7 @@ class FeaturedArtworksController {
       if (!card.isConnected) slides.appendChild(card);
       return { itemIndex, item, card };
     }).filter(Boolean);
+    this.lastRenderedIds = renderedIdsList;
 
     this.section.dataset.featuredLayout = this.layoutMode;
     this.section.dataset.featuredVisualCount = String(this.renderedEntries.length);
@@ -692,6 +830,7 @@ class FeaturedArtworksController {
       activeIndex: this.activeIndex,
       phaseSteps: Number(this.phaseSteps.toFixed(4))
     });
+    return true;
   }
 
   getOrbitGeometry(itemIndex) {
@@ -710,60 +849,75 @@ class FeaturedArtworksController {
     const radians = normalizedAngle * (Math.PI / 180);
     const depth = Math.cos(radians);
     const side = Math.sin(radians);
-    const isActive = itemIndex === this.activeIndex;
+    const frontness = clamp((depth + 1) / 2, 0, 1);
+    const prominence = smoothstep01(frontness);
     const absAngle = Math.abs(normalizedAngle);
     const sparseOrbit = this.items.length <= 3;
+    const mobileOrbit = this.layoutMode === 'mobile-compact';
 
-    let opacity = isActive ? 1 : 0.24 + ((depth + 1) / 2) * 0.62;
-    let scale = isActive ? 1 : 0.56 + ((depth + 1) / 2) * 0.36;
-    if (sparseOrbit && !isActive) {
-      opacity = Math.max(opacity, 0.56);
-      scale = Math.max(scale, 0.74);
-    }
-    if (this.layoutMode === 'mobile-compact' && !isActive) {
-      opacity = Math.max(opacity, 0.52);
-      scale = Math.max(scale, 0.68);
-    }
-    if (this.layoutMode === 'reduced-motion' && !isActive) opacity = 0;
-
-    const y = isActive ? -4 : Math.round((1 - depth) * 12 + Math.abs(side) * 7);
-    const yaw = isActive ? 0 : Math.round(side * -16);
-    const layer = Math.round((depth + 1) * 50) + (isActive ? 100 : 10);
+    const minOpacity = sparseOrbit ? 0.54 : mobileOrbit ? 0.46 : 0.20;
+    const minScale = sparseOrbit ? 0.72 : mobileOrbit ? 0.64 : 0.55;
+    const opacity = lerp(minOpacity, 1, prominence);
+    const scale = lerp(minScale, 1, prominence);
+    const y = lerp(22, -4, prominence) + (Math.abs(side) * 4);
+    const yaw = side * -18 * (1 - (prominence * 0.58));
+    const layer = 100 + Math.round(prominence * 900);
 
     card.style.setProperty('--orbit-angle', `${rawAngle.toFixed(3)}deg`);
     card.style.setProperty('--orbit-counter-angle', `${(-rawAngle).toFixed(3)}deg`);
-    card.style.setProperty('--orbit-y', `${y}px`);
+    card.style.setProperty('--orbit-y', `${y.toFixed(2)}px`);
     card.style.setProperty('--orbit-scale', scale.toFixed(4));
     card.style.setProperty('--orbit-opacity', opacity.toFixed(4));
-    card.style.setProperty('--orbit-yaw', `${yaw}deg`);
+    card.style.setProperty('--orbit-yaw', `${yaw.toFixed(3)}deg`);
     card.style.setProperty('--orbit-layer', String(layer));
+    card.style.setProperty('--orbit-frontness', frontness.toFixed(4));
+    card.style.setProperty('--orbit-prominence', prominence.toFixed(4));
+    card.style.setProperty('--orbit-frame-opacity', lerp(0.28, 1, prominence).toFixed(4));
+    card.style.setProperty('--orbit-glass-opacity', lerp(0.44, 0.78, frontness).toFixed(4));
     card.style.zIndex = String(layer);
 
-    const position = isActive ? 'active' : absAngle <= 78 ? 'near' : absAngle <= 138 ? 'far' : 'back';
+    const position = absAngle <= 24 ? 'active' : absAngle <= 78 ? 'near' : absAngle <= 138 ? 'far' : 'back';
     if (card.dataset.orbitPosition !== position) {
       POSITION_CLASSES.forEach((name) => card.classList.remove(name));
       if (position !== 'active') card.classList.add(`is-${position}`);
       card.dataset.orbitPosition = position;
     }
 
-    if (this.debug) card.dataset.orbitAngle = normalizedAngle.toFixed(2);
+    if (this.debug) {
+      card.dataset.orbitAngle = normalizedAngle.toFixed(2);
+      card.dataset.orbitFrontness = frontness.toFixed(3);
+    }
   }
 
   paintOrbitFrame() {
     for (const entry of this.renderedEntries) this.paintCardGeometry(entry);
+    this.paintCount += 1;
   }
 
-  getNearestFrontItemIndex() {
-    if (!this.items.length) return 0;
-    return modulo(Math.round(this.phaseSteps), this.items.length);
+  getSemanticFrontStep() {
+    let nextStep = Number.isFinite(this.activePhaseStep)
+      ? this.activePhaseStep
+      : Math.round(this.phaseSteps);
+    const threshold = 0.5 + ACTIVE_CROSSING_HYSTERESIS_STEPS;
+
+    while ((this.phaseSteps - nextStep) >= threshold) nextStep += 1;
+    while ((this.phaseSteps - nextStep) <= -threshold) nextStep -= 1;
+    return nextStep;
   }
 
   syncActiveFromPhase(source = 'orbit') {
-    const nextIndex = this.getNearestFrontItemIndex();
-    if (nextIndex === this.activeIndex) return false;
+    const nextPhaseStep = this.getSemanticFrontStep();
+    if (nextPhaseStep === this.activePhaseStep) return false;
+
+    const nextIndex = modulo(nextPhaseStep, this.items.length);
     this.previousActiveIndex = this.activeIndex;
+    this.activePhaseStep = nextPhaseStep;
     this.activeIndex = nextIndex;
-    this.reconcileCards(source);
+
+    const nextRenderedIndices = this.getRenderedIndices(nextIndex);
+    if (this.hasRenderedSetChanged(nextRenderedIndices)) {
+      this.reconcileCards(source, nextRenderedIndices);
+    }
     this.syncActivePresentation(source, false);
     return true;
   }
@@ -781,6 +935,7 @@ class FeaturedArtworksController {
     this.updateDots();
     this.section.dataset.featuredActive = item.id;
     this.section.dataset.featuredPhase = this.phaseSteps.toFixed(4);
+    this.section.dataset.featuredSemanticStep = String(this.activePhaseStep);
     this.section.dataset.featuredItemPeriod = String(this.itemPeriodMs || DEFAULT_AUTOPLAY_MS);
 
     for (const entry of this.renderedEntries) {
@@ -837,6 +992,7 @@ class FeaturedArtworksController {
       : Math.min(failedIndex, this.items.length - 1);
     this.activeIndex = Math.max(0, preservedIndex);
     this.previousActiveIndex = this.activeIndex;
+    this.activePhaseStep = this.activeIndex;
     this.phaseSteps = this.activeIndex;
     this.lastFrameTime = 0;
 
@@ -921,6 +1077,7 @@ class FeaturedArtworksController {
     else this.startOrbitEngine(trigger);
 
     this.updateEngineClasses(pauseReason);
+    this.updateDebugPanel(true);
     if (pauseReason !== this.lastPauseReason) {
       this.lastPauseReason = pauseReason;
       this.log('orbit state', {
@@ -973,26 +1130,18 @@ class FeaturedArtworksController {
 
     this.lastFrameTime = timestamp;
     const deltaMs = clamp(elapsed, 0, MAX_FRAME_DELTA_MS);
+    this.lastFrameDelta = deltaMs;
     const period = Math.max(MIN_VISUAL_AUTOPLAY_MS, Number(this.itemPeriodMs) || DEFAULT_AUTOPLAY_MS);
     this.phaseSteps += deltaMs / period;
 
     if (Math.abs(this.phaseSteps) > this.items.length * 1000) {
       this.phaseSteps = modulo(this.phaseSteps, this.items.length);
+      this.activePhaseStep = Math.round(this.phaseSteps);
+      this.activeIndex = modulo(this.activePhaseStep, this.items.length);
     }
 
     this.syncActiveFromPhase('continuous-orbit');
     this.paintOrbitFrame();
-
-    if (this.debug && timestamp - this.lastDebugFrameAt >= DEBUG_FRAME_LOG_INTERVAL_MS) {
-      this.lastDebugFrameAt = timestamp;
-      this.section.dataset.featuredPhase = this.phaseSteps.toFixed(4);
-      this.log('orbit frame', {
-        phaseSteps: Number(this.phaseSteps.toFixed(4)),
-        activeIndex: this.activeIndex,
-        itemCount: this.items.length,
-        fpsMode: this.frameSkipMobile ? 30 : 60
-      });
-    }
 
     this.rafId = window.requestAnimationFrame(this.onAnimationFrame);
   }
@@ -1042,5 +1191,6 @@ export {
   MAX_VISUAL_AUTOPLAY_MS,
   ORBIT_TRANSITION_MS,
   MOBILE_FRAME_INTERVAL_MS,
+  ACTIVE_CROSSING_HYSTERESIS_STEPS,
   classifyImageRatio
 };
