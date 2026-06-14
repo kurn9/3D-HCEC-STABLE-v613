@@ -290,6 +290,7 @@ function applyCmsIndexContent(indexContent, mediaOptions = {}) {
       }))
     }
   );
+  syncFeaturedNavVisibility(featuredResult);
   if (featuredResult.visible) changed += 1;
 
   return changed;
@@ -508,12 +509,12 @@ function getHeaderOffset() {
   return parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--header-offset')) || 116;
 }
 
-function scrollToSection(section) {
+function scrollToSection(section, behavior = 'smooth') {
   if (!section) return;
   updateHeaderOffset();
   const offset = getHeaderOffset();
   const top = section.getBoundingClientRect().top + window.scrollY - offset;
-  window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+  window.scrollTo({ top: Math.max(0, top), behavior });
 }
 
 function initHeaderOffsetRuntime() {
@@ -524,7 +525,12 @@ function initHeaderOffsetRuntime() {
 }
 
 const navStateLinks = Array.from(document.querySelectorAll('[data-nav-section]'));
-const NAV_ACTIVE_ALIAS = Object.freeze({ featured: 'experience' });
+const featuredNavLink = document.querySelector('[data-featured-nav-link]');
+const featuredNavContainer = featuredNavLink?.closest('.site-nav') || null;
+const featuredSection = document.querySelector('[data-featured-showcase]');
+const NAV_ACTIVE_ALIAS = Object.freeze({});
+let requestNavActiveStateRefresh = () => {};
+let featuredDirectHashHandled = false;
 
 function setActiveNav(sectionName) {
   const activeSection = NAV_ACTIVE_ALIAS[sectionName] || sectionName;
@@ -540,6 +546,63 @@ function lockActiveNav(sectionName, duration = 360) {
   navActiveLockSection = sectionName;
   navActiveLockUntil = performance.now() + duration;
   setActiveNav(sectionName);
+}
+
+function isFeaturedSectionUsable(featuredResult = null) {
+  if (!featuredSection || featuredSection.hidden) return false;
+
+  if (featuredResult && typeof featuredResult.visible === 'boolean') {
+    return featuredResult.visible === true && Number(featuredResult.itemCount) > 0;
+  }
+
+  const itemCount = Number.parseInt(featuredSection.dataset.featuredCount || '0', 10);
+  return featuredSection.dataset.featuredState === 'ready' && Number.isFinite(itemCount) && itemCount > 0;
+}
+
+function syncFeaturedNavVisibility(featuredResult = null) {
+  if (!featuredNavLink || !featuredSection) return false;
+
+  const isVisible = isFeaturedSectionUsable(featuredResult);
+  featuredNavLink.hidden = !isVisible;
+  featuredNavContainer?.classList.toggle('has-featured-nav', isVisible);
+
+  if (isVisible) {
+    featuredNavLink.removeAttribute('aria-hidden');
+    featuredNavLink.removeAttribute('tabindex');
+  } else {
+    featuredNavLink.setAttribute('aria-hidden', 'true');
+    featuredNavLink.tabIndex = -1;
+    featuredNavLink.classList.remove('is-active');
+
+    if (navActiveLockSection === 'featured') {
+      navActiveLockSection = null;
+      navActiveLockUntil = 0;
+    }
+    requestNavActiveStateRefresh();
+  }
+
+  updateHeaderOffset();
+
+  if (isVisible && !featuredDirectHashHandled && window.location.hash === '#tac-pham-tieu-bieu') {
+    featuredDirectHashHandled = true;
+    lockActiveNav('featured', 680);
+    scrollToSection(featuredSection, 'auto');
+  }
+
+  return isVisible;
+}
+
+function initFeaturedNavVisibilitySync() {
+  if (!featuredNavLink || !featuredSection) return;
+
+  syncFeaturedNavVisibility();
+  if (!('MutationObserver' in window)) return;
+
+  const observer = new MutationObserver(() => syncFeaturedNavVisibility());
+  observer.observe(featuredSection, {
+    attributes: true,
+    attributeFilter: ['hidden', 'data-featured-state', 'data-featured-count']
+  });
 }
 
 function initSmoothNavigation() {
@@ -570,7 +633,8 @@ function initSmoothNavigation() {
       event.preventDefault();
 
       if (link.dataset.navSection) {
-        lockActiveNav(link.dataset.navSection);
+        const lockDuration = link.dataset.navSection === 'featured' ? 680 : 360;
+        lockActiveNav(link.dataset.navSection, lockDuration);
       } else if (targetId === '#trai-nghiem') {
         lockActiveNav('experience');
       } else if (targetId === '#huong-dan') {
@@ -582,6 +646,7 @@ function initSmoothNavigation() {
       scrollToSection(target);
 
       window.setTimeout(() => {
+        if (targetId === '#tac-pham-tieu-bieu' && isFeaturedSectionUsable()) setActiveNav('featured');
         if (targetId === '#trai-nghiem' || targetId === '#gioi-thieu-them') setActiveNav('experience');
         if (targetId === '#huong-dan') setActiveNav('guide');
         if (targetId === '#top') setActiveNav('intro');
@@ -633,6 +698,8 @@ function initNavActiveState() {
     if (rafId) return;
     rafId = window.requestAnimationFrame(update);
   };
+
+  requestNavActiveStateRefresh = requestUpdate;
 
   if ('IntersectionObserver' in window) {
     const observer = new IntersectionObserver(() => requestUpdate(), {
@@ -880,5 +947,6 @@ initHeroMagneticHover();
 initIntroVideoModal();
 initGalleryWarmup();
 initPortalEnterTransition();
+initFeaturedNavVisibilitySync();
 initCmsIndexHydration();
 initLiquidCursor();
