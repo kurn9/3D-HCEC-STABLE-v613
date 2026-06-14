@@ -3124,3 +3124,192 @@ html {
     letter-spacing: -.02em;
   }
 }
+
+/* v6.14.017 — Smart Section Rhythm.
+   Scope: index spacing, section cadence and anchor offset only.
+   Visual materials, cursor, navigation logic and Featured orbit geometry remain unchanged. */
+:root {
+  --header-offset: 96px;
+  --section-gap: clamp(104px, 10vh, 152px);
+  --section-header-gap: clamp(26px, 3.2vw, 44px);
+}
+
+.site-header {
+  margin-bottom: clamp(48px, 6vh, 76px);
+}
+
+.museum-lobby-flow {
+  padding-bottom: clamp(64px, 8vh, 108px);
+}
+
+.stage-section {
+  scroll-margin-top: var(--header-offset);
+}
+
+.section-header,
+.guide-detail-heading {
+  margin-bottom: var(--section-header-gap);
+}
+
+.stage-section--featured {
+  padding-block: clamp(38px, 5vh, 62px) clamp(44px, 6vh, 76px);
+}
+
+.stage-section--experience {
+  padding-block: clamp(38px, 5vh, 70px);
+}
+
+.stage-section--guide {
+  padding-block: clamp(30px, 3.6vw, 50px);
+}
+
+@media (min-width: 1900px) {
+  :root {
+    --section-gap: clamp(112px, 9vh, 148px);
+  }
+
+  .site-header {
+    margin-bottom: clamp(52px, 5.5vh, 72px);
+  }
+}
+
+@media (max-height: 820px) and (min-width: 901px) {
+  :root {
+    --section-gap: clamp(72px, 9vh, 88px);
+    --section-header-gap: clamp(24px, 2.8vw, 36px);
+  }
+
+  .site-header {
+    margin-bottom: clamp(28px, 4vh, 36px);
+  }
+
+  .stage-section--intro {
+    min-height: min(510px, calc(100svh - var(--header-offset) - 24px));
+  }
+
+  .stage-section--featured {
+    padding-block: 24px 32px;
+  }
+
+  .stage-section--experience {
+    padding-block: 36px;
+  }
+
+  .stage-section--guide {
+    padding-block: 38px;
+  }
+}
+
+@media (max-width: 1180px) and (min-width: 901px) {
+  :root {
+    --section-gap: clamp(68px, 8vh, 84px);
+    --section-header-gap: clamp(24px, 3vw, 34px);
+  }
+
+  .site-header {
+    margin-bottom: clamp(34px, 5vh, 46px);
+  }
+
+  .stage-section--featured {
+    padding-block: 30px 38px;
+  }
+
+  .stage-section--experience {
+    padding-block: 38px;
+  }
+
+  .stage-section--guide {
+    padding-block: 32px;
+  }
+}
+
+@media (max-width: 900px) {
+  :root {
+    --header-offset: 204px;
+    --section-gap: 52px;
+    --section-header-gap: 26px;
+  }
+
+  .site-header {
+    margin-bottom: 24px;
+  }
+
+  .stage-section--featured {
+    padding-block: 28px 34px;
+  }
+
+  .stage-section--experience {
+    padding-block: clamp(36px, 5vh, 48px);
+  }
+
+  .stage-section--guide {
+    padding-block: 26px;
+  }
+}
+
+@media (max-width: 640px) {
+  :root {
+    --header-offset: 187px;
+    --section-gap: 42px;
+    --section-header-gap: 22px;
+  }
+
+  .page-shell {
+    padding-bottom: 40px;
+  }
+
+  .site-header {
+    padding: 8px 10px;
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+
+  .site-nav {
+    gap: 5px;
+  }
+
+  .stage-section--intro {
+    padding-bottom: 28px;
+  }
+
+  .stage-section--featured {
+    padding-block: 22px 28px;
+  }
+
+  .stage-section--experience {
+    padding-block: 38px;
+  }
+
+  .stage-section--guide {
+    padding: 24px 18px;
+  }
+}
+
+@media (max-width: 920px) and (orientation: landscape),
+       (max-height: 560px) and (max-width: 920px) {
+  :root {
+    --header-offset: 70px;
+    --section-gap: 24px;
+    --section-header-gap: 18px;
+  }
+
+  .page-shell {
+    padding-bottom: 20px;
+  }
+
+  .site-header {
+    margin-bottom: 14px;
+  }
+
+  .stage-section--featured {
+    padding-block: 10px 14px;
+  }
+
+  .stage-section--experience {
+    padding-block: 30px;
+  }
+
+  .stage-section--guide {
+    padding: 22px 18px;
+  }
+}
