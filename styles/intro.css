@@ -3125,6 +3125,559 @@ html {
   }
 }
 
+
+/* v6.14.019 — Cultural Material System.
+   Scope: CSS-only material tokens and selector allowlist.
+   Layout, rhythm, navigation logic, cursor lifecycle and Featured orbit geometry remain unchanged. */
+:root {
+  --material-bg-deep: #050911;
+  --material-bg-stage: #07101c;
+  --material-surface-subtle: rgba(7, 12, 20, .44);
+  --material-surface-card: rgba(7, 12, 20, .70);
+  --material-surface-elevated: rgba(5, 10, 18, .88);
+  --material-glass-header: linear-gradient(90deg, rgba(3, 7, 13, .965), rgba(7, 13, 23, .89));
+  --material-text-primary: #f7f4ed;
+  --material-text-secondary: rgba(247, 244, 237, .76);
+  --material-text-tertiary: rgba(247, 244, 237, .60);
+  --material-gold-primary: #e8c06d;
+  --material-gold-highlight: #f5d684;
+  --material-gold-deep: #c99737;
+  --material-gold-ink: #211705;
+  --material-gold-subtle: rgba(232, 192, 109, .065);
+  --material-cool-subtle: rgba(143, 217, 255, .040);
+  --material-border-subtle: rgba(255, 255, 255, .075);
+  --material-border-default: rgba(255, 255, 255, .105);
+  --material-border-warm: rgba(232, 192, 109, .28);
+  --material-border-active: rgba(232, 192, 109, .46);
+  --material-shadow-surface: 0 22px 72px rgba(0, 0, 0, .30), inset 0 1px 0 rgba(255, 255, 255, .045);
+  --material-shadow-elevated: 0 30px 94px rgba(0, 0, 0, .40), inset 0 1px 0 rgba(255, 255, 255, .055);
+  --material-shadow-elevated-hover: 0 36px 108px rgba(0, 0, 0, .46), 0 0 0 1px rgba(232, 192, 109, .055), inset 0 1px 0 rgba(255, 255, 255, .075);
+  --material-shadow-hero: 0 38px 112px rgba(0, 0, 0, .50), 0 0 0 8px rgba(255, 255, 255, .015), 0 0 44px rgba(232, 192, 109, .075), inset 0 1px 0 rgba(255, 255, 255, .14);
+  --material-shadow-hero-hover: 0 44px 126px rgba(0, 0, 0, .56), 0 0 0 8px rgba(232, 192, 109, .022), 0 0 54px rgba(232, 192, 109, .105), inset 0 1px 0 rgba(255, 255, 255, .17);
+  --material-shadow-portal: 0 38px 118px rgba(0, 0, 0, .42), inset 0 1px 0 rgba(255, 255, 255, .045), inset 0 -46px 92px rgba(0, 0, 0, .22);
+  --material-radius-compact: 14px;
+  --material-radius-card: 20px;
+  --material-radius-panel: 28px;
+  --material-radius-pill: 999px;
+  --material-focus-ring: rgba(232, 192, 109, .72);
+}
+
+/* Foundation and header surfaces. */
+.site-header {
+  border-color: var(--material-border-subtle);
+  background: var(--material-glass-header);
+  box-shadow: var(--material-shadow-surface);
+  backdrop-filter: blur(18px) saturate(112%);
+  -webkit-backdrop-filter: blur(18px) saturate(112%);
+}
+
+body.is-header-scrolled .site-header {
+  border-color: rgba(232, 192, 109, .12);
+  background: linear-gradient(90deg, rgba(2, 5, 10, .98), rgba(6, 12, 22, .94));
+  box-shadow: var(--material-shadow-elevated);
+}
+
+.brand-logo-wrap {
+  box-shadow: 0 0 0 1px rgba(232, 192, 109, .20), 0 12px 28px rgba(0, 0, 0, .26);
+}
+
+.site-nav a {
+  color: rgba(247, 244, 237, .84);
+}
+
+.site-nav a:hover,
+.site-nav a:focus-visible {
+  border-color: var(--material-border-default);
+  background: rgba(255, 255, 255, .055);
+}
+
+.site-nav a.is-active {
+  border-color: rgba(232, 192, 109, .18);
+  background: linear-gradient(180deg, rgba(232, 192, 109, .050), rgba(255, 255, 255, .035));
+}
+
+.site-nav .nav-cta,
+.hero-action--primary {
+  color: var(--material-gold-ink);
+  border-color: rgba(255, 255, 255, .18);
+  background: linear-gradient(135deg, var(--material-gold-highlight), var(--material-gold-deep));
+}
+
+.site-nav .nav-cta {
+  box-shadow: 0 14px 34px rgba(201, 151, 55, .21), inset 0 1px 0 rgba(255, 255, 255, .28);
+}
+
+.site-nav .nav-cta:hover,
+.site-nav .nav-cta:focus-visible,
+.hero-action--primary:hover,
+.hero-action--primary:focus-visible {
+  color: #201604;
+  background: linear-gradient(135deg, #f9dfa0, #d2a03c);
+}
+
+/* Shared cultural accents, labels and compact surfaces. */
+.eyebrow,
+.section-kicker {
+  color: rgba(232, 192, 109, .94);
+  border-color: var(--material-border-warm);
+  background: var(--material-gold-subtle);
+}
+
+.section-boundary {
+  background: linear-gradient(90deg, rgba(232, 192, 109, .68), rgba(232, 192, 109, .13), transparent);
+}
+
+.hero-lead,
+.section-header p,
+.guide-detail-heading p,
+.infinity-gate-header p,
+.route-card p {
+  color: var(--material-text-secondary);
+}
+
+.hero-proof-grid.hero-proof-strip span {
+  color: var(--material-text-secondary);
+  border-color: var(--material-border-default);
+  background: rgba(255, 255, 255, .022);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .03);
+}
+
+.hero-proof-grid.hero-proof-strip span::before {
+  background: rgba(232, 192, 109, .82);
+  box-shadow: 0 0 9px rgba(232, 192, 109, .20);
+}
+
+.hero-proof-grid.hero-proof-strip span:hover {
+  border-color: var(--material-border-warm);
+  background: var(--material-gold-subtle);
+}
+
+.hero-action {
+  border-color: var(--material-border-default);
+  color: rgba(247, 244, 237, .90);
+  box-shadow: var(--material-shadow-surface);
+}
+
+.hero-action--primary {
+  box-shadow: 0 16px 42px rgba(201, 151, 55, .17), inset 0 1px 0 rgba(255, 255, 255, .36);
+}
+
+.hero-action--primary:hover,
+.hero-action--primary:focus-visible {
+  border-color: rgba(255, 231, 166, .66);
+  box-shadow: 0 19px 50px rgba(201, 151, 55, .22), inset 0 1px 0 rgba(255, 255, 255, .42);
+}
+
+.hero-action--secondary {
+  color: rgba(247, 244, 237, .86);
+  background: var(--material-surface-subtle);
+}
+
+.hero-action--secondary:hover,
+.hero-action--secondary:focus-visible {
+  border-color: var(--material-border-warm);
+  background: rgba(232, 192, 109, .070);
+  box-shadow: var(--material-shadow-surface);
+}
+
+.experience-note {
+  border-color: var(--material-border-subtle);
+  border-radius: var(--material-radius-compact);
+  color: var(--material-text-secondary);
+  background: var(--material-surface-subtle);
+}
+
+/* Hero display case and modal surfaces. */
+.museum-display-case {
+  border-color: var(--material-border-warm);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, .060), rgba(255, 255, 255, .014) 34%, rgba(0, 0, 0, .42)),
+    var(--material-surface-card);
+  box-shadow: var(--material-shadow-hero);
+}
+
+.museum-display-case::before {
+  background:
+    linear-gradient(90deg, rgba(232, 192, 109, .44), transparent 13%, transparent 87%, rgba(143, 217, 255, .16)),
+    linear-gradient(180deg, rgba(255, 255, 255, .17), transparent 22%, transparent 74%, rgba(232, 192, 109, .11));
+  opacity: .72;
+}
+
+.museum-display-case:hover,
+.museum-display-case:focus-visible {
+  border-color: var(--material-border-active);
+  box-shadow: var(--material-shadow-hero-hover);
+}
+
+.display-case-frame {
+  border-color: rgba(255, 255, 255, .12);
+}
+
+.display-case-caption {
+  color: rgba(247, 244, 237, .92);
+  border-color: var(--material-border-default);
+  background: rgba(4, 9, 16, .72);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.intro-video-dialog {
+  border-color: var(--material-border-default);
+  border-radius: var(--material-radius-panel);
+  background: rgba(5, 10, 18, .94);
+  box-shadow: 0 40px 126px rgba(0, 0, 0, .56), inset 0 1px 0 rgba(255, 255, 255, .04);
+}
+
+.intro-video-close,
+.intro-video-message span {
+  border-color: var(--material-border-default);
+  background: rgba(3, 8, 15, .72);
+}
+
+/* Experience and guide surfaces. */
+.route-card {
+  border-color: var(--material-border-default);
+  background:
+    linear-gradient(140deg, rgba(255, 255, 255, .052), rgba(255, 255, 255, .014) 44%, var(--material-cool-subtle)),
+    var(--material-surface-card);
+  box-shadow: var(--material-shadow-surface);
+}
+
+.route-card::before {
+  background: linear-gradient(180deg, rgba(232, 192, 109, .74), rgba(143, 217, 255, .12), transparent);
+  opacity: .76;
+}
+
+.route-card:hover,
+.route-card:focus-visible {
+  border-color: rgba(232, 192, 109, .34);
+  box-shadow: var(--material-shadow-elevated-hover);
+}
+
+.route-card-topline,
+.guide-platform-heading small,
+.guide-contact-strip span,
+.infinity-gate-counter {
+  color: rgba(232, 192, 109, .88);
+}
+
+.room-link {
+  color: var(--material-gold-ink);
+  background: linear-gradient(135deg, var(--material-gold-primary), var(--material-gold-deep));
+  box-shadow: 0 15px 32px rgba(201, 151, 55, .16);
+}
+
+.stage-section--guide {
+  border-color: var(--material-border-subtle);
+  background:
+    linear-gradient(120deg, rgba(255, 255, 255, .032), rgba(255, 255, 255, .010) 54%, rgba(232, 192, 109, .022)),
+    rgba(6, 11, 20, .48);
+  box-shadow: var(--material-shadow-surface);
+}
+
+.guide-journey-rail article,
+.guide-platform-card {
+  border-color: var(--material-border-subtle);
+  border-radius: var(--material-radius-card);
+  background: rgba(4, 9, 16, .46);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .032);
+}
+
+.guide-journey-rail article:hover,
+.guide-platform-card:hover {
+  border-color: rgba(232, 192, 109, .17);
+  background: rgba(5, 10, 18, .54);
+}
+
+.guide-journey-rail span,
+.guide-device-icon {
+  border-color: rgba(232, 192, 109, .15);
+  background: linear-gradient(135deg, rgba(232, 192, 109, .17), rgba(255, 255, 255, .035));
+}
+
+.guide-contact-strip {
+  border-color: rgba(232, 192, 109, .13);
+  border-radius: var(--material-radius-card);
+  background: linear-gradient(110deg, rgba(232, 192, 109, .045), rgba(255, 255, 255, .018), rgba(143, 217, 255, .022));
+}
+
+kbd {
+  border-color: var(--material-border-default);
+  background: rgba(255, 255, 255, .045);
+}
+
+/* Featured portal: preserve topology, reduce technical glow density. */
+.stage-section--featured::before {
+  border-block-color: rgba(232, 192, 109, .085);
+  background:
+    radial-gradient(ellipse at 50% 45%, rgba(232, 192, 109, .075), transparent 38%),
+    radial-gradient(ellipse at 16% 66%, rgba(143, 217, 255, .028), transparent 31%),
+    radial-gradient(ellipse at 84% 31%, rgba(143, 217, 255, .024), transparent 29%),
+    linear-gradient(180deg, rgba(255, 255, 255, .012), rgba(3, 8, 15, .22) 56%, rgba(255, 255, 255, .008));
+}
+
+.stage-section--featured::after {
+  opacity: .54;
+  background:
+    linear-gradient(180deg, transparent, rgba(3, 7, 13, .82) 52%, transparent),
+    linear-gradient(90deg, transparent, rgba(232, 192, 109, .12), rgba(143, 217, 255, .028), transparent);
+}
+
+.infinity-gate-header p::before,
+.infinity-gate-header p::after {
+  background: linear-gradient(90deg, transparent, rgba(232, 192, 109, .48));
+}
+
+.infinity-gate-stage {
+  border-color: var(--material-border-default);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .022), transparent 21%, rgba(0, 0, 0, .24) 88%),
+    radial-gradient(ellipse at 50% 43%, rgba(232, 192, 109, .062), transparent 36%),
+    radial-gradient(ellipse at 50% 84%, rgba(143, 217, 255, .026), transparent 44%),
+    rgba(3, 8, 16, .94);
+  box-shadow: var(--material-shadow-portal);
+}
+
+.infinity-gate-stage::before {
+  opacity: .46;
+  background:
+    linear-gradient(90deg, transparent 0 8%, rgba(232, 192, 109, .026) 8.1%, transparent 8.25%, transparent 91.75%, rgba(143, 217, 255, .018) 91.9%, transparent 92%),
+    linear-gradient(180deg, rgba(255, 255, 255, .020), transparent 18%);
+}
+
+.infinity-gate-stage::after {
+  opacity: .54;
+  background: radial-gradient(ellipse at 50% 100%, rgba(232, 192, 109, .090), transparent 72%);
+}
+
+.infinity-gate-stage:focus-visible {
+  outline-color: var(--material-focus-ring);
+}
+
+.infinity-gate-core {
+  background:
+    radial-gradient(ellipse at 50% 48%, rgba(12, 24, 39, .20) 0 24%, rgba(5, 12, 22, .78) 58%, rgba(2, 6, 12, .97) 100%),
+    linear-gradient(180deg, rgba(143, 217, 255, .020), transparent 38%, rgba(232, 192, 109, .025));
+  box-shadow:
+    0 0 88px rgba(232, 192, 109, .09),
+    inset 0 0 86px rgba(0, 0, 0, .64),
+    inset 0 0 0 1px rgba(232, 192, 109, .09);
+}
+
+.infinity-gate-core::before,
+.infinity-gate-core::after {
+  border-color: rgba(232, 192, 109, .085);
+}
+
+.infinity-gate-core::after {
+  border-color: rgba(143, 217, 255, .045);
+  box-shadow: inset 0 0 42px rgba(143, 217, 255, .022);
+}
+
+.infinity-gate-depth {
+  background: radial-gradient(ellipse, rgba(143, 217, 255, .045), rgba(4, 10, 19, .66) 48%, rgba(1, 4, 9, .95) 74%);
+  box-shadow: 0 0 42px rgba(143, 217, 255, .045), inset 0 0 68px rgba(0, 0, 0, .74);
+}
+
+.infinity-gate-light {
+  opacity: .56;
+  background: radial-gradient(ellipse, rgba(232, 192, 109, .15), rgba(232, 192, 109, .025) 46%, transparent 72%);
+}
+
+.infinity-gate-orbit-line {
+  border-color: rgba(232, 192, 109, .25);
+  box-shadow: 0 0 20px rgba(232, 192, 109, .085), inset 0 0 22px rgba(143, 217, 255, .020);
+}
+
+.infinity-gate-orbit-line::before,
+.infinity-gate-orbit-line::after {
+  background: rgba(255, 223, 157, .58);
+  box-shadow: 0 0 10px rgba(232, 192, 109, .28);
+}
+
+.infinity-gate-orbit-glow {
+  box-shadow: 0 0 34px rgba(143, 217, 255, .026), inset 0 0 34px rgba(232, 192, 109, .022);
+  opacity: .68;
+}
+
+.infinity-gate-card {
+  border-color: var(--material-border-default);
+  background: var(--material-bg-stage);
+  box-shadow: var(--material-shadow-elevated);
+}
+
+.infinity-gate-card::before {
+  border-color: rgba(232, 192, 109, .19);
+}
+
+.infinity-gate-card::after {
+  background:
+    linear-gradient(180deg, rgba(0, 0, 0, .02), transparent 53%, rgba(0, 0, 0, .32)),
+    linear-gradient(116deg, rgba(255, 255, 255, .078), transparent 18%, transparent 77%, rgba(232, 192, 109, .045));
+}
+
+.infinity-gate-media-matte {
+  background:
+    radial-gradient(ellipse at 50% 46%, rgba(143, 217, 255, .040), transparent 50%),
+    linear-gradient(145deg, rgba(232, 192, 109, .055), rgba(5, 12, 22, .95) 52%, rgba(143, 217, 255, .020));
+}
+
+.infinity-gate-media-matte::after {
+  border-color: rgba(232, 192, 109, .055);
+  border-radius: var(--material-radius-card);
+}
+
+.infinity-gate-card-glass {
+  background: radial-gradient(ellipse at 50% 3%, rgba(255, 231, 176, .075), transparent 44%);
+}
+
+.infinity-gate-front-rim {
+  border-color: rgba(232, 192, 109, .34);
+  box-shadow:
+    0 0 0 7px rgba(232, 192, 109, .010),
+    0 0 0 8px rgba(255, 255, 255, .018),
+    0 0 48px rgba(232, 192, 109, .10),
+    inset 0 0 42px rgba(232, 192, 109, .020);
+}
+
+.infinity-gate-front-rim::before,
+.infinity-gate-front-rim::after,
+.infinity-gate-front-rim span::before,
+.infinity-gate-front-rim span::after {
+  border-color: rgba(232, 192, 109, .52);
+  filter: drop-shadow(0 0 8px rgba(232, 192, 109, .10));
+}
+
+.infinity-gate.is-orbit-running .infinity-gate-orbit-glow {
+  opacity: .76;
+  box-shadow: 0 0 38px rgba(143, 217, 255, .030), inset 0 0 38px rgba(232, 192, 109, .026);
+}
+
+.infinity-gate.is-orbit-running .infinity-gate-light {
+  opacity: .62;
+}
+
+.infinity-gate.is-orbit-running .infinity-gate-front-rim {
+  border-color: rgba(232, 192, 109, .38);
+  box-shadow:
+    0 0 0 7px rgba(232, 192, 109, .011),
+    0 0 0 8px rgba(255, 255, 255, .020),
+    0 0 54px rgba(232, 192, 109, .115),
+    inset 0 0 44px rgba(232, 192, 109, .022);
+}
+
+.infinity-gate.is-orbit-paused .infinity-gate-orbit-glow {
+  opacity: .58;
+}
+
+.infinity-gate-plaque {
+  border-color: var(--material-border-default);
+  color: var(--material-text-primary);
+  background: rgba(4, 9, 16, .86);
+  box-shadow: var(--material-shadow-surface);
+}
+
+.infinity-gate-plaque strong {
+  color: rgba(247, 244, 237, .92);
+}
+
+.infinity-gate-cta {
+  color: rgba(245, 214, 132, .94);
+  border-color: var(--material-border-warm);
+  background: var(--material-gold-subtle);
+}
+
+.infinity-gate-cta:hover,
+.infinity-gate-cta:focus-visible {
+  color: #f8e3ad;
+  border-color: var(--material-border-active);
+  background: rgba(232, 192, 109, .09);
+}
+
+.infinity-gate-controls button {
+  color: rgba(247, 244, 237, .84);
+  border-color: var(--material-border-default);
+  background: rgba(4, 9, 16, .80);
+  box-shadow: var(--material-shadow-surface);
+}
+
+.infinity-gate-controls button:hover,
+.infinity-gate-controls button:focus-visible {
+  color: rgba(245, 214, 132, .98);
+  border-color: var(--material-border-active);
+  background: rgba(232, 192, 109, .085);
+}
+
+.infinity-gate-dot span {
+  border-color: rgba(247, 244, 237, .38);
+  background: rgba(255, 255, 255, .035);
+}
+
+.infinity-gate-dot:hover span,
+.infinity-gate-dot:focus-visible span,
+.infinity-gate-dot.is-active span {
+  border-color: rgba(245, 214, 132, .80);
+  background: rgba(232, 192, 109, .62);
+  box-shadow: 0 0 0 5px rgba(232, 192, 109, .060), 0 0 14px rgba(232, 192, 109, .12);
+}
+
+.infinity-gate-dot:focus-visible {
+  outline-color: var(--material-focus-ring);
+}
+
+/* Keyboard focus material: visible without becoming a second CTA. */
+.site-nav a:focus-visible,
+.hero-action:focus-visible,
+.museum-display-case:focus-visible,
+.route-card:focus-visible,
+.infinity-gate-stage:focus-visible,
+.infinity-gate-cta:focus-visible,
+.infinity-gate-controls button:focus-visible {
+  outline: 2px solid var(--material-focus-ring);
+  outline-offset: 3px;
+}
+
+@media (max-width: 900px) {
+  .site-header {
+    box-shadow: 0 16px 48px rgba(0, 0, 0, .30), inset 0 1px 0 rgba(255, 255, 255, .04);
+    backdrop-filter: blur(14px) saturate(108%);
+    -webkit-backdrop-filter: blur(14px) saturate(108%);
+  }
+
+  .museum-display-case {
+    box-shadow: 0 24px 72px rgba(0, 0, 0, .42), 0 0 32px rgba(232, 192, 109, .055), inset 0 1px 0 rgba(255, 255, 255, .10);
+  }
+
+  .route-card,
+  .stage-section--guide,
+  .infinity-gate-card {
+    box-shadow: 0 20px 62px rgba(0, 0, 0, .30), inset 0 1px 0 rgba(255, 255, 255, .035);
+  }
+
+  .infinity-gate-stage {
+    box-shadow: 0 26px 78px rgba(0, 0, 0, .36), inset 0 1px 0 rgba(255, 255, 255, .038), inset 0 -36px 72px rgba(0, 0, 0, .20);
+  }
+
+  .infinity-gate-front-rim {
+    box-shadow: 0 0 0 6px rgba(232, 192, 109, .008), 0 0 36px rgba(232, 192, 109, .075), inset 0 0 32px rgba(232, 192, 109, .016);
+  }
+}
+
+@media (orientation: landscape) and (max-height: 560px) and (max-width: 920px) {
+  .site-header {
+    backdrop-filter: blur(12px) saturate(106%);
+    -webkit-backdrop-filter: blur(12px) saturate(106%);
+  }
+
+  .infinity-gate-stage {
+    box-shadow: 0 18px 54px rgba(0, 0, 0, .32), inset 0 1px 0 rgba(255, 255, 255, .034), inset 0 -28px 56px rgba(0, 0, 0, .18);
+  }
+
+  .infinity-gate-front-rim {
+    box-shadow: 0 0 0 5px rgba(232, 192, 109, .007), 0 0 28px rgba(232, 192, 109, .06), inset 0 0 24px rgba(232, 192, 109, .014);
+  }
+}
+
 /* v6.14.017 — Smart Section Rhythm.
    Scope: index spacing, section cadence and anchor offset only.
    Visual materials, cursor, navigation logic and Featured orbit geometry remain unchanged. */
