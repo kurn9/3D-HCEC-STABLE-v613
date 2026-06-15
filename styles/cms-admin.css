@@ -3409,7 +3409,7 @@ body.cms-admin-page * {
   margin-top: 12px;
 }
 
-/* V6.11.21-B6-F_K_O_I_N_APPLY — rollback / version history gate */
+/* V6.14.039.003 — rollback operator simplify hotfix */
 .cms-admin-rollback-history-view {
   display: grid;
   gap: 18px;
@@ -3422,16 +3422,33 @@ body.cms-admin-page * {
   min-width: 0;
 }
 
-.cms-admin-rollback-table {
+.cms-admin-rollback-table,
+.cms-admin-rollback-activity-list {
   display: grid;
   gap: 12px;
 }
 
-.cms-admin-rollback-log-card {
+.cms-admin-rollback-log-card,
+.cms-admin-rollback-activity-card {
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 16px;
   padding: 14px;
   background: rgba(255, 255, 255, 0.035);
+}
+
+.cms-admin-restore-point-card {
+  position: relative;
+  transition: border-color 160ms ease, background-color 160ms ease, box-shadow 160ms ease;
+}
+
+.cms-admin-restore-point-card:hover {
+  border-color: rgba(214, 178, 94, 0.34);
+}
+
+.cms-admin-restore-point-card.is-selected {
+  border-color: rgba(214, 178, 94, 0.76);
+  background: rgba(214, 178, 94, 0.08);
+  box-shadow: 0 0 0 1px rgba(214, 178, 94, 0.12);
 }
 
 .cms-admin-rollback-log-head {
@@ -3442,6 +3459,7 @@ body.cms-admin-page * {
   margin-bottom: 12px;
 }
 
+.cms-admin-restore-point-summary,
 .cms-admin-rollback-meta-grid,
 .cms-admin-static-publish-result-grid {
   display: grid;
@@ -3470,12 +3488,166 @@ body.cms-admin-page * {
 }
 
 .cms-admin-rollback-log-actions,
-.cms-admin-rollback-actions {
+.cms-admin-rollback-actions,
+.cms-admin-rollback-preview-actions {
   margin-top: 12px;
   flex-wrap: wrap;
 }
 
+.cms-admin-restore-point-selected {
+  margin-top: 12px;
+}
+
+.cms-admin-rollback-activity-details,
+.cms-admin-rollback-technical-details,
 .cms-admin-rollback-json-details {
+  margin-top: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 13px;
+  background: rgba(0, 0, 0, 0.12);
+  padding: 10px 12px;
+}
+
+.cms-admin-rollback-activity-details > summary,
+.cms-admin-rollback-technical-details > summary,
+.cms-admin-rollback-json-details > summary {
+  cursor: pointer;
+  color: var(--cms-admin-muted);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.cms-admin-rollback-activity-list {
+  margin-top: 12px;
+}
+
+.cms-admin-rollback-activity-card {
+  border-style: dashed;
+  opacity: 0.9;
+}
+
+.cms-admin-rollback-selected-source {
+  margin-top: 12px;
+  border: 1px solid rgba(214, 178, 94, 0.26);
+  border-radius: 13px;
+  background: rgba(214, 178, 94, 0.07);
+  color: #f4dfad;
+  font-weight: 850;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  padding: 11px 12px;
+}
+
+.cms-admin-rollback-preview-summary,
+.cms-admin-rollback-featured-summary {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.cms-admin-rollback-featured-summary {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 13px;
+  background: rgba(0, 0, 0, 0.12);
+  padding: 12px;
+}
+
+.cms-admin-rollback-featured-list {
+  display: grid;
+  gap: 6px;
+  margin: 0 0 0 20px;
+  padding: 0;
+}
+
+.cms-admin-rollback-featured-list li {
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.cms-admin-rollback-flow-steps {
+  display: grid;
+  gap: 9px;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cms-admin-rollback-flow-steps li {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 30px minmax(0, 1fr);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.025);
+  color: var(--cms-admin-muted);
+  font-weight: 800;
+  padding: 9px 10px;
+}
+
+.cms-admin-rollback-flow-steps li.is-complete {
+  border-color: rgba(69, 191, 137, 0.34);
+  background: rgba(69, 191, 137, 0.08);
+  color: #baf5d5;
+}
+
+.cms-admin-rollback-step-number {
+  align-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  display: inline-flex;
+  height: 26px;
+  justify-content: center;
+  width: 26px;
+}
+
+.cms-admin-rollback-flow-steps li.is-complete .cms-admin-rollback-step-number {
+  border-color: rgba(69, 191, 137, 0.48);
+  background: rgba(69, 191, 137, 0.12);
+}
+
+.cms-admin-rollback-condition-list {
+  display: grid;
+  gap: 7px;
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+}
+
+.cms-admin-rollback-condition-list li {
+  align-items: center;
+  color: var(--cms-admin-muted);
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 22px minmax(0, 1fr);
+  line-height: 1.4;
+}
+
+.cms-admin-rollback-condition-list li.is-complete {
+  color: #baf5d5;
+}
+
+.cms-admin-rollback-condition-icon {
+  font-weight: 950;
+  text-align: center;
+}
+
+.cms-admin-rollback-guidance {
+  border-left: 3px solid rgba(214, 178, 94, 0.66);
+  color: #f4dfad;
+  line-height: 1.5;
+  margin: 12px 0 0;
+  padding: 8px 10px;
+}
+
+.cms-admin-rollback-guidance.is-ready {
+  border-left-color: rgba(69, 191, 137, 0.72);
+  color: #baf5d5;
+}
+
+.cms-admin-rollback-result {
+  display: grid;
+  gap: 10px;
   margin-top: 12px;
 }
 
@@ -3503,6 +3675,7 @@ body.cms-admin-page * {
 @media (min-width: 1180px) {
   .cms-admin-rollback-history-view {
     grid-template-columns: minmax(0, 1.35fr) minmax(360px, 0.8fr);
+    align-items: start;
   }
 
   .cms-admin-rollback-hero-panel,
@@ -3517,6 +3690,24 @@ body.cms-admin-page * {
 
   .cms-admin-rollback-preview-panel {
     grid-row: 1 / 2;
+  }
+}
+
+@media (max-width: 720px) {
+  .cms-admin-rollback-log-head {
+    display: grid;
+  }
+
+  .cms-admin-rollback-log-actions,
+  .cms-admin-rollback-actions,
+  .cms-admin-rollback-preview-actions {
+    display: grid;
+  }
+
+  .cms-admin-rollback-log-actions .cms-admin-button,
+  .cms-admin-rollback-actions .cms-admin-button,
+  .cms-admin-rollback-preview-actions .cms-admin-button {
+    width: 100%;
   }
 }
 
