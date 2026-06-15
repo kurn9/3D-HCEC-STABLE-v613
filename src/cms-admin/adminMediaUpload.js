@@ -1,5 +1,17 @@
 import { CMS_MEDIA_UPLOAD_CONFIG } from './adminConfig.js';
 
+export const CMS_MEDIA_TARGET_TYPES = Object.freeze({
+  roomArtwork: 'room_artwork',
+  indexFeatured: 'index_featured',
+});
+
+export const INDEX_FEATURED_MEDIA_UPLOAD_TARGET = Object.freeze({
+  targetType: CMS_MEDIA_TARGET_TYPES.indexFeatured,
+  sectionKey: CMS_MEDIA_UPLOAD_CONFIG.featuredSectionKey,
+  fieldName: 'imageUrl',
+  mediaKind: 'image',
+});
+
 export const STATIC_CMS_MEDIA_UPLOAD_TARGETS = Object.freeze([
   {
     key: 'image',
@@ -66,6 +78,16 @@ export function getMediaUploadStatusKey(roomKey, itemCode, fieldName) {
   return [roomKey || 'room', itemCode || 'item', fieldName || 'field']
     .map((part) => String(part).replace(/[^a-zA-Z0-9_-]/g, '_'))
     .join('__');
+}
+
+export function getFeaturedMediaUploadStatusKey(itemId, fieldName = 'imageUrl') {
+  return ['index_featured', itemId || 'item', fieldName || 'field']
+    .map((part) => String(part).replace(/[^a-zA-Z0-9_-]/g, '_'))
+    .join('__');
+}
+
+export function validateFeaturedImageFile(file) {
+  return validateClientMediaFile(file, INDEX_FEATURED_MEDIA_UPLOAD_TARGET.mediaKind);
 }
 
 export function getUploadedUrl(result = {}) {

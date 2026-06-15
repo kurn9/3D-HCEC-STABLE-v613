@@ -109,6 +109,9 @@ export const CMS_MEDIA_UPLOAD_CONFIG = Object.freeze({
   edgeFunctionName: 'upload-cms-media',
   endpoint: `${SUPABASE_CONFIG.url}/functions/v1/upload-cms-media`,
   bucket: 'cms-media',
+  allowedTargetTypes: Object.freeze(['room_artwork', 'index_featured']),
+  featuredSectionKey: 'index.featuredArtworks',
+  featuredFieldNames: Object.freeze(['image', 'imageUrl', 'image_url']),
   allowedRoomKeys: Object.freeze(['indoor', 'outdoor']),
   allowedMediaKinds: Object.freeze(['image', 'poster', 'video']),
   allowedFieldNames: Object.freeze([

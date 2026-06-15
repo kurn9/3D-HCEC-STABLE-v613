@@ -311,7 +311,7 @@
   }
 
   function isRelativeMediaUrl(url) {
-    if (!url || url.startsWith('//') || url.includes('..')) return false;
+    if (!url || url.startsWith('//') || url.includes('..') || url.includes('\\')) return false;
     return SAFE_RELATIVE_MEDIA_PREFIXES.some((prefix) => url.startsWith(prefix));
   }
 

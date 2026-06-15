@@ -657,13 +657,19 @@ export async function uploadCmsMedia(client, payload = {}) {
     return { data: null, error: new Error('Payload upload thiếu file hợp lệ.') };
   }
 
+  const targetType = String(payload.targetType || 'room_artwork').trim() || 'room_artwork';
   const formData = new FormData();
   formData.append('file', file);
-  formData.append('roomKey', String(payload.roomKey || ''));
+  if (payload.targetType) formData.append('targetType', targetType);
   formData.append('itemId', String(payload.itemId || payload.artworkCode || ''));
-  formData.append('artworkCode', String(payload.artworkCode || payload.itemId || ''));
   formData.append('fieldName', String(payload.fieldName || ''));
   formData.append('mediaKind', String(payload.mediaKind || ''));
+  if (targetType === 'index_featured') {
+    formData.append('sectionKey', String(payload.sectionKey || ''));
+  } else {
+    formData.append('roomKey', String(payload.roomKey || ''));
+    formData.append('artworkCode', String(payload.artworkCode || payload.itemId || ''));
+  }
   if (payload.draftId) formData.append('draftId', String(payload.draftId));
 
   try {

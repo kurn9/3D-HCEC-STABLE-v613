@@ -905,6 +905,9 @@ export function validateStaticCmsMediaUrl(value, options = {}) {
   if (lower.startsWith('javascript:') || lower.startsWith('data:') || lower.startsWith('file:') || lower.startsWith('blob:')) {
     return { valid: false, reason: 'blocked-protocol' };
   }
+  if (raw.startsWith('//') || raw.includes('..') || raw.includes('\\')) {
+    return { valid: false, reason: 'unsafe-path' };
+  }
   if (raw.includes('intro_h264_test.mp4')) {
     return { valid: false, reason: 'stale-missing-media' };
   }

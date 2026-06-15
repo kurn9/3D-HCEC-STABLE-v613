@@ -4315,3 +4315,114 @@ body.cms-admin-page * {
     width: 100%;
   }
 }
+
+/* v6.14.040.004 — Featured local image upload operator flow */
+.cms-admin-featured-image-current-grid {
+  align-items: start;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(180px, 0.5fr) minmax(0, 1.5fr);
+}
+
+.cms-admin-featured-local-upload {
+  background: rgba(34, 197, 94, 0.035);
+  border: 1px solid rgba(74, 222, 128, 0.22);
+  border-radius: 14px;
+  display: grid;
+  gap: 11px;
+  min-width: 0;
+  padding: 13px;
+}
+
+.cms-admin-featured-upload-title {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.cms-admin-featured-file-picker {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px dashed rgba(214, 178, 94, 0.52);
+  border-radius: 12px;
+  cursor: pointer;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: space-between;
+  padding: 12px;
+}
+
+.cms-admin-featured-file-picker > span {
+  color: var(--cms-admin-text);
+  font-weight: 700;
+}
+
+.cms-admin-featured-file-picker input[type='file'] {
+  color: var(--cms-admin-muted);
+  max-width: 100%;
+}
+
+.cms-admin-featured-file-picker:has(input:disabled) {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.cms-admin-featured-file-meta {
+  align-items: flex-start;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid var(--cms-admin-border-soft);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 12px;
+}
+
+.cms-admin-featured-file-meta span {
+  color: var(--cms-admin-muted);
+  font-size: 0.78rem;
+}
+
+.cms-admin-featured-local-preview {
+  display: grid;
+  gap: 8px;
+}
+
+.cms-admin-featured-url-replace {
+  border: 1px solid var(--cms-admin-border-soft);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.018);
+  overflow: hidden;
+}
+
+.cms-admin-featured-url-replace > summary {
+  cursor: pointer;
+  font-weight: 700;
+  padding: 12px 14px;
+}
+
+.cms-admin-featured-url-replace-body {
+  border-top: 1px solid var(--cms-admin-border-soft);
+  display: grid;
+  gap: 11px;
+  padding: 13px;
+}
+
+@media (max-width: 860px) {
+  .cms-admin-featured-image-current-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 620px) {
+  .cms-admin-featured-file-picker {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .cms-admin-featured-file-picker input[type='file'] {
+    width: 100%;
+  }
+}
