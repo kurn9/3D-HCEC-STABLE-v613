@@ -1035,6 +1035,8 @@ export function createEmptyStaticCmsDraftState() {
     publishStatus: '',
     publishError: null,
     publishLastVerifiedAt: null,
+    activeEditorTab: 'content',
+    activeDrawer: '',
   };
 }
 
@@ -1085,6 +1087,8 @@ export function setStaticCmsDraftBaseline({ baselineJson = null, source = '', so
       publishStatus: '',
       publishError: null,
       publishLastVerifiedAt: null,
+      activeEditorTab: 'content',
+      activeDrawer: '',
     },
   });
 }
@@ -1093,7 +1097,7 @@ export function updateStaticCmsDraftRoom(selectedRoom) {
   const current = state.staticCmsDraft || createEmptyStaticCmsDraftState();
   const room = String(selectedRoom || 'indoor');
   const selectedItemCode = getFirstStaticCmsItemCode(current.draftJson, room);
-  return setStaticCmsDraftState({ selectedRoom: room, selectedItemCode, exportError: null, exportSuccess: null });
+  return setStaticCmsDraftState({ selectedRoom: room, selectedItemCode, exportError: null, exportSuccess: null, activeDrawer: '' });
 }
 
 export function updateStaticCmsDraftItem(selectedItemCode) {
@@ -1103,6 +1107,7 @@ export function updateStaticCmsDraftItem(selectedItemCode) {
     exportSuccess: null,
     draftSaveStatus: '',
     draftPersistenceError: null,
+    activeDrawer: '',
   });
 }
 
@@ -1193,6 +1198,17 @@ export function setStaticCmsPublishState(patch = {}) {
     ...current,
     ...patch,
   });
+}
+
+export function setStaticCmsDraftEditorTab(activeEditorTab) {
+  const next = ['content', 'media', 'metadata'].includes(String(activeEditorTab || '')) ? String(activeEditorTab) : 'content';
+  return setStaticCmsDraftState({ activeEditorTab: next });
+}
+
+export function setStaticCmsDraftDrawer(activeDrawer = '') {
+  const allowed = ['', 'drafts', 'advanced', 'featured', 'publishDetails'];
+  const next = allowed.includes(String(activeDrawer || '')) ? String(activeDrawer || '') : '';
+  return setStaticCmsDraftState({ activeDrawer: next });
 }
 
 export function updateStaticCmsDraftMeta(fieldName, value) {

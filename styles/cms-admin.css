@@ -4729,3 +4729,281 @@ body.cms-admin-page * {
     justify-content: flex-start;
   }
 }
+
+/* v6.14.041.010 - One-page operator workspace */
+.cms-admin-static-workspace-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.cms-admin-static-command-bar {
+  align-items: center;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(280px, 1.1fr) minmax(320px, 1fr) minmax(360px, auto);
+  padding: 14px 16px;
+  position: sticky;
+  top: 0;
+  z-index: 12;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.18);
+}
+
+.cms-admin-static-command-main {
+  min-width: 0;
+}
+
+.cms-admin-static-command-title-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.cms-admin-static-command-subtitle {
+  margin-top: 4px;
+  max-width: 780px;
+}
+
+.cms-admin-static-command-status {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.cms-admin-static-command-status .cms-admin-info-tile {
+  min-height: 54px;
+}
+
+.cms-admin-static-command-actions {
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.cms-admin-static-command-actions > .cms-admin-static-main-load-actions,
+.cms-admin-static-command-actions > .cms-admin-static-primary-actions {
+  display: contents;
+}
+
+.cms-admin-static-command-actions .cms-admin-button {
+  white-space: nowrap;
+}
+
+.cms-admin-static-workspace {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(240px, 0.72fr) minmax(440px, 1.42fr) minmax(300px, 0.86fr);
+  min-height: min(760px, calc(100vh - 240px));
+}
+
+.cms-admin-static-workspace-pane {
+  min-height: 0;
+  overflow: auto;
+  padding: 14px;
+}
+
+.cms-admin-static-left-pane {
+  align-self: stretch;
+}
+
+.cms-admin-static-left-pane .cms-admin-static-selector-stack {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.cms-admin-static-left-pane .cms-admin-static-item-list {
+  max-height: none;
+}
+
+.cms-admin-static-locked-note-compact {
+  margin-top: 12px;
+}
+
+.cms-admin-static-locked-note-compact > summary {
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.cms-admin-static-editor-pane {
+  align-self: stretch;
+}
+
+.cms-admin-static-editor-tabs {
+  background: rgba(5, 14, 22, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 999px;
+  display: inline-flex;
+  gap: 4px;
+  margin: 8px 0 14px;
+  padding: 4px;
+}
+
+.cms-admin-static-editor-tab {
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  color: var(--cms-admin-text-muted, #aeb8c5);
+  cursor: pointer;
+  font-weight: 800;
+  padding: 8px 14px;
+}
+
+.cms-admin-static-editor-tab.is-active {
+  background: linear-gradient(135deg, rgba(226, 184, 82, 0.95), rgba(230, 199, 110, 0.86));
+  color: #10151d;
+}
+
+.cms-admin-static-tabbed-form .cms-admin-static-field-section {
+  margin-bottom: 0;
+}
+
+.cms-admin-static-tabbed-form .cms-admin-static-field-section-heading p {
+  max-width: 720px;
+}
+
+.cms-admin-static-inspector-pane {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow: auto;
+  padding: 0;
+}
+
+.cms-admin-static-inspector-pane > .cms-admin-panel,
+.cms-admin-static-inspector-card {
+  flex: 0 0 auto;
+}
+
+.cms-admin-static-readiness-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 10px 0;
+}
+
+.cms-admin-static-message-list-compact {
+  max-height: 132px;
+  overflow: auto;
+}
+
+.cms-admin-static-drawer-root.is-empty {
+  display: none;
+}
+
+.cms-admin-static-drawer-root.is-open {
+  inset: 0;
+  position: fixed;
+  z-index: 80;
+}
+
+.cms-admin-static-drawer-overlay {
+  background: rgba(0, 0, 0, 0.48);
+  border: 0;
+  cursor: pointer;
+  inset: 0;
+  position: absolute;
+  width: 100%;
+}
+
+.cms-admin-static-drawer-panel {
+  background: linear-gradient(180deg, rgba(9, 19, 28, 0.98), rgba(7, 15, 23, 0.98));
+  border-left: 1px solid rgba(226, 184, 82, 0.28);
+  box-shadow: -30px 0 70px rgba(0, 0, 0, 0.36);
+  color: var(--cms-admin-text, #f4f7fb);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  height: 100%;
+  margin-left: auto;
+  max-width: min(920px, 92vw);
+  overflow: auto;
+  padding: 18px;
+  position: relative;
+  width: 760px;
+}
+
+.cms-admin-static-drawer-head {
+  align-items: flex-start;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  padding-bottom: 14px;
+}
+
+.cms-admin-static-drawer-head h3 {
+  margin: 0 0 6px;
+}
+
+.cms-admin-static-draft-manager-panel,
+.cms-admin-static-advanced-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.cms-admin-static-draft-manager-panel .cms-admin-static-save-form {
+  display: grid;
+  gap: 12px;
+}
+
+.cms-admin-static-advanced-panel .cms-admin-static-actions {
+  justify-content: flex-start;
+}
+
+.cms-admin-static-persistence-panel,
+.cms-admin-static-export-panel,
+.cms-admin-static-featured-details {
+  display: none;
+}
+
+.cms-admin-static-workflow-panel {
+  position: static !important;
+  top: auto !important;
+  z-index: auto !important;
+}
+
+@media (max-width: 1320px) {
+  .cms-admin-static-command-bar {
+    grid-template-columns: 1fr;
+    position: static;
+  }
+
+  .cms-admin-static-command-actions {
+    justify-content: flex-start;
+  }
+
+  .cms-admin-static-workspace {
+    grid-template-columns: minmax(230px, 0.82fr) minmax(420px, 1.28fr);
+  }
+
+  .cms-admin-static-inspector-pane {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 980px) {
+  .cms-admin-static-command-status,
+  .cms-admin-static-workspace,
+  .cms-admin-static-inspector-pane,
+  .cms-admin-static-readiness-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .cms-admin-static-workspace {
+    min-height: auto;
+  }
+
+  .cms-admin-static-workspace-pane {
+    max-height: none;
+  }
+
+  .cms-admin-static-drawer-panel {
+    max-width: 100vw;
+    width: 100%;
+  }
+}
