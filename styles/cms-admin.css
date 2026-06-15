@@ -3409,6 +3409,311 @@ body.cms-admin-page * {
   margin-top: 12px;
 }
 
+
+/* v6.14.040.001 — Index Featured operator UI */
+.cms-admin-featured-operator {
+  display: grid;
+  gap: 18px;
+  padding: clamp(18px, 2vw, 24px);
+  border-color: rgba(214, 178, 94, 0.32);
+}
+
+.cms-admin-featured-header {
+  align-items: flex-start;
+  display: flex;
+  gap: 18px;
+  justify-content: space-between;
+}
+
+.cms-admin-featured-heading {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.cms-admin-featured-heading .cms-admin-panel-title,
+.cms-admin-featured-preview h4 {
+  color: var(--cms-admin-text);
+  margin: 0;
+}
+
+.cms-admin-featured-header-actions {
+  justify-content: flex-end;
+  margin: 0;
+  max-width: 620px;
+}
+
+.cms-admin-featured-scope-note {
+  margin: 0;
+}
+
+.cms-admin-featured-layout {
+  align-items: start;
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(0, 1.55fr) minmax(300px, 0.75fr);
+}
+
+.cms-admin-featured-editor,
+.cms-admin-featured-side {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+}
+
+.cms-admin-featured-side {
+  position: sticky;
+  top: 18px;
+}
+
+.cms-admin-featured-settings,
+.cms-admin-featured-items-section,
+.cms-admin-featured-preview,
+.cms-admin-featured-validation {
+  border: 1px solid var(--cms-admin-border-soft);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.025);
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+
+.cms-admin-featured-settings-grid,
+.cms-admin-featured-item-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.cms-admin-featured-toggle {
+  align-items: flex-start;
+  border: 1px solid var(--cms-admin-border-soft);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.025);
+  cursor: pointer;
+  display: flex;
+  gap: 11px;
+  min-height: 48px;
+  padding: 12px;
+}
+
+.cms-admin-featured-toggle input {
+  accent-color: var(--cms-admin-accent);
+  height: 18px;
+  margin-top: 2px;
+  width: 18px;
+}
+
+.cms-admin-featured-toggle span {
+  display: grid;
+  gap: 3px;
+}
+
+.cms-admin-featured-toggle strong {
+  color: var(--cms-admin-text);
+}
+
+.cms-admin-featured-field {
+  gap: 8px;
+  min-width: 0;
+}
+
+.cms-admin-featured-field-wide,
+.cms-admin-featured-item-visible {
+  grid-column: 1 / -1;
+}
+
+.cms-admin-featured-item-list {
+  display: grid;
+  gap: 14px;
+}
+
+.cms-admin-featured-item-editor {
+  border: 1px solid var(--cms-admin-border-soft);
+  border-radius: 18px;
+  background: rgba(2, 8, 23, 0.28);
+  display: grid;
+  gap: 15px;
+  padding: 15px;
+}
+
+.cms-admin-featured-item-editor.is-hidden {
+  opacity: 0.78;
+}
+
+.cms-admin-featured-item-editor.has-error {
+  border-color: rgba(248, 113, 113, 0.5);
+}
+
+.cms-admin-featured-item-head,
+.cms-admin-featured-item-badges,
+.cms-admin-featured-item-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.cms-admin-featured-item-head {
+  justify-content: space-between;
+}
+
+.cms-admin-featured-item-identity {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.cms-admin-featured-item-identity strong,
+.cms-admin-featured-item-identity small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cms-admin-featured-item-actions {
+  border-top: 1px solid var(--cms-admin-border-soft);
+  padding-top: 13px;
+}
+
+.cms-admin-featured-preview-list {
+  display: grid;
+  gap: 12px;
+}
+
+.cms-admin-featured-preview-card {
+  border: 1px solid var(--cms-admin-border-soft);
+  border-radius: 16px;
+  background: rgba(0, 0, 0, 0.18);
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 112px minmax(0, 1fr);
+  overflow: hidden;
+  padding: 10px;
+}
+
+.cms-admin-featured-preview-media {
+  align-items: center;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.3);
+  display: flex;
+  justify-content: center;
+  min-height: 88px;
+  overflow: hidden;
+}
+
+.cms-admin-featured-preview-media img {
+  display: block;
+  height: 100%;
+  max-height: 104px;
+  object-fit: cover;
+  width: 100%;
+}
+
+.cms-admin-featured-preview-media.has-error {
+  color: var(--cms-admin-muted);
+  font-size: 0.78rem;
+  padding: 10px;
+  text-align: center;
+}
+
+.cms-admin-featured-preview-copy {
+  align-content: center;
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.cms-admin-featured-preview-copy strong,
+.cms-admin-featured-preview-copy p {
+  color: var(--cms-admin-text);
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.cms-admin-featured-preview-copy p {
+  color: var(--cms-admin-muted);
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+.cms-admin-featured-technical .cms-admin-code-block {
+  margin: 12px 0 0;
+  max-height: 300px;
+}
+
+.cms-admin-input.is-invalid,
+.cms-admin-select.is-invalid {
+  border-color: rgba(248, 113, 113, 0.7);
+  box-shadow: 0 0 0 2px rgba(248, 113, 113, 0.08);
+}
+
+@media (max-width: 1180px) {
+  .cms-admin-featured-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .cms-admin-featured-side {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    position: static;
+  }
+
+  .cms-admin-featured-technical {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 860px) {
+  .cms-admin-featured-header {
+    display: grid;
+  }
+
+  .cms-admin-featured-header-actions {
+    justify-content: flex-start;
+    max-width: none;
+  }
+
+  .cms-admin-featured-settings-grid,
+  .cms-admin-featured-item-grid,
+  .cms-admin-featured-side {
+    grid-template-columns: 1fr;
+  }
+
+  .cms-admin-featured-technical {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 620px) {
+  .cms-admin-featured-operator,
+  .cms-admin-featured-settings,
+  .cms-admin-featured-items-section,
+  .cms-admin-featured-preview,
+  .cms-admin-featured-validation,
+  .cms-admin-featured-item-editor {
+    padding: 13px;
+  }
+
+  .cms-admin-featured-header-actions,
+  .cms-admin-featured-item-actions {
+    display: grid;
+    width: 100%;
+  }
+
+  .cms-admin-featured-header-actions .cms-admin-button,
+  .cms-admin-featured-item-actions .cms-admin-button {
+    width: 100%;
+  }
+
+  .cms-admin-featured-preview-card {
+    grid-template-columns: 1fr;
+  }
+
+  .cms-admin-featured-preview-media {
+    min-height: 150px;
+  }
+}
+
 /* V6.14.039.003 — rollback operator simplify hotfix */
 .cms-admin-rollback-history-view {
   display: grid;

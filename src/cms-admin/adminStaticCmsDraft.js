@@ -79,6 +79,18 @@ const LOCKED_EXPORT_FIELDS = new Set([
 ]);
 const OPTIONAL_EMPTY_ALLOWED = new Set([...TEXT_FIELDS, ...MEDIA_FIELDS]);
 const MAX_JSON_IMPORT_BYTES = 2 * 1024 * 1024;
+const FEATURED_OPERATOR_MAX_ITEMS = 12;
+const FEATURED_OPERATOR_DEFAULTS = Object.freeze({
+  enabled: true,
+  title: 'Tác phẩm tiêu biểu',
+  lead: '',
+  items: Object.freeze([]),
+});
+const FEATURED_OPERATOR_ROOM_OPTIONS = Object.freeze([
+  { value: '', label: 'Không gắn liên kết 3D' },
+  { value: 'indoor', label: 'Trong nhà' },
+  { value: 'outdoor', label: 'Ngoài trời' },
+]);
 
 export function renderStaticCmsDraftTab(state, handlers = {}) {
   const copy = ADMIN_COPY.staticDraft || {};
@@ -101,6 +113,8 @@ export function renderStaticCmsDraftTab(state, handlers = {}) {
     panel.appendChild(empty);
     return panel;
   }
+
+  panel.appendChild(renderFeaturedOperatorPanel(draftState, handlers));
 
   const currentItem = getSelectedDraftItem(draftState);
   const dashboard = createElement('section', { className: 'cms-admin-static-dashboard' });
@@ -198,6 +212,557 @@ function renderStaticPanelTitle(title, meta = '') {
   wrap.appendChild(createElement('h3', { className: 'cms-admin-panel-title', text: title }));
   if (meta) wrap.appendChild(renderBadge(meta, meta === 'PASS' || meta === 'Sạch' ? 'success' : 'warning'));
   return wrap;
+}
+
+
+function renderFeaturedOperatorPanel(draftState = {}, handlers = {}) {
+  const featured = getFeaturedOperatorSection(draftState.draftJson);
+  const validation = validateFeaturedOperatorSection(featured, STATIC_CMS_DRAFT_CONFIG);
+  const featuredDirty = hasFeaturedOperatorChanges(draftState.draftJson, draftState.baselineJson);
+  const panel = createElement('section', { className: 'cms-admin-panel cms-admin-featured-operator' });
+  const header = createElement('div', { className: 'cms-admin-featured-header' });
+  const heading = createElement('div', { className: 'cms-admin-featured-heading' });
+  heading.appendChild(createElement('p', { className: 'cms-admin-eyebrow', text: 'Trang chủ' }));
+  heading.appendChild(createElement('h3', { className: 'cms-admin-panel-title', text: 'Tác phẩm tiêu biểu' }));
+  heading.appendChild(createElement('p', {
+    className: 'cms-admin-help-text',
+    text: 'Quản lý các tác phẩm hiển thị ở khu vực “Tác phẩm tiêu biểu” trên trang chủ. Dữ liệu được ghi vào bản nháp CMS hiện tại.',
+  }));
+
+  const headerActions = createElement('div', { className: 'cms-admin-actions cms-admin-featured-header-actions' });
+  const addButton = createElement('button', {
+    className: 'cms-admin-button cms-admin-button-primary',
+    type: 'button',
+    text: 'Thêm tác phẩm tiêu biểu',
+  });
+  addButton.disabled = featured.items.length >= FEATURED_OPERATOR_MAX_ITEMS;
+  addButton.addEventListener('click', () => handleAddFeaturedItem(draftState, handlers));
+
+  const previewButton = createElement('button', {
+    className: 'cms-admin-button cms-admin-button-secondary',
+    type: 'button',
+    text: 'Xem trước',
+  });
+  previewButton.addEventListener('click', () => {
+    document.getElementById('cms-admin-featured-preview')?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+  });
+
+  const saveButton = createElement('button', {
+    className: 'cms-admin-button cms-admin-button-secondary',
+    type: 'button',
+    text: draftState.isSavingDraft ? 'Đang lưu...' : 'Lưu vào bản nháp',
+  });
+  saveButton.disabled = Boolean(draftState.isSavingDraft || !draftState.validation?.valid);
+  saveButton.addEventListener('click', () => handleSaveStaticCmsDraft({ asNew: !draftState.currentDraftId, handlers }));
+
+  const revertButton = createElement('button', {
+    className: 'cms-admin-button cms-admin-button-ghost',
+    type: 'button',
+    text: 'Hoàn tác phần tiêu biểu',
+  });
+  revertButton.disabled = !featuredDirty;
+  revertButton.addEventListener('click', () => handleRevertFeaturedSection(draftState, handlers));
+
+  appendChildren(headerActions, [addButton, previewButton, saveButton, revertButton]);
+  appendChildren(header, [heading, headerActions]);
+  panel.appendChild(header);
+  panel.appendChild(createElement('div', {
+    className: 'cms-admin-alert cms-admin-alert-warning cms-admin-featured-scope-note',
+    text: 'Tác phẩm tiêu biểu chỉ hiển thị trên trang chủ. Muốn đưa tác phẩm vào phòng 3D cần dùng quy trình Editor/Scene riêng.',
+  }));
+
+  const body = createElement('div', { className: 'cms-admin-featured-layout' });
+  const editor = createElement('div', { className: 'cms-admin-featured-editor' });
+  editor.appendChild(renderFeaturedSectionSettings(draftState, featured, handlers));
+  editor.appendChild(renderFeaturedItemList(draftState, featured, validation, handlers));
+
+  const side = createElement('aside', { className: 'cms-admin-featured-side' });
+  side.appendChild(renderFeaturedPreview(featured, validation));
+  side.appendChild(renderFeaturedValidationSummary(validation));
+  side.appendChild(renderFeaturedTechnicalDetails(featured));
+  appendChildren(body, [editor, side]);
+  panel.appendChild(body);
+
+  if (draftState.featuredOperatorStatus) {
+    panel.appendChild(createElement('div', { className: 'cms-admin-alert cms-admin-alert-success', text: draftState.featuredOperatorStatus }));
+  }
+  if (draftState.featuredOperatorError) {
+    panel.appendChild(renderErrorBox(draftState.featuredOperatorError, 'Không cập nhật được Tác phẩm tiêu biểu'));
+  }
+  return panel;
+}
+
+function renderFeaturedSectionSettings(draftState = {}, featured = {}, handlers = {}) {
+  const section = createElement('section', { className: 'cms-admin-featured-settings' });
+  section.appendChild(renderStaticPanelTitle('Thiết lập khu vực', featured.enabled ? 'Đang hiển thị' : 'Đang tắt'));
+  const grid = createElement('div', { className: 'cms-admin-featured-settings-grid' });
+
+  const enabledLabel = createElement('label', { className: 'cms-admin-featured-toggle' });
+  const enabled = createElement('input', { type: 'checkbox', attrs: { name: 'featured-enabled' } });
+  enabled.checked = featured.enabled !== false;
+  enabled.addEventListener('change', () => commitFeaturedDraftChange(draftState, (next) => {
+    next.enabled = enabled.checked;
+  }, handlers, enabled.checked ? 'Đã bật khu vực Tác phẩm tiêu biểu trong bản nháp.' : 'Đã tắt khu vực Tác phẩm tiêu biểu trong bản nháp.'));
+  enabledLabel.appendChild(enabled);
+  const enabledText = createElement('span');
+  enabledText.appendChild(createElement('strong', { text: 'Hiển thị trên trang chủ' }));
+  enabledText.appendChild(createElement('small', { className: 'cms-admin-help-text', text: 'Tắt công tắc để giữ dữ liệu nhưng không hiển thị khu vực Featured.' }));
+  enabledLabel.appendChild(enabledText);
+
+  const titleField = renderFeaturedTextControl({
+    label: 'Tiêu đề khu vực',
+    value: featured.title,
+    placeholder: 'Tác phẩm tiêu biểu',
+    onChange: (value) => commitFeaturedDraftChange(draftState, (next) => { next.title = value; }, handlers),
+  });
+  const leadField = renderFeaturedTextControl({
+    label: 'Mô tả khu vực',
+    value: featured.lead,
+    placeholder: 'Giới thiệu ngắn về các tác phẩm được tuyển chọn',
+    multiline: true,
+    onChange: (value) => commitFeaturedDraftChange(draftState, (next) => {
+      next.lead = value;
+      if (Object.prototype.hasOwnProperty.call(next, 'description')) next.description = value;
+    }, handlers),
+  });
+
+  appendChildren(grid, [enabledLabel, titleField, leadField]);
+  section.appendChild(grid);
+  return section;
+}
+
+function renderFeaturedItemList(draftState = {}, featured = {}, validation = {}, handlers = {}) {
+  const section = createElement('section', { className: 'cms-admin-featured-items-section' });
+  const titleRow = renderStaticPanelTitle('Danh sách tác phẩm', `${featured.items.length}/${FEATURED_OPERATOR_MAX_ITEMS}`);
+  section.appendChild(titleRow);
+  if (!featured.items.length) {
+    section.appendChild(renderEmptyState('Chưa có tác phẩm tiêu biểu. Bấm “Thêm tác phẩm tiêu biểu” để bắt đầu.'));
+    return section;
+  }
+
+  const list = createElement('div', { className: 'cms-admin-featured-item-list' });
+  featured.items.forEach((item, sourceIndex) => {
+    list.appendChild(renderFeaturedItemEditor(draftState, item, sourceIndex, featured.items.length, validation, handlers));
+  });
+  section.appendChild(list);
+  return section;
+}
+
+function renderFeaturedItemEditor(draftState = {}, item = {}, sourceIndex = 0, itemCount = 0, validation = {}, handlers = {}) {
+  const itemErrors = validation.itemErrors?.[sourceIndex] || {};
+  const card = createElement('article', {
+    className: ['cms-admin-featured-item-editor', item.isVisible === false ? 'is-hidden' : '', Object.keys(itemErrors).length ? 'has-error' : ''].filter(Boolean).join(' '),
+  });
+  const head = createElement('div', { className: 'cms-admin-featured-item-head' });
+  const identity = createElement('div', { className: 'cms-admin-featured-item-identity' });
+  identity.appendChild(createElement('strong', { text: `${sourceIndex + 1}. ${item.title || item.id || 'Tác phẩm mới'}` }));
+  identity.appendChild(createElement('small', { className: 'cms-admin-help-text', text: item.id || 'Chưa có ID' }));
+  const badges = createElement('div', { className: 'cms-admin-featured-item-badges' });
+  badges.appendChild(renderBadge(item.isVisible === false ? 'Đang ẩn' : 'Đang hiển thị', item.isVisible === false ? 'warning' : 'success'));
+  if (!String(item.imageUrl || '').trim()) badges.appendChild(renderBadge('Thiếu ảnh', 'danger'));
+  appendChildren(head, [identity, badges]);
+  card.appendChild(head);
+
+  const grid = createElement('div', { className: 'cms-admin-featured-item-grid' });
+  grid.appendChild(renderFeaturedTextControl({
+    label: 'ID',
+    value: item.id,
+    required: true,
+    error: itemErrors.id,
+    placeholder: 'featured_local_001',
+    onChange: (value) => handleFeaturedItemFieldChange(draftState, sourceIndex, 'id', value, handlers),
+  }));
+  grid.appendChild(renderFeaturedTextControl({
+    label: 'Tiêu đề',
+    value: item.title,
+    required: item.isVisible !== false,
+    error: itemErrors.title,
+    placeholder: 'Tên tác phẩm',
+    onChange: (value) => handleFeaturedItemFieldChange(draftState, sourceIndex, 'title', value, handlers),
+  }));
+  grid.appendChild(renderFeaturedTextControl({
+    label: 'Mô tả ngắn',
+    value: item.description,
+    error: itemErrors.description,
+    multiline: true,
+    placeholder: 'Thông tin ngắn hiển thị cùng tác phẩm',
+    onChange: (value) => handleFeaturedItemFieldChange(draftState, sourceIndex, 'description', value, handlers),
+  }));
+  grid.appendChild(renderFeaturedTextControl({
+    label: 'Đường dẫn ảnh / URL ảnh đã có',
+    value: item.imageUrl,
+    required: item.isVisible !== false,
+    error: itemErrors.imageUrl,
+    placeholder: './assets/... hoặc https://...',
+    hint: !String(item.imageUrl || '').trim() ? 'Mục này đang thiếu ảnh nên có thể không hiển thị đúng trên trang chủ.' : '',
+    onChange: (value) => handleFeaturedItemFieldChange(draftState, sourceIndex, 'imageUrl', value, handlers),
+  }));
+  grid.appendChild(renderFeaturedTextControl({
+    label: 'Alt text',
+    value: item.alt,
+    error: itemErrors.alt,
+    placeholder: 'Mô tả ảnh dành cho trợ năng',
+    hint: !String(item.alt || '').trim() ? 'Có thể để trống; Index sẽ dùng tiêu đề làm nội dung thay thế.' : '',
+    onChange: (value) => handleFeaturedItemFieldChange(draftState, sourceIndex, 'alt', value, handlers),
+  }));
+  grid.appendChild(renderFeaturedNumberControl({
+    label: 'Thứ tự',
+    value: item.sortOrder,
+    error: itemErrors.sortOrder,
+    onChange: (value) => handleFeaturedItemFieldChange(draftState, sourceIndex, 'sortOrder', value, handlers),
+  }));
+  grid.appendChild(renderFeaturedRoomControl(item.room, itemErrors.room, (value) => handleFeaturedItemFieldChange(draftState, sourceIndex, 'room', value, handlers)));
+  grid.appendChild(renderFeaturedTextControl({
+    label: 'Mã tác phẩm trong phòng 3D',
+    value: item.artworkId,
+    error: itemErrors.artworkId,
+    placeholder: 'ART_001 (không bắt buộc)',
+    hint: 'Chỉ tạo liên kết đến object đã tồn tại; không tạo object 3D mới.',
+    onChange: (value) => handleFeaturedItemFieldChange(draftState, sourceIndex, 'artworkId', value, handlers),
+  }));
+  grid.appendChild(renderFeaturedTextControl({
+    label: 'Nhãn nút liên kết',
+    value: item.ctaLabel,
+    error: itemErrors.ctaLabel,
+    placeholder: 'Xem trong không gian 3D',
+    onChange: (value) => handleFeaturedItemFieldChange(draftState, sourceIndex, 'ctaLabel', value, handlers),
+  }));
+
+  const visibleField = createElement('label', { className: 'cms-admin-featured-toggle cms-admin-featured-item-visible' });
+  const visible = createElement('input', { type: 'checkbox', attrs: { name: `featured-visible-${sourceIndex}` } });
+  visible.checked = item.isVisible !== false;
+  visible.addEventListener('change', () => handleFeaturedItemFieldChange(draftState, sourceIndex, 'isVisible', visible.checked, handlers));
+  const visibleText = createElement('span');
+  visibleText.appendChild(createElement('strong', { text: 'Hiển thị mục này' }));
+  visibleText.appendChild(createElement('small', { className: 'cms-admin-help-text', text: visible.checked ? 'Mục này đang hiển thị.' : 'Mục này đang tắt hiển thị.' }));
+  visibleField.appendChild(visible);
+  visibleField.appendChild(visibleText);
+  grid.appendChild(visibleField);
+  card.appendChild(grid);
+
+  const actions = createElement('div', { className: 'cms-admin-actions cms-admin-featured-item-actions' });
+  const up = createElement('button', { className: 'cms-admin-button cms-admin-button-ghost cms-admin-button-small', type: 'button', text: 'Lên' });
+  up.disabled = sourceIndex === 0;
+  up.addEventListener('click', () => handleMoveFeaturedItem(draftState, sourceIndex, -1, handlers));
+  const down = createElement('button', { className: 'cms-admin-button cms-admin-button-ghost cms-admin-button-small', type: 'button', text: 'Xuống' });
+  down.disabled = sourceIndex >= itemCount - 1;
+  down.addEventListener('click', () => handleMoveFeaturedItem(draftState, sourceIndex, 1, handlers));
+  const toggle = createElement('button', { className: 'cms-admin-button cms-admin-button-secondary cms-admin-button-small', type: 'button', text: item.isVisible === false ? 'Hiện' : 'Ẩn' });
+  toggle.addEventListener('click', () => handleFeaturedItemFieldChange(draftState, sourceIndex, 'isVisible', item.isVisible === false, handlers));
+  const remove = createElement('button', { className: 'cms-admin-button cms-admin-button-danger cms-admin-button-small', type: 'button', text: 'Xóa khỏi Featured' });
+  remove.addEventListener('click', () => handleRemoveFeaturedItem(draftState, sourceIndex, handlers));
+  appendChildren(actions, [up, down, toggle, remove]);
+  card.appendChild(actions);
+  return card;
+}
+
+function renderFeaturedTextControl({ label, value = '', required = false, error = '', hint = '', placeholder = '', multiline = false, onChange } = {}) {
+  const wrap = createElement('label', { className: ['cms-admin-field', 'cms-admin-featured-field', multiline ? 'cms-admin-featured-field-wide' : ''].filter(Boolean).join(' ') });
+  const labelNode = createElement('span', { className: 'cms-admin-static-field-label' });
+  labelNode.appendChild(createElement('span', { text: label || '' }));
+  if (required) labelNode.appendChild(renderBadge('Bắt buộc', 'warning'));
+  wrap.appendChild(labelNode);
+  const control = createElement(multiline ? 'textarea' : 'input', {
+    className: ['cms-admin-input', error ? 'is-invalid' : ''].filter(Boolean).join(' '),
+    value: String(value ?? ''),
+    placeholder,
+    attrs: { rows: multiline ? '3' : undefined, autocomplete: 'off' },
+  });
+  control.addEventListener('change', () => onChange?.(control.value));
+  wrap.appendChild(control);
+  if (error) wrap.appendChild(createElement('small', { className: 'cms-admin-help-text cms-admin-danger-text', text: error }));
+  else if (hint) wrap.appendChild(createElement('small', { className: 'cms-admin-help-text', text: hint }));
+  return wrap;
+}
+
+function renderFeaturedNumberControl({ label, value = 0, error = '', onChange } = {}) {
+  const wrap = createElement('label', { className: 'cms-admin-field cms-admin-featured-field' });
+  wrap.appendChild(createElement('span', { className: 'cms-admin-static-field-label', text: label || '' }));
+  const control = createElement('input', {
+    className: ['cms-admin-input', error ? 'is-invalid' : ''].filter(Boolean).join(' '),
+    type: 'number',
+    value: Number.isFinite(Number(value)) ? String(value) : '0',
+    attrs: { min: '0', step: '1' },
+  });
+  control.addEventListener('change', () => onChange?.(Number.isFinite(Number(control.value)) ? Number(control.value) : 0));
+  wrap.appendChild(control);
+  if (error) wrap.appendChild(createElement('small', { className: 'cms-admin-help-text cms-admin-danger-text', text: error }));
+  return wrap;
+}
+
+function renderFeaturedRoomControl(value = '', error = '', onChange) {
+  const wrap = createElement('label', { className: 'cms-admin-field cms-admin-featured-field' });
+  wrap.appendChild(createElement('span', { className: 'cms-admin-static-field-label', text: 'Liên kết đến không gian 3D' }));
+  const select = createElement('select', { className: ['cms-admin-select', error ? 'is-invalid' : ''].filter(Boolean).join(' ') });
+  FEATURED_OPERATOR_ROOM_OPTIONS.forEach((option) => select.appendChild(createElement('option', { value: option.value, text: option.label })));
+  select.value = ['indoor', 'outdoor'].includes(String(value || '').toLowerCase()) ? String(value).toLowerCase() : '';
+  select.addEventListener('change', () => onChange?.(select.value));
+  wrap.appendChild(select);
+  if (error) wrap.appendChild(createElement('small', { className: 'cms-admin-help-text cms-admin-danger-text', text: error }));
+  return wrap;
+}
+
+function renderFeaturedPreview(featured = {}, validation = {}) {
+  const panel = createElement('section', { className: 'cms-admin-featured-preview', attrs: { id: 'cms-admin-featured-preview' } });
+  panel.appendChild(renderStaticPanelTitle('Xem trước tác phẩm tiêu biểu', featured.enabled ? 'Đang bật' : 'Đang tắt'));
+  panel.appendChild(createElement('h4', { text: featured.title || 'Tác phẩm tiêu biểu' }));
+  if (featured.lead) panel.appendChild(createElement('p', { className: 'cms-admin-help-text', text: featured.lead }));
+  if (featured.enabled === false) {
+    panel.appendChild(createElement('div', { className: 'cms-admin-alert cms-admin-alert-warning', text: 'Khu vực Featured đang tắt và sẽ không hiển thị trên trang chủ.' }));
+  }
+
+  const sorted = featured.items
+    .map((item, index) => ({ item, index }))
+    .sort((a, b) => (Number(a.item.sortOrder || a.index + 1) - Number(b.item.sortOrder || b.index + 1)) || (a.index - b.index));
+  const visibleItems = sorted.filter(({ item }) => item.isVisible !== false);
+  if (!visibleItems.length) {
+    panel.appendChild(renderEmptyState('Chưa có mục đang hiển thị để xem trước.'));
+  } else {
+    const list = createElement('div', { className: 'cms-admin-featured-preview-list' });
+    visibleItems.forEach(({ item }) => list.appendChild(renderFeaturedPreviewCard(item)));
+    panel.appendChild(list);
+  }
+
+  const hiddenCount = featured.items.filter((item) => item.isVisible === false).length;
+  if (hiddenCount) panel.appendChild(createElement('p', { className: 'cms-admin-help-text', text: `${hiddenCount} mục đang tắt hiển thị.` }));
+  if (!validation.valid) panel.appendChild(createElement('div', { className: 'cms-admin-alert cms-admin-alert-error', text: 'Bản xem trước đang có lỗi nội dung. Hãy sửa các mục được đánh dấu trước khi lưu bản nháp.' }));
+  return panel;
+}
+
+function renderFeaturedPreviewCard(item = {}) {
+  const card = createElement('article', { className: 'cms-admin-featured-preview-card' });
+  const media = createElement('div', { className: 'cms-admin-featured-preview-media' });
+  const imageUrl = String(item.imageUrl || '').trim();
+  if (imageUrl && validateStaticCmsMediaUrl(imageUrl, STATIC_CMS_DRAFT_CONFIG).valid) {
+    const image = createElement('img', {
+      attrs: { src: imageUrl, alt: item.alt || item.title || '', loading: 'lazy' },
+    });
+    image.addEventListener('error', () => {
+      image.hidden = true;
+      media.classList.add('has-error');
+      media.appendChild(createElement('span', { text: 'Không tải được ảnh' }));
+    }, { once: true });
+    media.appendChild(image);
+  } else {
+    media.classList.add('has-error');
+    media.appendChild(createElement('span', { text: 'Thiếu ảnh hợp lệ' }));
+  }
+  const copy = createElement('div', { className: 'cms-admin-featured-preview-copy' });
+  copy.appendChild(createElement('strong', { text: item.title || 'Chưa có tiêu đề' }));
+  if (item.description) copy.appendChild(createElement('p', { text: item.description }));
+  if (item.room) copy.appendChild(renderBadge(`${item.room === 'outdoor' ? 'Ngoài trời' : 'Trong nhà'}${item.artworkId ? ` · ${item.artworkId}` : ''}`, 'default'));
+  appendChildren(card, [media, copy]);
+  return card;
+}
+
+function renderFeaturedValidationSummary(validation = {}) {
+  const panel = createElement('section', { className: 'cms-admin-featured-validation' });
+  panel.appendChild(renderStaticPanelTitle('Kiểm tra nội dung', validation.valid ? 'PASS' : 'Cần sửa'));
+  if (validation.valid) {
+    panel.appendChild(createElement('div', { className: 'cms-admin-alert cms-admin-alert-success', text: 'Phần Tác phẩm tiêu biểu đã đủ điều kiện ghi vào bản nháp.' }));
+  } else {
+    const list = createElement('ul', { className: 'cms-admin-static-message-list cms-admin-danger-text' });
+    validation.errors.slice(0, 12).forEach((message) => list.appendChild(createElement('li', { text: message })));
+    panel.appendChild(list);
+  }
+  if (validation.warnings.length) {
+    const warnings = createElement('ul', { className: 'cms-admin-static-message-list' });
+    validation.warnings.slice(0, 8).forEach((message) => warnings.appendChild(createElement('li', { text: message })));
+    panel.appendChild(warnings);
+  }
+  return panel;
+}
+
+function renderFeaturedTechnicalDetails(featured = {}) {
+  const details = createElement('details', { className: 'cms-admin-static-technical-details cms-admin-featured-technical' });
+  details.appendChild(createElement('summary', { text: 'Chi tiết kỹ thuật' }));
+  details.appendChild(createElement('pre', { className: 'cms-admin-code-block', text: JSON.stringify(featured, null, 2) }));
+  return details;
+}
+
+function handleAddFeaturedItem(draftState = {}, handlers = {}) {
+  commitFeaturedDraftChange(draftState, (featured) => {
+    if (featured.items.length >= FEATURED_OPERATOR_MAX_ITEMS) return;
+    featured.items.push(createFeaturedOperatorItem(featured));
+    normalizeFeaturedSortOrder(featured.items);
+  }, handlers, 'Đã thêm một mục Tác phẩm tiêu biểu mới. Hãy bổ sung ảnh trước khi lưu bản nháp.');
+}
+
+function handleFeaturedItemFieldChange(draftState = {}, sourceIndex = 0, fieldName = '', value, handlers = {}) {
+  commitFeaturedDraftChange(draftState, (featured) => {
+    const item = featured.items[sourceIndex];
+    if (!item) return;
+    if (fieldName === 'isVisible') item.isVisible = Boolean(value);
+    else if (fieldName === 'sortOrder') item.sortOrder = Number.isFinite(Number(value)) ? Number(value) : sourceIndex + 1;
+    else item[fieldName] = String(value ?? '').trim();
+    if (fieldName === 'description' && Object.prototype.hasOwnProperty.call(item, 'caption')) item.caption = item.description;
+  }, handlers);
+}
+
+function handleMoveFeaturedItem(draftState = {}, sourceIndex = 0, direction = 0, handlers = {}) {
+  commitFeaturedDraftChange(draftState, (featured) => {
+    const targetIndex = sourceIndex + direction;
+    if (targetIndex < 0 || targetIndex >= featured.items.length) return;
+    [featured.items[sourceIndex], featured.items[targetIndex]] = [featured.items[targetIndex], featured.items[sourceIndex]];
+    normalizeFeaturedSortOrder(featured.items);
+  }, handlers, 'Đã cập nhật thứ tự Tác phẩm tiêu biểu trong bản nháp.');
+}
+
+function handleRemoveFeaturedItem(draftState = {}, sourceIndex = 0, handlers = {}) {
+  const item = getFeaturedOperatorSection(draftState.draftJson).items[sourceIndex];
+  const confirmed = globalThis.confirm?.(`Xóa “${item?.title || item?.id || 'mục này'}” khỏi Tác phẩm tiêu biểu? Thao tác này không xóa ảnh, media hoặc object 3D.`);
+  if (!confirmed) return;
+  commitFeaturedDraftChange(draftState, (featured) => {
+    featured.items.splice(sourceIndex, 1);
+    normalizeFeaturedSortOrder(featured.items);
+  }, handlers, 'Đã xóa mục khỏi danh sách Tác phẩm tiêu biểu. Media và object 3D không bị xóa.');
+}
+
+function handleRevertFeaturedSection(draftState = {}, handlers = {}) {
+  const confirmed = globalThis.confirm?.('Hoàn tác toàn bộ thay đổi chưa lưu trong phần Tác phẩm tiêu biểu về baseline đang mở?');
+  if (!confirmed) return;
+  const baselineFeatured = getRawFeaturedSection(draftState.baselineJson);
+  const draftJson = cloneJson(draftState.draftJson || {});
+  if (!draftJson.index || typeof draftJson.index !== 'object' || Array.isArray(draftJson.index)) draftJson.index = {};
+  if (baselineFeatured) draftJson.index.featuredArtworks = cloneJson(baselineFeatured);
+  else delete draftJson.index.featuredArtworks;
+  delete draftJson.index.featured;
+  const validation = validateStaticCmsDraft(draftJson, STATIC_CMS_DRAFT_CONFIG);
+  updateStaticCmsDraftJson(draftJson, validation);
+  setStaticCmsDraftState({ featuredOperatorStatus: 'Đã hoàn tác phần Tác phẩm tiêu biểu về bản gốc đang mở.', featuredOperatorError: null });
+  handlers.onRerender?.();
+}
+
+function commitFeaturedDraftChange(draftState = {}, mutator, handlers = {}, status = 'Đã cập nhật Tác phẩm tiêu biểu trong bản nháp. Website công khai chưa thay đổi.') {
+  try {
+    const nextJson = applyFeaturedOperatorMutation(draftState.draftJson, mutator);
+    const sanitized = sanitizeStaticCmsExport(nextJson, { keepVersion: true });
+    const validation = validateStaticCmsDraft(sanitized, STATIC_CMS_DRAFT_CONFIG);
+    updateStaticCmsDraftJson(sanitized, validation);
+    setStaticCmsDraftState({ featuredOperatorStatus: status, featuredOperatorError: null });
+  } catch (error) {
+    setStaticCmsDraftState({ featuredOperatorError: normalizeErrorMessage(error), featuredOperatorStatus: '' });
+  }
+  handlers.onRerender?.();
+}
+
+export function getFeaturedOperatorSection(cmsJson = {}) {
+  const raw = getRawFeaturedSection(cmsJson) || {};
+  const section = cloneJson(raw);
+  section.enabled = typeof raw.enabled === 'boolean'
+    ? raw.enabled
+    : typeof raw.isVisible === 'boolean'
+      ? raw.isVisible
+      : FEATURED_OPERATOR_DEFAULTS.enabled;
+  section.title = String(raw.title ?? FEATURED_OPERATOR_DEFAULTS.title).trim();
+  section.lead = String(raw.lead ?? raw.description ?? FEATURED_OPERATOR_DEFAULTS.lead).trim();
+  section.items = safeArray(raw.items).map((item, index) => normalizeFeaturedOperatorItem(item, index));
+  return section;
+}
+
+export function createFeaturedOperatorItem(featured = {}) {
+  const existingIds = new Set(safeArray(featured.items).map((item) => String(item?.id || '').trim().toLowerCase()).filter(Boolean));
+  let sequence = 1;
+  let id = '';
+  do {
+    id = `featured_local_${String(sequence).padStart(3, '0')}`;
+    sequence += 1;
+  } while (existingIds.has(id.toLowerCase()));
+  return {
+    id,
+    title: 'Tác phẩm tiêu biểu mới',
+    description: '',
+    imageUrl: '',
+    alt: '',
+    room: '',
+    artworkId: '',
+    ctaLabel: 'Xem trong không gian 3D',
+    isVisible: true,
+    sortOrder: safeArray(featured.items).length + 1,
+  };
+}
+
+export function applyFeaturedOperatorMutation(cmsJson = {}, mutator) {
+  const draftJson = cloneJson(cmsJson || {});
+  if (!draftJson.index || typeof draftJson.index !== 'object' || Array.isArray(draftJson.index)) draftJson.index = {};
+  const featured = getFeaturedOperatorSection(draftJson);
+  if (typeof mutator === 'function') mutator(featured);
+  draftJson.index.featuredArtworks = featured;
+  delete draftJson.index.featured;
+  return draftJson;
+}
+
+export function validateFeaturedOperatorSection(featured = {}, options = {}) {
+  const errors = [];
+  const warnings = [];
+  const itemErrors = {};
+  if (!featured || typeof featured !== 'object' || Array.isArray(featured)) {
+    return { valid: false, errors: ['Tác phẩm tiêu biểu phải là một object hợp lệ.'], warnings, itemErrors };
+  }
+  if (!Array.isArray(featured.items)) {
+    return { valid: false, errors: ['Danh sách Tác phẩm tiêu biểu phải là một mảng.'], warnings, itemErrors };
+  }
+  if (featured.enabled === true && featured.items.length === 0) errors.push('Khu vực đang bật nhưng chưa có tác phẩm tiêu biểu.');
+  if (featured.items.length > FEATURED_OPERATOR_MAX_ITEMS) warnings.push(`Chỉ nên dùng tối đa ${FEATURED_OPERATOR_MAX_ITEMS} mục Featured.`);
+  const ids = new Map();
+  featured.items.forEach((item, index) => {
+    const fieldErrors = {};
+    const id = String(item?.id || '').trim();
+    const visible = item?.isVisible !== false;
+    const title = String(item?.title || '').trim();
+    const imageUrl = String(item?.imageUrl || '').trim();
+    if (!id) fieldErrors.id = 'ID không được để trống.';
+    else if (ids.has(id)) fieldErrors.id = 'ID này đã tồn tại trong danh sách Tác phẩm tiêu biểu.';
+    else ids.set(id, index);
+    if (visible && !title) fieldErrors.title = 'Tiêu đề không được để trống khi mục đang hiển thị.';
+    if (visible && !imageUrl) fieldErrors.imageUrl = 'Ảnh không được để trống khi mục đang hiển thị.';
+    if (imageUrl && !validateStaticCmsMediaUrl(imageUrl, options).valid) fieldErrors.imageUrl = 'Đường dẫn ảnh không hợp lệ hoặc không thuộc nguồn media được phép.';
+    if (!Number.isFinite(Number(item?.sortOrder))) fieldErrors.sortOrder = 'Thứ tự phải là số.';
+    if (item?.room && !['indoor', 'outdoor'].includes(String(item.room).toLowerCase())) fieldErrors.room = 'Không gian liên kết chỉ được là Trong nhà hoặc Ngoài trời.';
+    if (Object.keys(fieldErrors).length) {
+      itemErrors[index] = fieldErrors;
+      Object.values(fieldErrors).forEach((message) => errors.push(`Mục ${index + 1}: ${message}`));
+    }
+    if (visible && title && !String(item?.alt || '').trim()) warnings.push(`Mục ${index + 1}: Alt text đang trống; Index sẽ dùng tiêu đề làm nội dung thay thế.`);
+  });
+  return { valid: errors.length === 0, errors, warnings, itemErrors };
+}
+
+function hasFeaturedOperatorChanges(draftJson = {}, baselineJson = {}) {
+  return JSON.stringify(getFeaturedOperatorSection(draftJson)) !== JSON.stringify(getFeaturedOperatorSection(baselineJson));
+}
+
+function getRawFeaturedSection(cmsJson = {}) {
+  const index = cmsJson?.index;
+  if (!index || typeof index !== 'object' || Array.isArray(index)) return null;
+  if (index.featuredArtworks && typeof index.featuredArtworks === 'object' && !Array.isArray(index.featuredArtworks)) return index.featuredArtworks;
+  if (index.featured && typeof index.featured === 'object' && !Array.isArray(index.featured)) return index.featured;
+  return null;
+}
+
+function normalizeFeaturedOperatorItem(item = {}, index = 0) {
+  const sharedValidator = globalThis.cmsSchemaValidator || null;
+  const normalized = sharedValidator?.normalizeFeaturedItemAliases
+    ? sharedValidator.normalizeFeaturedItemAliases(item, index, { dropLegacyAliases: true })
+    : cloneJson(item || {});
+  return {
+    ...normalized,
+    id: String(normalized?.id || item?.id || '').trim(),
+    title: String(normalized?.title || item?.title || item?.name || '').trim(),
+    description: String(normalized?.description || item?.description || item?.caption || '').trim(),
+    imageUrl: String(normalized?.imageUrl || item?.imageUrl || item?.image || item?.src || item?.url || '').trim(),
+    alt: String(normalized?.alt || item?.alt || '').trim(),
+    room: String(normalized?.room || item?.room || item?.room_key || item?.roomKey || '').trim().toLowerCase(),
+    artworkId: String(normalized?.artworkId || item?.artworkId || item?.artwork_id || '').trim(),
+    ctaLabel: String(normalized?.ctaLabel || item?.ctaLabel || item?.cta_label || '').trim(),
+    isVisible: normalized?.isVisible !== false,
+    sortOrder: Number.isFinite(Number(normalized?.sortOrder)) ? Number(normalized.sortOrder) : index + 1,
+  };
+}
+
+function normalizeFeaturedSortOrder(items = []) {
+  safeArray(items).forEach((item, index) => { item.sortOrder = index + 1; });
+  return items;
 }
 
 function renderStaticDraftActions(draftState = {}, handlers = {}) {
