@@ -952,10 +952,17 @@ export function createEmptyArtworksEditState() {
     isEditing: false,
     editingArtworkId: null,
     editingArtworkCode: null,
+    editingRoomKey: null,
+    editingCanonicalIndex: -1,
+    editingBridgeStatus: '',
+    editingSource: '',
     draftValues: {},
     originalValues: {},
     dirty: false,
     saving: false,
+    mediaUploading: false,
+    mediaUploadError: null,
+    mediaUploadStatus: {},
     saveError: null,
     saveSuccess: null,
     validationErrors: {},
@@ -964,19 +971,28 @@ export function createEmptyArtworksEditState() {
 }
 
 export function extractArtworkTextEditableValues(artwork = {}) {
+  const realSize = artwork.realSize ?? artwork.real_size ?? '';
   return {
     title: artwork.title || '',
     subtitle: artwork.subtitle || '',
-    artist: artwork.artist || '',
+    description: artwork.description || '',
+    content: artwork.content || '',
+    author: artwork.author || '',
+    artist: artwork.artist || artwork.author || '',
     year: artwork.year || '',
     material: artwork.material || '',
-    real_size: artwork.real_size || '',
-    description: artwork.description || '',
+    realSize,
+    real_size: realSize,
+    note: artwork.note || '',
+    imageUrl: artwork.imageUrl || artwork.image_url || artwork.image || artwork.src || artwork.url || '',
+    thumbnailUrl: artwork.thumbnailUrl || artwork.thumbnail_url || artwork.thumbnail || '',
+    posterUrl: artwork.posterUrl || artwork.poster_url || artwork.poster || '',
+    videoUrl: artwork.videoUrl || artwork.video_url || '',
   };
 }
 
 export function hasArtworkTextDraftChanged(draftValues = {}, originalValues = {}) {
-  const keys = ['title', 'subtitle', 'artist', 'year', 'material', 'real_size', 'description'];
+  const keys = ['title', 'subtitle', 'description', 'content', 'author', 'artist', 'year', 'material', 'realSize', 'real_size', 'note', 'imageUrl', 'thumbnailUrl', 'posterUrl', 'videoUrl'];
   return keys.some((key) => normalizeDraftValue(draftValues[key]) !== normalizeDraftValue(originalValues[key]));
 }
 

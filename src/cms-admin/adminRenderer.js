@@ -1,4 +1,4 @@
-import { ADMIN_FEATURE_FLAGS, ADMIN_ROLES, ADMIN_UI, getSupabaseConfigStatus } from './adminConfig.js';
+import { ADMIN_FEATURE_FLAGS, ADMIN_ROLES, ADMIN_UI, STATIC_CMS_DRAFT_CONFIG, getSupabaseConfigStatus } from './adminConfig.js';
 import {
   createSupabaseClient,
   onAuthStateChange,
@@ -6,7 +6,7 @@ import {
   signInWithEmailPassword,
   signOut,
 } from './adminAuth.js';
-import { fetchArtworksPage, fetchDashboardData, updateArtworkTextDraft, updateExperienceIndexSectionDraft, updateGateContentDraft, updateGuideIndexSectionDraft, updateIndexSectionDraft, updateRoomDraft, updateSiteSettingsDraft } from './adminApi.js';
+import { createCmsDraft, fetchArtworksPage, fetchDashboardData, updateCmsDraft, uploadCmsMedia, updateExperienceIndexSectionDraft, updateGateContentDraft, updateGuideIndexSectionDraft, updateIndexSectionDraft, updateRoomDraft, updateSiteSettingsDraft } from './adminApi.js';
 import {
   appendChildren,
   byId,
@@ -43,6 +43,9 @@ import {
   applyArtworksPageResult,
   setArtworksEditState,
   setArtworksListState,
+  setStaticCmsDraftBaseline,
+  setStaticCmsDraftPersistenceState,
+  updateStaticCmsDraftJson,
   setError,
   setLoading,
   setNestedData,
@@ -86,8 +89,9 @@ import {
   getVisibleLabel,
   getWarningLabel,
 } from './adminCopy.js';
-import { validateArtworkTextDraft, validateGateContentDraft, validateHomeExperienceSectionDraft, validateHomeGuideSectionDraft, validateIndexSectionDraft, validateRoomDraft, validateSiteSettingsDraft } from './adminValidation.js';
+import { validateStaticCmsDraft, validateStaticCmsMediaUrl, validateGateContentDraft, validateHomeExperienceSectionDraft, validateHomeGuideSectionDraft, validateIndexSectionDraft, validateRoomDraft, validateSiteSettingsDraft } from './adminValidation.js';
 import { renderStaticCmsDraftTab } from './adminStaticCmsDraft.js';
+import { getMediaUploadStatusKey, getUploadAccept, getUploadedUrl, validateClientMediaFile } from './adminMediaUpload.js';
 import { renderRollbackHistoryTab } from './adminRollbackGate.js';
 import { renderCmsStorageCleanupTab } from './adminCleanupGate.js';
 
@@ -101,6 +105,22 @@ let artworksPageRequestSeq = 0;
 let pendingEditFocusTarget = null;
 let pendingEntityHighlight = null;
 let beforeUnloadGuardBound = false;
+
+let artworkBridgeLoadPromise = null;
+
+const CANONICAL_ARTWORK_TEXT_FIELDS = [
+  'title', 'subtitle', 'description', 'content', 'author', 'artist', 'year', 'material', 'realSize', 'real_size', 'note',
+];
+const CANONICAL_ARTWORK_MEDIA_FIELDS = ['imageUrl', 'thumbnailUrl', 'posterUrl', 'videoUrl'];
+const CANONICAL_ARTWORK_LOCKED_FIELDS = new Set([
+  'position', 'rotation', 'size', 'scale', 'group', 'frame', 'clickable', 'transparent',
+  'collider', 'physics', 'mesh', 'object3D', 'geometry', 'materialConfig', 'renderConfig',
+]);
+const ARTWORK_SCENE_URLS = Object.freeze({
+  indoor: './data/scene.json',
+  outdoor: './data/scene_outdoor.json',
+});
+
 
 boot();
 
@@ -880,6 +900,305 @@ function renderRoomsTab(state) {
   return panel;
 }
 
+
+function getArtworkBridgeStatusLabels(bridge = {}) {
+  const labels = [];
+  if (bridge.sceneStatus === 'match') labels.push({ label: 'Khớp scene', variant: 'success' });
+  else if (bridge.sceneStatus === 'wrong-room') labels.push({ label: 'Sai room', variant: 'danger' });
+  else if (bridge.sceneStatus === 'missing-scene') labels.push({ label: 'Không có object 3D', variant: 'warning' });
+  else labels.push({ label: 'Chưa kiểm scene', variant: 'default' });
+
+  if (bridge.sourceStatus === 'cms-only') labels.push({ label: 'CMS-only', variant: 'warning' });
+  if (bridge.sourceStatus === 'db-only') labels.push({ label: 'DB-only', variant: 'danger' });
+  if (bridge.sourceStatus === 'db-cms') labels.push({ label: 'Canonical draft', variant: 'success' });
+  if (bridge.itemDirty) labels.push({ label: 'Có thay đổi trong draft', variant: 'warning' });
+  if (bridge.draftDirty) labels.push({ label: 'Chưa publish', variant: 'warning' });
+  return labels;
+}
+
+function normalizeArtworkKey(value = '') {
+  return String(value || '').trim().toUpperCase();
+}
+
+function normalizeRoomKey(value = '') {
+  const room = String(value || '').trim().toLowerCase();
+  return ['indoor', 'outdoor'].includes(room) ? room : '';
+}
+
+function getCanonicalArtworkCode(item = {}) {
+  return String(item?.artwork_code || item?.id || item?.code || '').trim();
+}
+
+function getCanonicalArtworkKey(item = {}) {
+  return normalizeArtworkKey(getCanonicalArtworkCode(item));
+}
+
+function getCanonicalRoomItems(cmsJson = {}, roomKey = '') {
+  const room = normalizeRoomKey(roomKey);
+  return Array.isArray(cmsJson?.rooms?.[room]?.artworks) ? cmsJson.rooms[room].artworks : [];
+}
+
+function cloneJson(value) {
+  return JSON.parse(JSON.stringify(value || {}));
+}
+
+function indexCanonicalRoomArtworks(cmsJson = {}) {
+  const byRoomCode = new Map();
+  const byCode = new Map();
+  ['indoor', 'outdoor'].forEach((roomKey) => {
+    getCanonicalRoomItems(cmsJson, roomKey).forEach((item, index) => {
+      const code = getCanonicalArtworkCode(item);
+      const key = normalizeArtworkKey(code);
+      if (!key) return;
+      const record = { roomKey, itemCode: code, itemKey: key, item, index };
+      byRoomCode.set(`${roomKey}::${key}`, record);
+      if (!byCode.has(key)) byCode.set(key, []);
+      byCode.get(key).push(record);
+    });
+  });
+  return { byRoomCode, byCode };
+}
+
+function getArtworkSceneIndex(state = getState()) {
+  const index = state.artworksList?.sceneIndex || {};
+  return {
+    indoor: new Set(safeArray(index.indoor).map(normalizeArtworkKey).filter(Boolean)),
+    outdoor: new Set(safeArray(index.outdoor).map(normalizeArtworkKey).filter(Boolean)),
+  };
+}
+
+function getSceneStatusForItem(roomKey = '', itemKey = '', sceneIndex = getArtworkSceneIndex()) {
+  const room = normalizeRoomKey(roomKey);
+  const key = normalizeArtworkKey(itemKey);
+  if (!room || !key) return 'unknown';
+  if (sceneIndex[room]?.has(key)) return 'match';
+  const otherRoom = room === 'indoor' ? 'outdoor' : 'indoor';
+  if (sceneIndex[otherRoom]?.has(key)) return 'wrong-room';
+  return 'missing-scene';
+}
+
+function getBaselineCanonicalRecord(state = getState(), roomKey = '', itemCode = '') {
+  const index = indexCanonicalRoomArtworks(state.staticCmsDraft?.baselineJson || {});
+  return index.byRoomCode.get(`${normalizeRoomKey(roomKey)}::${normalizeArtworkKey(itemCode)}`) || null;
+}
+
+function hasCanonicalItemChanged(state = getState(), record = null) {
+  if (!record) return false;
+  const baseline = getBaselineCanonicalRecord(state, record.roomKey, record.itemCode);
+  if (!baseline) return true;
+  return JSON.stringify(record.item || {}) !== JSON.stringify(baseline.item || {});
+}
+
+function createArtworkRowFromCanonical(record = {}) {
+  const item = record.item || {};
+  const code = getCanonicalArtworkCode(item);
+  return {
+    id: `cms:${record.roomKey}:${code}`,
+    room_key: record.roomKey,
+    artwork_code: code,
+    type: item.type || item.mediaType || 'artwork',
+    title: item.title || code,
+    subtitle: item.subtitle || '',
+    artist: item.artist || item.author || '',
+    author: item.author || item.artist || '',
+    year: item.year || '',
+    material: item.material || '',
+    real_size: item.real_size || item.realSize || '',
+    realSize: item.realSize || item.real_size || '',
+    description: item.description || '',
+    content: item.content || '',
+    note: item.note || '',
+    image_url: item.image_url || item.imageUrl || item.image || item.src || item.url || '',
+    imageUrl: item.imageUrl || item.image_url || item.image || item.src || item.url || '',
+    thumbnail_url: item.thumbnail_url || item.thumbnailUrl || item.thumbnail || '',
+    thumbnailUrl: item.thumbnailUrl || item.thumbnail_url || item.thumbnail || '',
+    poster_url: item.poster_url || item.posterUrl || item.poster || '',
+    posterUrl: item.posterUrl || item.poster_url || item.poster || '',
+    video_url: item.video_url || item.videoUrl || '',
+    videoUrl: item.videoUrl || item.video_url || '',
+    is_visible: item.is_visible !== false,
+    is_featured: Boolean(item.is_featured),
+    sort_order: Number.isFinite(Number(item.sort_order)) ? Number(item.sort_order) : record.index,
+    cms_warning: '',
+    updated_at: '',
+  };
+}
+
+function buildArtworkOperatorRows(state = getState(), dbRows = []) {
+  const canonicalIndex = indexCanonicalRoomArtworks(state.staticCmsDraft?.draftJson || {});
+  const sceneIndex = getArtworkSceneIndex(state);
+  const seen = new Set();
+  const rows = [];
+
+  safeArray(dbRows).forEach((dbItem) => {
+    const roomKey = normalizeRoomKey(dbItem.room_key);
+    const itemKey = normalizeArtworkKey(dbItem.artwork_code || dbItem.id);
+    const canonicalRecord = canonicalIndex.byRoomCode.get(`${roomKey}::${itemKey}`) || null;
+    const sameCodeRecords = canonicalIndex.byCode.get(itemKey) || [];
+    const bridgeRoomKey = canonicalRecord?.roomKey || roomKey || sameCodeRecords[0]?.roomKey || '';
+    const sceneStatus = canonicalRecord
+      ? getSceneStatusForItem(canonicalRecord.roomKey, canonicalRecord.itemKey, sceneIndex)
+      : sameCodeRecords.length
+        ? 'wrong-room'
+        : getSceneStatusForItem(roomKey, itemKey, sceneIndex);
+    const bridge = {
+      sourceStatus: canonicalRecord ? 'db-cms' : 'db-only',
+      canonicalRecord,
+      canonicalItem: canonicalRecord?.item || null,
+      roomKey: bridgeRoomKey,
+      itemCode: canonicalRecord?.itemCode || dbItem.artwork_code || dbItem.id || '',
+      itemKey: canonicalRecord?.itemKey || itemKey,
+      sceneStatus,
+      sameCodeRecords,
+      itemDirty: canonicalRecord ? hasCanonicalItemChanged(state, canonicalRecord) : false,
+      draftDirty: Boolean(state.staticCmsDraft?.dirty),
+    };
+    const effective = canonicalRecord ? { ...dbItem, ...createArtworkRowFromCanonical(canonicalRecord), id: dbItem.id || `cms:${bridgeRoomKey}:${bridge.itemCode}` } : { ...dbItem };
+    effective.__bridge = bridge;
+    rows.push(effective);
+    if (roomKey && itemKey) seen.add(`${roomKey}::${itemKey}`);
+    if (canonicalRecord) seen.add(`${canonicalRecord.roomKey}::${canonicalRecord.itemKey}`);
+  });
+
+  canonicalIndex.byRoomCode.forEach((record, key) => {
+    if (seen.has(key)) return;
+    const sceneStatus = getSceneStatusForItem(record.roomKey, record.itemKey, sceneIndex);
+    const row = createArtworkRowFromCanonical(record);
+    row.__bridge = {
+      sourceStatus: 'cms-only',
+      canonicalRecord: record,
+      canonicalItem: record.item,
+      roomKey: record.roomKey,
+      itemCode: record.itemCode,
+      itemKey: record.itemKey,
+      sceneStatus,
+      sameCodeRecords: [record],
+      itemDirty: hasCanonicalItemChanged(state, record),
+      draftDirty: Boolean(state.staticCmsDraft?.dirty),
+    };
+    rows.push(row);
+  });
+
+  return rows;
+}
+
+function renderArtworkCanonicalBridgePanel(state = getState()) {
+  const draftState = state.staticCmsDraft || {};
+  const listState = state.artworksList || {};
+  const panel = createElement('section', { className: 'cms-admin-artwork-bridge-panel' });
+  const title = createElement('div', { className: 'cms-admin-artwork-bridge-title' });
+  title.appendChild(createElement('strong', { text: 'Nguồn public canonical cho Viewer' }));
+  const status = draftState.draftJson ? 'Đã có CMS draft' : listState.bridgeLoading ? 'Đang load' : 'Chưa load CMS draft';
+  title.appendChild(renderBadge(status, draftState.draftJson ? 'success' : listState.bridgeLoading ? 'warning' : 'danger'));
+  panel.appendChild(title);
+
+  const source = draftState.sourceUrl || draftState.source || '—';
+  const sceneLoaded = Boolean(listState.sceneIndex?.indoor || listState.sceneIndex?.outdoor);
+  panel.appendChild(createElement('p', {
+    className: 'cms-admin-help-text',
+    text: draftState.draftJson
+      ? `Danh sách đang bridge vào cms_drafts.content_json/current CMS draft. Source: ${source}`
+      : 'Danh sách DB chỉ là catalog/reference cho đến khi load CMS canonical draft. Sửa public Viewer phải ghi vào rooms.[room].artworks[].',
+  }));
+  if (!sceneLoaded) {
+    panel.appendChild(createElement('div', { className: 'cms-admin-alert cms-admin-alert-warning', text: 'Chưa có scene index để xác định item nào thật sự render trong Viewer.' }));
+  }
+  if (listState.bridgeError) {
+    panel.appendChild(renderErrorBox(listState.bridgeError, 'Không load được canonical bridge'));
+  }
+
+  const actions = createElement('div', { className: 'cms-admin-actions cms-admin-artwork-bridge-actions' });
+  const loadButton = createElement('button', {
+    className: 'cms-admin-button cms-admin-button-secondary',
+    type: 'button',
+    text: listState.bridgeLoading ? 'Đang load canonical...' : 'Load / refresh canonical bridge',
+  });
+  loadButton.disabled = Boolean(listState.bridgeLoading);
+  loadButton.addEventListener('click', () => ensureArtworkCanonicalBridge({ force: true }));
+  actions.appendChild(loadButton);
+
+  const openDraftButton = createElement('button', {
+    className: 'cms-admin-button cms-admin-button-ghost',
+    type: 'button',
+    text: 'Mở Bản nháp CMS JSON',
+  });
+  openDraftButton.addEventListener('click', () => switchAdminTab('staticDraft'));
+  actions.appendChild(openDraftButton);
+  panel.appendChild(actions);
+  return panel;
+}
+
+async function ensureArtworkCanonicalBridge({ force = false } = {}) {
+  const state = getState();
+  if (!force && state.artworksList?.bridgeLoading) return artworkBridgeLoadPromise;
+  if (!force && state.staticCmsDraft?.draftJson && state.artworksList?.sceneIndex) return null;
+  if (artworkBridgeLoadPromise && !force) return artworkBridgeLoadPromise;
+
+  setArtworksListState({ bridgeLoading: true, bridgeError: null, bridgeAttempted: true });
+  renderAdminShell();
+  artworkBridgeLoadPromise = (async () => {
+    try {
+      if (force || !getState().staticCmsDraft?.draftJson) {
+        const baseline = await loadArtworkCanonicalBaseline();
+        setStaticCmsDraftBaseline({
+          baselineJson: baseline.json,
+          source: baseline.source,
+          sourceUrl: baseline.url,
+          validation: baseline.validation,
+        });
+      }
+      const sceneIndex = await loadArtworkSceneIndex();
+      setArtworksListState({
+        sceneIndex,
+        bridgeLoading: false,
+        bridgeError: null,
+        bridgeLoadedAt: new Date().toISOString(),
+      });
+    } catch (error) {
+      setArtworksListState({ bridgeLoading: false, bridgeError: normalizeErrorMessage(error) });
+    } finally {
+      artworkBridgeLoadPromise = null;
+      renderAdminShell();
+    }
+  })();
+  return artworkBridgeLoadPromise;
+}
+
+async function loadArtworkCanonicalBaseline() {
+  const candidates = [
+    { source: 'remote', url: STATIC_CMS_DRAFT_CONFIG.remoteUrl },
+    { source: 'fallback', url: STATIC_CMS_DRAFT_CONFIG.fallbackUrl },
+    { source: 'local', url: STATIC_CMS_DRAFT_CONFIG.localGeneratedUrl },
+  ].filter((entry) => entry.url);
+  const errors = [];
+  for (const candidate of candidates) {
+    try {
+      const response = await fetch(candidate.url, { cache: 'no-store' });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const json = await response.json();
+      const validation = validateStaticCmsDraft(json, STATIC_CMS_DRAFT_CONFIG);
+      if (!validation.valid) throw new Error(`CMS canonical validation failed (${Object.keys(validation.errors || {}).length} lỗi).`);
+      return { ...candidate, json: validation.canonicalJson || json, validation };
+    } catch (error) {
+      errors.push(`${candidate.source}: ${normalizeErrorMessage(error)}`);
+    }
+  }
+  throw new Error(`Không load được CMS canonical baseline. ${errors.join(' | ')}`);
+}
+
+async function loadArtworkSceneIndex() {
+  const result = { indoor: [], outdoor: [] };
+  await Promise.all(['indoor', 'outdoor'].map(async (roomKey) => {
+    const url = ARTWORK_SCENE_URLS[roomKey];
+    const response = await fetch(url, { cache: 'no-store' });
+    if (!response.ok) throw new Error(`Không đọc được ${url} HTTP ${response.status}`);
+    const json = await response.json();
+    const items = Array.isArray(json) ? json : safeArray(json?.items || json?.objects || json?.scene || []);
+    result[roomKey] = items.map((item) => item?.id || item?.artwork_code || item?.code).map(normalizeArtworkKey).filter(Boolean);
+  }));
+  return result;
+}
+
 function renderArtworksTab(state) {
   const listState = getArtworkListState(state);
   const copy = ADMIN_COPY.artworks;
@@ -930,7 +1249,11 @@ function renderArtworksTab(state) {
   const paginationTop = renderArtworkPaginationControls(listState);
   appendChildren(toolbar, [paginationTop]);
   panel.appendChild(toolbar);
-  panel.appendChild(renderCompactNotice(copy.futureNote));
+  panel.appendChild(renderArtworkCanonicalBridgePanel(state));
+  panel.appendChild(renderCompactNotice('Danh sách tác phẩm hiện được bridge vào CMS canonical draft. DB artworks chỉ là catalog/reference nếu item chưa khớp rooms.[room].artworks[].'));
+  if (!state.artworksList?.bridgeAttempted && (!state.staticCmsDraft?.draftJson || !state.artworksList?.sceneIndex)) {
+    window.setTimeout(() => ensureArtworkCanonicalBridge({ force: false }), 0);
+  }
 
   if (listState.notice) {
     panel.appendChild(renderNoticeBox(listState.notice, 'info'));
@@ -3551,6 +3874,9 @@ function switchAdminTab(tabKey) {
   if (!requestLeaveEditSession('tab-switch')) return false;
   setActiveTab(tabKey);
   renderAdminShell();
+  if (tabKey === 'artworks') {
+    window.setTimeout(() => ensureArtworkCanonicalBridge({ force: false }), 0);
+  }
   return true;
 }
 
@@ -3572,11 +3898,11 @@ function renderRoomsTable(rooms) {
 }
 
 function renderArtworksTable(state, artworks) {
-  const list = safeArray(artworks);
+  const list = buildArtworkOperatorRows(state, artworks);
   if (!list.length) return renderEmptyState(ADMIN_COPY.artworks.emptyFiltered || ADMIN_COPY.artworks.empty);
 
   const editState = state.artworksEdit || {};
-  const headers = [...ADMIN_COPY.artworks.headers, ADMIN_COPY.artworks.edit?.actionsHeader || 'Thao tác'];
+  const headers = [...ADMIN_COPY.artworks.headers.slice(0, 2), 'Scene sync', ...ADMIN_COPY.artworks.headers.slice(2), ADMIN_COPY.artworks.edit?.actionsHeader || 'Thao tác'];
   const wrap = createElement('div', { className: 'cms-admin-artworks-table-stack' });
   const tableWrap = createElement('div', { className: 'cms-admin-table-wrap cms-admin-artworks-table-wrap' });
   const table = createElement('table', { className: 'cms-admin-table cms-admin-artworks-table' });
@@ -3587,19 +3913,22 @@ function renderArtworksTable(state, artworks) {
   const tbody = createElement('tbody');
 
   list.forEach((item) => {
+    const bridge = item.__bridge || {};
+    const editKey = `${bridge.roomKey || item.room_key || ''}::${bridge.itemCode || item.artwork_code || item.id || ''}`;
     const editingThis = editState.isEditing
-      && editState.editingArtworkId === item.id
-      && (!editState.editingArtworkCode || item.artwork_code === editState.editingArtworkCode);
-    const recentlySaved = matchesPendingHighlight('artwork', item.id);
-    const rowClass = [editingThis ? 'is-editing' : '', recentlySaved ? 'is-recently-saved' : ''].filter(Boolean).join(' ');
+      && normalizeRoomKey(editState.editingRoomKey) === normalizeRoomKey(bridge.roomKey || item.room_key)
+      && normalizeArtworkKey(editState.editingArtworkCode) === normalizeArtworkKey(bridge.itemCode || item.artwork_code || item.id);
+    const recentlySaved = matchesPendingHighlight('artwork', editKey);
+    const rowClass = [editingThis ? 'is-editing' : '', recentlySaved ? 'is-recently-saved' : '', bridge.sourceStatus === 'db-only' ? 'is-db-only' : '', bridge.sceneStatus === 'missing-scene' ? 'is-scene-missing' : ''].filter(Boolean).join(' ');
     const row = createElement('tr', {
       className: rowClass,
-      dataset: { cmsEditRow: 'artwork', cmsEditId: item.id },
+      dataset: { cmsEditRow: 'artwork', cmsEditId: editKey },
     });
     const cells = [
       cellNode(renderRoomNameOnly(item.room_key), 'cms-admin-room-cell'),
       cellNode(renderArtworkIdentityWithInlineAction(state, item), 'cms-admin-artwork-cell'),
-      cellText(item.artist || '—', 'cms-admin-artist-cell'),
+      cellNode(renderArtworkBridgeBadges(bridge), 'cms-admin-artwork-bridge-cell'),
+      cellText(item.artist || item.author || '—', 'cms-admin-artist-cell'),
       cellText(getContentTypeLabel(item.type), 'cms-admin-nowrap'),
       cellNode(renderBadge(getVisibleLabel(item.is_visible), item.is_visible ? 'success' : 'warning')),
       cellNode(renderBadge(getFeaturedLabel(item.is_featured), item.is_featured ? 'success' : 'default')),
@@ -3621,7 +3950,7 @@ function renderArtworksTable(state, artworks) {
     if (editingThis) {
       const editRow = createElement('tr', {
         className: 'cms-admin-artwork-edit-row is-editing',
-        dataset: { cmsEditRow: 'artwork', cmsEditId: item.id },
+        dataset: { cmsEditRow: 'artwork', cmsEditId: editKey },
       });
       const editCell = createElement('td', { attrs: { colspan: String(headers.length) } });
       editCell.appendChild(renderArtworkTextEditPanel(state, item, editState));
@@ -3647,80 +3976,163 @@ function renderArtworkIdentityWithInlineAction(state, artwork) {
   return wrap;
 }
 
+function renderArtworkBridgeBadges(bridge = {}) {
+  const wrap = createElement('div', { className: 'cms-admin-artwork-bridge-badges' });
+  getArtworkBridgeStatusLabels(bridge).forEach((entry) => {
+    wrap.appendChild(renderBadge(entry.label, entry.variant));
+  });
+  if (bridge.sourceStatus === 'db-only') {
+    wrap.appendChild(createElement('small', { className: 'cms-admin-help-text', text: 'Catalog DB, chưa nối vào public CMS draft.' }));
+  } else if (bridge.sceneStatus === 'missing-scene') {
+    wrap.appendChild(createElement('small', { className: 'cms-admin-help-text', text: 'Viewer chưa render nếu Editor/Scene chưa có object này.' }));
+  }
+  return wrap;
+}
+
 function renderArtworkTextEditActions(state, artwork) {
   const copy = ADMIN_COPY.artworks.edit || {};
   const actions = createElement('div', { className: 'cms-admin-artwork-edit-actions' });
   const editState = state.artworksEdit || {};
+  const bridge = artwork.__bridge || {};
 
   if (!canEditArtworkText(state, artwork)) {
-    actions.appendChild(createElement('span', { className: 'cms-admin-inline-note', text: copy.noPermission || 'Chỉ xem' }));
+    const reason = getArtworkEditBlockedReason(state, artwork);
+    actions.appendChild(createElement('span', { className: 'cms-admin-inline-note', text: reason || copy.noPermission || 'Chỉ xem' }));
     return actions;
   }
 
-  const editingThis = editState.isEditing && editState.editingArtworkId === artwork.id;
+  const editingThis = editState.isEditing
+    && normalizeRoomKey(editState.editingRoomKey) === normalizeRoomKey(bridge.roomKey || artwork.room_key)
+    && normalizeArtworkKey(editState.editingArtworkCode) === normalizeArtworkKey(bridge.itemCode || artwork.artwork_code || artwork.id);
   const editButton = createElement('button', {
     className: editingThis ? 'cms-admin-button cms-admin-button-ghost cms-admin-mini-action' : 'cms-admin-button cms-admin-button-primary cms-admin-mini-action',
-    text: editingThis ? (copy.editing || 'Đang chỉnh') : (copy.rowButton || 'Sửa'),
+    text: editingThis ? (copy.editing || 'Đang chỉnh') : 'Sửa canonical',
     title: `${copy.button || 'Chỉnh sửa thông tin'} ${artwork.title || artwork.artwork_code || ''}`.trim(),
     type: 'button',
     attrs: { 'aria-label': `${copy.button || 'Chỉnh sửa thông tin'} ${artwork.title || artwork.artwork_code || ''}`.trim() },
   });
-  editButton.addEventListener('click', () => {
-    const guard = requestStartEditSession({ type: 'artwork', id: artwork.id });
-    if (!guard.allowed) return;
-    if (!guard.same) startArtworkTextEdit(artwork);
-    queueEditPanelFocus('artwork', artwork.id, 'title');
-    renderAdminShell();
-  });
+  editButton.addEventListener('click', () => handleStartArtworkCanonicalEdit(artwork));
   actions.appendChild(editButton);
   return actions;
 }
 
+function getArtworkEditBlockedReason(state = getState(), artwork = {}) {
+  const bridge = artwork.__bridge || {};
+  if (isMobileSafeModeViewport()) return 'Mobile safe-mode: chỉ xem.';
+  if (!ADMIN_FEATURE_FLAGS.allowArtworksTextEdit) return 'Chưa bật chỉnh sửa tác phẩm.';
+  if (!state.supabase) return 'Supabase chưa sẵn sàng.';
+  const role = state.profile?.role;
+  const active = state.profile?.is_active === true;
+  if (!active || ![ADMIN_ROLES.admin, ADMIN_ROLES.editor].includes(role)) return 'Tài khoản không có quyền sửa canonical draft.';
+  if (!state.staticCmsDraft?.draftJson) return 'Cần load CMS canonical draft trước.';
+  if (!bridge.canonicalItem) return 'DB catalog, chưa có item trong canonical draft.';
+  if (!normalizeRoomKey(bridge.roomKey) || !normalizeArtworkKey(bridge.itemCode)) return 'Thiếu room/id canonical.';
+  return '';
+}
+
+function canEditArtworkText(state, artwork) {
+  return !getArtworkEditBlockedReason(state, artwork);
+}
+
+function handleStartArtworkCanonicalEdit(artwork = {}) {
+  const bridge = artwork.__bridge || {};
+  const editKey = `${bridge.roomKey || artwork.room_key || ''}::${bridge.itemCode || artwork.artwork_code || artwork.id || ''}`;
+  const guard = requestStartEditSession({ type: 'artwork', id: editKey });
+  if (!guard.allowed) return;
+  if (!guard.same) {
+    startArtworkTextEdit({
+      ...(bridge.canonicalItem || artwork),
+      id: artwork.id || editKey,
+      artwork_code: bridge.itemCode || artwork.artwork_code || artwork.id,
+      room_key: bridge.roomKey || artwork.room_key,
+    });
+    setArtworksEditState({
+      editingArtworkId: artwork.id || editKey,
+      editingArtworkCode: bridge.itemCode || artwork.artwork_code || artwork.id,
+      editingRoomKey: bridge.roomKey || artwork.room_key,
+      editingCanonicalIndex: Number.isFinite(Number(bridge.canonicalRecord?.index)) ? Number(bridge.canonicalRecord.index) : -1,
+      editingBridgeStatus: bridge.sceneStatus || '',
+      editingSource: bridge.sourceStatus || '',
+      saveSuccess: null,
+      saveError: null,
+      mediaUploadStatus: {},
+      mediaUploadError: null,
+    });
+  }
+  queueEditPanelFocus('artwork', editKey, 'title');
+  renderAdminShell();
+}
+
 function renderArtworkTextEditPanel(state, artwork, editState = {}) {
   const copy = ADMIN_COPY.artworks.edit || {};
-  const panel = createElement('section', { className: 'cms-admin-home-hero-edit-panel cms-admin-artwork-edit-panel cms-admin-edit-panel-highlight', dataset: { cmsEditPanel: 'artwork', cmsEditId: artwork.id } });
-  panel.appendChild(renderDataCardTitle(copy.title || 'Chỉnh sửa tác phẩm', artwork.title || artwork.artwork_code || 'Tác phẩm'));
-  panel.appendChild(renderCompactNotice(copy.safeNote || 'Chức năng này chỉ lưu bản nháp CMS, không công khai lên website.'));
-  panel.appendChild(renderCompactNotice(copy.technicalNote || 'Mã tác phẩm, phòng, loại nội dung, trạng thái hiển thị và thứ tự chỉ xem ở bước này.'));
-  panel.appendChild(renderCompactNotice(copy.mediaReadonlyNote || 'Ảnh, video, poster và audio sẽ chỉnh ở bước Media Upload/Media Picker sau.'));
+  const bridge = artwork.__bridge || {};
+  const editKey = `${bridge.roomKey || artwork.room_key || ''}::${bridge.itemCode || artwork.artwork_code || artwork.id || ''}`;
+  const panel = createElement('section', { className: 'cms-admin-home-hero-edit-panel cms-admin-artwork-edit-panel cms-admin-edit-panel-highlight', dataset: { cmsEditPanel: 'artwork', cmsEditId: editKey } });
+  panel.appendChild(renderDataCardTitle('Chỉnh sửa canonical room artwork', artwork.title || artwork.artwork_code || 'Tác phẩm'));
+  panel.appendChild(renderCompactNotice('Form này cập nhật cms_drafts.content_json.rooms.[room].artworks[]. Website public chưa thay đổi cho đến khi publish bằng quy trình CMS JSON hiện có.'));
+  panel.appendChild(renderCompactNotice('Editor/Scene vẫn là source-of-truth cho object 3D, vị trí, kích thước và layout. CMS không tạo object 3D mới.'));
+  panel.appendChild(renderArtworkBridgeBadges(bridge));
 
+  if (bridge.sceneStatus !== 'match') {
+    panel.appendChild(createElement('div', {
+      className: 'cms-admin-alert cms-admin-alert-warning',
+      text: bridge.sceneStatus === 'missing-scene'
+        ? 'Item này chưa có object 3D trong scene. Cần tạo object trong Editor/Scene trước; Viewer chưa chắc hiển thị thay đổi này.'
+        : 'Item này có dấu hiệu lệch room/ID so với scene. Hãy kiểm tra mapping trước khi publish.',
+    }));
+  }
   if (editState.saveError) {
     panel.appendChild(renderNoticeBox(`${copy.error || 'Không thể lưu, vui lòng kiểm tra lại thông tin.'} ${normalizeErrorMessage(editState.saveError)}`, 'error'));
   }
   if (editState.saveSuccess) {
     panel.appendChild(renderNoticeBox(editState.saveSuccess, 'success'));
   }
+  if (editState.mediaUploadError) {
+    panel.appendChild(renderNoticeBox(normalizeErrorMessage(editState.mediaUploadError), 'error'));
+  }
 
-  const form = createElement('form', { className: 'cms-admin-edit-form cms-admin-artwork-edit-form', attrs: { novalidate: 'true' } });
+  const form = createElement('form', { className: 'cms-admin-edit-form cms-admin-artwork-edit-form cms-admin-artwork-canonical-form', attrs: { novalidate: 'true' } });
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
     await handleSaveArtworkTextDraft();
   });
 
   const metadataGroup = createElement('section', { className: 'cms-admin-home-form-section cms-admin-artwork-edit-metadata' });
-  metadataGroup.appendChild(createElement('h4', { className: 'cms-admin-data-group-title', text: copy.groups?.metadata || 'Metadata được phép sửa' }));
+  metadataGroup.appendChild(createElement('h4', { className: 'cms-admin-data-group-title', text: 'Nội dung / metadata canonical' }));
   const fields = createElement('div', { className: 'cms-admin-edit-field-grid' });
   fields.appendChild(renderArtworkEditableTextField('title', copy.fields?.title || 'Tên tác phẩm', editState, { required: true, placeholder: copy.placeholders?.title || '' }));
   fields.appendChild(renderArtworkEditableTextField('subtitle', copy.fields?.subtitle || 'Phụ đề', editState, { placeholder: copy.placeholders?.subtitle || '' }));
-  fields.appendChild(renderArtworkEditableTextField('artist', copy.fields?.artist || 'Tác giả / Đơn vị', editState, { placeholder: copy.placeholders?.artist || '' }));
+  fields.appendChild(renderArtworkEditableTextField('description', copy.fields?.description || 'Mô tả ngắn', editState, { multiline: true, rows: '4', placeholder: copy.placeholders?.description || '' }));
+  fields.appendChild(renderArtworkEditableTextField('content', 'Nội dung chi tiết', editState, { multiline: true, rows: '5', placeholder: 'Nội dung hiển thị trong popup nếu có...' }));
+  fields.appendChild(renderArtworkEditableTextField('author', 'Tác giả', editState, { placeholder: 'Tác giả...' }));
+  fields.appendChild(renderArtworkEditableTextField('artist', copy.fields?.artist || 'Nghệ sĩ / tác giả', editState, { placeholder: copy.placeholders?.artist || '' }));
   fields.appendChild(renderArtworkEditableTextField('year', copy.fields?.year || 'Năm sáng tác / Thời gian', editState, { placeholder: copy.placeholders?.year || '' }));
   fields.appendChild(renderArtworkEditableTextField('material', copy.fields?.material || 'Chất liệu', editState, { placeholder: copy.placeholders?.material || '' }));
-  fields.appendChild(renderArtworkEditableTextField('real_size', copy.fields?.realSize || 'Kích thước thật', editState, { placeholder: copy.placeholders?.realSize || '' }));
-  fields.appendChild(renderArtworkEditableTextField('description', copy.fields?.description || 'Mô tả ngắn', editState, { multiline: true, rows: '5', placeholder: copy.placeholders?.description || '' }));
+  fields.appendChild(renderArtworkEditableTextField('realSize', copy.fields?.realSize || 'Kích thước thật', editState, { placeholder: copy.placeholders?.realSize || '' }));
+  fields.appendChild(renderArtworkEditableTextField('note', 'Ghi chú', editState, { multiline: true, rows: '3', placeholder: 'Ghi chú nội bộ hoặc bổ sung...' }));
   metadataGroup.appendChild(fields);
   form.appendChild(metadataGroup);
 
+  const mediaGroup = createElement('section', { className: 'cms-admin-home-form-section cms-admin-artwork-edit-media' });
+  mediaGroup.appendChild(createElement('h4', { className: 'cms-admin-data-group-title', text: 'Media canonical' }));
+  mediaGroup.appendChild(createElement('p', { className: 'cms-admin-help-text', text: 'Có thể nhập URL/path hợp lệ hoặc upload qua upload-cms-media. Upload chỉ gắn URL vào bản nháp; chưa publish website.' }));
+  const mediaFields = createElement('div', { className: 'cms-admin-edit-field-grid cms-admin-artwork-media-edit-grid' });
+  CANONICAL_ARTWORK_MEDIA_FIELDS.forEach((fieldName) => {
+    mediaFields.appendChild(renderArtworkEditableMediaField(fieldName, getArtworkMediaFieldLabel(fieldName), editState));
+  });
+  mediaGroup.appendChild(mediaFields);
+  form.appendChild(mediaGroup);
+
   form.appendChild(renderArtworkTechnicalReadonlyBlock(artwork, copy));
-  form.appendChild(renderArtworkMediaReadonlyBlock(artwork, copy));
 
   const dirtyNotice = createElement('p', {
     className: `cms-admin-dirty-notice${editState.dirty ? '' : ' cms-admin-hidden'}`,
-    text: copy.dirty || 'Có thay đổi chưa lưu.',
+    text: 'Có thay đổi chưa lưu vào cms_drafts.content_json.',
     attrs: { role: 'status' },
   });
   form.appendChild(dirtyNotice);
 
-  form.appendChild(renderEditActionBlock(editState, copy, {
+  form.appendChild(renderEditActionBlock(editState, { ...copy, save: editState.saving ? 'Đang lưu...' : 'Lưu vào CMS draft', dirty: 'Có thay đổi chưa lưu vào canonical draft.' }, {
     onCancel: handleCancelArtworkTextEdit,
     onReset: () => handleResetActiveDraft('artwork'),
   }));
@@ -3729,6 +4141,21 @@ function renderArtworkTextEditPanel(state, artwork, editState = {}) {
   form.addEventListener('change', () => updateArtworkFormControls(form));
   panel.appendChild(form);
   return panel;
+}
+
+function getArtworkMediaFieldLabel(fieldName = '') {
+  return {
+    imageUrl: 'Ảnh chính / imageUrl',
+    thumbnailUrl: 'Ảnh đại diện / thumbnailUrl',
+    posterUrl: 'Poster video / posterUrl',
+    videoUrl: 'Video MP4 / videoUrl',
+  }[fieldName] || fieldName;
+}
+
+function getArtworkMediaKindForField(fieldName = '') {
+  if (fieldName === 'videoUrl') return 'video';
+  if (fieldName === 'posterUrl') return 'poster';
+  return 'image';
 }
 
 function renderArtworkEditableTextField(fieldName, label, editState, options = {}) {
@@ -3754,25 +4181,63 @@ function renderArtworkEditableTextField(fieldName, label, editState, options = {
   return field;
 }
 
+function renderArtworkEditableMediaField(fieldName, label, editState) {
+  const wrap = createElement('div', { className: 'cms-admin-edit-field cms-admin-artwork-media-edit-field' });
+  wrap.appendChild(createElement('span', { className: 'cms-admin-edit-label', text: label }));
+  const input = createElement('input', {
+    className: 'cms-admin-edit-input',
+    type: 'text',
+    value: editState.draftValues?.[fieldName] || '',
+    placeholder: './assets/... hoặc https://...',
+    attrs: { name: fieldName, autocomplete: 'off' },
+  });
+  input.addEventListener('input', () => updateArtworkTextDraftField(fieldName, input.value));
+  wrap.appendChild(input);
+  wrap.appendChild(renderFieldMessage(fieldName, editState));
+
+  const uploadRow = createElement('div', { className: 'cms-admin-artwork-media-upload-row' });
+  const kind = getArtworkMediaKindForField(fieldName);
+  const fileInput = createElement('input', {
+    type: 'file',
+    className: 'cms-admin-artwork-media-file-input',
+    attrs: { accept: getUploadAccept(kind), 'aria-label': `Upload ${label}` },
+  });
+  fileInput.disabled = Boolean(editState.mediaUploading || editState.saving);
+  const uploadButton = createElement('button', {
+    className: 'cms-admin-button cms-admin-button-secondary cms-admin-mini-action',
+    text: editState.mediaUploading ? 'Đang upload...' : 'Upload',
+    type: 'button',
+  });
+  uploadButton.disabled = Boolean(editState.mediaUploading || editState.saving);
+  uploadButton.addEventListener('click', () => handleUploadArtworkCanonicalMedia(fieldName, fileInput));
+  appendChildren(uploadRow, [fileInput, uploadButton]);
+  wrap.appendChild(uploadRow);
+
+  const status = editState.mediaUploadStatus?.[fieldName];
+  if (status?.success) wrap.appendChild(createElement('small', { className: 'cms-admin-help-text cms-admin-success-text', text: status.success }));
+  if (status?.error) wrap.appendChild(createElement('small', { className: 'cms-admin-help-text cms-admin-danger-text', text: status.error }));
+  return wrap;
+}
+
 function renderArtworkTechnicalReadonlyBlock(artwork, copy) {
+  const bridge = artwork.__bridge || {};
   const block = createElement('section', { className: 'cms-admin-readonly-field-grid cms-admin-home-technical-strip cms-admin-artwork-technical-strip' });
-  block.appendChild(renderReadonlyField(copy.readonly?.artworkCode || 'Mã tác phẩm', artwork?.artwork_code));
-  block.appendChild(renderReadonlyField(copy.readonly?.room || 'Phòng', getRoomLabel(artwork?.room_key)));
+  block.appendChild(renderReadonlyField(copy.readonly?.artworkCode || 'Mã tác phẩm', bridge.itemCode || artwork?.artwork_code));
+  block.appendChild(renderReadonlyField(copy.readonly?.room || 'Phòng', getRoomLabel(bridge.roomKey || artwork?.room_key)));
   block.appendChild(renderReadonlyField(copy.readonly?.type || 'Loại nội dung', getContentTypeLabel(artwork?.type)));
-  block.appendChild(renderReadonlyField(copy.readonly?.visible || 'Trạng thái hiển thị', getVisibleLabel(artwork?.is_visible)));
-  block.appendChild(renderReadonlyField(copy.readonly?.featured || 'Tác phẩm nổi bật', getFeaturedLabel(artwork?.is_featured)));
+  block.appendChild(renderReadonlyField('Source UI', bridge.sourceStatus === 'db-only' ? 'DB catalog/reference' : 'Canonical CMS draft'));
+  block.appendChild(renderReadonlyField('Scene sync', bridge.sceneStatus || 'unknown'));
   block.appendChild(renderReadonlyField(copy.readonly?.sortOrder || 'Thứ tự hiển thị', artwork?.sort_order));
-  block.appendChild(renderReadonlyField(copy.readonly?.warning || 'Cảnh báo CMS', getWarningLabel(artwork?.cms_warning)));
   block.appendChild(renderReadonlyField(copy.readonly?.updatedAt || 'Cập nhật gần nhất', formatDateTime(artwork?.updated_at)));
   return block;
 }
 
 function renderArtworkMediaReadonlyBlock(artwork, copy) {
   const block = createElement('section', { className: 'cms-admin-readonly-field-grid cms-admin-home-technical-strip cms-admin-artwork-media-strip' });
-  block.appendChild(renderReadonlyField(copy.readonly?.image || 'Ảnh chính', artwork?.image_url));
-  block.appendChild(renderReadonlyField(copy.readonly?.thumbnail || 'Ảnh đại diện', artwork?.thumbnail_url));
-  block.appendChild(renderReadonlyField(copy.readonly?.video || 'Video', artwork?.video_url));
-  block.appendChild(renderReadonlyField(copy.readonly?.poster || 'Poster', artwork?.poster_url));
+  block.appendChild(renderReadonlyField(copy.readonly?.image || 'Ảnh chính', artwork?.image_url || artwork?.imageUrl));
+  block.appendChild(renderReadonlyField(copy.readonly?.thumbnail || 'Ảnh đại diện', artwork?.thumbnail_url || artwork?.thumbnailUrl));
+  block.appendChild(renderReadonlyField(copy.readonly?.video || 'Video', artwork?.video_url || artwork?.videoUrl));
+  block.appendChild(renderReadonlyField(copy.readonly?.poster || 'Poster', artwork?.poster_url || artwork?.posterUrl));
   block.appendChild(renderReadonlyField(copy.readonly?.audio || 'Audio', artwork?.audio_url));
   return block;
 }
@@ -3784,80 +4249,261 @@ function updateArtworkFormControls(form) {
   const notice = form.querySelector('.cms-admin-dirty-notice');
   const saveButton = form.querySelector('button[type="submit"]');
   if (notice) notice.classList.toggle('cms-admin-hidden', !dirty);
-  if (saveButton) saveButton.disabled = Boolean(state.artworksEdit?.saving) || !dirty;
+  if (saveButton) saveButton.disabled = Boolean(state.artworksEdit?.saving || state.artworksEdit?.mediaUploading) || !dirty;
   updateSaveDisabledReason(form, state.artworksEdit || {});
 }
 
-function canEditArtworkText(state, artwork) {
-  const role = state.profile?.role;
-  const active = state.profile?.is_active === true;
-  const allowedRole = role === ADMIN_ROLES.admin || role === ADMIN_ROLES.editor;
-  return Boolean(!isMobileSafeModeViewport() && ADMIN_FEATURE_FLAGS.allowArtworksTextEdit && state.supabase && allowedRole && active && artwork?.id);
+function validateArtworkCanonicalEdit(state = getState()) {
+  const errors = {};
+  const warnings = {};
+  const edit = state.artworksEdit || {};
+  const roomKey = normalizeRoomKey(edit.editingRoomKey);
+  const itemCode = String(edit.editingArtworkCode || '').trim();
+  const itemKey = normalizeArtworkKey(itemCode);
+  const values = normalizeArtworkCanonicalValues(edit.draftValues || {});
+  if (!roomKey) errors.room = 'Room canonical phải là indoor hoặc outdoor.';
+  if (!itemKey) errors.id = 'ID/mã tác phẩm không được để trống.';
+  if (!values.title) errors.title = 'Tên tác phẩm không được để trống.';
+  CANONICAL_ARTWORK_MEDIA_FIELDS.forEach((fieldName) => {
+    const value = values[fieldName];
+    if (!value) return;
+    const check = validateStaticCmsMediaUrl(value, STATIC_CMS_DRAFT_CONFIG);
+    if (!check.valid) errors[fieldName] = `${fieldName} không hợp lệ hoặc ngoài allowlist (${check.reason}).`;
+  });
+  if (edit.editingBridgeStatus === 'missing-scene') warnings.scene = 'Item chưa có object 3D trong scene; Viewer chưa chắc hiển thị.';
+  if (edit.editingBridgeStatus === 'wrong-room') warnings.scene = 'ID có dấu hiệu thuộc room khác trong scene.';
+  if (edit.editingSource === 'db-only') errors.source = 'DB catalog chưa nối vào canonical draft; không lưu public từ source này.';
+
+  const patchResult = Object.keys(errors).length ? null : patchCanonicalArtworkInDraft(state.staticCmsDraft?.draftJson, roomKey, itemCode, values);
+  if (!patchResult?.ok && !Object.keys(errors).length) errors.draft = patchResult?.error || 'Không patch được canonical draft.';
+  const staticValidation = patchResult?.ok ? validateStaticCmsDraft(patchResult.draftJson, STATIC_CMS_DRAFT_CONFIG) : null;
+  if (staticValidation && !staticValidation.valid) {
+    warnings.contract = `CMS draft sau khi sửa còn ${Object.keys(staticValidation.errors || {}).length} lỗi contract. Không lưu server-side nếu còn blocker.`;
+  }
+  return { valid: Object.keys(errors).length === 0, errors, warnings, values, patchResult, staticValidation };
+}
+
+function normalizeArtworkCanonicalValues(values = {}) {
+  const realSize = String(values.realSize ?? values.real_size ?? '').trim();
+  return {
+    title: String(values.title ?? '').trim(),
+    subtitle: String(values.subtitle ?? '').trim(),
+    description: String(values.description ?? '').trim(),
+    content: String(values.content ?? '').trim(),
+    author: String(values.author ?? '').trim(),
+    artist: String(values.artist ?? '').trim(),
+    year: String(values.year ?? '').trim(),
+    material: String(values.material ?? '').trim(),
+    realSize,
+    real_size: realSize,
+    note: String(values.note ?? '').trim(),
+    imageUrl: String(values.imageUrl ?? '').trim(),
+    thumbnailUrl: String(values.thumbnailUrl ?? '').trim(),
+    posterUrl: String(values.posterUrl ?? '').trim(),
+    videoUrl: String(values.videoUrl ?? '').trim(),
+  };
+}
+
+function patchCanonicalArtworkInDraft(draftJson = {}, roomKey = '', itemCode = '', values = {}) {
+  const room = normalizeRoomKey(roomKey);
+  const key = normalizeArtworkKey(itemCode);
+  if (!draftJson || typeof draftJson !== 'object') return { ok: false, error: 'Chưa có CMS draft.' };
+  if (!room || !key) return { ok: false, error: 'Thiếu room hoặc mã tác phẩm.' };
+  const next = cloneJson(draftJson);
+  const items = getCanonicalRoomItems(next, room);
+  const index = items.findIndex((item) => getCanonicalArtworkKey(item) === key);
+  if (index < 0) return { ok: false, error: 'Item không tồn tại trong rooms.[room].artworks[].' };
+  const item = { ...(items[index] || {}) };
+  CANONICAL_ARTWORK_TEXT_FIELDS.forEach((fieldName) => {
+    if (!Object.prototype.hasOwnProperty.call(values, fieldName)) return;
+    if (CANONICAL_ARTWORK_LOCKED_FIELDS.has(fieldName)) return;
+    item[fieldName] = values[fieldName];
+  });
+  if (Object.prototype.hasOwnProperty.call(item, 'real_size')) item.real_size = values.realSize || values.real_size || '';
+  item.realSize = values.realSize || values.real_size || '';
+  patchArtworkMediaAliases(item, 'image', values.imageUrl);
+  patchArtworkMediaAliases(item, 'thumbnail', values.thumbnailUrl);
+  patchArtworkMediaAliases(item, 'poster', values.posterUrl);
+  patchArtworkMediaAliases(item, 'video', values.videoUrl);
+  items[index] = item;
+  return { ok: true, draftJson: next, item, index };
+}
+
+function patchArtworkMediaAliases(item = {}, group = '', value = '') {
+  const text = String(value ?? '').trim();
+  const aliasesByGroup = {
+    image: ['imageUrl', 'image_url', 'image', 'src', 'url'],
+    thumbnail: ['thumbnailUrl', 'thumbnail_url', 'thumbnail'],
+    poster: ['posterUrl', 'poster_url', 'poster'],
+    video: ['videoUrl', 'video_url'],
+  };
+  const aliases = aliasesByGroup[group] || [];
+  const existing = aliases.filter((key) => Object.prototype.hasOwnProperty.call(item, key));
+  const targets = existing.length ? existing : [aliases[0]].filter(Boolean);
+  targets.forEach((key) => { item[key] = text; });
+}
+
+function getDraftPersistenceAccessForArtwork(appState = {}) {
+  if (!appState.supabase) return { allowed: false, reason: 'Supabase client chưa sẵn sàng.' };
+  if (!appState.session?.user?.id) return { allowed: false, reason: 'Cần đăng nhập để lưu bản nháp CMS.' };
+  const role = String(appState.profile?.role || '').trim().toLowerCase();
+  const active = appState.profile?.is_active === true;
+  if (!active || !['admin', 'editor'].includes(role)) return { allowed: false, reason: 'Tài khoản không có quyền lưu bản nháp CMS.' };
+  return { allowed: true, userId: appState.session.user.id, role };
+}
+
+function createArtworkDraftPayload(draftState = {}, exportJson = {}, validation = {}) {
+  return {
+    title: draftState.draftTitle || `Bản nháp CMS ${exportJson.version || draftState.source || ''}`.trim(),
+    status: validation.valid ? 'validated' : 'draft',
+    content_json: exportJson,
+    validation_json: validation,
+    source_version: exportJson.version || draftState.draftJson?.version || '',
+    source_url: draftState.sourceUrl || STATIC_CMS_DRAFT_CONFIG.remoteUrl || '',
+    source_type: draftState.source || 'artworks-canonical-bridge',
+    note: draftState.draftNote || 'Cập nhật từ Danh sách tác phẩm canonical bridge.',
+  };
 }
 
 async function handleSaveArtworkTextDraft() {
   const state = getState();
-  const copy = ADMIN_COPY.artworks.edit || {};
-  const artwork = safeArray(state.artworksList?.items || state.data.artworks).find((item) => item.id === state.artworksEdit?.editingArtworkId && (!state.artworksEdit?.editingArtworkCode || item.artwork_code === state.artworksEdit?.editingArtworkCode));
-  if (!canEditArtworkText(state, artwork)) return;
-
-  const validation = validateArtworkTextDraft({
-    ...(state.artworksEdit?.draftValues || {}),
-    artworkId: state.artworksEdit?.editingArtworkId,
-    artworkCode: state.artworksEdit?.editingArtworkCode,
-    originalCmsWarning: artwork?.cms_warning,
-    originalHasMedia: Boolean(artwork?.image_url || artwork?.thumbnail_url || artwork?.video_url || artwork?.poster_url || artwork?.audio_url),
-  }, copy);
+  const validation = validateArtworkCanonicalEdit(state);
   if (!validation.valid) {
-    setArtworksEditState({
-      validationErrors: validation.errors,
-      validationWarnings: validation.warnings,
-      saveError: null,
-      saveSuccess: null,
-    });
-    queueEditPanelFocus('artwork', state.artworksEdit?.editingArtworkId, Object.keys(validation.errors || {})[0] || 'title');
+    setArtworksEditState({ validationErrors: validation.errors, validationWarnings: validation.warnings, saveError: null, saveSuccess: null });
+    queueEditPanelFocus('artwork', `${state.artworksEdit?.editingRoomKey || ''}::${state.artworksEdit?.editingArtworkCode || ''}`, Object.keys(validation.errors || {})[0] || 'title');
+    renderAdminShell();
+    return;
+  }
+  if (!validation.staticValidation?.valid) {
+    setArtworksEditState({ validationErrors: validation.staticValidation?.errors || {}, validationWarnings: validation.staticValidation?.warnings || validation.warnings, saveError: 'Validation canonical CMS còn lỗi blocker. Chưa lưu server-side.', saveSuccess: null });
     renderAdminShell();
     return;
   }
 
-  setArtworksEditState({
-    saving: true,
-    saveError: null,
-    saveSuccess: null,
-    validationErrors: {},
-    validationWarnings: validation.warnings,
-  });
+  const access = getDraftPersistenceAccessForArtwork(state);
+  if (!access.allowed) {
+    setArtworksEditState({ saveError: access.reason, validationWarnings: validation.warnings });
+    renderAdminShell();
+    return;
+  }
+
+  setArtworksEditState({ saving: true, saveError: null, saveSuccess: null, validationErrors: {}, validationWarnings: validation.warnings });
+  setStaticCmsDraftPersistenceState({ isSavingDraft: true, draftPersistenceError: null, draftSaveStatus: '' });
   renderAdminShell();
 
-  const latestState = getState();
-  const { error } = await updateArtworkTextDraft(
-    latestState.supabase,
-    latestState.artworksEdit?.editingArtworkId,
-    latestState.artworksEdit?.editingArtworkCode,
-    validation.values,
-    latestState.session?.user?.id || null
-  );
+  const latest = getState();
+  const draftState = latest.staticCmsDraft || {};
+  const exportJson = validation.staticValidation.canonicalJson || validation.patchResult.draftJson;
+  const payload = createArtworkDraftPayload(draftState, exportJson, validation.staticValidation);
+  const result = draftState.currentDraftId
+    ? await updateCmsDraft(latest.supabase, draftState.currentDraftId, payload, access.userId)
+    : await createCmsDraft(latest.supabase, payload, access.userId);
 
-  if (error) {
-    setArtworksEditState({ saving: false, saveError: error, validationWarnings: validation.warnings });
+  if (result.error) {
+    setArtworksEditState({ saving: false, saveError: normalizeErrorMessage(result.error), validationWarnings: validation.warnings });
+    setStaticCmsDraftPersistenceState({ isSavingDraft: false, draftPersistenceError: normalizeErrorMessage(result.error) });
     renderAdminShell();
     return;
   }
 
-  const savedArtworkId = latestState.artworksEdit?.editingArtworkId;
-  await loadArtworksPage({}, { renderStart: false, savedArtworkId });
+  updateStaticCmsDraftJson(exportJson, validation.staticValidation);
+  setStaticCmsDraftPersistenceState({
+    isSavingDraft: false,
+    currentDraftId: result.data?.id || draftState.currentDraftId || '',
+    draftLastSavedAt: result.data?.updated_at || new Date().toISOString(),
+    draftSaveStatus: 'Đã cập nhật bản nháp CMS canonical. Website public chưa thay đổi cho đến khi publish.',
+    dirty: false,
+    validation: validation.staticValidation,
+    baselineJson: cloneJson(exportJson),
+    draftJson: cloneJson(exportJson),
+    draftPersistenceError: null,
+  });
+  const editKey = `${latest.artworksEdit?.editingRoomKey || ''}::${latest.artworksEdit?.editingArtworkCode || ''}`;
+  queueEntityHighlight('artwork', editKey);
   setArtworksEditState({
     isEditing: false,
     editingArtworkId: null,
     editingArtworkCode: null,
+    editingRoomKey: null,
+    editingCanonicalIndex: -1,
+    editingBridgeStatus: '',
+    editingSource: '',
     draftValues: {},
     originalValues: {},
     dirty: false,
     saving: false,
+    mediaUploading: false,
     saveError: null,
-    saveSuccess: copy.success || 'Đã lưu bản nháp. Website public chưa thay đổi.',
+    saveSuccess: 'Đã cập nhật cms_drafts.content_json. Hãy dùng quy trình Công khai nội dung để publish website.',
     validationErrors: {},
     validationWarnings: {},
+  });
+  renderAdminShell();
+}
+
+async function handleUploadArtworkCanonicalMedia(fieldName, input) {
+  const state = getState();
+  const edit = state.artworksEdit || {};
+  const roomKey = normalizeRoomKey(edit.editingRoomKey);
+  const itemCode = String(edit.editingArtworkCode || '').trim();
+  const mediaKind = getArtworkMediaKindForField(fieldName);
+  const file = input?.files?.[0] || null;
+  const fileCheck = validateClientMediaFile(file, mediaKind);
+  if (!fileCheck.valid) {
+    setArtworksEditState({ mediaUploadError: fileCheck.reason, mediaUploadStatus: { ...(edit.mediaUploadStatus || {}), [fieldName]: { error: fileCheck.reason, success: '' } } });
+    renderAdminShell();
+    return;
+  }
+  if (!roomKey || !itemCode || !state.staticCmsDraft?.draftJson) {
+    setArtworksEditState({ mediaUploadError: 'Cần item canonical có room/id hợp lệ trước khi upload.', mediaUploadStatus: { ...(edit.mediaUploadStatus || {}), [fieldName]: { error: 'Thiếu room/id canonical.', success: '' } } });
+    renderAdminShell();
+    return;
+  }
+
+  const statusKey = getMediaUploadStatusKey(roomKey, itemCode, fieldName);
+  setArtworksEditState({ mediaUploading: true, mediaUploadError: null, mediaUploadStatus: { ...(edit.mediaUploadStatus || {}), [fieldName]: { loading: true, error: '', success: '' } } });
+  renderAdminShell();
+
+  const result = await uploadCmsMedia(state.supabase, {
+    file,
+    targetType: 'room_artwork',
+    roomKey,
+    itemId: itemCode,
+    artworkCode: itemCode,
+    fieldName,
+    mediaKind,
+    draftId: state.staticCmsDraft?.currentDraftId || '',
+  });
+  if (result.error) {
+    const message = normalizeErrorMessage(result.error);
+    setArtworksEditState({ mediaUploading: false, mediaUploadError: message, mediaUploadStatus: { ...(getState().artworksEdit?.mediaUploadStatus || {}), [fieldName]: { loading: false, error: message, success: '' } } });
+    renderAdminShell();
+    return;
+  }
+  const publicUrl = getUploadedUrl(result.data || {});
+  if (!publicUrl) {
+    const message = 'Upload thành công nhưng không nhận được publicUrl hợp lệ.';
+    setArtworksEditState({ mediaUploading: false, mediaUploadError: message, mediaUploadStatus: { ...(getState().artworksEdit?.mediaUploadStatus || {}), [fieldName]: { loading: false, error: message, success: '' } } });
+    renderAdminShell();
+    return;
+  }
+
+  const latest = getState();
+  const nextDraftValues = { ...(latest.artworksEdit?.draftValues || {}), [fieldName]: publicUrl };
+  const patchResult = patchCanonicalArtworkInDraft(latest.staticCmsDraft?.draftJson, roomKey, itemCode, normalizeArtworkCanonicalValues(nextDraftValues));
+  if (patchResult.ok) {
+    const staticValidation = validateStaticCmsDraft(patchResult.draftJson, STATIC_CMS_DRAFT_CONFIG);
+    updateStaticCmsDraftJson(patchResult.draftJson, staticValidation);
+  }
+  setArtworksEditState({
+    draftValues: nextDraftValues,
+    dirty: true,
+    mediaUploading: false,
+    mediaUploadError: null,
+    mediaUploadStatus: {
+      ...(latest.artworksEdit?.mediaUploadStatus || {}),
+      [fieldName]: { loading: false, error: '', success: `Đã upload qua upload-cms-media (${statusKey}) và gắn URL vào bản nháp. Cần lưu/publish để website public thay đổi.` },
+    },
   });
   renderAdminShell();
 }

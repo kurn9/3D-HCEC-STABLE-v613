@@ -4426,3 +4426,81 @@ body.cms-admin-page * {
     width: 100%;
   }
 }
+
+/* v6.14.041.002 — Room artwork canonical draft bridge */
+.cms-admin-artwork-bridge-panel {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid rgba(234, 190, 82, 0.24);
+  border-radius: 18px;
+  background: rgba(234, 190, 82, 0.06);
+  margin: 12px 0;
+}
+
+.cms-admin-artwork-bridge-title,
+.cms-admin-artwork-bridge-actions,
+.cms-admin-artwork-media-upload-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.cms-admin-artwork-bridge-badges {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 150px;
+}
+
+.cms-admin-artwork-bridge-badges .cms-admin-badge {
+  width: fit-content;
+}
+
+.cms-admin-artwork-bridge-cell {
+  min-width: 170px;
+}
+
+.cms-admin-artworks-table tr.is-db-only td,
+.cms-admin-artworks-table tr.is-scene-missing td {
+  background: rgba(234, 190, 82, 0.035);
+}
+
+.cms-admin-artwork-canonical-form .cms-admin-home-form-section {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 14px;
+  background: rgba(7, 16, 25, 0.42);
+}
+
+.cms-admin-artwork-media-edit-grid {
+  grid-template-columns: minmax(220px, 1fr) minmax(220px, 1fr);
+}
+
+.cms-admin-artwork-media-edit-field {
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.14);
+}
+
+.cms-admin-artwork-media-file-input {
+  max-width: 260px;
+  color: var(--cms-admin-text-muted, #aeb8c5);
+}
+
+.cms-admin-success-text {
+  color: #69d39f;
+}
+
+.cms-admin-danger-text {
+  color: #ff9b9b;
+}
+
+@media (max-width: 900px) {
+  .cms-admin-artwork-media-edit-grid {
+    grid-template-columns: 1fr;
+  }
+}
