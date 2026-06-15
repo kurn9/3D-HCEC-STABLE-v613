@@ -78,6 +78,7 @@ const LOCKED_EXPORT_FIELDS = new Set([
   'collider', 'physics', 'mesh', 'object3D', 'geometry', 'materialConfig', 'renderConfig',
 ]);
 const OPTIONAL_EMPTY_ALLOWED = new Set([...TEXT_FIELDS, ...MEDIA_FIELDS]);
+const MAX_JSON_IMPORT_BYTES = 2 * 1024 * 1024;
 
 export function renderStaticCmsDraftTab(state, handlers = {}) {
   const copy = ADMIN_COPY.staticDraft || {};
@@ -156,11 +157,12 @@ function renderDraftHero(draftState = {}, copy = {}, handlers = {}) {
 function renderStatusStrip(draftState = {}, copy = {}) {
   const strip = createElement('div', { className: 'cms-admin-static-status-strip' });
   const source = draftState.source || copy.sourceUnknown || 'chưa rõ';
-  const sourceVariant = source === 'remote' ? 'success' : source === 'fallback' || source === 'local' ? 'warning' : 'default';
+  const sourceLabel = source === 'imported-json' ? 'Từ file JSON' : source;
+  const sourceVariant = source === 'remote' ? 'success' : source === 'fallback' || source === 'local' || source === 'imported-json' ? 'warning' : 'default';
   const rooms = draftState.draftJson?.rooms || {};
   const version = draftState.draftJson?.version || '—';
   const entries = [
-    { label: 'Nguồn', value: source, variant: sourceVariant },
+    { label: 'Nguồn', value: sourceLabel, variant: sourceVariant },
     { label: 'Version', value: version },
     { label: 'Indoor', value: String(safeArray(rooms.indoor?.artworks).length) },
     { label: 'Outdoor', value: String(safeArray(rooms.outdoor?.artworks).length) },
@@ -216,6 +218,45 @@ function renderStaticDraftActions(draftState = {}, handlers = {}) {
   resetButton.disabled = Boolean(draftState.loading) || !Boolean(draftState.draftJson);
   resetButton.addEventListener('click', () => handleResetStaticDraft(handlers));
 
+  const importInput = createElement('input', {
+    type: 'file',
+    attrs: {
+      accept: '.json,application/json',
+      'aria-hidden': 'true',
+      tabindex: '-1',
+    },
+  });
+  importInput.hidden = true;
+  importInput.addEventListener('change', async () => {
+    const file = importInput.files?.[0] || null;
+    if (!file) return;
+    try {
+      await handleImportStaticDraftJson({ file, handlers });
+    } finally {
+      importInput.value = '';
+    }
+  });
+
+  const importButton = createElement('button', {
+    className: 'cms-admin-button cms-admin-button-secondary',
+    text: 'Nhập JSON vào bản nháp',
+    title: 'Chọn file JSON từ máy tính để đưa vào bản nháp hiện tại. Chưa công khai website.',
+    type: 'button',
+  });
+  importButton.disabled = Boolean(draftState.loading)
+    || Boolean(draftState.isSavingDraft)
+    || Boolean(draftState.isPublishingCms)
+    || Boolean(draftState.isUploadingMedia)
+    || !ADMIN_FEATURE_FLAGS.allowStaticCmsDraftEdit;
+  importButton.addEventListener('click', () => {
+    const current = getState().staticCmsDraft || draftState;
+    if (current.dirty) {
+      const confirmed = globalThis.confirm('Bản nháp hiện tại có thay đổi chưa lưu. Nhập JSON mới sẽ thay thế nội dung bản nháp đang xem. Bạn có muốn tiếp tục không?');
+      if (!confirmed) return;
+    }
+    importInput.click();
+  });
+
   const exportButton = createElement('button', {
     className: 'cms-admin-button cms-admin-button-primary',
     text: 'Export JSON draft',
@@ -232,7 +273,7 @@ function renderStaticDraftActions(draftState = {}, handlers = {}) {
   copyButton.disabled = !Boolean(draftState.draftJson) || !navigator?.clipboard;
   copyButton.addEventListener('click', () => handleCopyStaticDraft(handlers));
 
-  appendChildren(actions, [loadButton, resetButton, exportButton, copyButton]);
+  appendChildren(actions, [loadButton, resetButton, importButton, importInput, exportButton, copyButton]);
   return actions;
 }
 
@@ -1067,6 +1108,12 @@ function appendValidationList(parent, title, entries, className) {
 
 function renderExportHelp(draftState = {}) {
   const wrap = createElement('div', { className: 'cms-admin-static-export-help' });
+  if (draftState.importError) {
+    wrap.appendChild(renderErrorBox(draftState.importError, 'Nhập JSON chưa thành công'));
+  }
+  if (draftState.importSuccess) {
+    wrap.appendChild(createElement('div', { className: 'cms-admin-alert cms-admin-alert-success', text: draftState.importSuccess }));
+  }
   if (draftState.exportError) {
     wrap.appendChild(renderErrorBox(draftState.exportError, 'Export chưa thành công'));
   }
@@ -1224,8 +1271,157 @@ function handleResetStaticDraft(handlers = {}) {
   const current = getState().staticCmsDraft || {};
   if (!current.draftJson) return;
   const validation = validateStaticCmsDraft(current.baselineJson || {}, STATIC_CMS_DRAFT_CONFIG);
+  const baselineSource = current.importPreviousSource || current.source;
+  const baselineSourceUrl = current.importPreviousSourceUrl || current.sourceUrl;
   resetStaticCmsDraftToBaseline(validation);
+  setStaticCmsDraftState({
+    source: baselineSource,
+    sourceUrl: baselineSourceUrl,
+    importPreviousSource: '',
+    importPreviousSourceUrl: '',
+    importedFileName: '',
+    importedAt: null,
+    importError: null,
+    importSuccess: null,
+  });
   handlers.onRerender?.();
+}
+
+async function handleImportStaticDraftJson({ file, handlers = {} } = {}) {
+  const current = getState().staticCmsDraft || {};
+  const fileCheck = validateStaticCmsJsonFile(file);
+  if (!fileCheck.valid) {
+    setStaticCmsDraftState({
+      importError: fileCheck.message,
+      importSuccess: null,
+      exportError: null,
+      exportSuccess: null,
+    });
+    handlers.onRerender?.();
+    return;
+  }
+
+  try {
+    const rawText = await readLocalJsonFile(file);
+    const parsed = JSON.parse(String(rawText || '').replace(/^\uFEFF/, ''));
+    if (!isPlainJsonObject(parsed)) {
+      throw new Error('CMS JSON phải là một object ở cấp gốc.');
+    }
+
+    const canonicalJson = sanitizeStaticCmsExport(parsed, { keepVersion: true });
+    const validation = validateStaticCmsDraft(canonicalJson, STATIC_CMS_DRAFT_CONFIG);
+    if (!validation.valid) {
+      const detail = getFirstValidationMessage(validation);
+      console.error('[CMS JSON import] Validation blocked:', validation.errors || {});
+      setStaticCmsDraftState({
+        importError: `Không nhập được file JSON. File không đúng định dạng hoặc thiếu cấu trúc CMS hợp lệ.${detail ? ` Chi tiết: ${detail}` : ''}`,
+        importSuccess: null,
+        exportError: null,
+        exportSuccess: null,
+      });
+      handlers.onRerender?.();
+      return;
+    }
+
+    const selectedRoom = ROOM_KEYS.find((roomKey) => getDraftRoomItems(canonicalJson, roomKey).length > 0) || 'indoor';
+    const selectedItemCode = getItemCode(getDraftRoomItems(canonicalJson, selectedRoom)[0] || {});
+    const localFileSourceUrl = `local-file:${file.name}`;
+    const hasExistingBaseline = isPlainJsonObject(current.baselineJson);
+    const previousSource = current.source === 'imported-json'
+      ? (current.importPreviousSource || '')
+      : (hasExistingBaseline ? (current.source || '') : 'imported-json');
+    const previousSourceUrl = current.source === 'imported-json'
+      ? (current.importPreviousSourceUrl || '')
+      : (hasExistingBaseline ? (current.sourceUrl || '') : localFileSourceUrl);
+
+    setStaticCmsDraftState({
+      baselineJson: hasExistingBaseline ? current.baselineJson : cloneJson(canonicalJson),
+      draftJson: cloneJson(canonicalJson),
+      source: 'imported-json',
+      loading: false,
+      loadError: null,
+      sourceUrl: localFileSourceUrl,
+      selectedRoom,
+      selectedItemCode,
+      dirty: true,
+      validation,
+      previewField: '',
+      importError: null,
+      importSuccess: 'Đã nhập JSON vào bản nháp. Website public chưa thay đổi. Hãy bấm “Lưu thành bản nháp mới” trước khi công khai.',
+      exportError: null,
+      exportSuccess: null,
+      lastExportName: '',
+      currentDraftId: '',
+      draftTitle: createImportedDraftTitle(canonicalJson, file.name),
+      draftNote: '',
+      draftSaveStatus: 'Bản nháp đã nhập từ file JSON, chưa lưu server-side.',
+      draftLastSavedAt: null,
+      draftPersistenceError: null,
+      mediaUploadStatus: {},
+      mediaUploadError: null,
+      lastMediaUpload: null,
+      isUploadingMedia: false,
+      publishDryRunResult: null,
+      publishResult: null,
+      publishStatus: '',
+      publishError: null,
+      publishLastVerifiedAt: null,
+      importPreviousSource: previousSource,
+      importPreviousSourceUrl: previousSourceUrl,
+      importedFileName: file.name,
+      importedAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error('[CMS JSON import] Parse/read failed:', error);
+    setStaticCmsDraftState({
+      importError: 'Không nhập được file JSON. File không đúng định dạng hoặc thiếu cấu trúc CMS hợp lệ.',
+      importSuccess: null,
+      exportError: null,
+      exportSuccess: null,
+    });
+  }
+  handlers.onRerender?.();
+}
+
+function validateStaticCmsJsonFile(file) {
+  if (!file) {
+    return { valid: false, message: 'Chưa chọn file JSON.' };
+  }
+  const fileName = String(file.name || '').trim();
+  if (!/\.json$/i.test(fileName)) {
+    return { valid: false, message: 'Không nhập được file. Vui lòng chọn đúng file có phần mở rộng .json.' };
+  }
+  if (Number(file.size || 0) > MAX_JSON_IMPORT_BYTES) {
+    return { valid: false, message: 'Không nhập được file JSON. Dung lượng tối đa cho phép là 2 MB.' };
+  }
+  return { valid: true, message: '' };
+}
+
+function readLocalJsonFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(reader.error || new Error('Không đọc được file JSON.'));
+    reader.onabort = () => reject(new Error('Đã hủy đọc file JSON.'));
+    reader.readAsText(file, 'utf-8');
+  });
+}
+
+function isPlainJsonObject(value) {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
+}
+
+function getFirstValidationMessage(validation = {}) {
+  const errors = validation.errors || {};
+  const firstKey = Object.keys(errors)[0];
+  return firstKey ? String(errors[firstKey] || '') : '';
+}
+
+function createImportedDraftTitle(cmsJson = {}, fileName = '') {
+  const version = String(cmsJson?.version || '').trim();
+  const baseName = String(fileName || 'file JSON').replace(/\.json$/i, '').trim();
+  const suffix = version || baseName || 'file JSON';
+  return `Bản nháp nhập ${suffix}`.slice(0, 160);
 }
 
 function handleExportStaticDraft(handlers = {}) {
