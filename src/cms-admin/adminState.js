@@ -1016,6 +1016,7 @@ export function createEmptyStaticCmsDraftState() {
     lastLoadedAt: null,
     currentDraftId: '',
     draftTitle: '',
+    draftTitleTouched: false,
     draftNote: '',
     savedDrafts: [],
     isSavingDraft: false,
@@ -1070,6 +1071,7 @@ export function setStaticCmsDraftBaseline({ baselineJson = null, source = '', so
       lastLoadedAt: new Date().toISOString(),
       currentDraftId: '',
       draftTitle: createDefaultStaticCmsDraftTitle(draft),
+      draftTitleTouched: false,
       draftNote: '',
       draftSaveStatus: '',
       draftLastSavedAt: null,
@@ -1139,6 +1141,7 @@ export function resetStaticCmsDraftToBaseline(validation = null) {
     lastExportName: '',
     currentDraftId: '',
     draftTitle: createDefaultStaticCmsDraftTitle(baseline),
+    draftTitleTouched: false,
     draftNote: '',
     draftSaveStatus: '',
     draftLastSavedAt: null,
@@ -1194,11 +1197,15 @@ export function setStaticCmsPublishState(patch = {}) {
 
 export function updateStaticCmsDraftMeta(fieldName, value) {
   if (!['draftTitle', 'draftNote'].includes(fieldName)) return state;
-  return setStaticCmsDraftState({
+  const patch = {
     [fieldName]: String(value ?? ''),
     draftSaveStatus: '',
     draftPersistenceError: null,
-  });
+  };
+  if (fieldName === 'draftTitle') {
+    patch.draftTitleTouched = true;
+  }
+  return setStaticCmsDraftState(patch);
 }
 
 export function applySavedStaticCmsDraft(savedDraft = {}, validation = null) {
@@ -1216,6 +1223,7 @@ export function applySavedStaticCmsDraft(savedDraft = {}, validation = null) {
     validation: validation || savedDraft.validation_json || { valid: false, errors: {}, warnings: {} },
     currentDraftId: savedDraft.id || '',
     draftTitle: savedDraft.title || createDefaultStaticCmsDraftTitle(draftJson),
+    draftTitleTouched: Boolean(savedDraft.title),
     draftNote: savedDraft.note || '',
     draftSaveStatus: 'Đã mở bản nháp đã lưu. Chưa publish website.',
     draftLastSavedAt: savedDraft.updated_at || savedDraft.updatedAt || null,
@@ -1344,7 +1352,7 @@ export function getAllActiveEditSessions(currentState = state) {
     currentState.homeEdit?.isEditing ? { type: 'home', id: String(currentState.homeEdit.editingSectionId || currentState.homeEdit.editingSectionKey || 'home'), key: currentState.homeEdit.editingSectionKey || '', label: 'Trang chủ', dirty: Boolean(currentState.homeEdit.dirty), saving: Boolean(currentState.homeEdit.saving) } : null,
     currentState.roomsEdit?.isEditing ? { type: 'room', id: String(currentState.roomsEdit.editingRoomId || currentState.roomsEdit.editingRoomKey || 'room'), key: currentState.roomsEdit.editingRoomKey || '', label: 'Phòng trưng bày', dirty: Boolean(currentState.roomsEdit.dirty), saving: Boolean(currentState.roomsEdit.saving) } : null,
     currentState.artworksEdit?.isEditing ? { type: 'artwork', id: String(currentState.artworksEdit.editingArtworkId || currentState.artworksEdit.editingArtworkCode || 'artwork'), key: currentState.artworksEdit.editingArtworkCode || '', label: 'Tác phẩm', dirty: Boolean(currentState.artworksEdit.dirty), saving: Boolean(currentState.artworksEdit.saving) } : null,
-    currentState.staticCmsDraft?.draftJson ? { type: 'static-cms-draft', id: 'static-cms-draft', label: 'Bản nháp CMS JSON', dirty: Boolean(currentState.staticCmsDraft.dirty), saving: Boolean(currentState.staticCmsDraft.isSavingDraft) } : null,
+    currentState.staticCmsDraft?.draftJson ? { type: 'static-cms-draft', id: 'static-cms-draft', label: 'Nội dung phòng 3D', dirty: Boolean(currentState.staticCmsDraft.dirty), saving: Boolean(currentState.staticCmsDraft.isSavingDraft) } : null,
   ].filter(Boolean);
 }
 

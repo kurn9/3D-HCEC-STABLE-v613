@@ -4593,3 +4593,139 @@ body.cms-admin-page * {
     justify-content: flex-start;
   }
 }
+
+/* v6.14.041.008 - Operator UX simplify and draft naming */
+.cms-admin-static-hero {
+  padding: clamp(16px, 1.7vw, 22px);
+}
+
+.cms-admin-static-hero-top {
+  align-items: center;
+}
+
+.cms-admin-static-main-load-actions {
+  min-width: 0;
+}
+
+.cms-admin-static-workflow-panel {
+  position: sticky;
+  top: 10px;
+  z-index: 3;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.18);
+}
+
+.cms-admin-static-workflow-controls {
+  gap: 14px;
+}
+
+.cms-admin-static-primary-actions .cms-admin-button {
+  white-space: nowrap;
+}
+
+.cms-admin-static-dashboard-operator {
+  grid-template-columns: minmax(230px, 0.76fr) minmax(430px, 1.6fr) minmax(300px, 0.92fr);
+}
+
+.cms-admin-static-ops-stack {
+  gap: 14px;
+}
+
+.cms-admin-static-ops-stack .cms-admin-panel {
+  padding: 15px;
+}
+
+.cms-admin-static-collapsible-panel {
+  padding: 0;
+  overflow: hidden;
+}
+
+.cms-admin-static-persistence-details,
+.cms-admin-static-advanced-details,
+.cms-admin-static-featured-details {
+  display: block;
+}
+
+.cms-admin-static-persistence-details > summary,
+.cms-admin-static-advanced-details > summary,
+.cms-admin-static-featured-details > summary {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  list-style: none;
+  padding: 16px 18px;
+}
+
+.cms-admin-static-persistence-details > summary::-webkit-details-marker,
+.cms-admin-static-advanced-details > summary::-webkit-details-marker,
+.cms-admin-static-featured-details > summary::-webkit-details-marker {
+  display: none;
+}
+
+.cms-admin-static-persistence-details > summary::before,
+.cms-admin-static-advanced-details > summary::before,
+.cms-admin-static-featured-details > summary::before {
+  content: '▸';
+  color: var(--cms-admin-muted);
+  font-size: 0.9rem;
+}
+
+.cms-admin-static-persistence-details[open] > summary::before,
+.cms-admin-static-advanced-details[open] > summary::before,
+.cms-admin-static-featured-details[open] > summary::before {
+  content: '▾';
+}
+
+.cms-admin-static-persistence-details > :not(summary),
+.cms-admin-static-advanced-details > :not(summary),
+.cms-admin-static-featured-details > :not(summary) {
+  margin-left: 18px;
+  margin-right: 18px;
+}
+
+.cms-admin-static-persistence-details > :last-child,
+.cms-admin-static-advanced-details > :last-child,
+.cms-admin-static-featured-details > :last-child {
+  margin-bottom: 18px;
+}
+
+.cms-admin-static-publish-technical-details {
+  margin-top: 12px;
+}
+
+.cms-admin-static-publish-technical-details .cms-admin-static-publish-result-grid {
+  margin-top: 12px;
+}
+
+.cms-admin-static-validation-panel .cms-admin-alert,
+.cms-admin-static-publish-panel .cms-admin-alert {
+  margin-bottom: 8px;
+}
+
+.cms-admin-static-export-panel .cms-admin-static-actions,
+.cms-admin-static-advanced-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-start;
+}
+
+@media (max-width: 1320px) {
+  .cms-admin-static-workflow-panel {
+    position: static;
+  }
+}
+
+@media (max-width: 980px) {
+  .cms-admin-static-hero-top,
+  .cms-admin-static-workflow-head,
+  .cms-admin-static-workflow-controls {
+    align-items: stretch;
+  }
+
+  .cms-admin-static-primary-actions,
+  .cms-admin-static-main-load-actions {
+    justify-content: flex-start;
+  }
+}
