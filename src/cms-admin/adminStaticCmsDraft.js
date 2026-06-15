@@ -377,7 +377,7 @@ function renderUtilityDrawers(draftState = {}, appState = {}, currentItem = null
     },
     advanced: {
       title: 'Dành cho kỹ thuật',
-      description: 'Khu vực dành cho quản trị viên kỹ thuật. Người vận hành thông thường không cần dùng khu này.'
+      description: 'Khu vực dành cho quản trị viên kỹ thuật. Người vận hành thông thường không cần dùng khu này.',
       content: () => renderExportPanel(draftState, handlers, copy),
     },
     publishDetails: {
