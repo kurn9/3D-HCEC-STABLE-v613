@@ -5,7 +5,7 @@ const MAX_CANVAS_PIXELS = 3_200_000;
 const TRAIL_RESOLUTION_SCALE = 0.5;
 const RESIZE_DEBOUNCE_MS = 120;
 const IDLE_RENDER_MS = 1600;
-const CLICK_PULSE_MS = 420;
+const CLICK_PULSE_MS = 260;
 const MAX_FRAME_DELTA_MS = 50;
 const DEFAULT_MAX_FPS = 60;
 const ULTRAWIDE_MAX_FPS = 45;
@@ -14,19 +14,19 @@ const DEBUG_UPDATE_INTERVAL_MS = 200;
 const NORMAL_SAFETY_PROBE_INTERVAL_MS = 1000;
 const READY_BG_ALPHA_WARNING = 0.03;
 const READY_BG_ALPHA_FAIL = 0.08;
-const READY_CURSOR_ALPHA_MIN = 0.06;
+const READY_CURSOR_ALPHA_MIN = 0.28;
 const READY_SAFE_SAMPLE_COUNT = 2;
 const READY_MAX_PROBE_ATTEMPTS = 8;
 
-// v6.14.031 — Balanced C+ visual tune. Performance budgets remain unchanged.
-const BASE_RADIUS_PX = 22;
-const HOVER_RADIUS_BOOST_PX = 13;
-const CLICK_RADIUS_BOOST_PX = 3;
-const TRAIL_BASE_INTENSITY = 0.88;
-const TRAIL_HOVER_INTENSITY = 0.18;
-const DISPLAY_BASE_INTENSITY = 0.92;
-const DISPLAY_HOVER_INTENSITY = 0.12;
-const VELOCITY_DAMPING_TAU_MS = 72;
+// v6.14.035 — Two-layer cursor form factor: precise nucleus + restrained liquid trail.
+const BASE_RADIUS_PX = 12;
+const HOVER_RADIUS_BOOST_PX = 4;
+const CLICK_RADIUS_BOOST_PX = 1;
+const TRAIL_BASE_INTENSITY = 0.56;
+const TRAIL_HOVER_INTENSITY = 0.08;
+const DISPLAY_BASE_INTENSITY = 0.90;
+const DISPLAY_HOVER_INTENSITY = 0.06;
+const VELOCITY_DAMPING_TAU_MS = 56;
 const INTERACTIVE_SELECTOR = [
   'a[href]',
   'button',
@@ -45,8 +45,8 @@ precision highp float;
 out vec2 vUv;
 void main() {
   vec2 position = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2));
-  vUv = position * 0.5;
-  gl_Position = vec4(position - 1.0, 0.0, 1.0);
+  vUv = position;
+  gl_Position = vec4(position * 2.0 - 1.0, 0.0, 1.0);
 }`;
 
 const TRAIL_FRAGMENT_SHADER_SOURCE = `#version 300 es
@@ -88,11 +88,11 @@ void main() {
   vec4 seed = texture(uTrailTexture, vUv);
   vec2 seedFlow = seed.gb * 2.0 - 1.0;
   vec2 flowUv = seedFlow * vec2(1.0 / max(aspect, 0.0001), 1.0);
-  vec2 velocityOffset = clamp(uVelocity, vec2(-0.035), vec2(0.035)) * (0.44 + uHover * 0.10);
-  vec2 internalOffset = flowUv * (0.0024 + speed * 0.0018);
+  vec2 velocityOffset = clamp(uVelocity, vec2(-0.028), vec2(0.028)) * (0.26 + uHover * 0.04);
+  vec2 internalOffset = flowUv * (0.0014 + speed * 0.0010);
   vec4 previous = texture(uTrailTexture, clamp(vUv - velocityOffset - internalOffset, 0.0, 1.0));
 
-  float decay = exp(-uDelta * mix(1.55, 1.25, uHover));
+  float decay = exp(-uDelta * mix(2.85, 2.45, uHover));
   float density = previous.r * decay;
   vec2 previousFlow = previous.gb * 2.0 - 1.0;
 
@@ -102,12 +102,12 @@ void main() {
   float radius = uRadius;
 
   float temporalWobble = sin(uTime * 3.1 + dot(point, vec2(13.0, 9.0)))
-    * radius * (0.045 + uHover * 0.035);
+    * radius * (0.024 + uHover * 0.012);
   vec2 liquidMouse = mouse + movementNormal * temporalWobble;
   float distanceToStroke = segmentDistance(point, previousMouse, liquidMouse);
   float stroke = 1.0 - smoothstep(
-    radius * 0.12,
-    radius * (1.04 + speed * 0.48),
+    radius * 0.14,
+    radius * (0.72 + speed * 0.28),
     distanceToStroke
   );
 
@@ -115,44 +115,44 @@ void main() {
   float along = dot(local, movementDirection);
   float across = dot(local, movementNormal);
   float bodyDistance = length(vec2(
-    along / (1.0 + speed * 0.95 + uHover * 0.10),
-    across / (0.78 + uHover * 0.10)
+    along / (1.0 + speed * 0.62 + uHover * 0.04),
+    across / (0.56 + uHover * 0.05)
   ));
   float angle = atan(local.y, local.x);
   float edgeWarp = 1.0
-    + sin(angle * 3.0 + uTime * 1.85) * 0.075
-    + sin(angle * 2.0 - uTime * 1.17) * uHover * 0.055;
+    + sin(angle * 3.0 + uTime * 1.85) * 0.040
+    + sin(angle * 2.0 - uTime * 1.17) * uHover * 0.025;
   float body = 1.0 - smoothstep(radius * 0.16, radius * edgeWarp, bodyDistance);
 
-  float lobeOffset = radius * (0.20 + uHover * 0.24);
+  float lobeOffset = radius * (0.12 + uHover * 0.12);
   vec2 lobeCenterA = mouse + movementNormal * lobeOffset;
-  vec2 lobeCenterB = mouse - movementNormal * lobeOffset * 0.72;
-  float lobeA = 1.0 - smoothstep(radius * 0.12, radius * 0.82, length(point - lobeCenterA));
-  float lobeB = 1.0 - smoothstep(radius * 0.12, radius * 0.74, length(point - lobeCenterB));
+  vec2 lobeCenterB = mouse - movementNormal * lobeOffset * 0.64;
+  float lobeA = 1.0 - smoothstep(radius * 0.14, radius * 0.64, length(point - lobeCenterA));
+  float lobeB = 1.0 - smoothstep(radius * 0.14, radius * 0.60, length(point - lobeCenterB));
   float hoverLobes = max(lobeA, lobeB) * uHover;
 
-  float splat = max(stroke, max(body * 0.92, hoverLobes * 0.84));
-  float liquidBody = splat * uIntensity * (0.78 + speed * 0.64 + uHover * 0.20);
-  float accumulation = liquidBody * max(0.40, 0.82 - density * 0.42);
+  float splat = max(stroke, max(body * 0.74, hoverLobes * 0.56));
+  float liquidBody = splat * uIntensity * (0.56 + speed * 0.42 + uHover * 0.08);
+  float accumulation = liquidBody * max(0.24, 0.58 - density * 0.34);
   density = clamp(density + accumulation, 0.0, 1.0);
 
   float clickAge = clamp(1.0 - uClick, 0.0, 1.0);
-  float rippleRadius = radius * mix(0.90, 3.45, clickAge);
-  float rippleWidth = radius * mix(0.30, 0.14, clickAge);
+  float rippleRadius = radius * mix(0.88, 2.15, clickAge);
+  float rippleWidth = radius * mix(0.20, 0.09, clickAge);
   float cursorDistance = length(point - mouse);
   float rippleEnvelope = sin(clickAge * PI);
   float ripple = (1.0 - smoothstep(0.0, rippleWidth, abs(cursorDistance - rippleRadius)))
-    * rippleEnvelope * 0.56;
-  density = clamp(density + ripple * max(0.42, 0.66 - density * 0.26), 0.0, 1.0);
+    * rippleEnvelope * 0.28;
+  density = clamp(density + ripple * max(0.20, 0.38 - density * 0.18), 0.0, 1.0);
 
   vec2 injectedFlow = movementDirection
-    + movementNormal * sin(uTime * 2.2 + angle * 2.0) * (0.07 + uHover * 0.09);
+    + movementNormal * sin(uTime * 2.2 + angle * 2.0) * (0.04 + uHover * 0.04);
   injectedFlow = length(injectedFlow) > 0.000001 ? normalize(injectedFlow) : movementDirection;
-  float flowMix = clamp(splat * (0.28 + speed * 0.52 + uHover * 0.10), 0.0, 0.82);
+  float flowMix = clamp(splat * (0.20 + speed * 0.38 + uHover * 0.05), 0.0, 0.62);
   vec2 flow = mix(previousFlow * decay, injectedFlow, flowMix);
 
-  float rippleMemory = previous.a * exp(-uDelta * 3.8);
-  outColor = vec4(density, flow * 0.5 + 0.5, max(rippleMemory, ripple * 0.55));
+  float rippleMemory = previous.a * exp(-uDelta * 6.8);
+  outColor = vec4(density, flow * 0.5 + 0.5, max(rippleMemory, ripple * 0.30));
 }`;
 
 const DISPLAY_FRAGMENT_SHADER_SOURCE = `#version 300 es
@@ -196,8 +196,8 @@ void main() {
 
   vec2 gradient = vec2(right - left, up - down);
   float laplacian = abs(left + right + up + down - center.r * 4.0);
-  float edge = clamp(length(gradient) * 8.2 + laplacian * 2.2, 0.0, 1.0);
-  float density = smoothstep(0.018, 0.72, center.r);
+  float edge = clamp(length(gradient) * 5.4 + laplacian * 1.4, 0.0, 1.0);
+  float density = smoothstep(0.055, 0.78, center.r);
   vec2 flow = center.gb * 2.0 - 1.0;
 
   float aspect = uResolution.x / max(uResolution.y, 1.0);
@@ -209,44 +209,92 @@ void main() {
   float velocityLength = length(velocityAspect);
   vec2 axis = velocityLength > 0.000001
     ? normalize(velocityAspect)
-    : vec2(cos(uTime * 0.42), sin(uTime * 0.34));
+    : vec2(1.0, 0.0);
   vec2 normal = vec2(-axis.y, axis.x);
 
-  float coreRadius = uRadius * (0.84 + uHover * 0.30);
-  float core = liquidBlob(local, axis, coreRadius, uHover, uTime);
-  float lobeOffset = coreRadius * 0.27 * uHover;
-  float lobeA = liquidBlob(local - normal * lobeOffset, axis, coreRadius * 0.79, uHover, uTime + 0.7);
-  float lobeB = liquidBlob(local + normal * lobeOffset * 0.72, axis, coreRadius * 0.72, uHover, uTime - 0.5);
-  core = max(core * (1.0 - uHover * 0.14), max(lobeA, lobeB) * uHover * 0.92);
+  // Layer 1: a compact, direct pointer nucleus. It never depends on trail density.
+  float pointerDistance = length(local);
+  float pointerAngle = atan(local.y, local.x);
+  float nucleusRadius = uRadius * (0.58 - uHover * 0.10);
+  float nucleusWarp = 1.0
+    + sin(pointerAngle * 3.0 + uTime * 1.65) * 0.030
+    + sin(pointerAngle * 2.0 - uTime * 1.10) * uHover * 0.018;
+  float nucleus = 1.0 - smoothstep(
+    nucleusRadius * 0.54,
+    nucleusRadius * nucleusWarp,
+    pointerDistance
+  );
+  float hotSpot = 1.0 - smoothstep(0.0, nucleusRadius * 0.34, pointerDistance);
+  float nucleusRim = (1.0 - smoothstep(
+    0.0,
+    nucleusRadius * 0.11,
+    abs(pointerDistance - nucleusRadius * 0.72)
+  )) * (0.58 + uHover * 0.12);
 
-  float coreDistance = length(local);
-  float halo = (1.0 - smoothstep(coreRadius * 0.58, coreRadius * 2.05, coreDistance)) * 0.08;
+  // Hover keeps the exact hot spot visible and adds only two restrained liquid lobes.
+  float hoverLobeOffset = nucleusRadius * 0.42;
+  float hoverLobeA = liquidBlob(
+    local - normal * hoverLobeOffset,
+    axis,
+    nucleusRadius * 0.66,
+    uHover,
+    uTime + 0.45
+  );
+  float hoverLobeB = liquidBlob(
+    local + normal * hoverLobeOffset * 0.72,
+    axis,
+    nucleusRadius * 0.58,
+    uHover,
+    uTime - 0.35
+  );
+  float hoverMorph = max(hoverLobeA, hoverLobeB) * uHover;
+
+  float nucleusHalo = (1.0 - smoothstep(
+    nucleusRadius * 0.82,
+    nucleusRadius * 1.72,
+    pointerDistance
+  )) * 0.032;
+
   float clickAge = clamp(1.0 - uClick, 0.0, 1.0);
   float clickEnvelope = sin(clickAge * PI);
-  float ringRadius = coreRadius * mix(0.92, 3.25, clickAge);
-  float ringWidth = coreRadius * mix(0.25, 0.11, clickAge);
-  float clickRing = (1.0 - smoothstep(0.0, ringWidth, abs(coreDistance - ringRadius)))
+  float ringRadius = nucleusRadius * mix(1.12, 2.20, clickAge);
+  float ringWidth = nucleusRadius * mix(0.20, 0.09, clickAge);
+  float clickRing = (1.0 - smoothstep(0.0, ringWidth, abs(pointerDistance - ringRadius)))
     * clickEnvelope;
 
   float shimmer = 0.5 + 0.5 * sin(uTime * 1.22 + dot(flow, vec2(5.4, 3.9)));
   vec3 ivory = vec3(0.969, 0.949, 0.875);
   vec3 bronze = vec3(0.910, 0.706, 0.337);
   vec3 cool = vec3(0.500, 0.735, 0.820);
-  vec3 liquidColor = mix(ivory, bronze, clamp(density * 0.58 + uHover * 0.15, 0.0, 0.78));
-  liquidColor = mix(liquidColor, cool, clamp(length(flow) * 0.075 + shimmer * 0.028, 0.0, 0.10));
-  liquidColor += edge * vec3(0.085, 0.074, 0.052);
-  vec3 ringColor = mix(ivory, bronze, 0.48);
-  liquidColor = mix(liquidColor, ringColor, clickRing * 0.16);
 
-  float storedRipple = center.a * (0.08 + uClick * 0.04);
-  float trailAlpha = density * 0.33 + edge * 0.16;
-  float coreAlpha = core * 0.40 + halo;
-  float rippleAlpha = clickRing * 0.20 + storedRipple;
-  float alpha = clamp(trailAlpha + coreAlpha + rippleAlpha, 0.0, 0.62);
-  alpha *= mix(0.90, 1.02, clamp(uIntensity, 0.0, 1.2));
+  // Layer 2: a narrow, subordinate liquid trail.
+  vec3 trailColor = mix(ivory, bronze, clamp(density * 0.42 + uHover * 0.06, 0.0, 0.58));
+  trailColor = mix(trailColor, cool, clamp(length(flow) * 0.045 + shimmer * 0.014, 0.0, 0.055));
+  trailColor += edge * vec3(0.040, 0.034, 0.024);
 
-  // The default framebuffer is composited as premultiplied alpha.
-  // Writing premultiplied RGB keeps every zero-alpha pixel truly transparent.
+  vec3 nucleusColor = mix(ivory, bronze, 0.24 + uHover * 0.05);
+  nucleusColor = mix(nucleusColor, cool, 0.028);
+  nucleusColor = mix(nucleusColor, bronze, nucleusRim * 0.20);
+  vec3 ringColor = mix(ivory, bronze, 0.42);
+
+  float storedRipple = center.a * (0.028 + uClick * 0.012);
+  float trailAlpha = clamp(density * 0.17 + edge * 0.07, 0.0, 0.26);
+  float nucleusAlpha = clamp(
+    nucleus * 0.74 + hotSpot * 0.18 + nucleusRim * 0.12 + hoverMorph * 0.08 + nucleusHalo,
+    0.0,
+    0.90
+  );
+  float rippleAlpha = clamp(clickRing * 0.16 + storedRipple, 0.0, 0.18);
+  float alpha = max(nucleusAlpha, max(trailAlpha, rippleAlpha));
+  alpha *= mix(0.94, 1.0, clamp(uIntensity, 0.0, 1.2));
+  alpha = clamp(alpha, 0.0, 0.90);
+
+  float nucleusWeight = clamp(nucleusAlpha / max(alpha, 0.0001), 0.0, 1.0);
+  float rippleWeight = clamp(rippleAlpha / max(alpha, 0.0001), 0.0, 1.0);
+  vec3 liquidColor = mix(trailColor, nucleusColor, nucleusWeight);
+  liquidColor = mix(liquidColor, ringColor, rippleWeight * 0.34);
+
+  // The default framebuffer remains premultiplied and transparent outside the cursor.
   outColor = vec4(liquidColor * alpha, alpha);
 }`;
 
