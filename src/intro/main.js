@@ -3,6 +3,7 @@ import '../shared/cmsContentLoader.js';
 import { loadNormalizedIndexCmsContent } from './indexCmsNormalizer.js';
 import { initFeaturedArtworks } from './featuredArtworks.js';
 import { initLiquidCursor } from './liquidCursor.js';
+import { initWebglLiquidCursor } from './webglLiquidCursor.js';
 import { INDEX_VIDEO_CONFIG } from './indexVideoConfig.js';
 
 const revealItems = Array.from(document.querySelectorAll('[data-reveal]'));
@@ -1161,4 +1162,37 @@ initGalleryWarmup();
 initPortalEnterTransition();
 initFeaturedNavVisibilitySync();
 initCmsIndexHydration();
-initLiquidCursor();
+
+function initIndexCursor() {
+  let activeCursorController = null;
+  let legacyCursorDestroy = null;
+  let fallbackStarted = false;
+
+  const startLegacyCursor = () => {
+    if (fallbackStarted) return;
+    fallbackStarted = true;
+    const destroy = initLiquidCursor();
+    legacyCursorDestroy = typeof destroy === 'function' ? destroy : null;
+  };
+
+  try {
+    activeCursorController = initWebglLiquidCursor({
+      onFallback: startLegacyCursor
+    });
+  } catch {
+    activeCursorController = null;
+  }
+
+  if (!activeCursorController?.supported) startLegacyCursor();
+
+  const cleanupCursor = () => {
+    activeCursorController?.destroy?.();
+    activeCursorController = null;
+    legacyCursorDestroy?.();
+    legacyCursorDestroy = null;
+  };
+
+  window.addEventListener('pagehide', cleanupCursor, { once: true });
+}
+
+initIndexCursor();

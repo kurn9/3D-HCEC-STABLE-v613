@@ -4300,3 +4300,87 @@ kbd {
     filter: none;
   }
 }
+
+/* v6.14.029 — Index-only progressive WebGL liquid cursor. */
+.webgl-liquid-cursor {
+  position: fixed;
+  inset: 0;
+  z-index: 79;
+  width: 100vw;
+  height: 100vh;
+  display: block;
+  opacity: 0;
+  pointer-events: none;
+  user-select: none;
+  contain: strict;
+  transition: opacity 140ms ease;
+}
+
+body.has-webgl-liquid-cursor .webgl-liquid-cursor.is-ready {
+  opacity: .88;
+}
+
+body.has-webgl-liquid-cursor,
+body.has-webgl-liquid-cursor a,
+body.has-webgl-liquid-cursor button,
+body.has-webgl-liquid-cursor [role="button"],
+body.has-webgl-liquid-cursor input,
+body.has-webgl-liquid-cursor select,
+body.has-webgl-liquid-cursor textarea,
+body.has-webgl-liquid-cursor [data-featured-interactive] {
+  cursor: none;
+}
+
+body.has-webgl-liquid-cursor.is-video-modal-open,
+body.has-webgl-liquid-cursor.is-video-modal-open .intro-video-modal,
+body.has-webgl-liquid-cursor.is-video-modal-open .intro-video-modal *,
+body.has-webgl-liquid-cursor.is-video-modal-open video,
+body.has-webgl-liquid-cursor.is-video-modal-open [controls] {
+  cursor: auto;
+}
+
+body.has-webgl-liquid-cursor.is-video-modal-open .intro-video-close,
+body.has-webgl-liquid-cursor.is-video-modal-open .intro-video-backdrop,
+body.has-webgl-liquid-cursor.is-video-modal-open button,
+body.has-webgl-liquid-cursor.is-video-modal-open [data-close-intro-video] {
+  cursor: pointer;
+}
+
+body.is-video-modal-open .webgl-liquid-cursor {
+  opacity: 0;
+}
+
+@media (max-width: 819px), (hover: none), (pointer: coarse) {
+  .webgl-liquid-cursor {
+    display: none;
+  }
+
+  body.has-webgl-liquid-cursor,
+  body.has-webgl-liquid-cursor a,
+  body.has-webgl-liquid-cursor button,
+  body.has-webgl-liquid-cursor [role="button"],
+  body.has-webgl-liquid-cursor input,
+  body.has-webgl-liquid-cursor select,
+  body.has-webgl-liquid-cursor textarea,
+  body.has-webgl-liquid-cursor [data-featured-interactive] {
+    cursor: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .webgl-liquid-cursor {
+    display: none;
+    transition: none;
+  }
+
+  body.has-webgl-liquid-cursor,
+  body.has-webgl-liquid-cursor a,
+  body.has-webgl-liquid-cursor button,
+  body.has-webgl-liquid-cursor [role="button"],
+  body.has-webgl-liquid-cursor input,
+  body.has-webgl-liquid-cursor select,
+  body.has-webgl-liquid-cursor textarea,
+  body.has-webgl-liquid-cursor [data-featured-interactive] {
+    cursor: auto;
+  }
+}
