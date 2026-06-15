@@ -10,6 +10,13 @@ const MAX_FRAME_DELTA_MS = 50;
 const DEFAULT_MAX_FPS = 60;
 const ULTRAWIDE_MAX_FPS = 45;
 const ULTRAWIDE_MIN_WIDTH = 2560;
+const DEBUG_UPDATE_INTERVAL_MS = 200;
+const NORMAL_SAFETY_PROBE_INTERVAL_MS = 1000;
+const READY_BG_ALPHA_WARNING = 0.03;
+const READY_BG_ALPHA_FAIL = 0.08;
+const READY_CURSOR_ALPHA_MIN = 0.06;
+const READY_SAFE_SAMPLE_COUNT = 2;
+const READY_MAX_PROBE_ATTEMPTS = 8;
 
 // v6.14.031 — Balanced C+ visual tune. Performance budgets remain unchanged.
 const BASE_RADIUS_PX = 22;
@@ -238,10 +245,13 @@ void main() {
   float alpha = clamp(trailAlpha + coreAlpha + rippleAlpha, 0.0, 0.62);
   alpha *= mix(0.90, 1.02, clamp(uIntensity, 0.0, 1.2));
 
-  outColor = vec4(liquidColor, alpha);
+  // The default framebuffer is composited as premultiplied alpha.
+  // Writing premultiplied RGB keeps every zero-alpha pixel truly transparent.
+  outColor = vec4(liquidColor * alpha, alpha);
 }`;
 
 let destroyActiveWebglCursor = null;
+let destroyActiveDebugOverlay = null;
 
 function addMediaQueryChangeListener(query, listener) {
   if (typeof query.addEventListener === 'function') {
@@ -258,6 +268,96 @@ function hasKillSwitch() {
   } catch {
     return false;
   }
+}
+
+function hasDebugSwitch() {
+  try {
+    return new URLSearchParams(window.location.search).get('debugLiquidCursor') === '1';
+  } catch {
+    return false;
+  }
+}
+
+function createDebugOverlay() {
+  if (!hasDebugSwitch()) return null;
+  destroyActiveDebugOverlay?.();
+
+  const element = document.createElement('pre');
+  element.className = 'liquid-cursor-debug-overlay';
+  element.setAttribute('aria-hidden', 'true');
+  element.dataset.liquidCursorDebug = '1';
+  document.body.appendChild(element);
+
+  let destroyed = false;
+  const metrics = {
+    webgl: 'OFF',
+    reason: 'initializing',
+    mode: 'disabled',
+    ready: 'no',
+    firstFrame: 'no',
+    cursorHidden: 'no',
+    contextLost: 'no',
+    dpr: '-',
+    canvas: '-',
+    fbo: '-',
+    fps: '0',
+    alphaBg: '-',
+    alphaCursor: '-',
+    cssOpacity: '-',
+    premultiplied: '-',
+    blend: '-',
+    mouseIn: 'no',
+    hover: '0.00',
+    click: '0.00',
+    fallback: 'no',
+    shaders: 'pending'
+  };
+
+  const render = () => {
+    if (destroyed) return;
+    element.textContent = [
+      `WEBGL: ${metrics.webgl}`,
+      `REASON: ${metrics.reason}`,
+      `MODE: ${metrics.mode}`,
+      `READY: ${metrics.ready}`,
+      `FIRST_FRAME: ${metrics.firstFrame}`,
+      `CURSOR_HIDDEN: ${metrics.cursorHidden}`,
+      `CONTEXT_LOST: ${metrics.contextLost}`,
+      `SHADERS: ${metrics.shaders}`,
+      `DPR: ${metrics.dpr}`,
+      `CANVAS: ${metrics.canvas}`,
+      `FBO: ${metrics.fbo}`,
+      `FPS: ${metrics.fps}`,
+      `ALPHA_BG: ${metrics.alphaBg}`,
+      `ALPHA_CURSOR: ${metrics.alphaCursor}`,
+      `CSS_OPACITY: ${metrics.cssOpacity}`,
+      `PREMULTIPLIED: ${metrics.premultiplied}`,
+      `BLEND: ${metrics.blend}`,
+      `MOUSE_IN: ${metrics.mouseIn}`,
+      `HOVER: ${metrics.hover}`,
+      `CLICK: ${metrics.click}`,
+      `FALLBACK: ${metrics.fallback}`
+    ].join('\n');
+  };
+
+  const update = (patch = {}) => {
+    if (destroyed) return;
+    Object.assign(metrics, patch);
+    render();
+  };
+
+  const destroy = () => {
+    if (destroyed) return;
+    destroyed = true;
+    window.removeEventListener('pagehide', destroy);
+    element.remove();
+    if (destroyActiveDebugOverlay === destroy) destroyActiveDebugOverlay = null;
+  };
+
+  window.addEventListener('pagehide', destroy, { once: true });
+  destroyActiveDebugOverlay = destroy;
+  render();
+  return { update, destroy };
 }
 
 function compileShader(gl, type, source) {
@@ -359,12 +459,36 @@ function isVideoModalOpen() {
 
 export function initWebglLiquidCursor({ onFallback } = {}) {
   destroyActiveWebglCursor?.();
+  destroyActiveDebugOverlay?.();
 
+  const debugOverlay = createDebugOverlay();
   const reducedMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
   const finePointerQuery = window.matchMedia('(hover: hover) and (pointer: fine)');
   const desktopWidthQuery = window.matchMedia(`(min-width: ${MIN_CURSOR_WIDTH}px)`);
 
-  if (!ENABLE_WEBGL_LIQUID_CURSOR || hasKillSwitch() || reducedMotionQuery.matches || !finePointerQuery.matches || !desktopWidthQuery.matches) {
+  const disabledReason = !ENABLE_WEBGL_LIQUID_CURSOR
+    ? 'disabled-by-config'
+    : hasKillSwitch()
+      ? 'disabled-by-query'
+      : reducedMotionQuery.matches
+        ? 'disabled-by-reduced-motion'
+        : !finePointerQuery.matches
+          ? 'disabled-by-pointer'
+          : !desktopWidthQuery.matches
+            ? 'disabled-by-viewport'
+            : '';
+
+  if (disabledReason) {
+    debugOverlay?.update({
+      webgl: 'OFF',
+      reason: disabledReason,
+      mode: disabledReason === 'disabled-by-query' ? 'legacy' : 'disabled',
+      ready: 'no',
+      firstFrame: 'no',
+      cursorHidden: 'no',
+      fallback: disabledReason === 'disabled-by-query' ? 'yes' : 'no',
+      shaders: 'not-started'
+    });
     return null;
   }
 
@@ -378,6 +502,7 @@ export function initWebglLiquidCursor({ onFallback } = {}) {
   let trailTargets = [];
   let readTargetIndex = 0;
   let resizeTimer = 0;
+  let debugTimer = 0;
   let modalObserver = null;
   let fallbackTriggered = false;
   let resourcesDisposed = false;
@@ -411,7 +536,21 @@ export function initWebglLiquidCursor({ onFallback } = {}) {
     trailHeight: 1,
     effectiveDpr: 1,
     firstFrameRendered: false,
-    pausedByModal: false
+    compositionVerified: false,
+    readyProbeAttempts: 0,
+    readySafeSamples: 0,
+    alphaBg: null,
+    alphaCursor: null,
+    lastProbeAt: 0,
+    pausedByModal: false,
+    statusReason: 'initializing',
+    mode: 'webgl',
+    fallback: false,
+    shadersReady: false,
+    contextAttributes: null,
+    fps: 0,
+    fpsFrames: 0,
+    fpsWindowStartedAt: 0
   };
 
   const canUseCursor = () => !state.destroyed
@@ -425,6 +564,64 @@ export function initWebglLiquidCursor({ onFallback } = {}) {
     && state.pointerInside
     && (state.pointerType === 'mouse' || state.pointerType === 'pen' || state.pointerType === '');
 
+  const getCssOpacity = () => {
+    const value = Number.parseFloat(window.getComputedStyle(canvas).opacity);
+    return Number.isFinite(value) ? value : 1;
+  };
+
+  const refreshDebugOverlay = () => {
+    if (!debugOverlay) return;
+    debugOverlay.update({
+      webgl: gl && !state.destroyed ? 'ON' : 'OFF',
+      reason: state.statusReason,
+      mode: state.mode,
+      ready: state.compositionVerified ? 'yes' : 'no',
+      firstFrame: state.firstFrameRendered ? 'yes' : 'no',
+      cursorHidden: document.body.classList.contains('has-webgl-liquid-cursor') ? 'yes' : 'no',
+      contextLost: state.contextLost ? 'yes' : 'no',
+      shaders: state.shadersReady ? 'ready' : 'pending',
+      dpr: state.effectiveDpr.toFixed(2),
+      canvas: `${state.canvasWidth}x${state.canvasHeight}`,
+      fbo: `${state.trailWidth}x${state.trailHeight}`,
+      fps: state.fps.toFixed(1),
+      alphaBg: state.alphaBg == null ? '-' : state.alphaBg.toFixed(3),
+      alphaCursor: state.alphaCursor == null ? '-' : state.alphaCursor.toFixed(3),
+      cssOpacity: getCssOpacity().toFixed(2),
+      premultiplied: state.contextAttributes?.premultipliedAlpha ? 'yes' : 'no',
+      blend: 'OFF/direct-premultiplied',
+      mouseIn: state.pointerInside ? 'yes' : 'no',
+      hover: state.hover.toFixed(2),
+      click: state.click.toFixed(2),
+      fallback: state.fallback ? 'yes' : 'no'
+    });
+  };
+
+  const updateFallbackDebug = (reason) => {
+    debugOverlay?.update({
+      webgl: 'OFF',
+      reason,
+      mode: 'legacy',
+      ready: 'no',
+      firstFrame: state.firstFrameRendered ? 'yes' : 'no',
+      cursorHidden: 'no',
+      contextLost: state.contextLost ? 'yes' : 'no',
+      shaders: state.shadersReady ? 'ready' : 'fail',
+      dpr: state.effectiveDpr.toFixed(2),
+      canvas: `${state.canvasWidth}x${state.canvasHeight}`,
+      fbo: `${state.trailWidth}x${state.trailHeight}`,
+      fps: state.fps.toFixed(1),
+      alphaBg: state.alphaBg == null ? '-' : state.alphaBg.toFixed(3),
+      alphaCursor: state.alphaCursor == null ? '-' : state.alphaCursor.toFixed(3),
+      cssOpacity: '1.00',
+      premultiplied: state.contextAttributes?.premultipliedAlpha ? 'yes' : 'no',
+      blend: 'OFF/direct-premultiplied',
+      mouseIn: state.pointerInside ? 'yes' : 'no',
+      hover: state.hover.toFixed(2),
+      click: state.click.toFixed(2),
+      fallback: 'yes'
+    });
+  };
+
   const removeReadyState = () => {
     document.body.classList.remove('has-webgl-liquid-cursor');
     canvas.classList.remove('is-ready');
@@ -434,20 +631,23 @@ export function initWebglLiquidCursor({ onFallback } = {}) {
     if (!gl || state.contextLost) return;
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, state.canvasWidth, state.canvasHeight);
+    gl.disable(gl.BLEND);
     gl.clearColor(0, 0, 0, 0);
     gl.clear(gl.COLOR_BUFFER_BIT);
   };
 
-  const stopLoop = ({ hide = false } = {}) => {
+  const stopLoop = ({ hide = false, reason = '' } = {}) => {
     if (state.rafId) {
       window.cancelAnimationFrame(state.rafId);
       state.rafId = 0;
     }
     state.lastFrameAt = 0;
+    if (reason) state.statusReason = reason;
     if (hide) {
       removeReadyState();
       clearDefaultFramebuffer();
     }
+    refreshDebugOverlay();
   };
 
   const disposeResources = () => {
@@ -460,7 +660,7 @@ export function initWebglLiquidCursor({ onFallback } = {}) {
       if (displayProgram) gl?.deleteProgram(displayProgram);
       if (vertexArray) gl?.deleteVertexArray(vertexArray);
     } catch {
-      // Context loss is already handled by removing the canvas and restoring the native cursor.
+      // Context loss can make deletion unavailable. Removing the canvas remains the safe fallback.
     }
     trailProgram = null;
     displayProgram = null;
@@ -486,16 +686,29 @@ export function initWebglLiquidCursor({ onFallback } = {}) {
       window.clearTimeout(resizeTimer);
       resizeTimer = 0;
     }
+    if (debugTimer) {
+      window.clearInterval(debugTimer);
+      debugTimer = 0;
+    }
   };
 
-  const destroy = ({ fallback = false } = {}) => {
+  const destroy = ({ fallback = false, reason = 'destroyed' } = {}) => {
     if (state.destroyed) return;
     state.destroyed = true;
+    state.fallback = fallback;
+    state.mode = fallback ? 'legacy' : 'disabled';
+    state.statusReason = reason;
     stopLoop({ hide: true });
     detachListeners();
     disposeResources();
     canvas.remove();
     if (publicController && destroyActiveWebglCursor === publicController.destroy) destroyActiveWebglCursor = null;
+
+    if (fallback) {
+      updateFallbackDebug(reason);
+    } else {
+      debugOverlay?.destroy();
+    }
 
     if (fallback && !fallbackTriggered) {
       fallbackTriggered = true;
@@ -511,7 +724,7 @@ export function initWebglLiquidCursor({ onFallback } = {}) {
 
   const failToLegacy = (reason) => {
     if (!state.destroyed && reason) console.warn(`[Index cursor] WebGL disabled: ${reason}`);
-    destroy({ fallback: true });
+    destroy({ fallback: true, reason });
   };
 
   const getEffectiveDpr = () => {
@@ -536,6 +749,16 @@ export function initWebglLiquidCursor({ onFallback } = {}) {
     readTargetIndex = 0;
   };
 
+  const resetCompositionVerification = () => {
+    state.firstFrameRendered = false;
+    state.compositionVerified = false;
+    state.readyProbeAttempts = 0;
+    state.readySafeSamples = 0;
+    state.alphaBg = null;
+    state.alphaCursor = null;
+    removeReadyState();
+  };
+
   const resizeRenderer = () => {
     if (!gl || state.destroyed || state.contextLost) return;
     state.effectiveDpr = getEffectiveDpr();
@@ -549,7 +772,9 @@ export function initWebglLiquidCursor({ onFallback } = {}) {
     canvas.style.width = `${window.innerWidth}px`;
     canvas.style.height = `${window.innerHeight}px`;
     recreateTrailTargets();
+    resetCompositionVerification();
     clearDefaultFramebuffer();
+    refreshDebugOverlay();
   };
 
   const setCommonTrailUniforms = (deltaSeconds, elapsedSeconds) => {
@@ -588,10 +813,9 @@ export function initWebglLiquidCursor({ onFallback } = {}) {
     const readTarget = trailTargets[readTargetIndex];
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, state.canvasWidth, state.canvasHeight);
+    gl.disable(gl.BLEND);
     gl.clearColor(0, 0, 0, 0);
     gl.clear(gl.COLOR_BUFFER_BIT);
-    gl.enable(gl.BLEND);
-    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     gl.useProgram(displayProgram);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, readTarget.texture);
@@ -611,23 +835,139 @@ export function initWebglLiquidCursor({ onFallback } = {}) {
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   };
 
-  const revealRenderedFrame = () => {
-    if (!state.firstFrameRendered) {
-      if (gl.getError() !== gl.NO_ERROR) {
-        failToLegacy('first-frame-error');
-        return false;
-      }
-      state.firstFrameRendered = true;
+  const readAlphaPixel = (x, y) => {
+    const pixel = new Uint8Array(4);
+    const pixelX = Math.max(0, Math.min(state.canvasWidth - 1, Math.round(x)));
+    const pixelY = Math.max(0, Math.min(state.canvasHeight - 1, Math.round(y)));
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.readPixels(pixelX, pixelY, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
+    return pixel[3] / 255;
+  };
+
+  const readCursorAlpha = () => {
+    const centerX = Math.max(1, Math.min(state.canvasWidth - 2, Math.round(state.mouseX * (state.canvasWidth - 1))));
+    const centerY = Math.max(1, Math.min(state.canvasHeight - 2, Math.round(state.mouseY * (state.canvasHeight - 1))));
+    const pixels = new Uint8Array(3 * 3 * 4);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.readPixels(centerX - 1, centerY - 1, 3, 3, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+    let maxAlpha = 0;
+    for (let index = 3; index < pixels.length; index += 4) {
+      maxAlpha = Math.max(maxAlpha, pixels[index] / 255);
     }
+    return maxAlpha;
+  };
+
+  const probeComposition = () => {
+    // readPixels is used only during the ready gate/debug cadence. finish() avoids
+    // false zero-alpha samples on desynchronized/SwiftShader presentation paths.
+    gl.finish();
+    const corners = [
+      [0.03, 0.03],
+      [0.97, 0.03],
+      [0.03, 0.97],
+      [0.97, 0.97]
+    ];
+    const backgroundPoint = corners.reduce((farthest, point) => {
+      const distance = Math.hypot(point[0] - state.mouseX, point[1] - state.mouseY);
+      return distance > farthest.distance ? { point, distance } : farthest;
+    }, { point: corners[0], distance: -1 }).point;
+
+    state.alphaBg = readAlphaPixel(
+      backgroundPoint[0] * (state.canvasWidth - 1),
+      backgroundPoint[1] * (state.canvasHeight - 1)
+    );
+    state.alphaCursor = readCursorAlpha();
+    state.lastProbeAt = performance.now();
+    return { alphaBg: state.alphaBg, alphaCursor: state.alphaCursor };
+  };
+
+  const verifyComposition = () => {
+    const cssOpacity = getCssOpacity();
+    const { alphaBg, alphaCursor } = probeComposition();
+    state.readyProbeAttempts += 1;
+
+    if (cssOpacity < 0.99) {
+      failToLegacy('canvas-opacity-invalid');
+      return 'failed';
+    }
+    if (alphaBg > READY_BG_ALPHA_FAIL) {
+      failToLegacy('dark-overlay-risk');
+      return 'failed';
+    }
+
+    if (alphaBg <= READY_BG_ALPHA_WARNING && alphaCursor >= READY_CURSOR_ALPHA_MIN) {
+      state.readySafeSamples += 1;
+    } else {
+      state.readySafeSamples = 0;
+    }
+
+    if (state.readySafeSamples >= READY_SAFE_SAMPLE_COUNT) {
+      state.compositionVerified = true;
+      state.statusReason = 'ready';
+      canvas.classList.add('is-ready');
+      document.body.classList.add('has-webgl-liquid-cursor');
+      refreshDebugOverlay();
+      return 'ready';
+    }
+
+    if (state.readyProbeAttempts >= READY_MAX_PROBE_ATTEMPTS) {
+      failToLegacy(alphaCursor < READY_CURSOR_ALPHA_MIN ? 'cursor-not-visible' : 'background-alpha-warning');
+      return 'failed';
+    }
+
+    state.statusReason = 'verifying-composition';
+    refreshDebugOverlay();
+    return 'pending';
+  };
+
+  const revealRenderedFrame = (timestamp) => {
+    if (gl.isContextLost?.()) {
+      state.contextLost = true;
+      failToLegacy('context-lost');
+      return 'failed';
+    }
+    if (gl.getError() !== gl.NO_ERROR) {
+      failToLegacy('first-frame-error');
+      return 'failed';
+    }
+
+    state.firstFrameRendered = true;
+    if (!state.compositionVerified) return verifyComposition();
+
+    const probeInterval = debugOverlay ? DEBUG_UPDATE_INTERVAL_MS : NORMAL_SAFETY_PROBE_INTERVAL_MS;
+    if (timestamp - state.lastProbeAt >= probeInterval) {
+      try {
+        const { alphaBg } = probeComposition();
+        if (alphaBg > READY_BG_ALPHA_FAIL) {
+          failToLegacy('dark-overlay-risk');
+          return 'failed';
+        }
+      } catch {
+        failToLegacy('alpha-probe-error');
+        return 'failed';
+      }
+    }
+
     canvas.classList.add('is-ready');
     document.body.classList.add('has-webgl-liquid-cursor');
-    return true;
+    return 'ready';
+  };
+
+  const updateFps = (timestamp) => {
+    if (!state.fpsWindowStartedAt) state.fpsWindowStartedAt = timestamp;
+    state.fpsFrames += 1;
+    const elapsed = timestamp - state.fpsWindowStartedAt;
+    if (elapsed >= 500) {
+      state.fps = state.fpsFrames * 1000 / elapsed;
+      state.fpsFrames = 0;
+      state.fpsWindowStartedAt = timestamp;
+    }
   };
 
   const render = (timestamp) => {
     state.rafId = 0;
     if (!canUseCursor()) {
-      stopLoop({ hide: true });
+      stopLoop({ hide: true, reason: state.pausedByModal ? 'modal-open' : 'cursor-inactive' });
       return;
     }
 
@@ -653,7 +993,8 @@ export function initWebglLiquidCursor({ onFallback } = {}) {
     try {
       updateTrail(deltaSeconds, elapsedSeconds);
       displayTrail(elapsedSeconds);
-      if (!revealRenderedFrame()) return;
+      updateFps(timestamp);
+      if (revealRenderedFrame(timestamp) === 'failed') return;
     } catch {
       failToLegacy('render-error');
       return;
@@ -664,13 +1005,17 @@ export function initWebglLiquidCursor({ onFallback } = {}) {
     state.velocityX *= Math.exp(-deltaMs / VELOCITY_DAMPING_TAU_MS);
     state.velocityY *= Math.exp(-deltaMs / VELOCITY_DAMPING_TAU_MS);
 
-    const shouldKeepAnimating = timestamp - state.lastPointerAt < IDLE_RENDER_MS || state.click > 0.001 || Math.abs(state.hover - state.targetHover) > 0.01;
+    const shouldKeepAnimating = !state.compositionVerified
+      || timestamp - state.lastPointerAt < IDLE_RENDER_MS
+      || state.click > 0.001
+      || Math.abs(state.hover - state.targetHover) > 0.01;
     if (shouldKeepAnimating) state.rafId = window.requestAnimationFrame(render);
   };
 
   const startLoop = () => {
     if (!canUseCursor() || state.rafId) return;
     state.lastFrameAt = 0;
+    state.statusReason = state.compositionVerified ? 'running' : 'verifying-composition';
     state.rafId = window.requestAnimationFrame(render);
   };
 
@@ -678,7 +1023,7 @@ export function initWebglLiquidCursor({ onFallback } = {}) {
     state.pointerType = event.pointerType || 'mouse';
     if (state.pointerType === 'touch') {
       state.pointerInside = false;
-      stopLoop({ hide: true });
+      stopLoop({ hide: true, reason: 'touch-pointer' });
       return;
     }
 
@@ -717,7 +1062,7 @@ export function initWebglLiquidCursor({ onFallback } = {}) {
 
   function handlePointerLeave() {
     state.pointerInside = false;
-    stopLoop({ hide: true });
+    stopLoop({ hide: true, reason: 'pointer-outside' });
   }
 
   function handlePointerEnter() {
@@ -728,12 +1073,12 @@ export function initWebglLiquidCursor({ onFallback } = {}) {
   }
 
   function handleWindowBlur() {
-    stopLoop({ hide: true });
+    stopLoop({ hide: true, reason: 'window-blur' });
   }
 
   function handleVisibilityChange() {
     if (document.visibilityState !== 'visible') {
-      stopLoop({ hide: true });
+      stopLoop({ hide: true, reason: 'tab-hidden' });
       return;
     }
     state.lastPointerAt = performance.now();
@@ -776,15 +1121,17 @@ export function initWebglLiquidCursor({ onFallback } = {}) {
       antialias: false,
       depth: false,
       stencil: false,
-      premultipliedAlpha: false,
+      premultipliedAlpha: true,
       preserveDrawingBuffer: false,
       powerPreference: 'high-performance',
-      desynchronized: true
+      desynchronized: false
     });
     if (!gl) throw new Error('WebGL2 unavailable.');
+    state.contextAttributes = gl.getContextAttributes();
 
     trailProgram = createProgram(gl, VERTEX_SHADER_SOURCE, TRAIL_FRAGMENT_SHADER_SOURCE);
     displayProgram = createProgram(gl, VERTEX_SHADER_SOURCE, DISPLAY_FRAGMENT_SHADER_SOURCE);
+    state.shadersReady = true;
     vertexArray = gl.createVertexArray();
     if (!vertexArray) throw new Error('Không thể tạo WebGL vertex array.');
     gl.bindVertexArray(vertexArray);
@@ -799,9 +1146,18 @@ export function initWebglLiquidCursor({ onFallback } = {}) {
     ]);
     resizeRenderer();
   } catch {
+    state.statusReason = !gl
+      ? 'webgl2-unavailable'
+      : state.shadersReady
+        ? 'webgl-init-failed'
+        : 'shader-init-failed';
+    state.mode = 'legacy';
+    state.fallback = true;
     state.destroyed = true;
+    removeReadyState();
     disposeResources();
     canvas.remove();
+    updateFallbackDebug(state.statusReason);
     return null;
   }
 
@@ -819,6 +1175,11 @@ export function initWebglLiquidCursor({ onFallback } = {}) {
   removeFinePointerListener = addMediaQueryChangeListener(finePointerQuery, handleCapabilityChange);
   removeDesktopWidthListener = addMediaQueryChangeListener(desktopWidthQuery, handleCapabilityChange);
 
+  if (debugOverlay) {
+    debugTimer = window.setInterval(refreshDebugOverlay, DEBUG_UPDATE_INTERVAL_MS);
+    refreshDebugOverlay();
+  }
+
   let previousModalState = isVideoModalOpen();
   modalObserver = new MutationObserver(() => {
     const modalOpen = isVideoModalOpen();
@@ -826,7 +1187,7 @@ export function initWebglLiquidCursor({ onFallback } = {}) {
     previousModalState = modalOpen;
     state.pausedByModal = modalOpen;
     if (modalOpen) {
-      stopLoop({ hide: true });
+      stopLoop({ hide: true, reason: 'modal-open' });
     } else {
       state.previousMouseX = state.mouseX;
       state.previousMouseY = state.mouseY;
@@ -839,11 +1200,11 @@ export function initWebglLiquidCursor({ onFallback } = {}) {
   publicController = {
     supported: true,
     get isActive() {
-      return state.firstFrameRendered && document.body.classList.contains('has-webgl-liquid-cursor');
+      return state.compositionVerified && document.body.classList.contains('has-webgl-liquid-cursor');
     },
     pause() {
       state.pausedByModal = true;
-      stopLoop({ hide: true });
+      stopLoop({ hide: true, reason: 'paused' });
     },
     resume() {
       state.pausedByModal = false;
@@ -853,7 +1214,7 @@ export function initWebglLiquidCursor({ onFallback } = {}) {
       startLoop();
     },
     destroy() {
-      destroy({ fallback: false });
+      destroy({ fallback: false, reason: 'destroyed' });
     }
   };
 
