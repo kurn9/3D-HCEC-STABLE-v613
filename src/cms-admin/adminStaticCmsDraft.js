@@ -165,6 +165,19 @@ export function renderStaticCmsDraftTab(state, handlers = {}) {
   return panel;
 }
 
+
+function renderInfoTile(label, value, technical = false) {
+  const tile = createElement('div', {
+    className: ['cms-admin-info-tile', technical ? 'is-technical' : ''].filter(Boolean).join(' '),
+  });
+  tile.appendChild(createElement('span', { className: 'cms-admin-info-label', text: label || '' }));
+  tile.appendChild(createElement('span', {
+    className: ['cms-admin-info-value', technical ? 'cms-admin-mono' : ''].filter(Boolean).join(' '),
+    text: toDisplayText(value),
+  }));
+  return tile;
+}
+
 function renderOperatorWorkflowPanel(draftState = {}, appState = {}, currentItem = null, handlers = {}, copy = {}) {
   const panel = createElement('section', { className: 'cms-admin-panel cms-admin-static-workflow-panel' });
   const head = createElement('div', { className: 'cms-admin-static-workflow-head' });
