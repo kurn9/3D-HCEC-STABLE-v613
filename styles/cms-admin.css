@@ -4504,3 +4504,92 @@ body.cms-admin-page * {
     grid-template-columns: 1fr;
   }
 }
+
+
+/* v6.14.041.004 - Canonical Draft Operator Simplify */
+.cms-admin-static-workflow-panel {
+  border-color: rgba(226, 184, 82, 0.34);
+  background: linear-gradient(135deg, rgba(226, 184, 82, 0.10), rgba(12, 24, 34, 0.92));
+}
+
+.cms-admin-static-workflow-head,
+.cms-admin-static-workflow-controls {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.cms-admin-static-workflow-head {
+  margin-bottom: 16px;
+}
+
+.cms-admin-static-workflow-controls {
+  align-items: stretch;
+  flex-wrap: wrap;
+}
+
+.cms-admin-static-workflow-controls .cms-admin-static-selector-stack {
+  flex: 1 1 420px;
+  display: grid;
+  grid-template-columns: minmax(180px, 0.7fr) minmax(260px, 1.3fr);
+  gap: 12px;
+}
+
+.cms-admin-static-primary-actions {
+  flex: 1 1 420px;
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.cms-admin-static-workflow-current {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.cms-admin-static-dashboard-operator {
+  margin-top: 18px;
+}
+
+.cms-admin-static-featured-details {
+  margin-top: 18px;
+  border: 1px solid rgba(226, 184, 82, 0.22);
+  border-radius: 18px;
+  background: rgba(9, 19, 28, 0.78);
+  padding: 14px 16px;
+}
+
+.cms-admin-static-featured-details > summary,
+.cms-admin-static-advanced-details > summary {
+  cursor: pointer;
+  font-weight: 800;
+  color: var(--cms-admin-text, #f4f7fb);
+}
+
+.cms-admin-static-featured-details > .cms-admin-help-text,
+.cms-admin-static-advanced-details > .cms-admin-help-text {
+  margin-top: 8px;
+}
+
+.cms-admin-static-advanced-details .cms-admin-static-actions {
+  margin-top: 12px;
+}
+
+@media (max-width: 920px) {
+  .cms-admin-static-workflow-head,
+  .cms-admin-static-workflow-controls {
+    display: grid;
+  }
+
+  .cms-admin-static-workflow-controls .cms-admin-static-selector-stack,
+  .cms-admin-static-workflow-current {
+    grid-template-columns: 1fr;
+  }
+
+  .cms-admin-static-primary-actions {
+    justify-content: flex-start;
+  }
+}
