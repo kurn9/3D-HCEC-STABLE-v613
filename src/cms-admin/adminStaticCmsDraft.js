@@ -92,6 +92,14 @@ const FEATURED_OPERATOR_ROOM_OPTIONS = Object.freeze([
   { value: 'outdoor', label: 'Ngoài trời' },
 ]);
 
+const featuredImageReplaceState = {
+  itemKey: '',
+  candidateUrl: '',
+  previewUrl: '',
+  previewStatus: 'idle',
+  error: '',
+};
+
 export function renderStaticCmsDraftTab(state, handlers = {}) {
   const copy = ADMIN_COPY.staticDraft || {};
   const draftState = state.staticCmsDraft || {};
@@ -388,14 +396,13 @@ function renderFeaturedItemEditor(draftState = {}, item = {}, sourceIndex = 0, i
     placeholder: 'Thông tin ngắn hiển thị cùng tác phẩm',
     onChange: (value) => handleFeaturedItemFieldChange(draftState, sourceIndex, 'description', value, handlers),
   }));
-  grid.appendChild(renderFeaturedTextControl({
-    label: 'Đường dẫn ảnh / URL ảnh đã có',
-    value: item.imageUrl,
+  grid.appendChild(renderFeaturedImageControl({
+    item,
+    sourceIndex,
     required: item.isVisible !== false,
     error: itemErrors.imageUrl,
-    placeholder: './assets/... hoặc https://...',
-    hint: !String(item.imageUrl || '').trim() ? 'Mục này đang thiếu ảnh nên có thể không hiển thị đúng trên trang chủ.' : '',
     onChange: (value) => handleFeaturedItemFieldChange(draftState, sourceIndex, 'imageUrl', value, handlers),
+    onReplace: () => handleOpenFeaturedImageReplace(item, sourceIndex, handlers),
   }));
   grid.appendChild(renderFeaturedTextControl({
     label: 'Alt text',
@@ -439,6 +446,10 @@ function renderFeaturedItemEditor(draftState = {}, item = {}, sourceIndex = 0, i
   visibleField.appendChild(visibleText);
   grid.appendChild(visibleField);
   card.appendChild(grid);
+
+  if (featuredImageReplaceState.itemKey === getFeaturedImageReplaceKey(item, sourceIndex)) {
+    card.appendChild(renderFeaturedImageReplacePanel(draftState, item, sourceIndex, handlers));
+  }
 
   const actions = createElement('div', { className: 'cms-admin-actions cms-admin-featured-item-actions' });
   const up = createElement('button', { className: 'cms-admin-button cms-admin-button-ghost cms-admin-button-small', type: 'button', text: 'Lên' });
@@ -500,6 +511,238 @@ function renderFeaturedRoomControl(value = '', error = '', onChange) {
   wrap.appendChild(select);
   if (error) wrap.appendChild(createElement('small', { className: 'cms-admin-help-text cms-admin-danger-text', text: error }));
   return wrap;
+}
+
+function renderFeaturedImageControl({ item = {}, sourceIndex = 0, required = false, error = '', onChange, onReplace } = {}) {
+  const wrap = createElement('div', { className: 'cms-admin-featured-image-control' });
+  wrap.appendChild(renderFeaturedTextControl({
+    label: 'Đường dẫn ảnh / URL ảnh đã có',
+    value: item.imageUrl,
+    required,
+    error,
+    placeholder: './assets/... hoặc https://...',
+    hint: !String(item.imageUrl || '').trim()
+      ? 'Mục này đang thiếu ảnh nên có thể không hiển thị đúng trên trang chủ.'
+      : 'Bạn có thể bấm “Thay ảnh” để đổi ảnh cho tác phẩm này. Thao tác này chỉ cập nhật bản nháp, chưa công khai website.',
+    onChange,
+  }));
+  const actions = createElement('div', { className: 'cms-admin-actions cms-admin-featured-image-actions' });
+  const replaceButton = createElement('button', {
+    className: 'cms-admin-button cms-admin-button-secondary cms-admin-button-small',
+    type: 'button',
+    text: 'Thay ảnh',
+    attrs: { 'aria-expanded': featuredImageReplaceState.itemKey === getFeaturedImageReplaceKey(item, sourceIndex) ? 'true' : 'false' },
+  });
+  replaceButton.addEventListener('click', () => onReplace?.());
+  actions.appendChild(replaceButton);
+  wrap.appendChild(actions);
+  return wrap;
+}
+
+function renderFeaturedImageReplacePanel(draftState = {}, item = {}, sourceIndex = 0, handlers = {}) {
+  const itemKey = getFeaturedImageReplaceKey(item, sourceIndex);
+  const panel = createElement('section', { className: 'cms-admin-featured-image-replace-panel' });
+  const header = createElement('div', { className: 'cms-admin-featured-image-replace-header' });
+  const heading = createElement('div');
+  heading.appendChild(createElement('h4', { text: 'Thay ảnh cho tác phẩm này' }));
+  heading.appendChild(createElement('p', {
+    className: 'cms-admin-help-text',
+    text: 'Thay ảnh chỉ cập nhật bản nháp CMS. Website công khai chưa thay đổi cho đến khi bạn lưu bản nháp và công khai.',
+  }));
+  header.appendChild(heading);
+  panel.appendChild(header);
+
+  const mediaGrid = createElement('div', { className: 'cms-admin-featured-image-replace-grid' });
+  mediaGrid.appendChild(renderFeaturedImageReplaceMedia('Ảnh hiện tại', String(item.imageUrl || '').trim(), item.alt || item.title || ''));
+
+  const candidate = createElement('div', { className: 'cms-admin-featured-image-candidate' });
+  const field = createElement('label', { className: 'cms-admin-field cms-admin-featured-field' });
+  field.appendChild(createElement('span', { className: 'cms-admin-static-field-label', text: 'Dán đường dẫn ảnh / URL ảnh mới' }));
+  const input = createElement('input', {
+    className: ['cms-admin-input', featuredImageReplaceState.error ? 'is-invalid' : ''].filter(Boolean).join(' '),
+    value: featuredImageReplaceState.candidateUrl,
+    placeholder: './assets/... hoặc https://...',
+    attrs: { autocomplete: 'off' },
+  });
+  input.addEventListener('input', () => {
+    featuredImageReplaceState.candidateUrl = input.value;
+    if (input.value.trim() !== featuredImageReplaceState.previewUrl) {
+      featuredImageReplaceState.previewUrl = '';
+      featuredImageReplaceState.previewStatus = 'idle';
+      featuredImageReplaceState.error = '';
+    }
+  });
+  field.appendChild(input);
+  candidate.appendChild(field);
+
+  const candidateActions = createElement('div', { className: 'cms-admin-actions cms-admin-featured-image-replace-actions' });
+  const previewButton = createElement('button', {
+    className: 'cms-admin-button cms-admin-button-secondary cms-admin-button-small',
+    type: 'button',
+    text: 'Xem thử ảnh',
+  });
+  previewButton.addEventListener('click', () => handlePreviewFeaturedImageCandidate(item, sourceIndex, input.value, handlers));
+  const useButton = createElement('button', {
+    className: 'cms-admin-button cms-admin-button-primary cms-admin-button-small',
+    type: 'button',
+    text: 'Dùng ảnh này',
+  });
+  useButton.addEventListener('click', () => handleUseFeaturedImageCandidate(draftState, item, sourceIndex, input.value, handlers));
+  const cancelButton = createElement('button', {
+    className: 'cms-admin-button cms-admin-button-ghost cms-admin-button-small',
+    type: 'button',
+    text: 'Hủy',
+  });
+  cancelButton.addEventListener('click', () => handleCancelFeaturedImageReplace(handlers));
+  appendChildren(candidateActions, [previewButton, useButton, cancelButton]);
+  candidate.appendChild(candidateActions);
+
+  if (featuredImageReplaceState.error) {
+    candidate.appendChild(createElement('div', { className: 'cms-admin-alert cms-admin-alert-error', text: featuredImageReplaceState.error }));
+  }
+  if (featuredImageReplaceState.previewUrl) {
+    candidate.appendChild(renderFeaturedImageCandidatePreview(itemKey, featuredImageReplaceState.previewUrl, item.alt || item.title || ''));
+  } else {
+    candidate.appendChild(createElement('div', {
+      className: 'cms-admin-featured-image-preview-placeholder',
+      text: 'Dán đường dẫn ảnh mới rồi bấm “Xem thử ảnh”.',
+    }));
+  }
+
+  mediaGrid.appendChild(candidate);
+  panel.appendChild(mediaGrid);
+  panel.appendChild(createElement('div', {
+    className: 'cms-admin-alert cms-admin-alert-warning',
+    text: 'Hotfix này không upload hoặc xóa media. Hãy dùng đường dẫn/URL ảnh đã có; bấm “Dùng ảnh này” mới cập nhật item trong bản nháp.',
+  }));
+  return panel;
+}
+
+function renderFeaturedImageReplaceMedia(label = '', imageUrl = '', alt = '') {
+  const wrap = createElement('div', { className: 'cms-admin-featured-image-replace-media' });
+  wrap.appendChild(createElement('strong', { text: label }));
+  const media = createElement('div', { className: 'cms-admin-featured-image-replace-frame' });
+  if (imageUrl && validateStaticCmsMediaUrl(imageUrl, STATIC_CMS_DRAFT_CONFIG).valid) {
+    const image = createElement('img', { attrs: { src: imageUrl, alt, loading: 'lazy' } });
+    image.addEventListener('error', () => {
+      image.hidden = true;
+      media.classList.add('has-error');
+      media.appendChild(createElement('span', { text: 'Không tải được ảnh hiện tại' }));
+    }, { once: true });
+    media.appendChild(image);
+  } else {
+    media.classList.add('has-error');
+    media.appendChild(createElement('span', { text: 'Chưa có ảnh hợp lệ' }));
+  }
+  wrap.appendChild(media);
+  return wrap;
+}
+
+function renderFeaturedImageCandidatePreview(itemKey = '', imageUrl = '', alt = '') {
+  const wrap = createElement('div', { className: 'cms-admin-featured-image-candidate-preview' });
+  const status = createElement('div', {
+    className: 'cms-admin-help-text cms-admin-featured-image-preview-status',
+    text: featuredImageReplaceState.previewStatus === 'success' ? 'Ảnh có thể tải được.' : 'Đang kiểm tra khả năng tải ảnh...',
+  });
+  const frame = createElement('div', { className: 'cms-admin-featured-image-replace-frame' });
+  const image = createElement('img', { attrs: { src: imageUrl, alt, loading: 'eager' } });
+  image.addEventListener('load', () => {
+    if (featuredImageReplaceState.itemKey !== itemKey || featuredImageReplaceState.previewUrl !== imageUrl) return;
+    featuredImageReplaceState.previewStatus = 'success';
+    featuredImageReplaceState.error = '';
+    status.textContent = 'Ảnh có thể tải được.';
+    status.classList.remove('cms-admin-danger-text');
+    status.classList.add('cms-admin-success-text');
+  }, { once: true });
+  image.addEventListener('error', () => {
+    if (featuredImageReplaceState.itemKey !== itemKey || featuredImageReplaceState.previewUrl !== imageUrl) return;
+    featuredImageReplaceState.previewStatus = 'error';
+    featuredImageReplaceState.error = 'Không tải được ảnh từ đường dẫn này. Vui lòng kiểm tra lại.';
+    image.hidden = true;
+    frame.classList.add('has-error');
+    frame.appendChild(createElement('span', { text: 'Không tải được ảnh' }));
+    status.textContent = featuredImageReplaceState.error;
+    status.classList.remove('cms-admin-success-text');
+    status.classList.add('cms-admin-danger-text');
+  }, { once: true });
+  frame.appendChild(image);
+  wrap.appendChild(frame);
+  wrap.appendChild(status);
+  return wrap;
+}
+
+function getFeaturedImageReplaceKey(item = {}, sourceIndex = 0) {
+  return `${String(item?.id || '').trim() || 'featured-item'}::${sourceIndex}`;
+}
+
+function resetFeaturedImageReplaceState() {
+  featuredImageReplaceState.itemKey = '';
+  featuredImageReplaceState.candidateUrl = '';
+  featuredImageReplaceState.previewUrl = '';
+  featuredImageReplaceState.previewStatus = 'idle';
+  featuredImageReplaceState.error = '';
+}
+
+function handleOpenFeaturedImageReplace(item = {}, sourceIndex = 0, handlers = {}) {
+  const itemKey = getFeaturedImageReplaceKey(item, sourceIndex);
+  if (featuredImageReplaceState.itemKey === itemKey) {
+    resetFeaturedImageReplaceState();
+  } else {
+    featuredImageReplaceState.itemKey = itemKey;
+    featuredImageReplaceState.candidateUrl = String(item.imageUrl || '').trim();
+    featuredImageReplaceState.previewUrl = '';
+    featuredImageReplaceState.previewStatus = 'idle';
+    featuredImageReplaceState.error = '';
+  }
+  handlers.onRerender?.();
+}
+
+function handleCancelFeaturedImageReplace(handlers = {}) {
+  resetFeaturedImageReplaceState();
+  handlers.onRerender?.();
+}
+
+function handlePreviewFeaturedImageCandidate(item = {}, sourceIndex = 0, rawValue = '', handlers = {}) {
+  const candidateUrl = String(rawValue || '').trim();
+  const itemKey = getFeaturedImageReplaceKey(item, sourceIndex);
+  featuredImageReplaceState.itemKey = itemKey;
+  featuredImageReplaceState.candidateUrl = candidateUrl;
+  featuredImageReplaceState.previewUrl = '';
+  featuredImageReplaceState.previewStatus = 'idle';
+  featuredImageReplaceState.error = '';
+  if (!candidateUrl) {
+    featuredImageReplaceState.error = 'Vui lòng nhập đường dẫn ảnh mới trước khi xem thử.';
+  } else if (!validateStaticCmsMediaUrl(candidateUrl, STATIC_CMS_DRAFT_CONFIG).valid) {
+    featuredImageReplaceState.error = 'Đường dẫn ảnh không hợp lệ hoặc không thuộc nguồn media được phép.';
+  } else {
+    featuredImageReplaceState.previewUrl = candidateUrl;
+    featuredImageReplaceState.previewStatus = 'loading';
+  }
+  handlers.onRerender?.();
+}
+
+function handleUseFeaturedImageCandidate(draftState = {}, item = {}, sourceIndex = 0, rawValue = '', handlers = {}) {
+  const candidateUrl = String(rawValue || '').trim();
+  const itemKey = getFeaturedImageReplaceKey(item, sourceIndex);
+  featuredImageReplaceState.itemKey = itemKey;
+  featuredImageReplaceState.candidateUrl = candidateUrl;
+  featuredImageReplaceState.error = '';
+  if (!candidateUrl) {
+    featuredImageReplaceState.error = 'Vui lòng nhập đường dẫn ảnh mới trước khi dùng ảnh này.';
+    handlers.onRerender?.();
+    return;
+  }
+  if (!validateStaticCmsMediaUrl(candidateUrl, STATIC_CMS_DRAFT_CONFIG).valid) {
+    featuredImageReplaceState.error = 'Đường dẫn ảnh không hợp lệ hoặc không thuộc nguồn media được phép.';
+    handlers.onRerender?.();
+    return;
+  }
+  resetFeaturedImageReplaceState();
+  commitFeaturedDraftChange(draftState, (featured) => {
+    const target = featured.items[sourceIndex];
+    if (!target) return;
+    target.imageUrl = candidateUrl;
+  }, handlers, 'Đã thay ảnh trong bản nháp. Website công khai chưa thay đổi. Hãy bấm “Lưu vào bản nháp” để tiếp tục.');
 }
 
 function renderFeaturedPreview(featured = {}, validation = {}) {
@@ -589,6 +832,13 @@ function handleAddFeaturedItem(draftState = {}, handlers = {}) {
 }
 
 function handleFeaturedItemFieldChange(draftState = {}, sourceIndex = 0, fieldName = '', value, handlers = {}) {
+  const currentItem = getFeaturedOperatorSection(draftState.draftJson).items[sourceIndex];
+  if (fieldName === 'imageUrl' && featuredImageReplaceState.itemKey === getFeaturedImageReplaceKey(currentItem, sourceIndex)) {
+    featuredImageReplaceState.candidateUrl = String(value ?? '').trim();
+    featuredImageReplaceState.previewUrl = '';
+    featuredImageReplaceState.previewStatus = 'idle';
+    featuredImageReplaceState.error = '';
+  }
   commitFeaturedDraftChange(draftState, (featured) => {
     const item = featured.items[sourceIndex];
     if (!item) return;
@@ -600,6 +850,7 @@ function handleFeaturedItemFieldChange(draftState = {}, sourceIndex = 0, fieldNa
 }
 
 function handleMoveFeaturedItem(draftState = {}, sourceIndex = 0, direction = 0, handlers = {}) {
+  resetFeaturedImageReplaceState();
   commitFeaturedDraftChange(draftState, (featured) => {
     const targetIndex = sourceIndex + direction;
     if (targetIndex < 0 || targetIndex >= featured.items.length) return;
@@ -612,6 +863,7 @@ function handleRemoveFeaturedItem(draftState = {}, sourceIndex = 0, handlers = {
   const item = getFeaturedOperatorSection(draftState.draftJson).items[sourceIndex];
   const confirmed = globalThis.confirm?.(`Xóa “${item?.title || item?.id || 'mục này'}” khỏi Tác phẩm tiêu biểu? Thao tác này không xóa ảnh, media hoặc object 3D.`);
   if (!confirmed) return;
+  resetFeaturedImageReplaceState();
   commitFeaturedDraftChange(draftState, (featured) => {
     featured.items.splice(sourceIndex, 1);
     normalizeFeaturedSortOrder(featured.items);
@@ -621,6 +873,7 @@ function handleRemoveFeaturedItem(draftState = {}, sourceIndex = 0, handlers = {
 function handleRevertFeaturedSection(draftState = {}, handlers = {}) {
   const confirmed = globalThis.confirm?.('Hoàn tác toàn bộ thay đổi chưa lưu trong phần Tác phẩm tiêu biểu về baseline đang mở?');
   if (!confirmed) return;
+  resetFeaturedImageReplaceState();
   const baselineFeatured = getRawFeaturedSection(draftState.baselineJson);
   const draftJson = cloneJson(draftState.draftJson || {});
   if (!draftJson.index || typeof draftJson.index !== 'object' || Array.isArray(draftJson.index)) draftJson.index = {};
