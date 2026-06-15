@@ -5007,3 +5007,175 @@ body.cms-admin-page * {
     width: 100%;
   }
 }
+
+/* v6.14.041.011 - Operator content workspace final UX */
+.cms-admin-operator-command-bar {
+  grid-template-columns: minmax(300px, 1.2fr) minmax(260px, 0.8fr) minmax(360px, auto);
+  position: static;
+  box-shadow: none;
+}
+
+.cms-admin-workspace-switch {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 999px;
+  display: inline-flex;
+  gap: 4px;
+  margin-top: 12px;
+  padding: 4px;
+}
+
+.cms-admin-workspace-switch-button {
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  color: var(--cms-admin-text-muted, #aeb8c5);
+  cursor: pointer;
+  font-weight: 900;
+  padding: 8px 14px;
+}
+
+.cms-admin-workspace-switch-button.is-active {
+  background: linear-gradient(135deg, rgba(226, 184, 82, 0.96), rgba(230, 199, 110, 0.88));
+  color: #111827;
+}
+
+.cms-admin-workspace-switch-button:focus-visible,
+.cms-admin-static-editor-tab:focus-visible,
+.cms-admin-featured-nav-item:focus-visible {
+  outline: 2px solid rgba(120, 190, 255, 0.95);
+  outline-offset: 2px;
+}
+
+.cms-admin-static-command-context {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.cms-admin-static-command-context .cms-admin-info-tile {
+  min-height: 52px;
+}
+
+.cms-admin-static-workspace {
+  grid-template-columns: minmax(250px, 0.72fr) minmax(450px, 1.4fr) minmax(310px, 0.88fr);
+  min-height: min(720px, calc(100vh - 230px));
+}
+
+.cms-admin-static-workspace-pane {
+  border-radius: 18px;
+}
+
+.cms-admin-static-left-pane .cms-admin-static-locked-note-compact {
+  opacity: 0.82;
+}
+
+.cms-admin-featured-workspace .cms-admin-featured-settings,
+.cms-admin-featured-workspace .cms-admin-featured-item-editor,
+.cms-admin-featured-workspace .cms-admin-featured-preview,
+.cms-admin-featured-workspace .cms-admin-featured-validation,
+.cms-admin-featured-workspace .cms-admin-featured-friendly-status {
+  background: rgba(7, 18, 28, 0.54);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 16px;
+  padding: 14px;
+}
+
+.cms-admin-featured-navigator {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.cms-admin-featured-nav-list {
+  display: grid;
+  gap: 8px;
+  overflow: auto;
+}
+
+.cms-admin-featured-nav-item {
+  align-items: flex-start;
+  background: rgba(8, 18, 28, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.055);
+  border-radius: 14px;
+  color: var(--cms-admin-text, #f4f7fb);
+  cursor: pointer;
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  text-align: left;
+}
+
+.cms-admin-featured-nav-item small {
+  color: var(--cms-admin-text-muted, #aeb8c5);
+  font-weight: 700;
+}
+
+.cms-admin-featured-nav-item.is-active {
+  background: rgba(226, 184, 82, 0.15);
+  border-color: rgba(226, 184, 82, 0.52);
+}
+
+.cms-admin-featured-nav-item.has-error {
+  border-color: rgba(255, 193, 7, 0.44);
+}
+
+.cms-admin-featured-editor-pane .cms-admin-featured-settings,
+.cms-admin-featured-editor-pane .cms-admin-featured-item-editor {
+  margin-top: 14px;
+}
+
+.cms-admin-featured-inspector {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow: auto;
+}
+
+.cms-admin-featured-inspector .cms-admin-featured-preview,
+.cms-admin-featured-inspector .cms-admin-featured-validation {
+  flex: 0 0 auto;
+}
+
+.cms-admin-static-drawer-panel {
+  width: 680px;
+}
+
+.cms-admin-static-command-bar .cms-admin-info-label,
+.cms-admin-static-command-bar .cms-admin-info-value {
+  text-transform: none;
+}
+
+@media (max-width: 1320px) {
+  .cms-admin-operator-command-bar {
+    grid-template-columns: 1fr;
+  }
+
+  .cms-admin-static-command-context {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 980px) {
+  .cms-admin-workspace-switch,
+  .cms-admin-static-command-actions {
+    width: 100%;
+  }
+
+  .cms-admin-workspace-switch-button {
+    flex: 1 1 auto;
+  }
+
+  .cms-admin-static-command-context {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cms-admin-workspace-switch-button,
+  .cms-admin-static-editor-tab,
+  .cms-admin-featured-nav-item {
+    transition: none !important;
+  }
+}

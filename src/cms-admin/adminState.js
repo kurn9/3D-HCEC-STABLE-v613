@@ -1035,8 +1035,10 @@ export function createEmptyStaticCmsDraftState() {
     publishStatus: '',
     publishError: null,
     publishLastVerifiedAt: null,
+    activeWorkspace: 'room',
     activeEditorTab: 'content',
     activeDrawer: '',
+    selectedFeaturedIndex: 0,
   };
 }
 
@@ -1087,8 +1089,10 @@ export function setStaticCmsDraftBaseline({ baselineJson = null, source = '', so
       publishStatus: '',
       publishError: null,
       publishLastVerifiedAt: null,
+      activeWorkspace: 'room',
       activeEditorTab: 'content',
       activeDrawer: '',
+      selectedFeaturedIndex: 0,
     },
   });
 }
@@ -1200,13 +1204,23 @@ export function setStaticCmsPublishState(patch = {}) {
   });
 }
 
+export function setStaticCmsDraftWorkspace(activeWorkspace = 'room') {
+  const next = ['room', 'featured'].includes(String(activeWorkspace || '')) ? String(activeWorkspace || '') : 'room';
+  return setStaticCmsDraftState({ activeWorkspace: next, activeDrawer: '' });
+}
+
 export function setStaticCmsDraftEditorTab(activeEditorTab) {
   const next = ['content', 'media', 'metadata'].includes(String(activeEditorTab || '')) ? String(activeEditorTab) : 'content';
   return setStaticCmsDraftState({ activeEditorTab: next });
 }
 
+export function setStaticCmsFeaturedIndex(selectedFeaturedIndex = 0) {
+  const index = Number(selectedFeaturedIndex);
+  return setStaticCmsDraftState({ selectedFeaturedIndex: Number.isFinite(index) && index >= 0 ? Math.floor(index) : 0 });
+}
+
 export function setStaticCmsDraftDrawer(activeDrawer = '') {
-  const allowed = ['', 'drafts', 'advanced', 'featured', 'publishDetails'];
+  const allowed = ['', 'drafts', 'advanced', 'publishDetails'];
   const next = allowed.includes(String(activeDrawer || '')) ? String(activeDrawer || '') : '';
   return setStaticCmsDraftState({ activeDrawer: next });
 }

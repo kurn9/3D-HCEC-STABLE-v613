@@ -20,6 +20,8 @@ import {
   setStaticCmsDraftState,
   setStaticCmsDraftDrawer,
   setStaticCmsDraftEditorTab,
+  setStaticCmsDraftWorkspace,
+  setStaticCmsFeaturedIndex,
   setStaticCmsMediaUploadState,
   setStaticCmsPublishState,
   setStaticCmsSavedDrafts,
@@ -59,14 +61,14 @@ const DISPLAY_FIELD_GROUPS = [
   },
   {
     key: 'metadata',
-    title: 'Thông tin tác phẩm',
-    description: 'Metadata bổ sung. Có thể để trống nếu chưa có dữ liệu chính thức.',
+    title: 'Thông tin thêm',
+    description: 'Thông tin bổ sung. Có thể để trống nếu chưa có dữ liệu chính thức.',
     fields: ['author', 'artist', 'year', 'material', 'realSize', 'note'],
   },
   {
     key: 'media',
-    title: 'Đường dẫn media',
-    description: 'Có thể nhập URL/path hoặc upload qua cổng server-side. Chưa publish website trong bước này.',
+    title: 'Ảnh & video',
+    description: 'Có thể nhập đường dẫn hoặc tải ảnh/video từ máy. Website chỉ thay đổi sau khi công khai.',
     fields: ['imageUrl', 'thumbnailUrl', 'videoUrl', 'posterUrl'],
   },
 ];
@@ -182,40 +184,87 @@ export function renderStaticCmsDraftTab(state, handlers = {}) {
 }
 
 function renderStaticWorkspaceCommandBar(draftState = {}, appState = {}, currentItem = null, handlers = {}, copy = {}) {
-  const bar = createElement('section', { className: 'cms-admin-panel cms-admin-static-command-bar' });
+  const activeWorkspace = getActiveWorkspace(draftState);
+  const featured = getFeaturedOperatorSection(draftState.draftJson);
+  const bar = createElement('section', { className: 'cms-admin-panel cms-admin-static-command-bar cms-admin-operator-command-bar' });
+
   const left = createElement('div', { className: 'cms-admin-static-command-main' });
-  left.appendChild(createElement('p', { className: 'cms-admin-eyebrow', text: 'Quản lý nội dung' }));
+  left.appendChild(createElement('p', { className: 'cms-admin-eyebrow', text: 'Quản trị nội dung' }));
   const titleRow = createElement('div', { className: 'cms-admin-static-command-title-row' });
-  titleRow.appendChild(createElement('h2', { className: 'cms-admin-static-title', text: copy.mainTitle || 'Nội dung phòng 3D' }));
-  titleRow.appendChild(renderBadge(getDraftWorkflowStateLabel(draftState), draftState.dirty ? 'warning' : draftState.currentDraftId ? 'success' : 'default'));
+  titleRow.appendChild(createElement('h2', { className: 'cms-admin-static-title', text: 'Nội dung quản trị' }));
+  titleRow.appendChild(renderBadge(getFriendlyDraftStateLabel(draftState), getFriendlyDraftStateVariant(draftState)));
   left.appendChild(titleRow);
   left.appendChild(createElement('p', {
     className: 'cms-admin-subtitle cms-admin-static-command-subtitle',
-    text: currentItem
-      ? `${getRoomLabel(draftState.selectedRoom)} / ${getItemCode(currentItem) || 'item'} · ${currentItem.title || currentItem.name || getItemType(currentItem)}`
-      : 'Chọn item, sửa nội dung, lưu bản nháp, kiểm tra rồi công khai.',
+    text: 'Chỉnh nội dung hiển thị trong phòng 3D và khu Tác phẩm tiêu biểu trên Trang chủ.',
   }));
+  left.appendChild(renderWorkspaceSwitch(draftState, handlers));
 
-  const status = createElement('div', { className: 'cms-admin-static-command-status' });
-  const rooms = draftState.draftJson?.rooms || {};
-  [
-    ['Nguồn', draftState.source || copy.sourceUnknown || 'chưa rõ'],
-    ['Version', draftState.draftJson?.version || '—'],
-    ['Trong nhà', String(safeArray(rooms.indoor?.artworks).length)],
-    ['Ngoài trời', String(safeArray(rooms.outdoor?.artworks).length)],
-  ].forEach(([label, value]) => status.appendChild(renderInfoTile(label, value, label === 'Version')));
+  const context = createElement('div', { className: 'cms-admin-static-command-context' });
+  if (activeWorkspace === 'featured') {
+    context.appendChild(renderInfoTile('Đang sửa', 'Tác phẩm tiêu biểu'));
+    context.appendChild(renderInfoTile('Số mục', String(safeArray(featured.items).length)));
+    context.appendChild(renderInfoTile('Trạng thái', featured.enabled === false ? 'Đang ẩn trên Trang chủ' : 'Đang hiển thị'));
+  } else {
+    const rooms = draftState.draftJson?.rooms || {};
+    context.appendChild(renderInfoTile('Đang sửa', currentItem ? `${getRoomLabel(draftState.selectedRoom)} / ${getItemCode(currentItem) || 'item'}` : 'Chưa chọn item'));
+    context.appendChild(renderInfoTile('Trong nhà', `${safeArray(rooms.indoor?.artworks).length} item`));
+    context.appendChild(renderInfoTile('Ngoài trời', `${safeArray(rooms.outdoor?.artworks).length} item`));
+  }
 
   const actions = createElement('div', { className: 'cms-admin-actions cms-admin-static-command-actions' });
   actions.appendChild(renderMainLoadActions(draftState, handlers));
   if (draftState.draftJson) {
     actions.appendChild(renderPrimaryOperatorActions(draftState, appState, handlers));
     actions.appendChild(renderDrawerTrigger('Quản lý bản nháp', 'drafts', handlers));
-    actions.appendChild(renderDrawerTrigger('Nâng cao', 'advanced', handlers));
-    actions.appendChild(renderDrawerTrigger('Trang chủ / Tác phẩm tiêu biểu', 'featured', handlers));
+    actions.appendChild(renderDrawerTrigger('Dành cho kỹ thuật', 'advanced', handlers));
   }
 
-  appendChildren(bar, [left, status, actions]);
+  appendChildren(bar, [left, context, actions]);
   return bar;
+}
+
+function getActiveWorkspace(draftState = {}) {
+  return String(draftState.activeWorkspace || 'room') === 'featured' ? 'featured' : 'room';
+}
+
+function renderWorkspaceSwitch(draftState = {}, handlers = {}) {
+  const wrap = createElement('div', { className: 'cms-admin-workspace-switch', attrs: { role: 'tablist', 'aria-label': 'Chọn khu vực nội dung' } });
+  const active = getActiveWorkspace(draftState);
+  [
+    { key: 'room', label: 'Phòng 3D' },
+    { key: 'featured', label: 'Tác phẩm tiêu biểu' },
+  ].forEach((item) => {
+    const button = createElement('button', {
+      className: ['cms-admin-workspace-switch-button', active === item.key ? 'is-active' : ''].filter(Boolean).join(' '),
+      type: 'button',
+      text: item.label,
+      attrs: { role: 'tab', 'aria-selected': active === item.key ? 'true' : 'false' },
+    });
+    button.addEventListener('click', () => {
+      setStaticCmsDraftWorkspace(item.key);
+      handlers.onRerender?.();
+    });
+    wrap.appendChild(button);
+  });
+  return wrap;
+}
+
+function getFriendlyDraftStateLabel(draftState = {}) {
+  if (!draftState.draftJson) return 'Chưa tải nội dung';
+  if (draftState.isSavingDraft) return 'Đang lưu';
+  if (draftState.isPublishingCms) return 'Đang xử lý';
+  if (draftState.dirty) return 'Có thay đổi chưa lưu';
+  if (draftState.publishResult?.ok === true) return 'Đã công khai nội dung';
+  if (draftState.currentDraftId) return 'Đã lưu bản nháp';
+  return 'Chưa lưu bản nháp';
+}
+
+function getFriendlyDraftStateVariant(draftState = {}) {
+  if (!draftState.draftJson) return 'default';
+  if (draftState.dirty || !draftState.currentDraftId) return 'warning';
+  if (draftState.publishResult?.ok === true || draftState.currentDraftId) return 'success';
+  return 'default';
 }
 
 function getDraftWorkflowStateLabel(draftState = {}) {
@@ -225,7 +274,7 @@ function getDraftWorkflowStateLabel(draftState = {}) {
   if (draftState.dirty) return 'Có thay đổi';
   if (draftState.publishResult?.ok === true) return 'Đã công khai';
   if (draftState.currentDraftId) return 'Đã lưu';
-  return 'Chưa lưu server-side';
+  return 'Chưa lưu bản nháp';
 }
 
 function renderDrawerTrigger(label, drawerKey, handlers = {}, variant = 'ghost') {
@@ -242,7 +291,10 @@ function renderDrawerTrigger(label, drawerKey, handlers = {}, variant = 'ghost')
 }
 
 function renderStaticWorkspaceShell(draftState = {}, appState = {}, currentItem = null, handlers = {}, copy = {}) {
-  const shell = createElement('section', { className: 'cms-admin-static-workspace' });
+  if (getActiveWorkspace(draftState) === 'featured') {
+    return renderFeaturedWorkspaceShell(draftState, appState, handlers, copy);
+  }
+  const shell = createElement('section', { className: 'cms-admin-static-workspace cms-admin-static-room-workspace' });
   shell.appendChild(renderWorkspaceItemNavigator(draftState, currentItem, handlers));
   shell.appendChild(renderWorkspaceEditor(draftState, currentItem, handlers, copy));
   shell.appendChild(renderWorkspaceInspector(draftState, appState, currentItem, handlers, copy));
@@ -251,7 +303,7 @@ function renderStaticWorkspaceShell(draftState = {}, appState = {}, currentItem 
 
 function renderWorkspaceItemNavigator(draftState = {}, currentItem = null, handlers = {}) {
   const pane = createElement('aside', { className: 'cms-admin-panel cms-admin-static-workspace-pane cms-admin-static-left-pane' });
-  pane.appendChild(renderStaticPanelTitle('Item trong phòng', renderRoomCountMeta(draftState)));
+  pane.appendChild(renderStaticPanelTitle('Chọn item', renderRoomCountMeta(draftState)));
   pane.appendChild(renderRoomAndItemSelector(draftState, handlers));
   pane.appendChild(renderItemCards(draftState, handlers));
   if (currentItem) {
@@ -259,7 +311,7 @@ function renderWorkspaceItemNavigator(draftState = {}, currentItem = null, handl
     note.appendChild(createElement('summary', { text: 'Khóa kỹ thuật' }));
     note.appendChild(createElement('p', {
       className: 'cms-admin-help-text',
-      text: `Đang sửa nội dung cho ${getItemCode(currentItem) || 'item đã chọn'}. Không chỉnh artwork_code/id/room/type/layout trong workflow này.`,
+      text: 'Thông tin kỹ thuật của item được giữ nguyên. Người vận hành chỉ cần sửa nội dung, ảnh/video hoặc thông tin thêm.',
     }));
     pane.appendChild(note);
   }
@@ -268,7 +320,7 @@ function renderWorkspaceItemNavigator(draftState = {}, currentItem = null, handl
 
 function renderWorkspaceEditor(draftState = {}, currentItem = null, handlers = {}, copy = {}) {
   const pane = createElement('section', { className: 'cms-admin-panel cms-admin-static-workspace-pane cms-admin-static-editor-pane' });
-  pane.appendChild(renderStaticPanelTitle('Trình sửa nội dung', draftState.dirty ? (copy.dirty || 'Có thay đổi chưa lưu') : (copy.clean || 'Đã lưu / chưa có thay đổi')));
+  pane.appendChild(renderStaticPanelTitle('Sửa nội dung', draftState.dirty ? (copy.dirty || 'Có thay đổi chưa lưu') : (copy.clean || 'Đã lưu / chưa có thay đổi')));
   if (!currentItem) {
     pane.appendChild(renderEmptyState(copy.noItem || 'Chưa chọn tác phẩm / item.'));
     return pane;
@@ -283,8 +335,8 @@ function renderEditorTabs(draftState = {}, handlers = {}) {
   const active = getActiveEditorTab(draftState);
   [
     { key: 'content', label: 'Nội dung' },
-    { key: 'media', label: 'Media' },
-    { key: 'metadata', label: 'Metadata' },
+    { key: 'media', label: 'Ảnh & video' },
+    { key: 'metadata', label: 'Thông tin thêm' },
   ].forEach((tab) => {
     const button = createElement('button', {
       className: ['cms-admin-static-editor-tab', active === tab.key ? 'is-active' : ''].filter(Boolean).join(' '),
@@ -324,14 +376,9 @@ function renderUtilityDrawers(draftState = {}, appState = {}, currentItem = null
       content: () => renderDraftPersistencePanel(draftState, appState, handlers, copy),
     },
     advanced: {
-      title: 'Nâng cao',
-      description: 'Dành cho quản trị viên kỹ thuật. Người vận hành thông thường không cần dùng khu này.',
+      title: 'Dành cho kỹ thuật',
+      description: 'Khu vực dành cho quản trị viên kỹ thuật. Người vận hành thông thường không cần dùng khu này.'
       content: () => renderExportPanel(draftState, handlers, copy),
-    },
-    featured: {
-      title: 'Trang chủ / Tác phẩm tiêu biểu',
-      description: 'Quản lý nội dung Trang chủ, tách biệt với nội dung phòng 3D.',
-      content: () => renderFeaturedOperatorPanel(draftState, handlers),
     },
     publishDetails: {
       title: 'Chi tiết kỹ thuật công khai',
@@ -369,6 +416,85 @@ function renderUtilityDrawers(draftState = {}, appState = {}, currentItem = null
   return root;
 }
 
+
+
+function renderFeaturedWorkspaceShell(draftState = {}, appState = {}, handlers = {}, copy = {}) {
+  const featured = getFeaturedOperatorSection(draftState.draftJson);
+  const validation = validateFeaturedOperatorSection(featured, STATIC_CMS_DRAFT_CONFIG);
+  const shell = createElement('section', { className: 'cms-admin-static-workspace cms-admin-featured-workspace' });
+  shell.appendChild(renderFeaturedWorkspaceNavigator(draftState, featured, validation, handlers));
+  shell.appendChild(renderFeaturedWorkspaceEditor(draftState, featured, validation, handlers));
+  shell.appendChild(renderFeaturedWorkspaceInspector(featured, validation));
+  return shell;
+}
+
+function getSelectedFeaturedIndex(draftState = {}, featured = {}) {
+  const items = safeArray(featured.items);
+  if (!items.length) return -1;
+  const index = Number(draftState.selectedFeaturedIndex ?? 0);
+  if (!Number.isFinite(index) || index < 0) return 0;
+  return Math.min(Math.floor(index), items.length - 1);
+}
+
+function renderFeaturedWorkspaceNavigator(draftState = {}, featured = {}, validation = {}, handlers = {}) {
+  const pane = createElement('aside', { className: 'cms-admin-panel cms-admin-static-workspace-pane cms-admin-static-left-pane cms-admin-featured-navigator' });
+  pane.appendChild(renderStaticPanelTitle('Danh sách tiêu biểu', `${safeArray(featured.items).length}/${FEATURED_OPERATOR_MAX_ITEMS}`));
+  const add = createElement('button', { className: 'cms-admin-button cms-admin-button-primary cms-admin-button-small', type: 'button', text: 'Thêm tác phẩm' });
+  add.disabled = safeArray(featured.items).length >= FEATURED_OPERATOR_MAX_ITEMS;
+  add.addEventListener('click', () => {
+    setStaticCmsFeaturedIndex(safeArray(featured.items).length);
+    handleAddFeaturedItem(draftState, handlers);
+  });
+  pane.appendChild(add);
+  pane.appendChild(renderBadge(featured.enabled === false ? 'Đang ẩn trên Trang chủ' : 'Đang hiển thị trên Trang chủ', featured.enabled === false ? 'warning' : 'success'));
+
+  const list = createElement('div', { className: 'cms-admin-featured-nav-list' });
+  const selectedIndex = getSelectedFeaturedIndex(draftState, featured);
+  safeArray(featured.items).forEach((item, index) => {
+    const errors = validation.itemErrors?.[index] || {};
+    const button = createElement('button', {
+      className: ['cms-admin-featured-nav-item', selectedIndex === index ? 'is-active' : '', Object.keys(errors).length ? 'has-error' : ''].filter(Boolean).join(' '),
+      type: 'button',
+    });
+    button.appendChild(createElement('strong', { text: item.title || item.id || `Tác phẩm ${index + 1}` }));
+    button.appendChild(createElement('small', { text: item.isVisible === false ? 'Đang ẩn' : 'Đang hiển thị' }));
+    if (!String(item.imageUrl || '').trim()) button.appendChild(renderBadge('Thiếu ảnh', 'warning'));
+    button.addEventListener('click', () => {
+      setStaticCmsFeaturedIndex(index);
+      handlers.onRerender?.();
+    });
+    list.appendChild(button);
+  });
+  if (!safeArray(featured.items).length) list.appendChild(renderEmptyState('Chưa có tác phẩm tiêu biểu.'));
+  pane.appendChild(list);
+  return pane;
+}
+
+function renderFeaturedWorkspaceEditor(draftState = {}, featured = {}, validation = {}, handlers = {}) {
+  const pane = createElement('section', { className: 'cms-admin-panel cms-admin-static-workspace-pane cms-admin-static-editor-pane cms-admin-featured-editor-pane' });
+  pane.appendChild(renderStaticPanelTitle('Sửa tác phẩm tiêu biểu', validation.valid ? 'Nội dung hợp lệ' : 'Cần kiểm tra'));
+  pane.appendChild(createElement('p', { className: 'cms-admin-help-text', text: 'Sửa nội dung hiển thị ở khu Tác phẩm tiêu biểu trên Trang chủ.' }));
+  pane.appendChild(renderFeaturedSectionSettings(draftState, featured, handlers));
+  const selectedIndex = getSelectedFeaturedIndex(draftState, featured);
+  const selectedItem = selectedIndex >= 0 ? featured.items[selectedIndex] : null;
+  if (!selectedItem) {
+    pane.appendChild(renderEmptyState('Chọn hoặc thêm một tác phẩm tiêu biểu để chỉnh sửa.'));
+    return pane;
+  }
+  pane.appendChild(renderFeaturedItemEditor(draftState, selectedItem, selectedIndex, featured.items.length, validation, handlers));
+  return pane;
+}
+
+function renderFeaturedWorkspaceInspector(featured = {}, validation = {}) {
+  const pane = createElement('aside', { className: 'cms-admin-static-workspace-pane cms-admin-static-inspector-pane cms-admin-featured-inspector' });
+  const head = createElement('section', { className: 'cms-admin-panel cms-admin-featured-friendly-status' });
+  head.appendChild(renderStaticPanelTitle('Xem trước Trang chủ', validation.valid ? 'Sẵn sàng' : 'Cần sửa'));
+  head.appendChild(createElement('p', { className: 'cms-admin-help-text', text: validation.valid ? 'Nội dung tiêu biểu hợp lệ. Hãy lưu bản nháp trước khi công khai.' : 'Có mục thiếu thông tin cần kiểm tra.' }));
+  pane.appendChild(head);
+  pane.appendChild(renderFeaturedPreview(featured, validation));
+  pane.appendChild(renderFeaturedValidationSummary(validation));
+  return pane;
+}
 
 function renderInfoTile(label, value, technical = false) {
   const tile = createElement('div', {
@@ -625,7 +751,7 @@ function renderFeaturedSectionSettings(draftState = {}, featured = {}, handlers 
   enabledLabel.appendChild(enabled);
   const enabledText = createElement('span');
   enabledText.appendChild(createElement('strong', { text: 'Hiển thị trên trang chủ' }));
-  enabledText.appendChild(createElement('small', { className: 'cms-admin-help-text', text: 'Tắt công tắc để giữ dữ liệu nhưng không hiển thị khu vực Featured.' }));
+  enabledText.appendChild(createElement('small', { className: 'cms-admin-help-text', text: 'Tắt công tắc để giữ dữ liệu nhưng không hiển thị khu vực này trên Trang chủ.' }));
   enabledLabel.appendChild(enabledText);
 
   const titleField = renderFeaturedTextControl({
@@ -771,7 +897,7 @@ function renderFeaturedItemEditor(draftState = {}, item = {}, sourceIndex = 0, i
   down.addEventListener('click', () => handleMoveFeaturedItem(draftState, sourceIndex, 1, handlers));
   const toggle = createElement('button', { className: 'cms-admin-button cms-admin-button-secondary cms-admin-button-small', type: 'button', text: item.isVisible === false ? 'Hiện' : 'Ẩn' });
   toggle.addEventListener('click', () => handleFeaturedItemFieldChange(draftState, sourceIndex, 'isVisible', item.isVisible === false, handlers));
-  const remove = createElement('button', { className: 'cms-admin-button cms-admin-button-danger cms-admin-button-small', type: 'button', text: 'Xóa khỏi Featured' });
+  const remove = createElement('button', { className: 'cms-admin-button cms-admin-button-danger cms-admin-button-small', type: 'button', text: 'Xóa khỏi tiêu biểu' });
   remove.addEventListener('click', () => handleRemoveFeaturedItem(draftState, sourceIndex, handlers));
   appendChildren(actions, [up, down, toggle, remove]);
   card.appendChild(actions);
@@ -1796,7 +1922,7 @@ function renderLockedFieldNotice(item = {}) {
   box.appendChild(createElement('strong', { text: 'Khóa kỹ thuật' }));
   box.appendChild(createElement('p', {
     className: 'cms-admin-help-text',
-    text: `Đang sửa nội dung cho ${getItemCode(item) || 'item đã chọn'}. Không chỉnh artwork_code/id/room/type/layout trong workflow này.`,
+    text: 'Thông tin kỹ thuật của item được giữ nguyên. Người vận hành chỉ cần sửa nội dung, ảnh/video hoặc thông tin thêm.',
   }));
   return box;
 }
@@ -1809,9 +1935,6 @@ function renderStaticCmsDraftForm(draftState = {}, item = {}, handlers = {}) {
   const groupKey = activeTab === 'metadata' ? 'metadata' : activeTab === 'media' ? 'media' : 'display';
   const group = DISPLAY_FIELD_GROUPS.find((entry) => entry.key === groupKey) || DISPLAY_FIELD_GROUPS[0];
   form.appendChild(renderFieldGroup(draftState, item, group, handlers));
-  if (activeTab === 'metadata') {
-    form.appendChild(renderTechnicalAliasDetails(item));
-  }
   return form;
 }
 
@@ -2024,7 +2147,7 @@ function renderPreviewPanel(draftState = {}, currentItem = {}, copy = {}) {
 
 function renderValidationPanel(draftState = {}, copy = {}) {
   const validation = createElement('section', { className: 'cms-admin-panel cms-admin-static-validation-panel' });
-  validation.appendChild(renderStaticPanelTitle(copy.validationTitle || 'Kiểm tra bản nháp', draftState.validation?.valid ? 'PASS' : 'NEED CHECK'));
+  validation.appendChild(renderStaticPanelTitle(copy.validationTitle || 'Kiểm tra nội dung', draftState.validation?.valid ? 'Nội dung hợp lệ' : 'Cần kiểm tra'));
   validation.appendChild(renderValidationSummary(draftState.validation));
   return validation;
 }
@@ -2035,10 +2158,10 @@ function renderValidationPanelCompact(draftState = {}, copy = {}) {
   const errors = Object.keys(validation.errors || {});
   const warnings = Object.keys(validation.warnings || {});
   const panel = createElement('section', { className: 'cms-admin-panel cms-admin-static-validation-panel cms-admin-static-inspector-card' });
-  panel.appendChild(renderStaticPanelTitle(copy.validationTitle || 'Kiểm tra', validation.valid ? 'PASS' : 'Cần kiểm tra'));
+  panel.appendChild(renderStaticPanelTitle(copy.validationTitle || 'Tình trạng nội dung', validation.valid ? 'Nội dung hợp lệ' : 'Cần kiểm tra'));
   const summary = validation.valid
-    ? (warnings.length ? `PASS với ${warnings.length} cảnh báo cần kiểm tra.` : 'PASS, không có lỗi blocker.')
-    : (errors.length ? `${errors.length} lỗi blocker cần xử lý.` : 'Chưa có validation hợp lệ.');
+    ? (warnings.length ? `Nội dung hợp lệ, có ${warnings.length} cảnh báo cần xem.` : 'Nội dung hợp lệ.')
+    : (errors.length ? `${errors.length} lỗi cần xử lý.` : 'Chưa có kết quả kiểm tra.');
   panel.appendChild(createElement('div', {
     className: validation.valid ? 'cms-admin-alert cms-admin-alert-success' : 'cms-admin-alert cms-admin-alert-warning',
     text: summary,
@@ -2061,16 +2184,16 @@ function renderPublishInspectorPanel(draftState = {}, appState = {}, handlers = 
 
   const statusText = draftState.publishStatus
     || draftState.publishError
-    || (dryRunReady ? 'Kiểm tra server-side PASS. Có thể công khai nội dung.' : readiness.ready ? 'Bản nháp đã lưu. Hãy kiểm tra trước khi công khai.' : readiness.reason);
+    || (dryRunReady ? 'Đã kiểm tra xong. Có thể công khai nội dung.' : readiness.ready ? 'Bản nháp đã lưu. Hãy kiểm tra trước khi công khai.' : readiness.reason);
   panel.appendChild(createElement('div', {
     className: draftState.publishError ? 'cms-admin-alert cms-admin-alert-error' : dryRunReady || draftState.publishResult?.ok ? 'cms-admin-alert cms-admin-alert-success' : 'cms-admin-alert cms-admin-alert-warning',
     text: statusText,
   }));
 
   const mini = createElement('div', { className: 'cms-admin-static-readiness-grid' });
-  mini.appendChild(renderInfoTile('Draft', draftState.currentDraftId ? 'Đã lưu server-side' : 'Chưa lưu server-side'));
-  mini.appendChild(renderInfoTile('Validation', draftState.validation?.valid ? 'PASS' : 'Cần xử lý'));
-  mini.appendChild(renderInfoTile('Dry-run', dryRunReady ? 'PASS' : 'Chưa PASS'));
+  mini.appendChild(renderInfoTile('Bản nháp', draftState.currentDraftId ? 'Đã lưu' : 'Chưa lưu'));
+  mini.appendChild(renderInfoTile('Kiểm tra', draftState.validation?.valid ? 'Nội dung hợp lệ' : 'Cần xử lý'));
+  mini.appendChild(renderInfoTile('Công khai', dryRunReady ? 'Có thể công khai' : 'Cần kiểm tra trước'));
   panel.appendChild(mini);
 
   const detailsButton = createElement('button', {
@@ -2089,7 +2212,7 @@ function renderPublishInspectorPanel(draftState = {}, appState = {}, handlers = 
 
 function renderPublishGatePanel(draftState = {}, appState = {}, handlers = {}, copy = {}) {
   const panel = createElement('section', { className: 'cms-admin-panel cms-admin-static-publish-panel' });
-  panel.appendChild(renderStaticPanelTitle('Công khai nội dung', draftState.publishResult?.publishedVersion || 'Server-side gate'));
+  panel.appendChild(renderStaticPanelTitle('Công khai nội dung', draftState.publishResult?.publishedVersion || 'Kiểm tra hệ thống'));
   panel.appendChild(createElement('p', {
     className: 'cms-admin-help-text',
     text: 'Công khai sẽ thay đổi website public. Phase này chỉ cho admin publish bản nháp đã lưu server-side qua Edge Function publish-cms-json, có backup, verify và rollback tự động nếu lỗi.',
@@ -2150,9 +2273,9 @@ function renderPublishGateStatus(draftState = {}) {
 
   const grid = createElement('div', { className: 'cms-admin-static-publish-result-grid' });
   const entries = [
-    ['Trạng thái', result.ok === true ? 'PASS' : 'FAIL'],
-    ['Chế độ', result.dryRun ? 'Dry-run' : 'Publish'],
-    ['Version', result.publishedVersion || result.plan?.publishedVersion || '—'],
+    ['Trạng thái', result.ok === true ? 'Đạt' : 'Lỗi'],
+    ['Chế độ', result.dryRun ? 'Kiểm tra trước' : 'Công khai'],
+    ['Phiên bản kỹ thuật', result.publishedVersion || result.plan?.publishedVersion || '—'],
     ['Latest', result.latestPath || result.plan?.latestPath || '—'],
     ['Backup', result.backupPath || result.plan?.backupPath || '—'],
     ['Versioned', result.versionPath || result.plan?.versionPath || '—'],
@@ -2176,7 +2299,7 @@ function renderPublishGateHelp() {
   const wrap = createElement('div', { className: 'cms-admin-static-publish-help' });
   const steps = createElement('ol', { className: 'cms-admin-static-steps' });
   [
-    'Lưu bản nháp server-side trước khi công khai.',
+    'Lưu bản nháp trước khi công khai.',
     'Bấm “Kiểm tra trước khi công khai” để Edge Function validate bản nháp trên server.',
     'Nếu PASS, bấm “Công khai nội dung” và xác nhận 2 bước. Edge Function sẽ backup latest, ghi versioned object, ghi latest, verify và rollback tự động nếu lỗi.',
   ].forEach((step) => steps.appendChild(createElement('li', { text: step })));
@@ -2207,11 +2330,11 @@ function hasCurrentDryRunPass(draftState = {}) {
 function getPublishReadiness(draftState = {}, access = {}) {
   if (!access.allowed) return { ready: false, reason: access.reason || 'Không đủ quyền publish.' };
   if (!draftState.draftJson) return { ready: false, reason: 'Chưa load CMS draft.' };
-  if (!draftState.currentDraftId) return { ready: false, reason: 'Cần lưu bản nháp server-side trước khi công khai.' };
+  if (!draftState.currentDraftId) return { ready: false, reason: 'Cần lưu bản nháp trước khi công khai.' };
   if (draftState.dirty) return { ready: false, reason: 'Bản nháp đang có thay đổi chưa lưu. Hãy lưu bản nháp trước khi công khai.' };
   if (draftState.isSavingDraft) return { ready: false, reason: 'Đang lưu bản nháp, vui lòng chờ hoàn tất.' };
   if (draftState.isUploadingMedia) return { ready: false, reason: 'Đang upload media, vui lòng chờ hoàn tất.' };
-  if (!draftState.validation?.valid) return { ready: false, reason: 'Validation còn lỗi blocker. Chưa được công khai.' };
+  if (!draftState.validation?.valid) return { ready: false, reason: 'Nội dung còn lỗi cần xử lý. Chưa được công khai.' };
   return { ready: true, reason: 'OK' };
 }
 
@@ -2226,7 +2349,7 @@ async function handlePublishStaticCmsDraft({ dryRun = true, handlers = {} } = {}
     return;
   }
   if (!dryRun && !hasCurrentDryRunPass(draftState)) {
-    setStaticCmsPublishState({ publishError: 'Cần bấm “Kiểm tra trước khi công khai” và đạt PASS trước khi công khai nội dung.', publishStatus: '', publishResult: null });
+    setStaticCmsPublishState({ publishError: 'Cần bấm “Kiểm tra” và nội dung phải đạt trước khi công khai.', publishStatus: '', publishResult: null });
     handlers.onRerender?.();
     return;
   }
@@ -2271,7 +2394,7 @@ async function handlePublishStaticCmsDraft({ dryRun = true, handlers = {} } = {}
   setStaticCmsPublishState({
     isPublishingCms: false,
     publishError: null,
-    publishStatus: dryRun ? 'Server-side dry-run PASS. Chưa thay đổi website public.' : 'Đã công khai bản nháp và verify latest PASS.',
+    publishStatus: dryRun ? 'Đã kiểm tra xong. Website chưa thay đổi.' : 'Đã công khai nội dung.',
     publishDryRunResult: dryRun ? result.data : draftState.publishDryRunResult,
     publishResult: dryRun ? draftState.publishResult : result.data,
     publishLastVerifiedAt: new Date().toISOString(),
@@ -2429,7 +2552,7 @@ function formatDraftValidationBrief(validation = {}) {
   const warnings = Object.keys(validation?.warnings || {}).length;
   if (errors) return `${errors} lỗi blocker`;
   if (warnings) return `${warnings} cảnh báo`;
-  if (validation?.valid === true) return 'Validation PASS';
+  if (validation?.valid === true) return 'Nội dung hợp lệ';
   return 'Chưa có validation';
 }
 
@@ -2472,7 +2595,7 @@ async function handleSaveStaticCmsDraft({ asNew = false, handlers = {} } = {}) {
   const exportJson = createStaticCmsExportJson(draftState.draftJson);
   const validation = validateStaticCmsDraft(exportJson, STATIC_CMS_DRAFT_CONFIG);
   if (!validation.valid) {
-    setStaticCmsDraftPersistenceState({ validation, draftPersistenceError: 'Validation còn lỗi blocker. Chưa lưu bản nháp server-side.', draftSaveStatus: '' });
+    setStaticCmsDraftPersistenceState({ validation, draftPersistenceError: 'Nội dung còn lỗi cần xử lý. Chưa lưu bản nháp.', draftSaveStatus: '' });
     handlers.onRerender?.();
     return;
   }
