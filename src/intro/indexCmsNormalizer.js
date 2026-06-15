@@ -1,8 +1,47 @@
-// v6.14.003 — Canonical CMS index contract normalizer (featured exhibitionTitle extension).
+// v6.14.038 — Canonical Index CMS latest/fallback normalizer with per-item media recovery.
 // Keeps schema aliasing, validation and fallback merging outside intro/main.js.
 
 const IMAGE_EXTENSIONS = Object.freeze(['jpg', 'jpeg', 'png', 'webp', 'avif', 'gif']);
 const VIDEO_EXTENSIONS = Object.freeze(['mp4', 'webm', 'ogg', 'ogv', 'mov', 'm4v']);
+
+const DEFAULT_INDEX_CMS_LOADER_OPTIONS = Object.freeze({
+  context: 'index',
+  remoteEnabled: true,
+  remoteUrl: 'https://ocmidhgabyrvqbvqgorw.supabase.co/storage/v1/object/public/cms-public/published/cms_public_content.json',
+  fallbackUrl: './data/cms_content_fallback.json',
+  timeoutMs: 1200,
+  allowRemoteMedia: true,
+  allowedMediaOrigins: Object.freeze([
+    'https://ocmidhgabyrvqbvqgorw.supabase.co',
+    'https://pub-d00970587980484399ff842b58cd1e9e.r2.dev'
+  ]),
+  allowedMediaHosts: Object.freeze([
+    'ocmidhgabyrvqbvqgorw.supabase.co',
+    'pub-d00970587980484399ff842b58cd1e9e.r2.dev'
+  ]),
+  allowedMediaPathPrefixes: Object.freeze(['/storage/v1/object/public/', '/']),
+  strictIndexContract: true,
+  requireIndexFeatured: true,
+  allowFeaturedItemFallback: true,
+  strictRoomMedia: false
+});
+
+function getIndexCmsLoaderOptions(options = {}) {
+  const runtimeOptions = isPlainObject(globalThis.INDEX_CMS_CONTENT_CONFIG)
+    ? globalThis.INDEX_CMS_CONTENT_CONFIG
+    : {};
+  const merged = {
+    ...DEFAULT_INDEX_CMS_LOADER_OPTIONS,
+    ...runtimeOptions,
+    ...options
+  };
+  return {
+    ...merged,
+    allowedMediaOrigins: merged.allowedMediaOrigins || DEFAULT_INDEX_CMS_LOADER_OPTIONS.allowedMediaOrigins,
+    allowedMediaHosts: merged.allowedMediaHosts || DEFAULT_INDEX_CMS_LOADER_OPTIONS.allowedMediaHosts,
+    allowedMediaPathPrefixes: merged.allowedMediaPathPrefixes || DEFAULT_INDEX_CMS_LOADER_OPTIONS.allowedMediaPathPrefixes
+  };
+}
 
 const DEFAULT_INDEX_CONTENT = Object.freeze({
   hero: Object.freeze({
@@ -271,7 +310,35 @@ function normalizeSteps(value, diagnostics, path) {
   }).filter(Boolean);
 }
 
-function normalizeFeaturedItems(value, mediaOptions, diagnostics, path) {
+function getFeaturedBoolean(item, fallbackItem, keys, fallback = true) {
+  for (const key of keys) {
+    if (typeof item?.[key] === 'boolean') return item[key];
+  }
+  if (fallbackItem && typeof fallbackItem.visible === 'boolean') return fallbackItem.visible;
+  return fallback;
+}
+
+function getFeaturedOrder(item, fallbackItem, index) {
+  for (const key of ['sortOrder', 'sort_order', 'order']) {
+    if (item?.[key] === null || item?.[key] === undefined || item?.[key] === '') continue;
+    const value = Number(item[key]);
+    if (Number.isFinite(value)) return value;
+  }
+  if (Number.isFinite(Number(fallbackItem?.sortOrder))) return Number(fallbackItem.sortOrder);
+  return index + 1;
+}
+
+function findFeaturedFallback(fallbackItems, rawId, rawArtworkId, index) {
+  const normalizedId = String(rawId || '').trim();
+  const normalizedArtworkId = String(rawArtworkId || '').trim().toUpperCase();
+  const exact = fallbackItems.find((item) => {
+    if (normalizedId && item.id === normalizedId) return true;
+    return normalizedArtworkId && String(item.artworkId || '').trim().toUpperCase() === normalizedArtworkId;
+  });
+  return exact || fallbackItems[index] || null;
+}
+
+function normalizeFeaturedItems(value, mediaOptions, diagnostics, path, fallbackItems = []) {
   const limits = getLimits();
   const textLimits = getTextLimits();
   if (!Array.isArray(value)) {
@@ -289,9 +356,12 @@ function normalizeFeaturedItems(value, mediaOptions, diagnostics, path) {
     }
 
     const itemPath = `${path}[${index}]`;
-    const id = readText(item, ['id', 'artworkId', 'artwork_id', 'code'], textLimits.id, diagnostics, itemPath);
+    const rawId = readText(item, ['id', 'code'], textLimits.id, diagnostics, itemPath);
+    const rawArtworkId = readText(item, ['artworkId', 'artwork_id'], textLimits.artworkId, diagnostics, itemPath);
+    const fallbackItem = findFeaturedFallback(fallbackItems, rawId, rawArtworkId, index);
+    const id = rawId || fallbackItem?.id || rawArtworkId;
     if (!id) {
-      addWarning(diagnostics, `${itemPath} ignored because id is missing.`);
+      addWarning(diagnostics, `${itemPath} ignored because id is missing and no per-item fallback matched.`);
       return;
     }
     if (seenIds.has(id)) {
@@ -299,36 +369,64 @@ function normalizeFeaturedItems(value, mediaOptions, diagnostics, path) {
       return;
     }
 
-    const visible = item.visible !== false && item.isVisible !== false && item.enabled !== false;
-    const title = readText(item, ['title'], textLimits.title, diagnostics, itemPath);
-    const rawImageUrl = readText(item, ['imageUrl', 'image', 'image_url', 'mediaUrl', 'media_url'], textLimits.imageUrl, diagnostics, itemPath);
-    const imageUrl = rawImageUrl && isSafeMediaUrl(rawImageUrl, mediaOptions, IMAGE_EXTENSIONS) ? rawImageUrl : '';
+    const visible = getFeaturedBoolean(item, fallbackItem, ['visible', 'isVisible', 'is_visible', 'enabled'], true);
+    const title = readText(item, ['title', 'name'], textLimits.title, diagnostics, itemPath) || fallbackItem?.title || '';
+    const rawImageUrl = readText(
+      item,
+      ['imageUrl', 'image', 'image_url', 'src', 'url', 'thumbnailUrl', 'thumbnail', 'thumbnail_url', 'posterUrl', 'poster', 'poster_url', 'mediaUrl', 'media_url'],
+      textLimits.imageUrl,
+      diagnostics,
+      itemPath
+    );
+    const safePrimaryImage = rawImageUrl && isSafeMediaUrl(rawImageUrl, mediaOptions, IMAGE_EXTENSIONS) ? rawImageUrl : '';
+    const safeFallbackImage = fallbackItem?.imageUrl && isSafeMediaUrl(fallbackItem.imageUrl, mediaOptions, IMAGE_EXTENSIONS)
+      ? fallbackItem.imageUrl
+      : '';
+    const imageUrl = safePrimaryImage || safeFallbackImage;
 
-    if (rawImageUrl && !imageUrl) addWarning(diagnostics, `${itemPath}.imageUrl ignored by media policy.`);
+    if (rawImageUrl && !safePrimaryImage) addWarning(diagnostics, `${itemPath}.imageUrl ignored by media policy; per-item fallback was attempted.`);
+    if (!rawImageUrl && safeFallbackImage) addWarning(diagnostics, `${itemPath}.imageUrl missing; matched fallback item media was used.`);
     if (visible && !title) {
-      addWarning(diagnostics, `${itemPath} ignored because visible items require title.`);
+      addWarning(diagnostics, `${itemPath} ignored because visible items require title and no fallback title matched.`);
       return;
     }
     if (visible && !imageUrl) {
-      addWarning(diagnostics, `${itemPath} ignored because visible items require a safe imageUrl.`);
+      addWarning(diagnostics, `${itemPath} ignored because visible items require a safe imageUrl and no fallback image matched.`);
       return;
     }
 
-    const normalized = { id, title, imageUrl, visible };
-    applyText(normalized, 'subtitle', item, ['subtitle'], textLimits.subtitle, diagnostics, itemPath);
-    applyText(normalized, 'description', item, ['description'], textLimits.description, diagnostics, itemPath);
-    applyText(normalized, 'room', item, ['room', 'room_key', 'roomKey'], textLimits.room, diagnostics, itemPath);
-    applyText(normalized, 'artworkId', item, ['artworkId', 'artwork_id'], textLimits.artworkId, diagnostics, itemPath);
-    applyText(normalized, 'ctaLabel', item, ['ctaLabel', 'cta_label'], textLimits.ctaLabel, diagnostics, itemPath);
+    const normalized = {
+      id,
+      title,
+      imageUrl,
+      visible,
+      sortOrder: getFeaturedOrder(item, fallbackItem, index)
+    };
 
-    const alt = readText(item, ['alt'], textLimits.alt, diagnostics, itemPath);
-    normalized.alt = alt || title;
-    if (visible && !alt) addWarning(diagnostics, `${itemPath}.alt missing; title used as fallback.`);
+    const subtitle = readText(item, ['subtitle'], textLimits.subtitle, diagnostics, itemPath) || fallbackItem?.subtitle || '';
+    const description = readText(item, ['description', 'caption'], textLimits.description, diagnostics, itemPath) || fallbackItem?.description || '';
+    const room = readText(item, ['room', 'room_key', 'roomKey'], textLimits.room, diagnostics, itemPath) || fallbackItem?.room || '';
+    const artworkId = rawArtworkId || fallbackItem?.artworkId || '';
+    const ctaLabel = readText(item, ['ctaLabel', 'cta_label'], textLimits.ctaLabel, diagnostics, itemPath) || fallbackItem?.ctaLabel || '';
+    if (subtitle) normalized.subtitle = subtitle;
+    if (description) normalized.description = description;
+    if (room) normalized.room = room;
+    if (artworkId) normalized.artworkId = artworkId;
+    if (ctaLabel) normalized.ctaLabel = ctaLabel;
+
+    const alt = readText(item, ['alt'], textLimits.alt, diagnostics, itemPath) || fallbackItem?.alt || title;
+    normalized.alt = alt;
+    if (visible && !readText(item, ['alt'], textLimits.alt, { warnings: [], errors: [] }, itemPath) && !fallbackItem?.alt) {
+      addWarning(diagnostics, `${itemPath}.alt missing; title used as fallback.`);
+    }
 
     seenIds.add(id);
-    result.push(normalized);
+    result.push({ ...normalized, __sourceIndex: index });
   });
-  return result;
+
+  return result
+    .sort((a, b) => (a.sortOrder - b.sortOrder) || (a.__sourceIndex - b.__sourceIndex))
+    .map(({ __sourceIndex, ...item }) => item);
 }
 
 function applySiteContactLayer(target, content, diagnostics, sourceLabel) {
@@ -411,8 +509,11 @@ function applyIndexLayer(target, content, mediaOptions, diagnostics, sourceLabel
     : (isPlainObject(index.featured) ? index.featured : null);
   if (featured) {
     const featuredPath = `${sourceLabel}.index.${isPlainObject(index.featuredArtworks) ? 'featuredArtworks' : 'featured'}`;
-    if (typeof featured.enabled === 'boolean') target.featuredArtworks.enabled = featured.enabled;
-    else if (featured.enabled !== undefined) addWarning(diagnostics, `${featuredPath}.enabled ignored because it is not boolean.`);
+    const enabledValue = [featured.enabled, featured.isVisible, featured.is_visible, featured.visible].find((value) => typeof value === 'boolean');
+    if (typeof enabledValue === 'boolean') target.featuredArtworks.enabled = enabledValue;
+    else if ([featured.enabled, featured.isVisible, featured.is_visible, featured.visible].some((value) => value !== undefined)) {
+      addWarning(diagnostics, `${featuredPath}.enabled/isVisible ignored because it is not boolean.`);
+    }
     applyText(target.featuredArtworks, 'kicker', featured, ['kicker', 'eyebrow'], textLimits.kicker, diagnostics, featuredPath);
     applyText(target.featuredArtworks, 'title', featured, ['title'], textLimits.title, diagnostics, featuredPath);
     applyText(target.featuredArtworks, 'exhibitionTitle', featured, ['exhibitionTitle'], textLimits.exhibitionTitle, diagnostics, featuredPath);
@@ -427,8 +528,16 @@ function applyIndexLayer(target, content, mediaOptions, diagnostics, sourceLabel
       }
     }
 
-    const items = normalizeFeaturedItems(featured.items, mediaOptions, diagnostics, `${featuredPath}.items`);
-    if (items.length) target.featuredArtworks.items = items;
+    if (featured.items !== undefined) {
+      const items = normalizeFeaturedItems(
+        featured.items,
+        mediaOptions,
+        diagnostics,
+        `${featuredPath}.items`,
+        target.featuredArtworks.items
+      );
+      target.featuredArtworks.items = items;
+    }
   }
 
   return true;
@@ -463,10 +572,11 @@ export function normalizeCmsIndexContent(primaryContent, fallbackContent = null,
 }
 
 export async function loadNormalizedIndexCmsContent(cms, options = {}) {
-  if (!cms) return normalizeCmsIndexContent(null, null, { cms, loaderOptions: options });
+  const loaderOptions = getIndexCmsLoaderOptions(options);
+  if (!cms) return normalizeCmsIndexContent(null, null, { cms, loaderOptions });
 
   if (typeof cms.loadCmsContentSources === 'function') {
-    const sources = await cms.loadCmsContentSources(options);
+    const sources = await cms.loadCmsContentSources(loaderOptions);
     const result = normalizeCmsIndexContent(sources.remoteContent, sources.fallbackContent, {
       cms,
       loaderOptions: sources.config || options,
@@ -484,9 +594,9 @@ export async function loadNormalizedIndexCmsContent(cms, options = {}) {
     };
   }
 
-  const selected = typeof cms.loadCmsContent === 'function' ? await cms.loadCmsContent(options) : null;
-  const result = normalizeCmsIndexContent(selected, null, { cms, loaderOptions: options });
+  const selected = typeof cms.loadCmsContent === 'function' ? await cms.loadCmsContent(loaderOptions) : null;
+  const result = normalizeCmsIndexContent(selected, null, { cms, loaderOptions });
   return { ...result, source: cms.getCmsSource?.() || (selected ? 'selected' : 'legacy') };
 }
 
-export { DEFAULT_INDEX_CONTENT };
+export { DEFAULT_INDEX_CONTENT, DEFAULT_INDEX_CMS_LOADER_OPTIONS, getIndexCmsLoaderOptions };

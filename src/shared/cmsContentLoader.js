@@ -1,4 +1,4 @@
-// V6.11.21-B6-F_K_O_I_B — Safe CMS content loader with media/text override and schema compatibility.
+// v6.14.038 — Canonical CMS latest/fallback loader with safe media override and legacy alias compatibility.
 // No upload/admin integration here; this is a frontend content layer with local/legacy fallback.
 (function initCmsContentLoader(global) {
   if (global.cmsContentLoader) return;
@@ -41,6 +41,7 @@
     realSize: 'realSize',
     description: 'description',
     desc: 'description',
+    caption: 'description',
     content: 'content',
     note: 'note',
     text: 'text',
@@ -59,6 +60,8 @@
     video: 'videoUrl',
     media_url: 'mediaUrl',
     mediaUrl: 'mediaUrl',
+    src: 'mediaUrl',
+    url: 'mediaUrl',
     content_url: 'videoUrl',
     contentUrl: 'videoUrl',
     audio_url: 'audioUrl',
@@ -67,11 +70,14 @@
     category: 'category',
     tags: 'tags',
     is_visible: 'cmsVisible',
+    isVisible: 'cmsVisible',
     visible: 'cmsVisible',
+    enabled: 'cmsVisible',
     is_featured: 'isFeatured',
     featured: 'isFeatured',
     sort_order: 'cmsSortOrder',
-    sortOrder: 'cmsSortOrder'
+    sortOrder: 'cmsSortOrder',
+    order: 'cmsSortOrder'
   };
 
   const MEDIA_FIELDS = new Set(['image', 'thumbnail', 'videoUrl', 'poster', 'audioUrl']);
@@ -125,7 +131,13 @@
       allowedMediaOrigins: config.allowedMediaOrigins || [],
       allowedMediaHosts: config.allowedMediaHosts || [],
       allowedMediaPathPrefixes: config.allowedMediaPathPrefixes || [],
-      disallowSignedMediaUrls: true
+      disallowSignedMediaUrls: true,
+      strictIndexContract: config.strictIndexContract === true,
+      requireIndexFeatured: config.requireIndexFeatured === true,
+      allowFeaturedItemFallback: config.allowFeaturedItemFallback === true,
+      strictRoomMedia: config.strictRoomMedia === true,
+      requireCanonicalRooms: config.requireCanonicalRooms === true,
+      requireCanonicalDocument: config.requireCanonicalDocument === true
     };
   }
 
@@ -614,6 +626,7 @@
     isDebugCms,
     getCmsConfig,
     getCmsMediaValidationOptions,
+    normalizeCmsContentDocument: (...args) => getValidator().normalizeCmsContentDocument?.(...args),
     sanitizeText,
     isSafeMediaUrl,
     getArtworkMediaSrc,

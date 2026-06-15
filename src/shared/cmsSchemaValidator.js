@@ -1,4 +1,4 @@
-// v6.14.003 — CMS schema/media safety validator with featured exhibitionTitle validation.
+// v6.14.038 — Canonical CMS source-of-truth schema/media validator and legacy alias normalizer.
 // Dependency-free; safe to load as a classic script or ES module.
 (function initCmsSchemaValidator(global) {
   if (global.cmsSchemaValidator) return;
@@ -40,6 +40,20 @@
     artworkId: 160,
     imageUrl: 2048
   });
+
+  const CANONICAL_CMS_SCHEMA_VERSION = 1;
+  const ROOM_MEDIA_ALIAS_FIELDS = Object.freeze([
+    'imageUrl', 'image', 'image_url', 'src', 'url', 'mediaUrl', 'media_url',
+    'thumbnailUrl', 'thumbnail', 'thumbnail_url',
+    'posterUrl', 'poster', 'poster_url',
+    'videoUrl', 'video', 'video_url', 'contentUrl', 'content_url',
+    'audioUrl', 'audio_url'
+  ]);
+  const FEATURED_IMAGE_ALIAS_FIELDS = Object.freeze([
+    'imageUrl', 'image', 'image_url', 'src', 'url', 'thumbnailUrl', 'thumbnail',
+    'thumbnail_url', 'posterUrl', 'poster', 'poster_url', 'mediaUrl', 'media_url'
+  ]);
+  const VIDEO_MEDIA_PATTERN = /\.(mp4|webm|ogg|ogv|mov|m4v)(?:[?#]|$)/i;
 
   function isPlainObject(value) {
     return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -91,6 +105,155 @@
       ? (item.artwork_code || item.artworkCode || item.artwork_id || item.artworkId || item.id || item.code || fallback)
       : fallback;
     return sanitizeText(raw).toUpperCase();
+  }
+
+  function cloneJsonSafe(value) {
+    try { return JSON.parse(JSON.stringify(value || {})); } catch { return {}; }
+  }
+
+  function firstUsableValue(source, keys) {
+    if (!isPlainObject(source)) return '';
+    for (const key of keys) {
+      const value = source[key];
+      if (value === null || value === undefined) continue;
+      if (typeof value === 'string' && !value.trim()) continue;
+      return value;
+    }
+    return '';
+  }
+
+  function isVideoLike(value, source = {}) {
+    const mediaType = sanitizeText(source.mediaType || source.media_type || source.kind || source.type).toLowerCase();
+    return mediaType === 'video' || VIDEO_MEDIA_PATTERN.test(sanitizeText(value));
+  }
+
+  function normalizeVisibilityAlias(source, fallback = true) {
+    for (const key of ['isVisible', 'is_visible', 'visible', 'enabled']) {
+      if (typeof source?.[key] === 'boolean') return source[key];
+    }
+    return fallback;
+  }
+
+  function normalizeOrderAlias(source, fallback = null) {
+    const raw = firstUsableValue(source, ['sortOrder', 'sort_order', 'order']);
+    if (raw === '') return fallback;
+    const value = Number(raw);
+    return Number.isFinite(value) ? value : fallback;
+  }
+
+  function dropLegacyMediaAliases(target, kind = 'room') {
+    const aliases = kind === 'featured'
+      ? ['image', 'image_url', 'src', 'url', 'mediaUrl', 'media_url', 'thumbnail', 'thumbnail_url', 'poster', 'poster_url', 'video', 'video_url', 'contentUrl', 'content_url', 'is_visible', 'visible', 'enabled', 'sort_order', 'order']
+      : ['image', 'image_url', 'src', 'url', 'mediaUrl', 'media_url', 'thumbnail', 'thumbnail_url', 'poster', 'poster_url', 'video', 'video_url', 'contentUrl', 'content_url', 'is_visible', 'visible', 'enabled', 'sort_order', 'order'];
+    aliases.forEach((key) => { delete target[key]; });
+    return target;
+  }
+
+  function normalizeCmsArtworkAliases(item, fallbackKey = '', options = {}) {
+    if (!isPlainObject(item)) return null;
+    const out = cloneJsonSafe(item);
+    const id = normalizeCmsItemId(item, fallbackKey);
+    if (id) {
+      out.id = id;
+      out.artwork_code = sanitizeText(item.artwork_code || item.artworkCode || id).toUpperCase();
+    }
+
+    const imageValue = firstUsableValue(item, ['imageUrl', 'image', 'image_url']);
+    const genericMedia = firstUsableValue(item, ['src', 'url', 'mediaUrl', 'media_url']);
+    const directVideo = firstUsableValue(item, ['videoUrl', 'video', 'video_url', 'contentUrl', 'content_url']);
+    const poster = firstUsableValue(item, ['posterUrl', 'poster', 'poster_url']);
+    const thumbnail = firstUsableValue(item, ['thumbnailUrl', 'thumbnail', 'thumbnail_url']);
+    if (directVideo) out.videoUrl = sanitizeText(directVideo, '', INDEX_TEXT_LIMITS.imageUrl);
+    if (imageValue) out.imageUrl = sanitizeText(imageValue, '', INDEX_TEXT_LIMITS.imageUrl);
+    if (genericMedia) {
+      const clean = sanitizeText(genericMedia, '', INDEX_TEXT_LIMITS.imageUrl);
+      if (isVideoLike(clean, item)) out.videoUrl = out.videoUrl || clean;
+      else out.imageUrl = out.imageUrl || clean;
+    }
+    if (poster) out.posterUrl = sanitizeText(poster, '', INDEX_TEXT_LIMITS.imageUrl);
+    if (thumbnail) out.thumbnailUrl = sanitizeText(thumbnail, '', INDEX_TEXT_LIMITS.imageUrl);
+    if (!out.title && item.name) out.title = sanitizeText(item.name, '', INDEX_TEXT_LIMITS.title);
+    if (!out.description && (item.caption || item.desc)) out.description = sanitizeText(item.caption || item.desc, '', INDEX_TEXT_LIMITS.description);
+    if (!out.alt && (out.title || item.title || item.name)) out.alt = sanitizeText(out.title || item.title || item.name, '', INDEX_TEXT_LIMITS.alt);
+    out.isVisible = normalizeVisibilityAlias(item, true);
+    const order = normalizeOrderAlias(item, options.fallbackOrder ?? null);
+    if (order !== null) out.sortOrder = order;
+    if (options.dropLegacyAliases === true) dropLegacyMediaAliases(out, 'room');
+    return out;
+  }
+
+  function normalizeFeaturedItemAliases(item, index = 0, options = {}) {
+    if (!isPlainObject(item)) return null;
+    const out = cloneJsonSafe(item);
+    const id = sanitizeText(item.id || item.code || item.artworkId || item.artwork_id || `featured_${index + 1}`, '', INDEX_TEXT_LIMITS.id);
+    if (id) out.id = id;
+    const image = firstUsableValue(item, FEATURED_IMAGE_ALIAS_FIELDS);
+    const poster = firstUsableValue(item, ['posterUrl', 'poster', 'poster_url']);
+    const thumbnail = firstUsableValue(item, ['thumbnailUrl', 'thumbnail', 'thumbnail_url']);
+    const video = firstUsableValue(item, ['videoUrl', 'video', 'video_url', 'contentUrl', 'content_url']);
+    if (image) out.imageUrl = sanitizeText(image, '', INDEX_TEXT_LIMITS.imageUrl);
+    if (poster) out.posterUrl = sanitizeText(poster, '', INDEX_TEXT_LIMITS.imageUrl);
+    if (thumbnail) out.thumbnailUrl = sanitizeText(thumbnail, '', INDEX_TEXT_LIMITS.imageUrl);
+    if (video) out.videoUrl = sanitizeText(video, '', INDEX_TEXT_LIMITS.imageUrl);
+    if (!out.title && item.name) out.title = sanitizeText(item.name, '', INDEX_TEXT_LIMITS.title);
+    if (!out.description && (item.caption || item.desc)) out.description = sanitizeText(item.caption || item.desc, '', INDEX_TEXT_LIMITS.description);
+    out.isVisible = normalizeVisibilityAlias(item, true);
+    const order = normalizeOrderAlias(item, index + 1);
+    if (order !== null) out.sortOrder = order;
+    if (options.dropLegacyAliases === true) dropLegacyMediaAliases(out, 'featured');
+    return out;
+  }
+
+  function normalizeCmsRoomContent(roomContent, options = {}) {
+    const room = isPlainObject(roomContent) ? cloneJsonSafe(roomContent) : {};
+    const map = new Map();
+    if (isPlainObject(room.items)) {
+      Object.entries(room.items).forEach(([key, value], index) => {
+        const normalized = normalizeCmsArtworkAliases(value, key, { fallbackOrder: index + 1, dropLegacyAliases: options.dropLegacyAliases === true });
+        if (normalized?.id) map.set(normalized.id, normalized);
+      });
+    }
+    if (Array.isArray(room.artworks)) {
+      room.artworks.forEach((value, index) => {
+        const normalized = normalizeCmsArtworkAliases(value, '', { fallbackOrder: index + 1, dropLegacyAliases: options.dropLegacyAliases === true });
+        if (normalized?.id) map.set(normalized.id, normalized);
+      });
+    }
+    room.artworks = Array.from(map.values());
+    if (options.keepLegacyRoomItems !== true) delete room.items;
+    return room;
+  }
+
+  function normalizeCmsContentDocument(content, options = {}) {
+    const out = isPlainObject(content) ? cloneJsonSafe(content) : {};
+    if (!Number.isFinite(Number(out.schemaVersion))) out.schemaVersion = CANONICAL_CMS_SCHEMA_VERSION;
+    if (isPlainObject(out.rooms)) {
+      Object.keys(out.rooms).forEach((roomKey) => {
+        out.rooms[roomKey] = normalizeCmsRoomContent(out.rooms[roomKey], options);
+      });
+    }
+    if (isPlainObject(out.index)) {
+      if (!isPlainObject(out.index.featuredArtworks) && isPlainObject(out.index.featured)) {
+        out.index.featuredArtworks = cloneJsonSafe(out.index.featured);
+      }
+      if (isPlainObject(out.index.featuredArtworks)) {
+        const featured = out.index.featuredArtworks;
+        if (typeof featured.enabled !== 'boolean') {
+          const enabledAlias = [featured.isVisible, featured.is_visible, featured.visible].find((value) => typeof value === 'boolean');
+          if (typeof enabledAlias === 'boolean') featured.enabled = enabledAlias;
+        }
+        if (Array.isArray(featured.items)) {
+          featured.items = featured.items.map((item, index) => normalizeFeaturedItemAliases(item, index, { dropLegacyAliases: options.dropLegacyAliases === true })).filter(Boolean);
+        }
+        if (options.dropLegacyAliases === true) {
+          delete featured.isVisible;
+          delete featured.is_visible;
+          delete featured.visible;
+        }
+        if (options.keepLegacyFeaturedAlias !== true) delete out.index.featured;
+      }
+    }
+    return out;
   }
 
   function getHostnameFromAllowEntry(entry) {
@@ -238,6 +401,9 @@
     const featured = indexContent.featuredArtworks !== undefined
       ? validateObjectSection(indexContent, 'featuredArtworks', result)
       : validateObjectSection(indexContent, 'featured', result);
+    if (options.requireIndexFeatured === true && !featured) {
+      result.errors.push('index.featuredArtworks is required by the canonical CMS contract.');
+    }
 
     if (hero) {
       pushTextValidation(result, 'index.hero.eyebrow', hero.eyebrow, INDEX_TEXT_LIMITS.eyebrow);
@@ -319,7 +485,10 @@
       }
       if (featured.items !== undefined && !Array.isArray(featured.items)) {
         result.errors.push(`${featuredPath}.items must be an array.`);
+      } else if (featured.enabled === true && !Array.isArray(featured.items)) {
+        result.errors.push(`${featuredPath}.items is required when Featured is enabled.`);
       } else if (Array.isArray(featured.items)) {
+        if (featured.enabled === true && featured.items.length === 0) result.errors.push(`${featuredPath}.items must contain at least one item when enabled.`);
         if (featured.items.length > INDEX_LIMITS.featuredItems) result.warnings.push(`${featuredPath}.items exceeds ${INDEX_LIMITS.featuredItems} items and will be capped.`);
         const seenIds = new Set();
         featured.items.slice(0, INDEX_LIMITS.featuredItems).forEach((item, index) => {
@@ -327,30 +496,37 @@
             result.errors.push(`${featuredPath}.items[${index}] must be an object.`);
             return;
           }
-          const id = sanitizeText(item.id || item.artworkId || item.artwork_id || item.code, '', INDEX_TEXT_LIMITS.id);
-          const visible = item.visible !== false && item.isVisible !== false && item.enabled !== false;
+          const id = sanitizeText(item.id || item.code || item.artworkId || item.artwork_id, '', INDEX_TEXT_LIMITS.id);
+          const visible = normalizeVisibilityAlias(item, true);
           if (!id) result.errors.push(`${featuredPath}.items[${index}].id is required.`);
           else if (seenIds.has(id)) result.errors.push(`${featuredPath}.items[${index}].id duplicates "${id}".`);
           else seenIds.add(id);
 
-          pushTextValidation(result, `${featuredPath}.items[${index}].title`, item.title, INDEX_TEXT_LIMITS.title);
+          pushTextValidation(result, `${featuredPath}.items[${index}].title`, item.title ?? item.name, INDEX_TEXT_LIMITS.title);
           pushTextValidation(result, `${featuredPath}.items[${index}].subtitle`, item.subtitle, INDEX_TEXT_LIMITS.subtitle);
-          pushTextValidation(result, `${featuredPath}.items[${index}].description`, item.description, INDEX_TEXT_LIMITS.description);
+          pushTextValidation(result, `${featuredPath}.items[${index}].description`, item.description ?? item.caption, INDEX_TEXT_LIMITS.description);
           pushTextValidation(result, `${featuredPath}.items[${index}].alt`, item.alt, INDEX_TEXT_LIMITS.alt);
           pushTextValidation(result, `${featuredPath}.items[${index}].room`, item.room, INDEX_TEXT_LIMITS.room);
           pushTextValidation(result, `${featuredPath}.items[${index}].artworkId`, item.artworkId ?? item.artwork_id, INDEX_TEXT_LIMITS.artworkId);
           pushTextValidation(result, `${featuredPath}.items[${index}].ctaLabel`, item.ctaLabel, INDEX_TEXT_LIMITS.ctaLabel);
 
-          const title = sanitizeText(item.title, '', INDEX_TEXT_LIMITS.title);
-          const imageUrl = sanitizeText(item.imageUrl || item.image || item.image_url || item.mediaUrl || item.media_url, '', INDEX_TEXT_LIMITS.imageUrl);
-          if (visible && !title) result.errors.push(`${featuredPath}.items[${index}].title is required when visible.`);
-          if (visible && !imageUrl) result.errors.push(`${featuredPath}.items[${index}].imageUrl is required when visible.`);
+          const title = sanitizeText(item.title || item.name, '', INDEX_TEXT_LIMITS.title);
+          const imageUrl = sanitizeText(firstUsableValue(item, FEATURED_IMAGE_ALIAS_FIELDS), '', INDEX_TEXT_LIMITS.imageUrl);
+          const allowItemFallback = options.allowFeaturedItemFallback === true;
+          if (visible && !title) {
+            (allowItemFallback ? result.warnings : result.errors).push(`${featuredPath}.items[${index}].title is required when visible.`);
+          }
+          if (visible && !imageUrl) {
+            (allowItemFallback ? result.warnings : result.errors).push(`${featuredPath}.items[${index}].imageUrl is required when visible.`);
+          }
           if (imageUrl && !isSafeMediaUrl(imageUrl, {
             ...options,
             allowedMediaExtensions: ['jpg', 'jpeg', 'png', 'webp', 'avif', 'gif']
           })) {
-            result.errors.push(`${featuredPath}.items[${index}].imageUrl is not allowed by the media policy.`);
+            (allowItemFallback ? result.warnings : result.errors).push(`${featuredPath}.items[${index}].imageUrl is not allowed by the media policy.`);
           }
+          const order = firstUsableValue(item, ['sortOrder', 'sort_order', 'order']);
+          if (order !== '' && !Number.isFinite(Number(order))) result.errors.push(`${featuredPath}.items[${index}].sortOrder/order must be numeric.`);
           if (visible && title && !sanitizeText(item.alt)) result.warnings.push(`${featuredPath}.items[${index}].alt is missing and will fall back to title.`);
         });
       }
@@ -368,8 +544,12 @@
       return { valid: false, errors: ['Root CMS content must be an object.'], warnings };
     }
 
-    if (!Number.isFinite(Number(content.schemaVersion)) && !sanitizeText(content.version)) {
-      warnings.push('Missing schemaVersion/version; accepting for backward compatibility.');
+    if (options.requireCanonicalDocument === true) {
+      if (!Number.isFinite(Number(content.schemaVersion)) || Number(content.schemaVersion) <= 0) errors.push('schemaVersion must be a positive number.');
+      if (!sanitizeText(content.version)) errors.push('version is required by the canonical CMS contract.');
+      if (!sanitizeText(content.source)) errors.push('source is required by the canonical CMS contract.');
+    } else if (!Number.isFinite(Number(content.schemaVersion)) && !sanitizeText(content.version)) {
+      warnings.push('Missing schemaVersion/version; accepting only in backward-compatible runtime mode.');
     }
 
     if (!isPlainObject(content.rooms)) {
@@ -381,33 +561,37 @@
           return;
         }
 
-        if (room.artworks !== undefined && !Array.isArray(room.artworks)) {
+        if (options.requireCanonicalRooms === true && !Array.isArray(room.artworks)) {
+          errors.push(`rooms.${roomKey}.artworks must be the canonical array.`);
+        } else if (room.artworks !== undefined && !Array.isArray(room.artworks)) {
           errors.push(`rooms.${roomKey}.artworks must be an array.`);
         }
-        (room.artworks || []).forEach((artwork, index) => {
+        if (options.requireCanonicalRooms === true && room.items !== undefined) {
+          errors.push(`rooms.${roomKey}.items is legacy input and must be normalized to artworks[] before publish.`);
+        }
+
+        const normalizedRoom = normalizeCmsRoomContent(room, { keepLegacyRoomItems: false });
+        const seenIds = new Set();
+        normalizedRoom.artworks.forEach((artwork, index) => {
           if (!isPlainObject(artwork)) {
             errors.push(`rooms.${roomKey}.artworks[${index}] must be an object.`);
             return;
           }
-          if (!normalizeCmsItemId(artwork)) {
-            errors.push(`rooms.${roomKey}.artworks[${index}] is missing artwork_code/id/code.`);
-          }
-        });
+          const id = normalizeCmsItemId(artwork);
+          if (!id) errors.push(`rooms.${roomKey}.artworks[${index}] is missing artwork_code/id/code.`);
+          else if (seenIds.has(id)) errors.push(`rooms.${roomKey}.artworks[${index}] duplicates "${id}".`);
+          else seenIds.add(id);
 
-        if (room.items !== undefined && !isPlainObject(room.items)) {
-          errors.push(`rooms.${roomKey}.items must be an object keyed by artwork id.`);
-        }
-        if (isPlainObject(room.items)) {
-          Object.entries(room.items).forEach(([itemKey, item]) => {
-            if (!isPlainObject(item)) {
-              errors.push(`rooms.${roomKey}.items.${itemKey} must be an object.`);
-              return;
-            }
-            if (!normalizeCmsItemId(item, itemKey)) {
-              errors.push(`rooms.${roomKey}.items.${itemKey} is missing a usable key/id.`);
+          ROOM_MEDIA_ALIAS_FIELDS.forEach((fieldName) => {
+            const value = artwork[fieldName];
+            if (value === null || value === undefined || sanitizeText(value) === '') return;
+            const mediaValid = isSafeMediaUrl(value, options);
+            if (!mediaValid) {
+              const target = options.strictRoomMedia === true ? errors : warnings;
+              target.push(`rooms.${roomKey}.artworks[${index}].${fieldName} is not allowed by the media policy.`);
             }
           });
-        }
+        });
 
         if (room.artworks === undefined && room.items === undefined) {
           warnings.push(`rooms.${roomKey} has no artworks[] or items{} content.`);
@@ -416,12 +600,16 @@
     }
 
     if (content.gate !== undefined && !isPlainObject(content.gate)) warnings.push('gate should be an object.');
-    if (content.index !== undefined && !isPlainObject(content.index)) warnings.push('index should be an object.');
+    if (content.index !== undefined && !isPlainObject(content.index)) {
+      (options.strictIndexContract === true ? errors : warnings).push('index should be an object.');
+    }
+    if (options.requireIndexFeatured === true && !isPlainObject(content.index)) errors.push('index object is required by the canonical CMS contract.');
     if (content.site !== undefined && !isPlainObject(content.site)) warnings.push('site should be an object.');
 
     if (isPlainObject(content.index)) {
       const indexValidation = validateCmsIndexContent(content.index, options);
-      indexValidation.errors.forEach((message) => warnings.push(`Index contract: ${message}`));
+      const strictIndex = options.strictIndexContract === true || options.requireIndexFeatured === true;
+      indexValidation.errors.forEach((message) => (strictIndex ? errors : warnings).push(`Index contract: ${message}`));
       indexValidation.warnings.forEach((message) => warnings.push(`Index contract: ${message}`));
     }
 
@@ -436,6 +624,14 @@
     normalizeStringList,
     isPlainObject,
     isSafeMediaUrl,
+    normalizeCmsItemId,
+    normalizeCmsArtworkAliases,
+    normalizeFeaturedItemAliases,
+    normalizeCmsRoomContent,
+    normalizeCmsContentDocument,
+    CANONICAL_CMS_SCHEMA_VERSION,
+    ROOM_MEDIA_ALIAS_FIELDS: [...ROOM_MEDIA_ALIAS_FIELDS],
+    FEATURED_IMAGE_ALIAS_FIELDS: [...FEATURED_IMAGE_ALIAS_FIELDS],
     INDEX_LIMITS,
     INDEX_TEXT_LIMITS,
     SAFE_RELATIVE_MEDIA_PREFIXES: [...SAFE_RELATIVE_MEDIA_PREFIXES]

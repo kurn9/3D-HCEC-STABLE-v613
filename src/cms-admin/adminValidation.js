@@ -1,3 +1,5 @@
+import '../shared/cmsSchemaValidator.js';
+
 const SITE_SETTINGS_ALLOWED_LANGUAGES = ['vi'];
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_PATTERN = /^[0-9\s+\-.()]+$/;
@@ -892,7 +894,7 @@ const STATIC_CMS_LAYOUT_FIELDS = new Set([
 ]);
 const STATIC_CMS_MEDIA_FIELDS = [
   'image', 'imageUrl', 'image_url', 'thumbnail', 'thumbnailUrl', 'thumbnail_url',
-  'videoUrl', 'video_url', 'poster', 'posterUrl', 'poster_url', 'mediaUrl', 'media_url',
+  'videoUrl', 'video_url', 'poster', 'posterUrl', 'poster_url', 'mediaUrl', 'media_url', 'src', 'url',
 ];
 const STATIC_CMS_OLD_ID_PATTERN = /^(TEXT_00[12]|VIDEO_00[23]|NEON_TEXT_HCEC_001|ART_00[2-9]|ART_0[1-4][0-9])$/i;
 
@@ -939,13 +941,43 @@ export function validateStaticCmsDraft(cmsJson = {}, options = {}) {
   if (!isPlainObject(cmsJson)) {
     return { valid: false, errors: { root: 'CMS JSON phải là object.' }, warnings };
   }
-  if (!isPlainObject(cmsJson.rooms)) {
+
+  const sharedValidator = globalThis.cmsSchemaValidator || null;
+  const canonicalJson = sharedValidator?.normalizeCmsContentDocument
+    ? sharedValidator.normalizeCmsContentDocument(cmsJson, { keepLegacyRoomItems: false, keepLegacyFeaturedAlias: false, dropLegacyAliases: true })
+    : cloneJsonSafe(cmsJson);
+
+  if (!isPlainObject(canonicalJson.rooms)) {
     errors.rooms = 'Thiếu rooms trong CMS JSON.';
+  }
+
+  if (sharedValidator?.validateCmsContent) {
+    const sharedResult = sharedValidator.validateCmsContent(canonicalJson, {
+      allowRemoteMedia: true,
+      allowedMediaOrigins: safeArray(options.allowedMediaOrigins),
+      allowedMediaHosts: safeArray(options.allowedMediaHosts),
+      allowedMediaPathPrefixes: [],
+      disallowSignedMediaUrls: true,
+      strictIndexContract: true,
+      requireIndexFeatured: true,
+      allowFeaturedItemFallback: false,
+      strictRoomMedia: true,
+      requireCanonicalRooms: true,
+      requireCanonicalDocument: true,
+    });
+    safeArray(sharedResult.errors).forEach((message, index) => {
+      errors[`contract.${index + 1}`] = message;
+    });
+    safeArray(sharedResult.warnings).forEach((message, index) => {
+      warnings[`contract.${index + 1}`] = message;
+    });
+  } else {
+    errors.contract = 'Không tải được shared CMS schema validator.';
   }
 
   const expectedIds = options.expectedIds || {};
   ['indoor', 'outdoor'].forEach((roomKey) => {
-    const artworks = cmsJson?.rooms?.[roomKey]?.artworks;
+    const artworks = canonicalJson?.rooms?.[roomKey]?.artworks;
     if (!Array.isArray(artworks)) {
       errors[`rooms.${roomKey}.artworks`] = `Thiếu rooms.${roomKey}.artworks[].`;
       return;
@@ -988,12 +1020,12 @@ export function validateStaticCmsDraft(cmsJson = {}, options = {}) {
         }
       });
       const videoValue = firstText(item || {}, ['videoUrl', 'video_url']);
-      const posterValue = firstText(item || {}, ['poster', 'posterUrl', 'poster_url']);
+      const posterValue = firstText(item || {}, ['posterUrl', 'poster', 'poster_url']);
       if (videoValue && !posterValue) {
         warnings[`rooms.${roomKey}.${id}.poster`] = 'Video chưa có poster; đây là warning, không chặn export.';
       }
     });
   });
 
-  return { valid: Object.keys(errors).length === 0, errors, warnings };
+  return { valid: Object.keys(errors).length === 0, errors, warnings, canonicalJson };
 }

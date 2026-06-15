@@ -41,7 +41,7 @@ import {
 const ROOM_KEYS = ['indoor', 'outdoor'];
 const TEXT_FIELDS = ['title', 'description', 'content', 'author', 'artist', 'year', 'material', 'realSize', 'real_size', 'note'];
 const MEDIA_FIELDS = [
-  'image', 'imageUrl', 'image_url',
+  'image', 'imageUrl', 'image_url', 'src', 'url',
   'thumbnail', 'thumbnailUrl', 'thumbnail_url',
   'videoUrl', 'video_url',
   'poster', 'posterUrl', 'poster_url',
@@ -67,7 +67,7 @@ const DISPLAY_FIELD_GROUPS = [
   },
 ];
 const TECHNICAL_ALIAS_FIELDS = [
-  'image', 'imageUrl', 'image_url',
+  'image', 'imageUrl', 'image_url', 'src', 'url',
   'thumbnail', 'thumbnailUrl', 'thumbnail_url',
   'videoUrl', 'video_url',
   'poster', 'posterUrl', 'poster_url',
@@ -1207,8 +1207,12 @@ async function loadStaticCmsBaseline() {
       const response = await fetch(candidate.url, { cache: 'no-store' });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const json = await response.json();
-      normalizeStaticCmsRooms(json);
-      return { ...candidate, json };
+      const canonicalJson = sanitizeStaticCmsExport(json, { keepVersion: true });
+      const validation = validateStaticCmsDraft(canonicalJson, STATIC_CMS_DRAFT_CONFIG);
+      if (!validation.valid) {
+        throw new Error(`CMS baseline không đạt canonical contract (${Object.keys(validation.errors || {}).length} lỗi).`);
+      }
+      return { ...candidate, json: canonicalJson, validation };
     } catch (error) {
       errors.push(`${candidate.source}: ${normalizeErrorMessage(error)}`);
     }
@@ -1271,8 +1275,8 @@ function applyDraftFieldChange(draftState = {}, fieldName, value) {
 
 function patchFieldAliases(item, fieldName, value) {
   const normalized = String(value ?? '').trim();
-  if (['image', 'imageUrl', 'image_url'].includes(fieldName)) {
-    ['image', 'imageUrl', 'image_url'].forEach((key) => { item[key] = normalized; });
+  if (['image', 'imageUrl', 'image_url', 'src', 'url'].includes(fieldName)) {
+    ['image', 'imageUrl', 'image_url', 'src', 'url'].forEach((key) => { item[key] = normalized; });
     return;
   }
   if (['thumbnail', 'thumbnailUrl', 'thumbnail_url'].includes(fieldName)) {
@@ -1309,7 +1313,14 @@ function createStaticCmsExportJson(draftJson = {}) {
 }
 
 function sanitizeStaticCmsExport(cmsJson = {}, options = {}) {
-  const json = cloneJson(cmsJson || {});
+  const sharedValidator = globalThis.cmsSchemaValidator || null;
+  const json = sharedValidator?.normalizeCmsContentDocument
+    ? sharedValidator.normalizeCmsContentDocument(cmsJson, {
+      keepLegacyRoomItems: false,
+      keepLegacyFeaturedAlias: false,
+      dropLegacyAliases: true,
+    })
+    : cloneJson(cmsJson || {});
   normalizeStaticCmsRooms(json);
   ROOM_KEYS.forEach((roomKey) => {
     const room = json.rooms[roomKey];
@@ -1333,9 +1344,12 @@ function sanitizeStaticCmsArtwork(item = {}, roomKey, index) {
   clean.artwork_code = code;
   clean.id = clean.id || code;
   clean.room_key = roomKey;
-  clean.is_visible = clean.is_visible !== false;
-  clean.sort_order = Number.isFinite(Number(clean.sort_order)) ? Number(clean.sort_order) : index + 1;
-  return clean;
+  clean.isVisible = clean.isVisible !== false && clean.is_visible !== false;
+  clean.sortOrder = Number.isFinite(Number(clean.sortOrder ?? clean.sort_order)) ? Number(clean.sortOrder ?? clean.sort_order) : index + 1;
+  const sharedValidator = globalThis.cmsSchemaValidator || null;
+  return sharedValidator?.normalizeCmsArtworkAliases
+    ? sharedValidator.normalizeCmsArtworkAliases(clean, code, { fallbackOrder: index + 1, dropLegacyAliases: true })
+    : clean;
 }
 
 function normalizeStaticCmsRooms(json = {}) {
