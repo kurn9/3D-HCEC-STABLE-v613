@@ -1156,7 +1156,6 @@ body.cms-admin-page * {
   }
 }
 
-
 /* V6.11.21-B4-B: Professional Civic CMS IA/navigation/dashboard polish */
 .cms-admin-nav-grouped {
   gap: 8px;
@@ -2793,37 +2792,12 @@ body.cms-admin-page * {
   gap: 18px;
 }
 
-.cms-admin-static-hero {
-  display: grid;
-  gap: 16px;
-  padding: clamp(18px, 2vw, 24px);
-}
-
-.cms-admin-static-hero-top {
-  align-items: flex-start;
-  display: flex;
-  gap: 18px;
-  justify-content: space-between;
-}
-
-.cms-admin-static-hero-copy {
-  display: grid;
-  gap: 4px;
-  min-width: 0;
-}
-
 .cms-admin-static-title {
   color: var(--cms-admin-text);
   font-size: clamp(1.55rem, 2.8vw, 2.1rem);
   letter-spacing: -0.04em;
   line-height: 1.06;
   margin: 0;
-}
-
-.cms-admin-static-hero .cms-admin-static-actions {
-  justify-content: flex-end;
-  margin-top: 0;
-  min-width: min(420px, 100%);
 }
 
 .cms-admin-static-status-strip {
@@ -2870,30 +2844,6 @@ body.cms-admin-page * {
 .cms-admin-static-status-chip-warning {
   border-color: rgba(214, 178, 94, 0.32);
   background: rgba(120, 85, 10, 0.14);
-}
-
-.cms-admin-static-hero-warning {
-  margin: 0;
-}
-
-.cms-admin-static-dashboard {
-  align-items: start;
-  display: grid;
-  gap: 18px;
-  grid-template-columns: minmax(230px, 0.78fr) minmax(420px, 1.55fr) minmax(290px, 0.95fr);
-}
-
-.cms-admin-static-column,
-.cms-admin-static-ops-stack > .cms-admin-panel {
-  min-width: 0;
-}
-
-.cms-admin-static-ops-stack {
-  display: grid;
-  gap: 18px;
-  min-width: 0;
-  position: sticky;
-  top: 18px;
 }
 
 .cms-admin-static-panel-title-row {
@@ -3168,31 +3118,9 @@ body.cms-admin-page * {
   gap: 10px;
 }
 
-@media (max-width: 1320px) {
-  .cms-admin-static-dashboard {
-    grid-template-columns: minmax(220px, 0.85fr) minmax(390px, 1.45fr);
-  }
-
-  .cms-admin-static-ops-stack {
-    grid-column: 1 / -1;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    position: static;
-  }
-}
-
 @media (max-width: 980px) {
-  .cms-admin-static-hero-top {
-    display: grid;
-  }
 
-  .cms-admin-static-hero .cms-admin-static-actions {
-    justify-content: flex-start;
-    min-width: 0;
-  }
-
-  .cms-admin-static-status-strip,
-  .cms-admin-static-dashboard,
-  .cms-admin-static-ops-stack {
+  .cms-admin-static-status-strip{
     grid-template-columns: 1fr;
   }
 
@@ -3206,7 +3134,6 @@ body.cms-admin-page * {
 }
 
 @media (max-width: 620px) {
-  .cms-admin-static-hero,
   .cms-admin-static-field-section,
   .cms-admin-static-preview-panel,
   .cms-admin-static-validation-panel,
@@ -3409,15 +3336,6 @@ body.cms-admin-page * {
   margin-top: 12px;
 }
 
-
-/* v6.14.040.001 — Index Featured operator UI */
-.cms-admin-featured-operator {
-  display: grid;
-  gap: 18px;
-  padding: clamp(18px, 2vw, 24px);
-  border-color: rgba(214, 178, 94, 0.32);
-}
-
 .cms-admin-featured-header {
   align-items: flex-start;
   display: flex;
@@ -3445,25 +3363,6 @@ body.cms-admin-page * {
 
 .cms-admin-featured-scope-note {
   margin: 0;
-}
-
-.cms-admin-featured-layout {
-  align-items: start;
-  display: grid;
-  gap: 18px;
-  grid-template-columns: minmax(0, 1.55fr) minmax(300px, 0.75fr);
-}
-
-.cms-admin-featured-editor,
-.cms-admin-featured-side {
-  display: grid;
-  gap: 18px;
-  min-width: 0;
-}
-
-.cms-admin-featured-side {
-  position: sticky;
-  top: 18px;
 }
 
 .cms-admin-featured-settings,
@@ -3521,11 +3420,6 @@ body.cms-admin-page * {
 .cms-admin-featured-field-wide,
 .cms-admin-featured-item-visible {
   grid-column: 1 / -1;
-}
-
-.cms-admin-featured-item-list {
-  display: grid;
-  gap: 14px;
 }
 
 .cms-admin-featured-item-editor {
@@ -3648,7 +3542,6 @@ body.cms-admin-page * {
   box-shadow: 0 0 0 2px rgba(248, 113, 113, 0.08);
 }
 
-
 /* v6.14.040.002 — Featured image replacement operator hotfix */
 .cms-admin-featured-image-control {
   display: grid;
@@ -3763,14 +3656,6 @@ body.cms-admin-page * {
 }
 
 @media (max-width: 1180px) {
-  .cms-admin-featured-layout {
-    grid-template-columns: 1fr;
-  }
-
-  .cms-admin-featured-side {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    position: static;
-  }
 
   .cms-admin-featured-technical {
     grid-column: 1 / -1;
@@ -3789,7 +3674,6 @@ body.cms-admin-page * {
 
   .cms-admin-featured-settings-grid,
   .cms-admin-featured-item-grid,
-  .cms-admin-featured-side,
   .cms-admin-featured-image-replace-grid {
     grid-template-columns: 1fr;
   }
@@ -3800,7 +3684,6 @@ body.cms-admin-page * {
 }
 
 @media (max-width: 620px) {
-  .cms-admin-featured-operator,
   .cms-admin-featured-settings,
   .cms-admin-featured-items-section,
   .cms-admin-featured-preview,
@@ -4263,7 +4146,6 @@ body.cms-admin-page * {
   background: rgba(113, 63, 18, 0.12);
 }
 
-
 /* v6.13.003 — CMS-to-Editor launcher */
 .cms-admin-editor-launcher {
   display: inline-flex;
@@ -4505,71 +4387,17 @@ body.cms-admin-page * {
   }
 }
 
-
-/* v6.14.041.004 - Canonical Draft Operator Simplify */
-.cms-admin-static-workflow-panel {
-  border-color: rgba(226, 184, 82, 0.34);
-  background: linear-gradient(135deg, rgba(226, 184, 82, 0.10), rgba(12, 24, 34, 0.92));
-}
-
-.cms-admin-static-workflow-head,
-.cms-admin-static-workflow-controls {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.cms-admin-static-workflow-head {
-  margin-bottom: 16px;
-}
-
-.cms-admin-static-workflow-controls {
-  align-items: stretch;
-  flex-wrap: wrap;
-}
-
-.cms-admin-static-workflow-controls .cms-admin-static-selector-stack {
-  flex: 1 1 420px;
-  display: grid;
-  grid-template-columns: minmax(180px, 0.7fr) minmax(260px, 1.3fr);
-  gap: 12px;
-}
-
 .cms-admin-static-primary-actions {
   flex: 1 1 420px;
   justify-content: flex-end;
   align-items: center;
   flex-wrap: wrap;
 }
-
-.cms-admin-static-workflow-current {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-  margin-top: 14px;
-}
-
-.cms-admin-static-dashboard-operator {
-  margin-top: 18px;
-}
-
-.cms-admin-static-featured-details {
-  margin-top: 18px;
-  border: 1px solid rgba(226, 184, 82, 0.22);
-  border-radius: 18px;
-  background: rgba(9, 19, 28, 0.78);
-  padding: 14px 16px;
-}
-
-.cms-admin-static-featured-details > summary,
 .cms-admin-static-advanced-details > summary {
   cursor: pointer;
   font-weight: 800;
   color: var(--cms-admin-text, #f4f7fb);
 }
-
-.cms-admin-static-featured-details > .cms-admin-help-text,
 .cms-admin-static-advanced-details > .cms-admin-help-text {
   margin-top: 8px;
 }
@@ -4579,59 +4407,18 @@ body.cms-admin-page * {
 }
 
 @media (max-width: 920px) {
-  .cms-admin-static-workflow-head,
-  .cms-admin-static-workflow-controls {
-    display: grid;
-  }
-
-  .cms-admin-static-workflow-controls .cms-admin-static-selector-stack,
-  .cms-admin-static-workflow-current {
-    grid-template-columns: 1fr;
-  }
 
   .cms-admin-static-primary-actions {
     justify-content: flex-start;
   }
 }
 
-/* v6.14.041.008 - Operator UX simplify and draft naming */
-.cms-admin-static-hero {
-  padding: clamp(16px, 1.7vw, 22px);
-}
-
-.cms-admin-static-hero-top {
-  align-items: center;
-}
-
 .cms-admin-static-main-load-actions {
   min-width: 0;
 }
 
-.cms-admin-static-workflow-panel {
-  position: sticky;
-  top: 10px;
-  z-index: 3;
-  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.18);
-}
-
-.cms-admin-static-workflow-controls {
-  gap: 14px;
-}
-
 .cms-admin-static-primary-actions .cms-admin-button {
   white-space: nowrap;
-}
-
-.cms-admin-static-dashboard-operator {
-  grid-template-columns: minmax(230px, 0.76fr) minmax(430px, 1.6fr) minmax(300px, 0.92fr);
-}
-
-.cms-admin-static-ops-stack {
-  gap: 14px;
-}
-
-.cms-admin-static-ops-stack .cms-admin-panel {
-  padding: 15px;
 }
 
 .cms-admin-static-collapsible-panel {
@@ -4640,14 +4427,12 @@ body.cms-admin-page * {
 }
 
 .cms-admin-static-persistence-details,
-.cms-admin-static-advanced-details,
-.cms-admin-static-featured-details {
+.cms-admin-static-advanced-details{
   display: block;
 }
 
 .cms-admin-static-persistence-details > summary,
-.cms-admin-static-advanced-details > summary,
-.cms-admin-static-featured-details > summary {
+.cms-admin-static-advanced-details > summary{
   align-items: center;
   cursor: pointer;
   display: flex;
@@ -4658,35 +4443,30 @@ body.cms-admin-page * {
 }
 
 .cms-admin-static-persistence-details > summary::-webkit-details-marker,
-.cms-admin-static-advanced-details > summary::-webkit-details-marker,
-.cms-admin-static-featured-details > summary::-webkit-details-marker {
+.cms-admin-static-advanced-details > summary::-webkit-details-marker{
   display: none;
 }
 
 .cms-admin-static-persistence-details > summary::before,
-.cms-admin-static-advanced-details > summary::before,
-.cms-admin-static-featured-details > summary::before {
+.cms-admin-static-advanced-details > summary::before{
   content: '▸';
   color: var(--cms-admin-muted);
   font-size: 0.9rem;
 }
 
 .cms-admin-static-persistence-details[open] > summary::before,
-.cms-admin-static-advanced-details[open] > summary::before,
-.cms-admin-static-featured-details[open] > summary::before {
+.cms-admin-static-advanced-details[open] > summary::before{
   content: '▾';
 }
 
 .cms-admin-static-persistence-details > :not(summary),
-.cms-admin-static-advanced-details > :not(summary),
-.cms-admin-static-featured-details > :not(summary) {
+.cms-admin-static-advanced-details > :not(summary){
   margin-left: 18px;
   margin-right: 18px;
 }
 
 .cms-admin-static-persistence-details > :last-child,
-.cms-admin-static-advanced-details > :last-child,
-.cms-admin-static-featured-details > :last-child {
+.cms-admin-static-advanced-details > :last-child{
   margin-bottom: 18px;
 }
 
@@ -4711,18 +4491,7 @@ body.cms-admin-page * {
   justify-content: flex-start;
 }
 
-@media (max-width: 1320px) {
-  .cms-admin-static-workflow-panel {
-    position: static;
-  }
-}
-
 @media (max-width: 980px) {
-  .cms-admin-static-hero-top,
-  .cms-admin-static-workflow-head,
-  .cms-admin-static-workflow-controls {
-    align-items: stretch;
-  }
 
   .cms-admin-static-primary-actions,
   .cms-admin-static-main-load-actions {
@@ -4954,15 +4723,8 @@ body.cms-admin-page * {
 }
 
 .cms-admin-static-persistence-panel,
-.cms-admin-static-export-panel,
-.cms-admin-static-featured-details {
+.cms-admin-static-export-panel{
   display: none;
-}
-
-.cms-admin-static-workflow-panel {
-  position: static !important;
-  top: auto !important;
-  z-index: auto !important;
 }
 
 @media (max-width: 1320px) {
