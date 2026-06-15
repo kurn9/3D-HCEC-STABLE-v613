@@ -4,12 +4,22 @@ const DPR_CAP = 1.25;
 const MAX_CANVAS_PIXELS = 3_200_000;
 const TRAIL_RESOLUTION_SCALE = 0.5;
 const RESIZE_DEBOUNCE_MS = 120;
-const IDLE_RENDER_MS = 1300;
+const IDLE_RENDER_MS = 1600;
 const CLICK_PULSE_MS = 420;
 const MAX_FRAME_DELTA_MS = 50;
 const DEFAULT_MAX_FPS = 60;
 const ULTRAWIDE_MAX_FPS = 45;
 const ULTRAWIDE_MIN_WIDTH = 2560;
+
+// v6.14.031 — Balanced C+ visual tune. Performance budgets remain unchanged.
+const BASE_RADIUS_PX = 22;
+const HOVER_RADIUS_BOOST_PX = 13;
+const CLICK_RADIUS_BOOST_PX = 3;
+const TRAIL_BASE_INTENSITY = 0.88;
+const TRAIL_HOVER_INTENSITY = 0.18;
+const DISPLAY_BASE_INTENSITY = 0.92;
+const DISPLAY_HOVER_INTENSITY = 0.12;
+const VELOCITY_DAMPING_TAU_MS = 72;
 const INTERACTIVE_SELECTOR = [
   'a[href]',
   'button',
@@ -48,6 +58,8 @@ uniform float uHover;
 uniform float uClick;
 out vec4 outColor;
 
+const float PI = 3.141592653589793;
+
 float segmentDistance(vec2 point, vec2 startPoint, vec2 endPoint) {
   vec2 segment = endPoint - startPoint;
   float segmentLength = max(dot(segment, segment), 0.000001);
@@ -58,10 +70,22 @@ float segmentDistance(vec2 point, vec2 startPoint, vec2 endPoint) {
 void main() {
   float aspect = uResolution.x / max(uResolution.y, 1.0);
   vec2 aspectScale = vec2(aspect, 1.0);
-  vec2 flowOffset = clamp(uVelocity, vec2(-0.025), vec2(0.025)) * (0.34 + uHover * 0.08);
-  vec4 previous = texture(uTrailTexture, clamp(vUv - flowOffset, 0.0, 1.0));
+  vec2 velocityAspect = uVelocity * aspectScale;
+  float velocityLength = length(velocityAspect);
+  float speed = clamp(velocityLength * uResolution.y * 0.09, 0.0, 1.0);
+  vec2 movementDirection = velocityLength > 0.000001
+    ? normalize(velocityAspect)
+    : vec2(cos(uTime * 0.37), sin(uTime * 0.31));
+  vec2 movementNormal = vec2(-movementDirection.y, movementDirection.x);
 
-  float decay = exp(-uDelta * mix(2.45, 1.85, uHover));
+  vec4 seed = texture(uTrailTexture, vUv);
+  vec2 seedFlow = seed.gb * 2.0 - 1.0;
+  vec2 flowUv = seedFlow * vec2(1.0 / max(aspect, 0.0001), 1.0);
+  vec2 velocityOffset = clamp(uVelocity, vec2(-0.035), vec2(0.035)) * (0.44 + uHover * 0.10);
+  vec2 internalOffset = flowUv * (0.0024 + speed * 0.0018);
+  vec4 previous = texture(uTrailTexture, clamp(vUv - velocityOffset - internalOffset, 0.0, 1.0));
+
+  float decay = exp(-uDelta * mix(1.55, 1.25, uHover));
   float density = previous.r * decay;
   vec2 previousFlow = previous.gb * 2.0 - 1.0;
 
@@ -69,24 +93,59 @@ void main() {
   vec2 mouse = uMouse * aspectScale;
   vec2 previousMouse = uPrevMouse * aspectScale;
   float radius = uRadius;
-  float distanceToStroke = segmentDistance(point, previousMouse, mouse);
-  float speed = clamp(length(uVelocity) * uResolution.y * 0.11, 0.0, 1.0);
-  float splat = 1.0 - smoothstep(radius * 0.16, radius, distanceToStroke);
-  float liquidBody = splat * uIntensity * (0.64 + speed * 0.58 + uHover * 0.16);
 
-  float clickProgress = 1.0 - uClick;
-  float rippleRadius = radius * mix(0.8, 3.2, clickProgress);
-  float rippleWidth = radius * 0.34;
+  float temporalWobble = sin(uTime * 3.1 + dot(point, vec2(13.0, 9.0)))
+    * radius * (0.045 + uHover * 0.035);
+  vec2 liquidMouse = mouse + movementNormal * temporalWobble;
+  float distanceToStroke = segmentDistance(point, previousMouse, liquidMouse);
+  float stroke = 1.0 - smoothstep(
+    radius * 0.12,
+    radius * (1.04 + speed * 0.48),
+    distanceToStroke
+  );
+
+  vec2 local = point - mouse;
+  float along = dot(local, movementDirection);
+  float across = dot(local, movementNormal);
+  float bodyDistance = length(vec2(
+    along / (1.0 + speed * 0.95 + uHover * 0.10),
+    across / (0.78 + uHover * 0.10)
+  ));
+  float angle = atan(local.y, local.x);
+  float edgeWarp = 1.0
+    + sin(angle * 3.0 + uTime * 1.85) * 0.075
+    + sin(angle * 2.0 - uTime * 1.17) * uHover * 0.055;
+  float body = 1.0 - smoothstep(radius * 0.16, radius * edgeWarp, bodyDistance);
+
+  float lobeOffset = radius * (0.20 + uHover * 0.24);
+  vec2 lobeCenterA = mouse + movementNormal * lobeOffset;
+  vec2 lobeCenterB = mouse - movementNormal * lobeOffset * 0.72;
+  float lobeA = 1.0 - smoothstep(radius * 0.12, radius * 0.82, length(point - lobeCenterA));
+  float lobeB = 1.0 - smoothstep(radius * 0.12, radius * 0.74, length(point - lobeCenterB));
+  float hoverLobes = max(lobeA, lobeB) * uHover;
+
+  float splat = max(stroke, max(body * 0.92, hoverLobes * 0.84));
+  float liquidBody = splat * uIntensity * (0.78 + speed * 0.64 + uHover * 0.20);
+  float accumulation = liquidBody * max(0.40, 0.82 - density * 0.42);
+  density = clamp(density + accumulation, 0.0, 1.0);
+
+  float clickAge = clamp(1.0 - uClick, 0.0, 1.0);
+  float rippleRadius = radius * mix(0.90, 3.45, clickAge);
+  float rippleWidth = radius * mix(0.30, 0.14, clickAge);
   float cursorDistance = length(point - mouse);
-  float ripple = (1.0 - smoothstep(0.0, rippleWidth, abs(cursorDistance - rippleRadius))) * uClick * 0.72;
+  float rippleEnvelope = sin(clickAge * PI);
+  float ripple = (1.0 - smoothstep(0.0, rippleWidth, abs(cursorDistance - rippleRadius)))
+    * rippleEnvelope * 0.56;
+  density = clamp(density + ripple * max(0.42, 0.66 - density * 0.26), 0.0, 1.0);
 
-  density = clamp(max(density, liquidBody) + ripple, 0.0, 1.0);
+  vec2 injectedFlow = movementDirection
+    + movementNormal * sin(uTime * 2.2 + angle * 2.0) * (0.07 + uHover * 0.09);
+  injectedFlow = length(injectedFlow) > 0.000001 ? normalize(injectedFlow) : movementDirection;
+  float flowMix = clamp(splat * (0.28 + speed * 0.52 + uHover * 0.10), 0.0, 0.82);
+  vec2 flow = mix(previousFlow * decay, injectedFlow, flowMix);
 
-  vec2 movementDirection = length(uVelocity) > 0.00001 ? normalize(uVelocity) : vec2(0.0);
-  float flowMix = clamp(splat * (0.16 + speed * 0.44), 0.0, 0.64);
-  vec2 flow = mix(previousFlow * decay, movementDirection, flowMix);
-
-  outColor = vec4(density, flow * 0.5 + 0.5, max(previous.a * decay, ripple));
+  float rippleMemory = previous.a * exp(-uDelta * 3.8);
+  outColor = vec4(density, flow * 0.5 + 0.5, max(rippleMemory, ripple * 0.55));
 }`;
 
 const DISPLAY_FRAGMENT_SHADER_SOURCE = `#version 300 es
@@ -103,6 +162,23 @@ uniform float uHover;
 uniform float uClick;
 out vec4 outColor;
 
+const float PI = 3.141592653589793;
+
+float liquidBlob(vec2 local, vec2 axis, float radius, float hoverAmount, float time) {
+  vec2 normal = vec2(-axis.y, axis.x);
+  float along = dot(local, axis);
+  float across = dot(local, normal);
+  float angle = atan(local.y, local.x);
+  float edgeWarp = 1.0
+    + sin(angle * 3.0 + time * 1.72) * 0.10
+    + sin(angle * 2.0 - time * 1.08) * hoverAmount * 0.075;
+  float shapedDistance = length(vec2(
+    along / (1.04 + hoverAmount * 0.20),
+    across / (0.90 - hoverAmount * 0.06)
+  ));
+  return 1.0 - smoothstep(radius * 0.18, radius * edgeWarp, shapedDistance);
+}
+
 void main() {
   vec2 texel = 1.0 / max(uResolution, vec2(1.0));
   vec4 center = texture(uTrailTexture, vUv);
@@ -112,29 +188,55 @@ void main() {
   float up = texture(uTrailTexture, vUv + vec2(0.0, texel.y)).r;
 
   vec2 gradient = vec2(right - left, up - down);
-  float edge = clamp(length(gradient) * 7.5, 0.0, 1.0);
-  float density = smoothstep(0.025, 0.82, center.r);
+  float laplacian = abs(left + right + up + down - center.r * 4.0);
+  float edge = clamp(length(gradient) * 8.2 + laplacian * 2.2, 0.0, 1.0);
+  float density = smoothstep(0.018, 0.72, center.r);
   vec2 flow = center.gb * 2.0 - 1.0;
 
   float aspect = uResolution.x / max(uResolution.y, 1.0);
-  vec2 point = vUv * vec2(aspect, 1.0);
-  vec2 mouse = uMouse * vec2(aspect, 1.0);
-  float coreDistance = length(point - mouse);
-  float coreRadius = uRadius * (0.72 + uHover * 0.18);
-  float core = 1.0 - smoothstep(coreRadius * 0.12, coreRadius, coreDistance);
-  float halo = (1.0 - smoothstep(coreRadius * 0.45, coreRadius * 2.3, coreDistance)) * 0.22;
+  vec2 aspectScale = vec2(aspect, 1.0);
+  vec2 point = vUv * aspectScale;
+  vec2 mouse = uMouse * aspectScale;
+  vec2 local = point - mouse;
+  vec2 velocityAspect = uVelocity * aspectScale;
+  float velocityLength = length(velocityAspect);
+  vec2 axis = velocityLength > 0.000001
+    ? normalize(velocityAspect)
+    : vec2(cos(uTime * 0.42), sin(uTime * 0.34));
+  vec2 normal = vec2(-axis.y, axis.x);
 
-  float shimmer = 0.5 + 0.5 * sin(uTime * 1.35 + dot(flow, vec2(5.1, 3.7)));
+  float coreRadius = uRadius * (0.84 + uHover * 0.30);
+  float core = liquidBlob(local, axis, coreRadius, uHover, uTime);
+  float lobeOffset = coreRadius * 0.27 * uHover;
+  float lobeA = liquidBlob(local - normal * lobeOffset, axis, coreRadius * 0.79, uHover, uTime + 0.7);
+  float lobeB = liquidBlob(local + normal * lobeOffset * 0.72, axis, coreRadius * 0.72, uHover, uTime - 0.5);
+  core = max(core * (1.0 - uHover * 0.14), max(lobeA, lobeB) * uHover * 0.92);
+
+  float coreDistance = length(local);
+  float halo = (1.0 - smoothstep(coreRadius * 0.58, coreRadius * 2.05, coreDistance)) * 0.08;
+  float clickAge = clamp(1.0 - uClick, 0.0, 1.0);
+  float clickEnvelope = sin(clickAge * PI);
+  float ringRadius = coreRadius * mix(0.92, 3.25, clickAge);
+  float ringWidth = coreRadius * mix(0.25, 0.11, clickAge);
+  float clickRing = (1.0 - smoothstep(0.0, ringWidth, abs(coreDistance - ringRadius)))
+    * clickEnvelope;
+
+  float shimmer = 0.5 + 0.5 * sin(uTime * 1.22 + dot(flow, vec2(5.4, 3.9)));
   vec3 ivory = vec3(0.969, 0.949, 0.875);
   vec3 bronze = vec3(0.910, 0.706, 0.337);
-  vec3 cool = vec3(0.560, 0.790, 0.890);
-  vec3 liquidColor = mix(ivory, bronze, clamp(density * 0.68 + uHover * 0.16, 0.0, 0.82));
-  liquidColor = mix(liquidColor, cool, clamp(abs(flow.y) * 0.10 + shimmer * 0.035, 0.0, 0.12));
-  liquidColor += edge * vec3(0.14, 0.12, 0.08);
+  vec3 cool = vec3(0.500, 0.735, 0.820);
+  vec3 liquidColor = mix(ivory, bronze, clamp(density * 0.58 + uHover * 0.15, 0.0, 0.78));
+  liquidColor = mix(liquidColor, cool, clamp(length(flow) * 0.075 + shimmer * 0.028, 0.0, 0.10));
+  liquidColor += edge * vec3(0.085, 0.074, 0.052);
+  vec3 ringColor = mix(ivory, bronze, 0.48);
+  liquidColor = mix(liquidColor, ringColor, clickRing * 0.16);
 
-  float pulse = center.a * (0.14 + uClick * 0.10);
-  float alpha = clamp(density * 0.24 + edge * 0.15 + core * 0.72 + halo + pulse, 0.0, 0.78);
-  alpha *= mix(0.86, 1.0, uIntensity);
+  float storedRipple = center.a * (0.08 + uClick * 0.04);
+  float trailAlpha = density * 0.33 + edge * 0.16;
+  float coreAlpha = core * 0.40 + halo;
+  float rippleAlpha = clickRing * 0.20 + storedRipple;
+  float alpha = clamp(trailAlpha + coreAlpha + rippleAlpha, 0.0, 0.62);
+  alpha *= mix(0.90, 1.02, clamp(uIntensity, 0.0, 1.2));
 
   outColor = vec4(liquidColor, alpha);
 }`;
@@ -457,8 +559,12 @@ export function initWebglLiquidCursor({ onFallback } = {}) {
     gl.uniform2f(trailUniforms.uVelocity, state.velocityX, state.velocityY);
     gl.uniform1f(trailUniforms.uTime, elapsedSeconds);
     gl.uniform1f(trailUniforms.uDelta, deltaSeconds);
-    gl.uniform1f(trailUniforms.uIntensity, 0.78 + state.hover * 0.16);
-    gl.uniform1f(trailUniforms.uRadius, (19 + state.hover * 10 + state.click * 3) / Math.max(1, window.innerHeight));
+    gl.uniform1f(trailUniforms.uIntensity, TRAIL_BASE_INTENSITY + state.hover * TRAIL_HOVER_INTENSITY);
+    gl.uniform1f(
+      trailUniforms.uRadius,
+      (BASE_RADIUS_PX + state.hover * HOVER_RADIUS_BOOST_PX + state.click * CLICK_RADIUS_BOOST_PX)
+        / Math.max(1, window.innerHeight)
+    );
     gl.uniform1f(trailUniforms.uHover, state.hover);
     gl.uniform1f(trailUniforms.uClick, state.click);
   };
@@ -494,8 +600,12 @@ export function initWebglLiquidCursor({ onFallback } = {}) {
     gl.uniform2f(displayUniforms.uMouse, state.mouseX, state.mouseY);
     gl.uniform2f(displayUniforms.uVelocity, state.velocityX, state.velocityY);
     gl.uniform1f(displayUniforms.uTime, elapsedSeconds);
-    gl.uniform1f(displayUniforms.uIntensity, 0.82 + state.hover * 0.14);
-    gl.uniform1f(displayUniforms.uRadius, (19 + state.hover * 10 + state.click * 3) / Math.max(1, window.innerHeight));
+    gl.uniform1f(displayUniforms.uIntensity, DISPLAY_BASE_INTENSITY + state.hover * DISPLAY_HOVER_INTENSITY);
+    gl.uniform1f(
+      displayUniforms.uRadius,
+      (BASE_RADIUS_PX + state.hover * HOVER_RADIUS_BOOST_PX + state.click * CLICK_RADIUS_BOOST_PX)
+        / Math.max(1, window.innerHeight)
+    );
     gl.uniform1f(displayUniforms.uHover, state.hover);
     gl.uniform1f(displayUniforms.uClick, state.click);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
@@ -534,7 +644,7 @@ export function initWebglLiquidCursor({ onFallback } = {}) {
     const deltaSeconds = deltaMs / 1000;
     const elapsedSeconds = timestamp / 1000;
 
-    const hoverFollow = 1 - Math.exp(-deltaMs / 70);
+    const hoverFollow = 1 - Math.exp(-deltaMs / 58);
     state.hover += (state.targetHover - state.hover) * hoverFollow;
     state.click = state.clickStartedAt
       ? Math.max(0, 1 - (timestamp - state.clickStartedAt) / CLICK_PULSE_MS)
@@ -551,8 +661,8 @@ export function initWebglLiquidCursor({ onFallback } = {}) {
 
     state.previousMouseX = state.mouseX;
     state.previousMouseY = state.mouseY;
-    state.velocityX *= Math.exp(-deltaMs / 54);
-    state.velocityY *= Math.exp(-deltaMs / 54);
+    state.velocityX *= Math.exp(-deltaMs / VELOCITY_DAMPING_TAU_MS);
+    state.velocityY *= Math.exp(-deltaMs / VELOCITY_DAMPING_TAU_MS);
 
     const shouldKeepAnimating = timestamp - state.lastPointerAt < IDLE_RENDER_MS || state.click > 0.001 || Math.abs(state.hover - state.targetHover) > 0.01;
     if (shouldKeepAnimating) state.rafId = window.requestAnimationFrame(render);
