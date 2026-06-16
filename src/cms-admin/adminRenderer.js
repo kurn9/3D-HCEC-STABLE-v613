@@ -70,6 +70,7 @@ import {
   getVisibleLabel,
 } from './adminCopy.js';
 import { validateGateContentDraft, validateHomeExperienceSectionDraft, validateHomeGuideSectionDraft, validateIndexSectionDraft, validateSiteSettingsDraft } from './adminValidation.js';
+import { buildDbFallbackDashboardSummary } from './adminDashboardSummary.js';
 import { renderStaticCmsDraftTab } from './adminStaticCmsDraft.js';
 import { renderRollbackHistoryTab } from './adminRollbackGate.js';
 import { renderCmsStorageCleanupTab } from './adminCleanupGate.js';
@@ -767,6 +768,9 @@ function renderDashboard(state) {
   const mediaAssets = safeArray(data.mediaAssets);
   const errors = data.errors || {};
   const published = getCurrentPublishedBundle(bundles);
+  const canonicalSummary = data.canonicalSummary?.valid ? data.canonicalSummary : null;
+  const dashboardSummary = canonicalSummary || buildDbFallbackDashboardSummary(data, { sourceLabel: ADMIN_COPY.dashboard.status.fallbackSource });
+  const usingCanonicalSummary = Boolean(canonicalSummary);
 
   const wrap = createElement('section', { className: 'cms-admin-grid cms-admin-dashboard-view cms-admin-operator-dashboard' });
 
@@ -775,16 +779,22 @@ function renderDashboard(state) {
   }
 
   const top = createElement('div', { className: 'cms-admin-dashboard-top-grid' });
-  top.appendChild(renderWebsiteStatusPanel({ published, errors, siteSettings: data.siteSettings }));
-  top.appendChild(renderTaskPanel({ warningItems: getWarningItems(artworks), warningCount: artworkStats.warning || 0, mediaCount: mediaAssets.length }));
+  top.appendChild(renderWebsiteStatusPanel({ published, errors, siteSettings: data.siteSettings, dashboardSummary, canonicalError: data.canonicalError }));
+  top.appendChild(renderTaskPanel({
+    warningItems: usingCanonicalSummary ? [] : getWarningItems(artworks),
+    warningMessages: usingCanonicalSummary ? safeArray(dashboardSummary.warnings) : [],
+    warningCount: dashboardSummary.warningCount || 0,
+    mediaCount: usingCanonicalSummary ? dashboardSummary.mediaPresentCount : mediaAssets.length,
+  }));
   top.appendChild(renderQuickActionsPanel());
 
   const metrics = renderMetricsPanel({
-    rooms: rooms.length,
-    artworks: artworkStats.total ?? artworks.length,
-    indoor: artworkStats.indoor ?? 0,
-    outdoor: artworkStats.outdoor ?? 0,
-    media: mediaAssets.length,
+    rooms: usingCanonicalSummary ? dashboardSummary.roomCount : rooms.length,
+    artworks: usingCanonicalSummary ? dashboardSummary.totalRoomItems : (artworkStats.total ?? artworks.length),
+    indoor: usingCanonicalSummary ? dashboardSummary.indoorCount : (artworkStats.indoor ?? 0),
+    outdoor: usingCanonicalSummary ? dashboardSummary.outdoorCount : (artworkStats.outdoor ?? 0),
+    media: usingCanonicalSummary ? dashboardSummary.mediaPresentCount : mediaAssets.length,
+    featured: usingCanonicalSummary ? dashboardSummary.featuredVisibleCount : undefined,
   });
 
   const twoCol = createElement('div', { className: 'cms-admin-two-col cms-admin-dashboard-reference-grid' });
@@ -2827,16 +2837,21 @@ function renderSectionIntroCard(title, body, meta) {
   return panel;
 }
 
-function renderWebsiteStatusPanel({ published, errors, siteSettings }) {
+function renderWebsiteStatusPanel({ published, errors, siteSettings, dashboardSummary, canonicalError }) {
   const copy = ADMIN_COPY.dashboard.status;
   const hasErrors = Object.keys(errors || {}).length > 0;
+  const usingFallback = dashboardSummary?.source === 'db-fallback';
+  const sourceLabel = usingFallback ? copy.fallbackSource : copy.canonicalSource;
+  const sourceDetail = canonicalError && usingFallback
+    ? `${sourceLabel} · ${normalizeErrorMessage(canonicalError)}`
+    : sourceLabel;
   const panel = createElement('section', { className: 'cms-admin-panel cms-admin-dashboard-status-panel' });
-  panel.appendChild(renderPanelTitle(copy.title, hasErrors ? 'Cần kiểm tra' : 'Ổn định'));
+  panel.appendChild(renderPanelTitle(copy.title, hasErrors || usingFallback ? 'Cần kiểm tra' : 'Ổn định'));
   panel.appendChild(renderKeyValueList([
-    [copy.currentVersion, published?.version || '—'],
+    [copy.currentVersion, dashboardSummary?.version || published?.version || '—'],
     [copy.publishedAt, formatDateTime(published?.published_at)],
     [copy.cmsRecordStatus, getStatusLabel(siteSettings?.site_status)],
-    [copy.dataSource, hasErrors ? 'Một số bảng chưa đọc được' : 'Đã đọc dữ liệu quản trị'],
+    [copy.dataSource, sourceDetail],
     [copy.readOnlyMode, copy.readOnly],
     [copy.website, hasErrors ? 'Cần kiểm tra kết nối dữ liệu' : copy.active],
   ]));
@@ -2873,18 +2888,22 @@ function renderQuickActionsPanel() {
   return panel;
 }
 
-function renderMetricsPanel({ rooms, artworks, indoor, outdoor, media }) {
+function renderMetricsPanel({ rooms, artworks, indoor, outdoor, media, featured }) {
   const copy = ADMIN_COPY.dashboard.metrics;
   const panel = createElement('section', { className: 'cms-admin-panel cms-admin-metrics-panel' });
   panel.appendChild(renderPanelTitle(copy.title));
   const stats = createElement('div', { className: 'cms-admin-metric-grid' });
-  [
+  const entries = [
     [copy.rooms, rooms],
     [copy.artworks, artworks],
     [copy.indoor, indoor],
     [copy.outdoor, outdoor],
     [copy.media, media],
-  ].forEach(([label, value]) => stats.appendChild(renderMetricTile(label, value)));
+  ];
+  if (featured !== undefined) {
+    entries.push([copy.featured, featured]);
+  }
+  entries.forEach(([label, value]) => stats.appendChild(renderMetricTile(label, value)));
   panel.appendChild(stats);
   return panel;
 }
@@ -3051,13 +3070,15 @@ function renderLatestBundlePanel(bundle) {
   return panel;
 }
 
-function renderTaskPanel({ warningItems = [], warningCount = 0, mediaCount = 0 } = {}) {
+function renderTaskPanel({ warningItems = [], warningMessages = [], warningCount = 0, mediaCount = 0 } = {}) {
   const panel = createElement('section', { className: 'cms-admin-help-panel cms-admin-task-panel' });
   panel.appendChild(createElement('h3', { text: ADMIN_COPY.dashboard.tasks.title }));
   const list = createElement('ul', { className: 'cms-admin-task-list' });
-  const effectiveWarningCount = warningCount || warningItems.length;
+  const effectiveWarningCount = warningCount || warningItems.length || warningMessages.length;
   if (effectiveWarningCount) {
-    const names = warningItems.slice(0, 3).map((item) => `${item.artwork_code || '—'} · ${item.title || 'Chưa có tên'}`).join('; ');
+    const names = warningMessages.length
+      ? warningMessages.slice(0, 3).join('; ')
+      : warningItems.slice(0, 3).map((item) => `${item.artwork_code || '—'} · ${item.title || 'Chưa có tên'}`).join('; ');
     const detail = names ? `: ${names}.` : '.';
     list.appendChild(createElement('li', { text: `Có ${formatCount(effectiveWarningCount)} nội dung cần kiểm tra${detail}` }));
   } else {

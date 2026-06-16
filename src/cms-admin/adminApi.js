@@ -1,5 +1,6 @@
-import { ADMIN_TABLES, ADMIN_UI, CMS_MEDIA_UPLOAD_CONFIG, CMS_PUBLISH_GATE_CONFIG, CMS_ROLLBACK_GATE_CONFIG, CMS_STORAGE_CLEANUP_CONFIG } from './adminConfig.js';
+import { ADMIN_TABLES, ADMIN_UI, CMS_MEDIA_UPLOAD_CONFIG, CMS_PUBLISH_GATE_CONFIG, CMS_ROLLBACK_GATE_CONFIG, CMS_STORAGE_CLEANUP_CONFIG, STATIC_CMS_DRAFT_CONFIG } from './adminConfig.js';
 import { safeArray } from './adminUtils.js';
+import { buildCanonicalDashboardSummary } from './adminDashboardSummary.js';
 
 const ARTWORK_COLUMNS = 'id,room_key,artwork_code,type,title,subtitle,artist,year,material,real_size,description,content,note,image_url,thumbnail_url,video_url,poster_url,audio_url,category,tags,is_visible,is_featured,sort_order,cms_warning,updated_at,updated_by';
 const ARTWORK_PAGE_SIZE_OPTIONS = Array.isArray(ADMIN_UI.artworkPageSizeOptions) ? ADMIN_UI.artworkPageSizeOptions : [25, 50, 100];
@@ -23,6 +24,7 @@ export async function fetchDashboardData(client) {
     artworkStats,
     publishedBundles,
     mediaAssets,
+    canonicalCms,
   ] = await Promise.all([
     fetchSiteSettings(client),
     fetchIndexSections(client),
@@ -32,6 +34,7 @@ export async function fetchDashboardData(client) {
     fetchArtworkStats(client),
     fetchPublishedBundles(client),
     fetchMediaAssets(client),
+    fetchDashboardCanonicalCmsContent(),
   ]);
 
   const errors = collectErrors({
@@ -55,6 +58,9 @@ export async function fetchDashboardData(client) {
       artworkStats: artworkStats.data || createEmptyArtworkStats(),
       publishedBundles: safeArray(publishedBundles.data),
       mediaAssets: safeArray(mediaAssets.data),
+      canonicalCms: canonicalCms.data || null,
+      canonicalSummary: canonicalCms.data?.summary || null,
+      canonicalError: canonicalCms.error || null,
       errors,
     },
     errors,
@@ -282,6 +288,38 @@ export async function fetchMediaAssets(client) {
       .limit(500);
     return { data: safeArray(data), error };
   });
+}
+
+export async function fetchDashboardCanonicalCmsContent() {
+  const sourceUrl = STATIC_CMS_DRAFT_CONFIG.remoteUrl;
+  if (!sourceUrl) {
+    return { name: 'canonicalCms', data: null, error: new Error('Chưa cấu hình URL CMS public JSON.') };
+  }
+
+  try {
+    const separator = sourceUrl.includes('?') ? '&' : '?';
+    const response = await fetch(`${sourceUrl}${separator}v=${Date.now()}`, { cache: 'no-store' });
+    const text = await response.text();
+    if (!response.ok) {
+      throw new Error(`Không đọc được CMS public JSON HTTP ${response.status}.`);
+    }
+    const json = JSON.parse(text);
+    const summary = buildCanonicalDashboardSummary(json, {
+      source: 'canonical-public',
+      sourceLabel: 'CMS public JSON',
+      sourceUrl,
+    });
+    if (!summary.valid) {
+      throw new Error(`CMS public JSON chưa đạt summary contract: ${summary.errors.join(' | ')}`);
+    }
+    return {
+      name: 'canonicalCms',
+      data: { json, summary, sourceUrl },
+      error: null,
+    };
+  } catch (error) {
+    return { name: 'canonicalCms', data: null, error };
+  }
 }
 
 
@@ -1052,6 +1090,9 @@ function createEmptyDashboardData() {
     artworkStats: createEmptyArtworkStats(),
     publishedBundles: [],
     mediaAssets: [],
+    canonicalCms: null,
+    canonicalSummary: null,
+    canonicalError: null,
     errors: {},
   };
 }

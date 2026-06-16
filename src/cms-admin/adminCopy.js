@@ -206,7 +206,9 @@ export const ADMIN_COPY = Object.freeze({
       active: 'Đang hoạt động',
       safe: 'Chỉ xem, không thay đổi dữ liệu',
       readOnly: 'Chỉ xem',
-      sourceNote: 'Dữ liệu CMS có thể là bản ghi quản trị. Website public dùng phiên bản đã công khai.',
+      sourceNote: 'Website public dùng nội dung đã công khai từ CMS JSON. Nếu CMS public JSON chưa đọc được, Tổng quan dùng DB catalog làm dự phòng.',
+      canonicalSource: 'Nguồn chính: CMS public JSON',
+      fallbackSource: 'Nguồn dự phòng: DB catalog',
     },
     quickActions: {
       title: 'Đi nhanh',
@@ -227,6 +229,7 @@ export const ADMIN_COPY = Object.freeze({
       indoor: 'Trong phòng',
       outdoor: 'Ngoài trời',
       media: 'Ảnh/video',
+      featured: 'Tác phẩm tiêu biểu',
     },
     cards: {
       currentContent: {
