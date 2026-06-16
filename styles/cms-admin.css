@@ -4865,3 +4865,22 @@ body.cms-admin-page * {
   padding: 5px 9px;
   font-size: 0.72rem;
 }
+
+/* v6.14.043.009 — Internal reference deep focus */
+.cms-admin-panel.is-reference-focus,
+.cms-admin-data-card.is-reference-focus,
+.cms-admin-site-logo-library-section.is-reference-focus,
+.cms-admin-static-draft-shell.is-reference-focus,
+.cms-admin-static-command-bar.is-reference-focus {
+  outline: 2px solid rgba(250, 204, 21, 0.88);
+  outline-offset: 4px;
+  box-shadow: 0 0 0 4px rgba(250, 204, 21, 0.14), 0 18px 42px rgba(15, 23, 42, 0.32);
+}
+
+.cms-admin-panel.is-scroll-focus,
+.cms-admin-data-card.is-scroll-focus,
+.cms-admin-site-logo-library-section.is-scroll-focus,
+.cms-admin-static-draft-shell.is-scroll-focus,
+.cms-admin-static-command-bar.is-scroll-focus {
+  scroll-margin-block: 96px;
+}

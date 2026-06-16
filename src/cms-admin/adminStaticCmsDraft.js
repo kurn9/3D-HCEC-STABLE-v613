@@ -178,7 +178,10 @@ export function renderStaticCmsDraftTab(state, handlers = {}) {
   const copy = ADMIN_COPY.staticDraft || {};
   const draftState = state.staticCmsDraft || {};
   const currentItem = getSelectedDraftItem(draftState);
-  const panel = createElement('section', { className: 'cms-admin-static-draft-shell cms-admin-static-workspace-shell' });
+  const panel = createElement('section', {
+    className: 'cms-admin-static-draft-shell cms-admin-static-workspace-shell',
+    dataset: { cmsReferenceTarget: 'static-draft', cmsReferenceId: 'static-draft' },
+  });
 
   panel.appendChild(renderStaticWorkspaceCommandBar(draftState, state, currentItem, handlers, copy));
 
@@ -205,7 +208,10 @@ export function renderStaticCmsDraftTab(state, handlers = {}) {
 function renderStaticWorkspaceCommandBar(draftState = {}, appState = {}, currentItem = null, handlers = {}, copy = {}) {
   const activeWorkspace = getActiveWorkspace(draftState);
   const featured = getFeaturedOperatorSection(draftState.draftJson);
-  const bar = createElement('section', { className: 'cms-admin-panel cms-admin-static-command-bar cms-admin-operator-command-bar' });
+  const bar = createElement('section', {
+    className: 'cms-admin-panel cms-admin-static-command-bar cms-admin-operator-command-bar',
+    dataset: { cmsReferenceTarget: 'static-draft', cmsReferenceId: 'static-draft' },
+  });
 
   const left = createElement('div', { className: 'cms-admin-static-command-main' });
   left.appendChild(createElement('p', { className: 'cms-admin-eyebrow', text: 'Quản trị nội dung' }));

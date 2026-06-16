@@ -81,6 +81,7 @@ let root = null;
 let unsubscribeAuth = null;
 let pendingEditFocusTarget = null;
 let pendingEntityHighlight = null;
+let pendingReferenceFocusTarget = null;
 let beforeUnloadGuardBound = false;
 const siteLogoMediaPickerState = {
   open: false,
@@ -274,6 +275,7 @@ function renderAdminShell() {
   shell.appendChild(main);
   root.appendChild(shell);
   focusPendingEditTarget();
+  focusPendingReferenceTarget();
 }
 
 function renderRuntimeFallbackPanel(error) {
@@ -296,6 +298,16 @@ function queueEditPanelFocus(type, id, fieldName = '') {
 function queueEntityHighlight(type, id) {
   if (!type || id === undefined || id === null) return;
   pendingEntityHighlight = { type, id: String(id) };
+}
+
+function queueReferenceFocus(type, id, fieldName = '', label = '') {
+  if (!type) return;
+  pendingReferenceFocusTarget = {
+    type,
+    id: id === undefined || id === null ? '' : String(id),
+    fieldName: fieldName || '',
+    label: label || '',
+  };
 }
 
 function matchesPendingHighlight(type, id) {
@@ -328,6 +340,43 @@ function focusPendingEditTarget() {
 function findCmsTarget(attributeName, type, id) {
   const selector = `[${attributeName}="${type}"]`;
   return Array.from(root.querySelectorAll(selector)).find((node) => String(node.dataset.cmsEditId || '') === String(id || '')) || null;
+}
+
+function focusPendingReferenceTarget() {
+  const target = pendingReferenceFocusTarget;
+  if (!target || !root) return;
+  pendingReferenceFocusTarget = null;
+  requestAnimationFrame(() => {
+    const targetNode = findReferenceTarget(target);
+    if (!targetNode) return;
+    targetNode.classList.add('is-reference-focus', 'is-scroll-focus');
+    const reducedMotion = typeof window !== 'undefined'
+      && typeof window.matchMedia === 'function'
+      && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    targetNode.scrollIntoView({ block: 'center', behavior: reducedMotion ? 'auto' : 'smooth' });
+    if (!targetNode.hasAttribute('tabindex')) targetNode.setAttribute('tabindex', '-1');
+    if (typeof targetNode.focus === 'function') targetNode.focus({ preventScroll: true });
+    window.setTimeout(() => targetNode.classList.remove('is-reference-focus'), 2600);
+  });
+}
+
+function findReferenceTarget(target = {}) {
+  const type = String(target.type || '');
+  const id = String(target.id || '');
+  const fieldName = String(target.fieldName || '');
+  const referenceNodes = Array.from(root.querySelectorAll('[data-cms-reference-target]'));
+  const exact = referenceNodes.find((node) => node.dataset.cmsReferenceTarget === type
+    && (!id || node.dataset.cmsReferenceId === id)
+    && (!fieldName || !node.dataset.cmsReferenceField || node.dataset.cmsReferenceField === fieldName));
+  if (exact) return exact;
+  const idMatch = referenceNodes.find((node) => node.dataset.cmsReferenceTarget === type
+    && (!id || node.dataset.cmsReferenceId === id));
+  if (idMatch) return idMatch;
+  const typeMatch = referenceNodes.find((node) => node.dataset.cmsReferenceTarget === type);
+  if (typeMatch) return typeMatch;
+  const panel = findCmsTarget('data-cms-edit-panel', type, id);
+  const row = findCmsTarget('data-cms-edit-row', type, id);
+  return panel || row || null;
 }
 
 
@@ -1435,14 +1484,15 @@ function getMediaReferenceNavigationTarget(reference = {}) {
   if (includesAny(haystack, ['trang chủ', 'index-section', 'indexsections', 'home', 'hero', 'featured', 'khu vực đầu trang', 'tác phẩm tiêu biểu'])) {
     const isGuide = includesAny(haystack, ['guide', 'hướng dẫn']);
     const isExperience = includesAny(haystack, ['experience', 'trải nghiệm']);
-    const isHero = !isGuide && !isExperience && includesAny(haystack, ['hero', 'khu vực đầu trang', 'videourl', 'video_url', 'media_json', 'video']);
-    const type = isGuide ? 'home-guide' : isExperience ? 'home-experience' : 'home-hero';
-    const id = isGuide ? 'guide' : isExperience ? 'experience' : 'hero';
+    const isFeatured = !isGuide && !isExperience && includesAny(haystack, ['featured', 'tác phẩm tiêu biểu', 'featured_local']);
+    const isHero = !isGuide && !isExperience && !isFeatured && includesAny(haystack, ['hero', 'khu vực đầu trang', 'videourl', 'video_url', 'media_json', 'video']);
+    const type = isGuide ? 'home-guide' : isExperience ? 'home-experience' : isFeatured ? 'home' : 'home-hero';
+    const id = isGuide ? 'guide' : isExperience ? 'experience' : isFeatured ? 'home' : 'hero';
     return {
       tab: 'home',
       type,
       id,
-      fieldName: isHero && includesAny(field, ['video', 'media_json']) ? 'media.videoUrl' : 'eyebrow',
+      fieldName: isHero && includesAny(field, ['video', 'media_json']) ? 'videoUrl' : isFeatured ? '' : 'eyebrow',
       label: 'Trang chủ',
     };
   }
@@ -1718,11 +1768,11 @@ function handleNavigateToMediaReference(reference = {}) {
 
 function queueMediaReferenceFocus(target = {}) {
   if (!target.type) return;
+  const focusId = target.id || target.type;
   if (target.type === 'static-draft') {
-    queueEntityHighlight('static-draft', target.id || 'static-draft');
-    return;
+    queueEntityHighlight('static-draft', focusId || 'static-draft');
   }
-  queueEditPanelFocus(target.type, target.id || target.type, target.fieldName || '');
+  queueReferenceFocus(target.type, focusId, target.fieldName || '', target.label || '');
 }
 
 function renderMediaPreview(asset = {}) {
@@ -1992,7 +2042,10 @@ function renderSiteSettingsBasicPanel(state, siteSettings, canEdit) {
 }
 
 function renderSiteSettingsIdentityPanel(siteSettings, isEditing = false, editState = {}) {
-  const identity = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel' });
+  const identity = createElement('section', {
+    className: 'cms-admin-panel cms-admin-view-panel',
+    dataset: { cmsReferenceTarget: 'site-settings', cmsReferenceId: 'site-settings', cmsReferenceField: 'logo_url' },
+  });
   identity.appendChild(renderPanelTitle(ADMIN_COPY.settings.identityTitle));
   if (siteSettings) {
     const logoValue = isEditing && Object.prototype.hasOwnProperty.call(editState.draftValues || {}, 'logo_url')
@@ -2090,7 +2143,10 @@ function renderSiteSettingsLogoLibrarySection(state, siteSettings, editState) {
       ? editState.draftValues.logo_url
       : siteSettings.logo_url
   );
-  const section = createElement('section', { className: 'cms-admin-site-logo-library-section' });
+  const section = createElement('section', {
+    className: 'cms-admin-site-logo-library-section',
+    dataset: { cmsReferenceTarget: 'site-settings', cmsReferenceId: 'site-settings', cmsReferenceField: 'logo_url' },
+  });
   const header = createElement('div', { className: 'cms-admin-site-logo-library-header' });
   const heading = createElement('div');
   heading.appendChild(createElement('span', { className: 'cms-admin-edit-label', text: ADMIN_COPY.settings.edit.fields.logo_url }));
@@ -2911,7 +2967,10 @@ function renderHomeDataView(state) {
     wrap.appendChild(renderNoticeBox(editState.saveSuccess, 'success'));
   }
 
-  const panel = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel' });
+  const panel = createElement('section', {
+    className: 'cms-admin-panel cms-admin-view-panel',
+    dataset: { cmsReferenceTarget: 'home', cmsReferenceId: 'home' },
+  });
   panel.appendChild(renderPanelTitle(copy.sourceTitle, sections.length ? `${formatCount(sections.length)} phần nội dung` : 'Chưa có dữ liệu'));
   panel.appendChild(renderSourceStrip('Nguồn dữ liệu', sections.length ? 'CMS index_sections, bản nháp quản trị' : 'Chưa đọc được dữ liệu Trang chủ'));
   panel.appendChild(renderPublicLink(copy.publicLink, './index.html'));
@@ -2942,7 +3001,10 @@ function renderGateDataView(state) {
     wrap.appendChild(renderNoticeBox(editState.saveSuccess, 'success'));
   }
 
-  const panel = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel' });
+  const panel = createElement('section', {
+    className: 'cms-admin-panel cms-admin-view-panel',
+    dataset: { cmsReferenceTarget: 'gate', cmsReferenceId: 'gate' },
+  });
   panel.appendChild(renderPanelTitle(copy.sourceTitle, gate ? 'Đã đọc dữ liệu' : 'Chưa có dữ liệu'));
   panel.appendChild(renderSourceStrip('Nguồn dữ liệu', gate ? 'CMS gate_content, bản nháp quản trị' : 'Chưa đọc được dữ liệu Cổng vào'));
   panel.appendChild(renderPublicLink(copy.publicLink, './gallery.html'));
@@ -2960,7 +3022,10 @@ function renderGateDataView(state) {
     return wrap;
   }
 
-  const main = createElement('section', { className: 'cms-admin-data-card cms-admin-gate-main-card' });
+  const main = createElement('section', {
+    className: 'cms-admin-data-card cms-admin-gate-main-card',
+    dataset: { cmsReferenceTarget: 'gate', cmsReferenceId: 'gate' },
+  });
   main.appendChild(renderDataCardTitle(copy.mainInfo, gate.is_active ? ADMIN_COPY.maps.status.active : ADMIN_COPY.maps.status.inactive));
   main.appendChild(renderKeyValueList([
     [copy.fields.eyebrow, gate.eyebrow],
@@ -3020,8 +3085,15 @@ function renderIndexSectionCard(section, copy, state = getState(), editState = {
   const isEditingHero = Boolean(isHero && editState.isEditing && editState.editingSectionId === section?.id);
   const isEditingGuide = Boolean(isGuide && editState.isEditing && editState.editingSectionId === section?.id);
   const isEditingExperience = Boolean(isExperience && editState.isEditing && editState.editingSectionId === section?.id);
+  const referenceTargetType = isHero ? 'home-hero' : isGuide ? 'home-guide' : isExperience ? 'home-experience' : isContact ? 'home-contact' : 'home-section';
+  const referenceTargetId = isHero ? 'hero' : isGuide ? 'guide' : isExperience ? 'experience' : isContact ? 'contact' : key;
   const card = createElement('article', {
     className: `cms-admin-data-card cms-admin-index-section-card${isHero ? ' cms-admin-home-hero-card' : ''}${isGuide ? ' cms-admin-home-guide-card' : ''}${isExperience ? ' cms-admin-home-experience-card' : ''}`,
+    dataset: {
+      cmsReferenceTarget: referenceTargetType,
+      cmsReferenceId: referenceTargetId,
+      cmsReferenceField: isHero ? 'videoUrl' : '',
+    },
   });
   card.appendChild(renderDataCardTitle(title, getVisibleLabel(section?.is_visible)));
 
