@@ -52,7 +52,6 @@ export async function fetchDashboardData(client) {
       gateContent: gateContent.data || null,
       rooms: safeArray(rooms.data),
       artworks: safeArray(artworksPage.data?.items),
-      artworksPage: artworksPage.data || createEmptyArtworksPage(defaultArtworkParams),
       artworkStats: artworkStats.data || createEmptyArtworkStats(),
       publishedBundles: safeArray(publishedBundles.data),
       mediaAssets: safeArray(mediaAssets.data),
@@ -103,19 +102,6 @@ export async function fetchRooms(client) {
       .select('id,room_key,name,description,room_type,is_active,sort_order,updated_at,updated_by')
       .order('sort_order', { ascending: true })
       .order('room_key', { ascending: true });
-    return { data: safeArray(data), error };
-  });
-}
-
-export async function fetchArtworks(client) {
-  return runReadQuery('artworks', async () => {
-    const { data, error } = await client
-      .from(ADMIN_TABLES.artworks)
-      .select(ARTWORK_COLUMNS)
-      .order('room_key', { ascending: true })
-      .order('sort_order', { ascending: true })
-      .order('artwork_code', { ascending: true })
-      .limit(ADMIN_UI.maxArtworkRows);
     return { data: safeArray(data), error };
   });
 }
@@ -532,108 +518,6 @@ function buildExperienceIndexSectionUpdatePayload(values = {}, userId = null) {
 
   return payload;
 }
-
-
-export async function updateRoomDraft(client, roomId, roomKey, values = {}, userId = null) {
-  if (!client) {
-    return { data: null, error: new Error('Supabase client chưa sẵn sàng.') };
-  }
-
-  const id = String(roomId || '').trim();
-  const safeRoomKey = String(roomKey || '').trim();
-  if (!id) {
-    return { data: null, error: new Error('Không tìm thấy ID phòng trưng bày.') };
-  }
-  if (!['indoor', 'outdoor'].includes(safeRoomKey)) {
-    return { data: null, error: new Error('Mã phòng không nằm trong phạm vi chỉnh sửa an toàn.') };
-  }
-
-  const payload = buildRoomUpdatePayload(values, userId);
-  const { data, error } = await client
-    .from(ADMIN_TABLES.rooms)
-    .update(payload)
-    .eq('id', id)
-    .eq('room_key', safeRoomKey)
-    .select('id,room_key,name,description,room_type,is_active,sort_order,updated_at,updated_by')
-    .maybeSingle();
-
-  return { data: data || null, error };
-}
-
-function buildRoomUpdatePayload(values = {}, userId = null) {
-  const allowedKeys = [
-    'name',
-    'description',
-  ];
-  const payload = {};
-
-  allowedKeys.forEach((key) => {
-    if (!Object.prototype.hasOwnProperty.call(values, key)) return;
-    const value = values[key];
-    payload[key] = typeof value === 'string' ? value.trim() : value;
-  });
-
-  if (userId) {
-    payload.updated_by = userId;
-  }
-
-  return payload;
-}
-
-
-export async function updateArtworkTextDraft(client, artworkId, artworkCode, values = {}, userId = null) {
-  if (!client) {
-    return { data: null, error: new Error('Supabase client chưa sẵn sàng.') };
-  }
-
-  const id = String(artworkId || '').trim();
-  const code = String(artworkCode || '').trim();
-  if (!id) {
-    return { data: null, error: new Error('Không tìm thấy ID tác phẩm.') };
-  }
-
-  const payload = buildArtworkTextUpdatePayload(values, userId);
-  let query = client
-    .from(ADMIN_TABLES.artworks)
-    .update(payload)
-    .eq('id', id);
-
-  if (code) {
-    query = query.eq('artwork_code', code);
-  }
-
-  const { data, error } = await query
-    .select(ARTWORK_COLUMNS)
-    .maybeSingle();
-
-  return { data: data || null, error };
-}
-
-function buildArtworkTextUpdatePayload(values = {}, userId = null) {
-  const allowedKeys = [
-    'title',
-    'subtitle',
-    'artist',
-    'year',
-    'material',
-    'real_size',
-    'description',
-  ];
-  const payload = {};
-
-  allowedKeys.forEach((key) => {
-    if (!Object.prototype.hasOwnProperty.call(values, key)) return;
-    const value = values[key];
-    payload[key] = typeof value === 'string' ? value.trim() : value;
-  });
-
-  if (userId) {
-    payload.updated_by = userId;
-  }
-
-  return payload;
-}
-
 
 
 
@@ -1165,7 +1049,6 @@ function createEmptyDashboardData() {
     gateContent: null,
     rooms: [],
     artworks: [],
-    artworksPage: createEmptyArtworksPage(),
     artworkStats: createEmptyArtworkStats(),
     publishedBundles: [],
     mediaAssets: [],

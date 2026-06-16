@@ -233,31 +233,6 @@ export const ADMIN_COPY = Object.freeze({
         label: 'Nội dung đang công khai',
         emptyNote: 'Chưa có nội dung công khai',
       },
-      rooms: {
-        label: 'Tổng số không gian',
-        note: 'Danh sách không gian',
-      },
-      artworks: {
-        label: 'Tổng số tác phẩm',
-        note: 'Danh sách tác phẩm',
-      },
-      indoor: {
-        label: 'Tác phẩm trong phòng',
-        note: 'Phòng trưng bày',
-      },
-      outdoor: {
-        label: 'Tác phẩm ngoài trời',
-        note: 'Không gian ngoài trời',
-      },
-      media: {
-        label: 'Ảnh/video đã tải lên',
-        note: 'Thư viện tệp',
-      },
-      warnings: {
-        label: 'Cảnh báo nội dung',
-        note: 'Cần kiểm tra',
-        emptyNote: 'Không có cảnh báo',
-      },
       connection: {
         label: 'Kết nối dữ liệu',
         ok: 'Đang hoạt động',

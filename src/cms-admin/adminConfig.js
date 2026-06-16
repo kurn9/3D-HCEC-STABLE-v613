@@ -30,7 +30,6 @@ export const ADMIN_UI = Object.freeze({
   readOnlyNotice: 'Bước hiện tại chỉ đọc dữ liệu. Chưa có lưu nháp, upload, publish hoặc rollback.',
   nextPhaseNotice: 'Chức năng này sẽ triển khai ở V6.11.21-C/D.',
   defaultTab: 'dashboard',
-  maxArtworkRows: 500,
   artworkPageSizeOptions: [25, 50, 100],
   defaultArtworkPageSize: 50,
 });
@@ -43,8 +42,6 @@ export const ADMIN_FEATURE_FLAGS = Object.freeze({
   allowHomeHeroEdit: true,
   allowHomeGuideEdit: true,
   allowHomeExperienceEdit: true,
-  allowRoomsEdit: true,
-  allowArtworksTextEdit: true,
   allowMediaUpload: false,
   allowPublish: false,
   allowRollback: false,

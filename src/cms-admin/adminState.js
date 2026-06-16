@@ -19,7 +19,6 @@ const initialState = {
     gateContent: null,
     rooms: [],
     artworks: [],
-    artworksPage: null,
     artworkStats: { total: 0, indoor: 0, outdoor: 0, warning: 0 },
     publishedBundles: [],
     mediaAssets: [],
