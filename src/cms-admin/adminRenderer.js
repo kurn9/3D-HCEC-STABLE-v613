@@ -75,14 +75,6 @@ import { renderRollbackHistoryTab } from './adminRollbackGate.js';
 import { renderCmsStorageCleanupTab } from './adminCleanupGate.js';
 
 const NAV_GROUPS = ADMIN_COPY.navGroups || [{ key: 'main', items: ADMIN_COPY.nav }];
-// Compatibility fallback: previous operator tabs "rooms" and "artworks" were merged into staticDraft.
-// Keep for a few releases to avoid stale URL/local state crashes.
-const LEGACY_OPERATOR_TABS = new Set(['rooms', 'artworks']);
-const OPERATOR_CANONICAL_TAB = 'staticDraft';
-
-function normalizeOperatorTabKey(tabKey) {
-  return LEGACY_OPERATOR_TABS.has(tabKey) ? OPERATOR_CANONICAL_TAB : tabKey;
-}
 
 let root = null;
 let unsubscribeAuth = null;
@@ -250,12 +242,7 @@ function renderAccessDenied(access) {
 
 function renderAdminShell() {
   clearNode(root);
-  let state = getState();
-  const normalizedActiveTab = normalizeOperatorTabKey(state.activeTab);
-  if (normalizedActiveTab !== state.activeTab) {
-    setActiveTab(normalizedActiveTab);
-    state = getState();
-  }
+  const state = getState();
   syncBeforeUnloadGuard(state);
   const shell = createElement('div', { className: 'cms-admin-shell' });
   shell.appendChild(renderSidebar(state));
@@ -754,10 +741,6 @@ function renderActiveTab(state) {
       return renderHomeTab(state);
     case 'gate':
       return renderGateTab(state);
-    case 'rooms':
-    case 'artworks':
-      setActiveTab(OPERATOR_CANONICAL_TAB);
-      return renderStaticCmsDraftTab(getState(), { onRerender: renderAdminShell, onOpenHistory: () => switchAdminTab('history') });
     case 'media':
       return renderMediaTab(state);
     case 'staticDraft':
@@ -1090,12 +1073,7 @@ function renderReadonlyField(label, value, note) {
 }
 
 function updateSiteSettingsFormControls(form) {
-  let state = getState();
-  const normalizedActiveTab = normalizeOperatorTabKey(state.activeTab);
-  if (normalizedActiveTab !== state.activeTab) {
-    setActiveTab(normalizedActiveTab);
-    state = getState();
-  }
+  const state = getState();
   syncBeforeUnloadGuard(state);
   const dirty = Boolean(state.siteSettingsEdit?.dirty);
   const notice = form.querySelector('.cms-admin-dirty-notice');
@@ -1313,12 +1291,7 @@ function renderGateTechnicalReadonlyBlock(gate, copy) {
 }
 
 function updateGateFormControls(form) {
-  let state = getState();
-  const normalizedActiveTab = normalizeOperatorTabKey(state.activeTab);
-  if (normalizedActiveTab !== state.activeTab) {
-    setActiveTab(normalizedActiveTab);
-    state = getState();
-  }
+  const state = getState();
   syncBeforeUnloadGuard(state);
   const dirty = Boolean(state.gateEdit?.dirty);
   const notice = form.querySelector('.cms-admin-dirty-notice');
@@ -2115,12 +2088,7 @@ function getHomeGuideReadonlyMetaRows(originalItem, copy) {
 }
 
 function updateHomeGuideFormControls(form) {
-  let state = getState();
-  const normalizedActiveTab = normalizeOperatorTabKey(state.activeTab);
-  if (normalizedActiveTab !== state.activeTab) {
-    setActiveTab(normalizedActiveTab);
-    state = getState();
-  }
+  const state = getState();
   syncBeforeUnloadGuard(state);
   const dirty = Boolean(state.homeEdit?.dirty);
   const notice = form.querySelector('.cms-admin-dirty-notice');
@@ -2400,12 +2368,7 @@ function getHomeExperienceReadonlyMetaRows(originalItem, copy) {
 }
 
 function updateHomeExperienceFormControls(form) {
-  let state = getState();
-  const normalizedActiveTab = normalizeOperatorTabKey(state.activeTab);
-  if (normalizedActiveTab !== state.activeTab) {
-    setActiveTab(normalizedActiveTab);
-    state = getState();
-  }
+  const state = getState();
   syncBeforeUnloadGuard(state);
   const dirty = Boolean(state.homeEdit?.dirty);
   const notice = form.querySelector('.cms-admin-dirty-notice');
@@ -2496,12 +2459,7 @@ function canEditHomeHero(state, section) {
 }
 
 function updateHomeHeroFormControls(form) {
-  let state = getState();
-  const normalizedActiveTab = normalizeOperatorTabKey(state.activeTab);
-  if (normalizedActiveTab !== state.activeTab) {
-    setActiveTab(normalizedActiveTab);
-    state = getState();
-  }
+  const state = getState();
   syncBeforeUnloadGuard(state);
   const dirty = Boolean(state.homeEdit?.dirty);
   const notice = form.querySelector('.cms-admin-dirty-notice');
@@ -2946,11 +2904,10 @@ function renderInfoTile(label, value, technical = false) {
 }
 
 function switchAdminTab(tabKey) {
-  const normalizedTabKey = normalizeOperatorTabKey(tabKey);
   const currentState = getState();
-  if (currentState.activeTab === normalizedTabKey) return true;
+  if (currentState.activeTab === tabKey) return true;
   if (!requestLeaveEditSession('tab-switch')) return false;
-  setActiveTab(normalizedTabKey);
+  setActiveTab(tabKey);
   renderAdminShell();
   return true;
 }
@@ -3120,7 +3077,7 @@ function renderTaskPanel({ warningItems = [], warningCount = 0, mediaCount = 0 }
       type: 'button',
     });
     action.addEventListener('click', () => {
-      switchAdminTab(OPERATOR_CANONICAL_TAB);
+      switchAdminTab('staticDraft');
     });
     panel.appendChild(action);
     panel.appendChild(renderCompactNotice(ADMIN_COPY.dashboard.tasks.warningHint));

@@ -137,14 +137,6 @@ export const ADMIN_COPY = Object.freeze({
       title: 'Cổng vào triển lãm',
       subtitle: 'Kiểm tra nội dung màn chọn không gian trước khi người xem vào tham quan.',
     },
-    rooms: {
-      title: 'Phòng trưng bày',
-      subtitle: 'Xem các không gian đang được dùng trong triển lãm 3D.',
-    },
-    artworks: {
-      title: 'Danh sách tác phẩm',
-      subtitle: 'Xem danh sách tác phẩm và nội dung đang được đưa vào không gian triển lãm.',
-    },
     media: {
       title: 'Ảnh & video',
       subtitle: 'Quản lý ảnh, video và poster của nội dung triển lãm. Chức năng tải tệp sẽ được bật ở bước sau.',
