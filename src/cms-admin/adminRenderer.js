@@ -1226,6 +1226,7 @@ function scanMediaUsageValue(value, source, identity, references, path, depth) {
     if (hasStrongMatch) {
       references.push({
         sourceType: source.sourceType || 'cms',
+        sourceKey: source.key || '',
         area: source.area || 'CMS',
         field: path,
         label: buildMediaReferenceLabel(source, path),
@@ -1382,12 +1383,86 @@ function dedupeMediaReferences(references = []) {
   const seen = new Set();
   const out = [];
   safeArray(references).forEach((reference) => {
-    const key = [reference.sourceType, reference.area, reference.field, reference.label, reference.matchType].join('|');
+    const enriched = enrichMediaReferenceNavigationTarget(reference);
+    const key = [enriched.sourceType, enriched.sourceKey, enriched.area, enriched.field, enriched.label, enriched.matchType].join('|');
     if (seen.has(key)) return;
     seen.add(key);
-    out.push(reference);
+    out.push(enriched);
   });
   return out;
+}
+
+function enrichMediaReferenceNavigationTarget(reference = {}) {
+  const target = getMediaReferenceNavigationTarget(reference);
+  if (!target) return reference;
+  return {
+    ...reference,
+    targetTab: target.tab,
+    targetType: target.type,
+    targetId: target.id,
+    targetFieldName: target.fieldName,
+    targetLabel: target.label,
+  };
+}
+
+function getMediaReferenceNavigationTarget(reference = {}) {
+  const label = String(reference.label || '').toLowerCase();
+  const area = String(reference.area || '').toLowerCase();
+  const field = String(reference.field || '').toLowerCase();
+  const sourceKey = String(reference.sourceKey || '').toLowerCase();
+  const haystack = [label, area, field, sourceKey].join(' | ');
+
+  if (includesAny(haystack, ['thông tin website', 'site-settings', 'sitesettings', 'logo_url', 'logourl', 'logo website'])) {
+    return {
+      tab: 'settings',
+      type: 'site-settings',
+      id: 'site-settings',
+      fieldName: field.includes('logo') ? 'logo_url' : 'site_title',
+      label: 'Thông tin website',
+    };
+  }
+
+  if (includesAny(haystack, ['cổng vào triển lãm', 'gatecontent', 'gate-content', 'cms-gate', 'gate.'])) {
+    return {
+      tab: 'gate',
+      type: 'gate',
+      id: 'gate',
+      fieldName: field.includes('media') || field.includes('image') ? '' : 'eyebrow',
+      label: 'Cổng vào triển lãm',
+    };
+  }
+
+  if (includesAny(haystack, ['trang chủ', 'index-section', 'indexsections', 'home', 'hero', 'featured', 'khu vực đầu trang', 'tác phẩm tiêu biểu'])) {
+    const isGuide = includesAny(haystack, ['guide', 'hướng dẫn']);
+    const isExperience = includesAny(haystack, ['experience', 'trải nghiệm']);
+    const isHero = !isGuide && !isExperience && includesAny(haystack, ['hero', 'khu vực đầu trang', 'videourl', 'video_url', 'media_json', 'video']);
+    const type = isGuide ? 'home-guide' : isExperience ? 'home-experience' : 'home-hero';
+    const id = isGuide ? 'guide' : isExperience ? 'experience' : 'hero';
+    return {
+      tab: 'home',
+      type,
+      id,
+      fieldName: isHero && includesAny(field, ['video', 'media_json']) ? 'media.videoUrl' : 'eyebrow',
+      label: 'Trang chủ',
+    };
+  }
+
+  if (includesAny(haystack, ['nội dung phòng 3d', 'artworks', 'artwork', 'rooms', 'static cms', 'static-cms', 'bản nháp cms', 'art_', 'logo_', 'video_'])) {
+    return {
+      tab: 'staticDraft',
+      type: 'static-draft',
+      id: 'static-draft',
+      fieldName: '',
+      label: 'Nội dung phòng 3D',
+    };
+  }
+
+  return null;
+}
+
+function includesAny(value = '', tokens = []) {
+  const raw = String(value || '').toLowerCase();
+  return safeArray(tokens).some((token) => raw.includes(String(token || '').toLowerCase()));
 }
 
 function buildMediaReferenceLabel(source = {}, path = '') {
@@ -1590,13 +1665,64 @@ function renderMediaUsageReferences(asset = {}) {
 
   const list = createElement('ul');
   references.slice(0, 3).forEach((reference) => {
-    list.appendChild(createElement('li', { text: reference.label || reference.area || 'CMS reference' }));
+    const item = createElement('li');
+    item.appendChild(createElement('span', { text: reference.label || reference.area || 'CMS reference' }));
+    const button = renderMediaReferenceNavigationButton(reference);
+    if (button) item.appendChild(button);
+    list.appendChild(item);
   });
   if (references.length > 3) {
     list.appendChild(createElement('li', { text: `+${formatCount(references.length - 3)} tham chiếu khác` }));
   }
   wrap.appendChild(list);
   return wrap;
+}
+
+function renderMediaReferenceNavigationButton(reference = {}) {
+  const target = getResolvedMediaReferenceTarget(reference);
+  if (!target) return null;
+  const button = createElement('button', {
+    className: 'cms-admin-button cms-admin-button-ghost cms-admin-media-reference-nav-button',
+    text: ADMIN_COPY.media.actions.goToReference || 'Đi tới nơi dùng',
+    type: 'button',
+    attrs: { title: ADMIN_COPY.media.referenceNavigationHint || 'Chỉ điều hướng trong CMS, không thay đổi website.' },
+  });
+  button.addEventListener('click', () => handleNavigateToMediaReference(reference));
+  return button;
+}
+
+function getResolvedMediaReferenceTarget(reference = {}) {
+  if (reference.targetTab) {
+    return {
+      tab: reference.targetTab,
+      type: reference.targetType || '',
+      id: reference.targetId || '',
+      fieldName: reference.targetFieldName || '',
+      label: reference.targetLabel || '',
+    };
+  }
+  return getMediaReferenceNavigationTarget(reference);
+}
+
+function handleNavigateToMediaReference(reference = {}) {
+  const target = getResolvedMediaReferenceTarget(reference);
+  if (!target?.tab || !['settings', 'home', 'staticDraft', 'gate'].includes(target.tab)) return;
+  const currentState = getState();
+  if (currentState.activeTab !== target.tab) {
+    if (!requestLeaveEditSession('media-reference-navigation')) return;
+    setActiveTab(target.tab);
+  }
+  queueMediaReferenceFocus(target);
+  renderAdminShell();
+}
+
+function queueMediaReferenceFocus(target = {}) {
+  if (!target.type) return;
+  if (target.type === 'static-draft') {
+    queueEntityHighlight('static-draft', target.id || 'static-draft');
+    return;
+  }
+  queueEditPanelFocus(target.type, target.id || target.type, target.fieldName || '');
 }
 
 function renderMediaPreview(asset = {}) {

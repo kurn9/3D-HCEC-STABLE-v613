@@ -4852,3 +4852,16 @@ body.cms-admin-page * {
   gap: 4px;
   padding-left: 16px;
 }
+
+
+/* v6.14.043.008 — Media Library reference navigation */
+.cms-admin-media-usage-references li {
+  display: grid;
+  gap: 5px;
+}
+
+.cms-admin-media-reference-nav-button {
+  justify-self: start;
+  padding: 5px 9px;
+  font-size: 0.72rem;
+}
