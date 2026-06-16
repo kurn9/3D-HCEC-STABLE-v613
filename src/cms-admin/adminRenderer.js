@@ -617,6 +617,7 @@ function renderEditorLauncher() {
   const roomSelect = createElement('select', {
     className: 'cms-admin-select cms-admin-editor-room-select',
     ariaLabel: 'Chọn phòng cần mở trong trình chỉnh sửa',
+    attrs: { id: 'cms-admin-editor-room-select', name: 'editorRoom' },
   });
   roomSelect.appendChild(createElement('option', { text: 'Trong nhà', value: 'indoor' }));
   roomSelect.appendChild(createElement('option', { text: 'Ngoài trời', value: 'outdoor' }));

@@ -569,7 +569,7 @@ function renderFeaturedSectionSettings(draftState = {}, featured = {}, handlers 
   const grid = createElement('div', { className: 'cms-admin-featured-settings-grid' });
 
   const enabledLabel = createElement('label', { className: 'cms-admin-featured-toggle' });
-  const enabled = createElement('input', { type: 'checkbox', attrs: { name: 'featured-enabled' } });
+  const enabled = createElement('input', { type: 'checkbox', attrs: { id: 'cms-admin-featured-enabled', name: 'featuredEnabled' } });
   enabled.checked = featured.enabled !== false;
   enabled.addEventListener('change', () => commitFeaturedDraftChange(draftState, (next) => {
     next.enabled = enabled.checked;
@@ -584,6 +584,8 @@ function renderFeaturedSectionSettings(draftState = {}, featured = {}, handlers 
     label: 'Tiêu đề khu vực',
     value: featured.title,
     placeholder: 'Tác phẩm tiêu biểu',
+    controlId: 'cms-admin-featured-section-title',
+    controlName: 'featuredSectionTitle',
     onChange: (value) => commitFeaturedDraftChange(draftState, (next) => { next.title = value; }, handlers),
   });
   const leadField = renderFeaturedTextControl({
@@ -591,6 +593,8 @@ function renderFeaturedSectionSettings(draftState = {}, featured = {}, handlers 
     value: featured.lead,
     placeholder: 'Giới thiệu ngắn về các tác phẩm được tuyển chọn',
     multiline: true,
+    controlId: 'cms-admin-featured-section-lead',
+    controlName: 'featuredSectionLead',
     onChange: (value) => commitFeaturedDraftChange(draftState, (next) => {
       next.lead = value;
       if (Object.prototype.hasOwnProperty.call(next, 'description')) next.description = value;
@@ -624,6 +628,8 @@ function renderFeaturedItemEditor(draftState = {}, item = {}, sourceIndex = 0, i
     required: true,
     error: itemErrors.id,
     placeholder: 'featured_local_001',
+    controlId: getFeaturedControlAttrs(sourceIndex, 'id', item).id,
+    controlName: getFeaturedControlAttrs(sourceIndex, 'id', item).name,
     onChange: (value) => handleFeaturedItemFieldChange(draftState, sourceIndex, 'id', value, handlers),
   }));
   grid.appendChild(renderFeaturedTextControl({
@@ -632,6 +638,8 @@ function renderFeaturedItemEditor(draftState = {}, item = {}, sourceIndex = 0, i
     required: item.isVisible !== false,
     error: itemErrors.title,
     placeholder: 'Tên tác phẩm',
+    controlId: getFeaturedControlAttrs(sourceIndex, 'title', item).id,
+    controlName: getFeaturedControlAttrs(sourceIndex, 'title', item).name,
     onChange: (value) => handleFeaturedItemFieldChange(draftState, sourceIndex, 'title', value, handlers),
   }));
   grid.appendChild(renderFeaturedTextControl({
@@ -640,6 +648,8 @@ function renderFeaturedItemEditor(draftState = {}, item = {}, sourceIndex = 0, i
     error: itemErrors.description,
     multiline: true,
     placeholder: 'Thông tin ngắn hiển thị cùng tác phẩm',
+    controlId: getFeaturedControlAttrs(sourceIndex, 'description', item).id,
+    controlName: getFeaturedControlAttrs(sourceIndex, 'description', item).name,
     onChange: (value) => handleFeaturedItemFieldChange(draftState, sourceIndex, 'description', value, handlers),
   }));
   grid.appendChild(renderFeaturedImageControl({
@@ -656,21 +666,27 @@ function renderFeaturedItemEditor(draftState = {}, item = {}, sourceIndex = 0, i
     error: itemErrors.alt,
     placeholder: 'Mô tả ảnh dành cho trợ năng',
     hint: !String(item.alt || '').trim() ? 'Có thể để trống; Index sẽ dùng tiêu đề làm nội dung thay thế.' : '',
+    controlId: getFeaturedControlAttrs(sourceIndex, 'alt', item).id,
+    controlName: getFeaturedControlAttrs(sourceIndex, 'alt', item).name,
     onChange: (value) => handleFeaturedItemFieldChange(draftState, sourceIndex, 'alt', value, handlers),
   }));
   grid.appendChild(renderFeaturedNumberControl({
     label: 'Thứ tự',
     value: item.sortOrder,
     error: itemErrors.sortOrder,
+    controlId: getFeaturedControlAttrs(sourceIndex, 'sortOrder', item).id,
+    controlName: getFeaturedControlAttrs(sourceIndex, 'sortOrder', item).name,
     onChange: (value) => handleFeaturedItemFieldChange(draftState, sourceIndex, 'sortOrder', value, handlers),
   }));
-  grid.appendChild(renderFeaturedRoomControl(item.room, itemErrors.room, (value) => handleFeaturedItemFieldChange(draftState, sourceIndex, 'room', value, handlers)));
+  grid.appendChild(renderFeaturedRoomControl(item.room, itemErrors.room, (value) => handleFeaturedItemFieldChange(draftState, sourceIndex, 'room', value, handlers), getFeaturedControlAttrs(sourceIndex, 'room', item)));
   grid.appendChild(renderFeaturedTextControl({
     label: 'Mã tác phẩm trong phòng 3D',
     value: item.artworkId,
     error: itemErrors.artworkId,
     placeholder: 'ART_001 (không bắt buộc)',
     hint: 'Chỉ tạo liên kết đến object đã tồn tại; không tạo object 3D mới.',
+    controlId: getFeaturedControlAttrs(sourceIndex, 'artworkId', item).id,
+    controlName: getFeaturedControlAttrs(sourceIndex, 'artworkId', item).name,
     onChange: (value) => handleFeaturedItemFieldChange(draftState, sourceIndex, 'artworkId', value, handlers),
   }));
   grid.appendChild(renderFeaturedTextControl({
@@ -678,11 +694,13 @@ function renderFeaturedItemEditor(draftState = {}, item = {}, sourceIndex = 0, i
     value: item.ctaLabel,
     error: itemErrors.ctaLabel,
     placeholder: 'Xem trong không gian 3D',
+    controlId: getFeaturedControlAttrs(sourceIndex, 'ctaLabel', item).id,
+    controlName: getFeaturedControlAttrs(sourceIndex, 'ctaLabel', item).name,
     onChange: (value) => handleFeaturedItemFieldChange(draftState, sourceIndex, 'ctaLabel', value, handlers),
   }));
 
   const visibleField = createElement('label', { className: 'cms-admin-featured-toggle cms-admin-featured-item-visible' });
-  const visible = createElement('input', { type: 'checkbox', attrs: { name: `featured-visible-${sourceIndex}` } });
+  const visible = createElement('input', { type: 'checkbox', attrs: { id: getFeaturedControlAttrs(sourceIndex, 'visible', item).id, name: getFeaturedControlAttrs(sourceIndex, 'visible', item).name } });
   visible.checked = item.isVisible !== false;
   visible.addEventListener('change', () => handleFeaturedItemFieldChange(draftState, sourceIndex, 'isVisible', visible.checked, handlers));
   const visibleText = createElement('span');
@@ -713,7 +731,7 @@ function renderFeaturedItemEditor(draftState = {}, item = {}, sourceIndex = 0, i
   return card;
 }
 
-function renderFeaturedTextControl({ label, value = '', required = false, error = '', hint = '', placeholder = '', multiline = false, onChange } = {}) {
+function renderFeaturedTextControl({ label, value = '', required = false, error = '', hint = '', placeholder = '', multiline = false, controlId = '', controlName = '', onChange } = {}) {
   const wrap = createElement('label', { className: ['cms-admin-field', 'cms-admin-featured-field', multiline ? 'cms-admin-featured-field-wide' : ''].filter(Boolean).join(' ') });
   const labelNode = createElement('span', { className: 'cms-admin-static-field-label' });
   labelNode.appendChild(createElement('span', { text: label || '' }));
@@ -723,7 +741,7 @@ function renderFeaturedTextControl({ label, value = '', required = false, error 
     className: ['cms-admin-input', error ? 'is-invalid' : ''].filter(Boolean).join(' '),
     value: String(value ?? ''),
     placeholder,
-    attrs: { rows: multiline ? '3' : undefined, autocomplete: 'off' },
+    attrs: { id: controlId || undefined, name: controlName || controlId || undefined, rows: multiline ? '3' : undefined, autocomplete: 'off' },
   });
   control.addEventListener('change', () => onChange?.(control.value));
   wrap.appendChild(control);
@@ -732,14 +750,14 @@ function renderFeaturedTextControl({ label, value = '', required = false, error 
   return wrap;
 }
 
-function renderFeaturedNumberControl({ label, value = 0, error = '', onChange } = {}) {
+function renderFeaturedNumberControl({ label, value = 0, error = '', controlId = '', controlName = '', onChange } = {}) {
   const wrap = createElement('label', { className: 'cms-admin-field cms-admin-featured-field' });
   wrap.appendChild(createElement('span', { className: 'cms-admin-static-field-label', text: label || '' }));
   const control = createElement('input', {
     className: ['cms-admin-input', error ? 'is-invalid' : ''].filter(Boolean).join(' '),
     type: 'number',
     value: Number.isFinite(Number(value)) ? String(value) : '0',
-    attrs: { min: '0', step: '1' },
+    attrs: { id: controlId || undefined, name: controlName || controlId || undefined, min: '0', step: '1' },
   });
   control.addEventListener('change', () => onChange?.(Number.isFinite(Number(control.value)) ? Number(control.value) : 0));
   wrap.appendChild(control);
@@ -747,10 +765,10 @@ function renderFeaturedNumberControl({ label, value = 0, error = '', onChange } 
   return wrap;
 }
 
-function renderFeaturedRoomControl(value = '', error = '', onChange) {
+function renderFeaturedRoomControl(value = '', error = '', onChange, attrs = {}) {
   const wrap = createElement('label', { className: 'cms-admin-field cms-admin-featured-field' });
   wrap.appendChild(createElement('span', { className: 'cms-admin-static-field-label', text: 'Liên kết đến không gian 3D' }));
-  const select = createElement('select', { className: ['cms-admin-select', error ? 'is-invalid' : ''].filter(Boolean).join(' ') });
+  const select = createElement('select', { className: ['cms-admin-select', error ? 'is-invalid' : ''].filter(Boolean).join(' '), attrs });
   FEATURED_OPERATOR_ROOM_OPTIONS.forEach((option) => select.appendChild(createElement('option', { value: option.value, text: option.label })));
   select.value = ['indoor', 'outdoor'].includes(String(value || '').toLowerCase()) ? String(value).toLowerCase() : '';
   select.addEventListener('change', () => onChange?.(select.value));
@@ -767,6 +785,8 @@ function renderFeaturedImageControl({ item = {}, sourceIndex = 0, required = fal
     required,
     error,
     placeholder: './assets/... hoặc https://...',
+    controlId: getFeaturedControlAttrs(sourceIndex, 'imageUrl', item).id,
+    controlName: getFeaturedControlAttrs(sourceIndex, 'imageUrl', item).name,
     hint: !String(item.imageUrl || '').trim()
       ? 'Mục này đang thiếu ảnh nên có thể không hiển thị đúng trên trang chủ.'
       : 'Bạn có thể bấm “Thay ảnh” để đổi ảnh cho tác phẩm này. Thao tác này chỉ cập nhật bản nháp, chưa công khai website.',
@@ -835,7 +855,11 @@ function renderFeaturedLocalUploadArea(draftState = {}, item = {}, sourceIndex =
   fileField.appendChild(createElement('span', { text: 'Chọn ảnh từ máy' }));
   const fileInput = createElement('input', {
     type: 'file',
-    attrs: { accept: getUploadAccept('image') },
+    attrs: {
+      id: `cms-admin-featured-image-file-${makeCmsControlIdToken(itemKey, `item-${sourceIndex}`)}`,
+      name: `featuredImageFile-${sourceIndex}`,
+      accept: getUploadAccept('image'),
+    },
   });
   fileInput.disabled = !hasDraftId || featuredImageReplaceState.localStatus === 'uploading';
   fileInput.addEventListener('change', () => handleSelectFeaturedLocalImage(item, sourceIndex, fileInput.files?.[0] || null, handlers));
@@ -930,7 +954,11 @@ function renderFeaturedUrlReplaceArea(draftState = {}, item = {}, sourceIndex = 
     className: ['cms-admin-input', featuredImageReplaceState.error ? 'is-invalid' : ''].filter(Boolean).join(' '),
     value: featuredImageReplaceState.candidateUrl,
     placeholder: './assets/... hoặc https://...',
-    attrs: { autocomplete: 'off' },
+    attrs: {
+      id: `cms-admin-featured-image-url-${makeCmsControlIdToken(itemKey, `item-${sourceIndex}`)}`,
+      name: `featuredImageUrl-${sourceIndex}`,
+      autocomplete: 'off',
+    },
   });
   input.addEventListener('focus', () => { featuredImageReplaceState.mode = 'url'; });
   input.addEventListener('input', () => {
@@ -1067,6 +1095,24 @@ function renderFeaturedUploadedImagePreview(itemKey = '', imageUrl = '', alt = '
 
 function getFeaturedImageReplaceKey(item = {}, sourceIndex = 0) {
   return `${String(item?.id || '').trim() || 'featured-item'}::${sourceIndex}`;
+}
+
+function makeCmsControlIdToken(value = '', fallback = 'field') {
+  const token = String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return token || fallback;
+}
+
+function getFeaturedControlAttrs(sourceIndex = 0, fieldName = 'field', item = {}) {
+  const itemToken = makeCmsControlIdToken(item?.id || `item-${sourceIndex}`, `item-${sourceIndex}`);
+  const fieldToken = makeCmsControlIdToken(fieldName, 'field');
+  return {
+    id: `cms-admin-featured-${itemToken}-${fieldToken}`,
+    name: `featured-${fieldToken}-${sourceIndex}`,
+  };
 }
 
 function releaseFeaturedLocalPreview() {
@@ -1582,6 +1628,8 @@ function renderAdvancedDataActions(draftState = {}, handlers = {}) {
   const importInput = createElement('input', {
     type: 'file',
     attrs: {
+      id: 'cms-admin-static-json-import',
+      name: 'staticCmsJsonImport',
       accept: '.json,application/json',
       'aria-hidden': 'true',
       tabindex: '-1',
@@ -1654,7 +1702,11 @@ function renderRoomCountMeta(draftState = {}) {
 
 function renderRoomAndItemSelector(draftState = {}, handlers = {}) {
   const wrap = createElement('div', { className: 'cms-admin-static-selector-stack' });
-  const roomSelect = createElement('select', { className: 'cms-admin-select', ariaLabel: 'Chọn không gian' });
+  const roomSelect = createElement('select', {
+    className: 'cms-admin-select',
+    ariaLabel: 'Chọn không gian',
+    attrs: { id: 'cms-admin-static-room-select', name: 'staticDraftRoom' },
+  });
   ROOM_KEYS.forEach((roomKey) => {
     const count = getDraftRoomItems(draftState.draftJson, roomKey).length;
     const label = roomKey === 'indoor' ? `Trong nhà (${count})` : `Ngoài trời (${count})`; 
@@ -1666,7 +1718,11 @@ function renderRoomAndItemSelector(draftState = {}, handlers = {}) {
     handlers.onRerender?.();
   });
 
-  const itemSelect = createElement('select', { className: 'cms-admin-select', ariaLabel: 'Chọn tác phẩm hoặc item' });
+  const itemSelect = createElement('select', {
+    className: 'cms-admin-select',
+    ariaLabel: 'Chọn tác phẩm hoặc item',
+    attrs: { id: 'cms-admin-static-item-select', name: 'staticDraftItem' },
+  });
   getDraftRoomItems(draftState.draftJson, draftState.selectedRoom).forEach((item) => {
     const code = getItemCode(item);
     const label = `${code} — ${item.title || item.name || getItemType(item)}`;
@@ -1797,10 +1853,15 @@ function renderMediaUploadTarget(draftState = {}, item = {}, target = {}, handle
   card.appendChild(createElement('strong', { text: target.label }));
   card.appendChild(createElement('p', { className: 'cms-admin-help-text', text: `${target.help} Giới hạn: ${formatUploadSizeLimit(target.mediaKind)}.` }));
 
+  const uploadFieldToken = makeCmsControlIdToken(target.fieldName || target.key || 'media');
   const input = createElement('input', {
     className: 'cms-admin-input cms-admin-static-upload-input',
     type: 'file',
-    attrs: { accept: getUploadAccept(target.mediaKind) },
+    attrs: {
+      id: `cms-admin-static-media-upload-${makeCmsControlIdToken(roomKey)}-${makeCmsControlIdToken(itemCode, 'item')}-${uploadFieldToken}`,
+      name: `staticMediaUpload-${uploadFieldToken}`,
+      accept: getUploadAccept(target.mediaKind),
+    },
   });
   const uploadButton = createElement('button', {
     className: 'cms-admin-button cms-admin-button-secondary cms-admin-button-small',
@@ -2214,7 +2275,7 @@ function renderDraftPersistencePanel(draftState = {}, appState = {}, handlers = 
   const titleInput = createElement('input', {
     className: 'cms-admin-input',
     value: getDraftTitleForDisplay(draftState),
-    attrs: { name: 'draftTitle', autocomplete: 'off' },
+    attrs: { id: 'cms-admin-static-draft-title', name: 'draftTitle', autocomplete: 'off' },
   });
   titleInput.addEventListener('change', () => {
     updateStaticCmsDraftMeta('draftTitle', titleInput.value);
@@ -2223,7 +2284,7 @@ function renderDraftPersistencePanel(draftState = {}, appState = {}, handlers = 
   const noteInput = createElement('textarea', {
     className: 'cms-admin-input',
     value: draftState.draftNote || '',
-    attrs: { name: 'draftNote', rows: '3', autocomplete: 'off' },
+    attrs: { id: 'cms-admin-static-draft-note', name: 'draftNote', rows: '3', autocomplete: 'off' },
   });
   noteInput.addEventListener('change', () => {
     updateStaticCmsDraftMeta('draftNote', noteInput.value);
