@@ -367,6 +367,7 @@ function buildSiteSettingsUpdatePayload(values = {}, userId = null) {
     'phone',
     'fax',
     'email',
+    'logo_url',
     'default_language',
   ];
   const payload = {};

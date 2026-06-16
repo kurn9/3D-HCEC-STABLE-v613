@@ -82,6 +82,12 @@ let unsubscribeAuth = null;
 let pendingEditFocusTarget = null;
 let pendingEntityHighlight = null;
 let beforeUnloadGuardBound = false;
+const siteLogoMediaPickerState = {
+  open: false,
+  search: '',
+  mediaKindFilter: 'compatible',
+  error: '',
+};
 
 
 
@@ -1370,7 +1376,7 @@ function renderSettingsTab(state) {
     wrap.appendChild(renderSiteSettingsBasicPanel(state, siteSettings, canEdit));
   }
 
-  wrap.appendChild(renderSiteSettingsIdentityPanel(siteSettings, editState.isEditing));
+  wrap.appendChild(renderSiteSettingsIdentityPanel(siteSettings, editState.isEditing, editState));
   wrap.appendChild(renderSettingsAdminPanel(state));
   return wrap;
 }
@@ -1417,12 +1423,15 @@ function renderSiteSettingsBasicPanel(state, siteSettings, canEdit) {
   return basic;
 }
 
-function renderSiteSettingsIdentityPanel(siteSettings, isEditing = false) {
+function renderSiteSettingsIdentityPanel(siteSettings, isEditing = false, editState = {}) {
   const identity = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel' });
   identity.appendChild(renderPanelTitle(ADMIN_COPY.settings.identityTitle));
   if (siteSettings) {
+    const logoValue = isEditing && Object.prototype.hasOwnProperty.call(editState.draftValues || {}, 'logo_url')
+      ? editState.draftValues.logo_url
+      : siteSettings.logo_url;
     identity.appendChild(renderKeyValueList([
-      [ADMIN_COPY.settings.websiteFields.logoUrl, siteSettings.logo_url],
+      [ADMIN_COPY.settings.websiteFields.logoUrl, logoValue],
       [ADMIN_COPY.settings.websiteFields.status, getStatusLabel(siteSettings.site_status)],
       [ADMIN_COPY.settings.websiteFields.language, getLanguageLabel(siteSettings.default_language)],
     ]));
@@ -1483,8 +1492,9 @@ function renderSiteSettingsEditPanel(state, siteSettings, editState) {
   fields.appendChild(renderEditableLanguageField(editState));
   form.appendChild(fields);
 
+  form.appendChild(renderSiteSettingsLogoLibrarySection(state, siteSettings, editState));
+
   const readonly = createElement('div', { className: 'cms-admin-readonly-field-grid' });
-  readonly.appendChild(renderReadonlyField(copy.fields.logo_url, siteSettings.logo_url, copy.logoReadonly));
   readonly.appendChild(renderReadonlyField(copy.fields.site_status, getStatusLabel(siteSettings.site_status), copy.statusReadonly));
   form.appendChild(readonly);
 
@@ -1504,6 +1514,450 @@ function renderSiteSettingsEditPanel(state, siteSettings, editState) {
   form.addEventListener('change', () => updateSiteSettingsFormControls(form));
   panel.appendChild(form);
   return panel;
+}
+
+function renderSiteSettingsLogoLibrarySection(state, siteSettings, editState) {
+  const logoValue = normalizeSiteLogoDraftValue(
+    Object.prototype.hasOwnProperty.call(editState.draftValues || {}, 'logo_url')
+      ? editState.draftValues.logo_url
+      : siteSettings.logo_url
+  );
+  const section = createElement('section', { className: 'cms-admin-site-logo-library-section' });
+  const header = createElement('div', { className: 'cms-admin-site-logo-library-header' });
+  const heading = createElement('div');
+  heading.appendChild(createElement('span', { className: 'cms-admin-edit-label', text: ADMIN_COPY.settings.edit.fields.logo_url }));
+  heading.appendChild(createElement('p', {
+    className: 'cms-admin-readonly-note',
+    text: 'Logo hiện có được giữ trong bản nháp Thông tin website. Chọn từ thư viện chỉ cập nhật form local, chưa tự lưu hoặc công khai.',
+  }));
+  const toggle = createElement('button', {
+    className: 'cms-admin-button cms-admin-button-secondary cms-admin-button-small',
+    type: 'button',
+    text: siteLogoMediaPickerState.open ? 'Đóng thư viện logo' : 'Chọn logo từ thư viện',
+    attrs: { 'aria-expanded': siteLogoMediaPickerState.open ? 'true' : 'false' },
+  });
+  toggle.addEventListener('click', () => handleToggleSiteLogoMediaPicker());
+  appendChildren(header, [heading, toggle]);
+  section.appendChild(header);
+
+  const current = createElement('div', { className: 'cms-admin-site-logo-current' });
+  current.appendChild(renderSiteLogoPreview(logoValue));
+  const valueBlock = createElement('div', { className: 'cms-admin-site-logo-current-value' });
+  valueBlock.appendChild(createElement('span', { className: 'cms-admin-readonly-value', text: toDisplayText(logoValue) }));
+  valueBlock.appendChild(createElement('span', { className: 'cms-admin-readonly-note', text: ADMIN_COPY.settings.edit.logoReadonly }));
+  current.appendChild(valueBlock);
+  section.appendChild(current);
+
+  const message = editState.validationErrors?.logo_url || editState.validationWarnings?.logo_url;
+  if (message) {
+    section.appendChild(createElement('span', {
+      className: editState.validationErrors?.logo_url ? 'cms-admin-field-message is-error' : 'cms-admin-field-message is-warning',
+      text: message,
+    }));
+  }
+
+  if (siteLogoMediaPickerState.open) {
+    section.appendChild(renderSiteLogoMediaPicker(state));
+  }
+
+  return section;
+}
+
+function renderSiteLogoPreview(logoUrl = '') {
+  const frame = createElement('div', { className: 'cms-admin-site-logo-preview' });
+  const safeUrl = normalizeSafeSiteLogoMediaUrl(logoUrl);
+  if (!safeUrl) {
+    frame.classList.add('has-error');
+    frame.appendChild(createElement('span', { text: 'Chưa có logo hợp lệ' }));
+    return frame;
+  }
+  const image = createElement('img', { attrs: { src: safeUrl, alt: 'Logo website', loading: 'lazy' } });
+  image.addEventListener('error', () => {
+    image.hidden = true;
+    frame.classList.add('has-error');
+    frame.appendChild(createElement('span', { text: 'Không tải được logo' }));
+  }, { once: true });
+  frame.appendChild(image);
+  return frame;
+}
+
+function renderSiteLogoMediaPicker(state = {}) {
+  const sourceAssets = safeArray(state.data?.cmsMediaUploads).map(normalizeSiteLogoPickerMediaAsset);
+  const mediaError = state.data?.errors?.cmsMediaUploads || null;
+  const filteredAssets = sourceAssets.filter((asset) => matchesSiteLogoPickerFilters(asset));
+  const panel = createElement('section', { className: 'cms-admin-static-media-picker-panel cms-admin-site-logo-media-picker-panel' });
+  const header = createElement('div', { className: 'cms-admin-static-media-picker-header' });
+  const heading = createElement('div');
+  heading.appendChild(createElement('h5', { text: 'Chọn logo từ thư viện' }));
+  heading.appendChild(createElement('p', {
+    className: 'cms-admin-help-text',
+    text: 'Chọn media đã upload để gắn vào logo trong bản nháp Thông tin website. Website public chưa thay đổi cho đến khi bạn lưu và công khai.',
+  }));
+  const closeButton = createElement('button', { className: 'cms-admin-button cms-admin-button-ghost cms-admin-button-small', type: 'button', text: 'Đóng' });
+  closeButton.addEventListener('click', () => closeSiteLogoMediaPicker());
+  appendChildren(header, [heading, closeButton]);
+  panel.appendChild(header);
+
+  panel.appendChild(renderSiteLogoPickerContext());
+
+  if (mediaError) {
+    panel.appendChild(renderErrorBox(mediaError, 'Không đọc được cms_media_uploads'));
+    return panel;
+  }
+
+  if (!sourceAssets.length) {
+    panel.appendChild(renderEmptyState('Chưa có media trong thư viện upload.'));
+    return panel;
+  }
+
+  panel.appendChild(renderSiteLogoPickerControls());
+
+  if (siteLogoMediaPickerState.error) {
+    panel.appendChild(createElement('div', { className: 'cms-admin-alert cms-admin-alert-error', text: siteLogoMediaPickerState.error }));
+  }
+
+  if (!filteredAssets.length) {
+    panel.appendChild(createElement('div', { className: 'cms-admin-media-filter-empty', text: 'Không có media nào khớp bộ lọc hiện tại.' }));
+    return panel;
+  }
+
+  const list = createElement('div', { className: 'cms-admin-static-media-picker-grid cms-admin-site-logo-media-picker-grid' });
+  filteredAssets.forEach((asset) => list.appendChild(renderSiteLogoPickerMediaCard(asset)));
+  panel.appendChild(list);
+  return panel;
+}
+
+function renderSiteLogoPickerContext() {
+  const meta = createElement('div', { className: 'cms-admin-static-media-picker-context cms-admin-site-logo-media-picker-context' });
+  meta.appendChild(renderInfoTile('Thông tin website', 'Logo website'));
+  meta.appendChild(renderInfoTile('Field đích', 'siteSettings.logo_url'));
+  meta.appendChild(renderInfoTile('Loại hợp lệ', 'Ảnh / Poster'));
+  meta.appendChild(renderInfoTile('Trạng thái', 'Bản nháp local'));
+  return meta;
+}
+
+function renderSiteLogoPickerControls() {
+  const controls = createElement('div', { className: 'cms-admin-static-media-picker-controls cms-admin-site-logo-media-picker-controls' });
+  const search = createElement('input', {
+    className: 'cms-admin-input cms-admin-static-media-picker-search',
+    value: siteLogoMediaPickerState.search,
+    placeholder: 'Tìm theo tên file, path, phòng, item, section...',
+    attrs: { type: 'search', autocomplete: 'off', 'aria-label': 'Tìm logo trong thư viện upload' },
+  });
+  search.addEventListener('input', () => {
+    siteLogoMediaPickerState.search = search.value;
+    renderAdminShell();
+  });
+
+  const filter = createElement('select', {
+    className: 'cms-admin-select cms-admin-static-media-picker-filter',
+    attrs: { 'aria-label': 'Lọc loại media cho logo website' },
+  });
+  [
+    { value: 'compatible', label: 'Ảnh & poster phù hợp' },
+    { value: 'image', label: 'Ảnh' },
+    { value: 'poster', label: 'Poster' },
+    { value: 'video', label: 'Video (không phù hợp)' },
+    { value: 'all', label: 'Tất cả loại media' },
+  ].forEach((option) => filter.appendChild(createElement('option', { value: option.value, text: option.label })));
+  filter.value = ['compatible', 'all', 'image', 'poster', 'video'].includes(siteLogoMediaPickerState.mediaKindFilter)
+    ? siteLogoMediaPickerState.mediaKindFilter
+    : 'compatible';
+  filter.addEventListener('change', () => {
+    siteLogoMediaPickerState.mediaKindFilter = filter.value;
+    renderAdminShell();
+  });
+  appendChildren(controls, [search, filter]);
+  return controls;
+}
+
+function renderSiteLogoPickerMediaCard(asset = {}) {
+  const compatibility = getSiteLogoPickerCompatibility(asset);
+  const card = createElement('article', {
+    className: [
+      'cms-admin-static-media-picker-card',
+      'cms-admin-site-logo-media-picker-card',
+      asset.hasSafeUrl && compatibility.allowed ? 'is-selectable' : 'is-disabled',
+    ].filter(Boolean).join(' '),
+  });
+
+  card.appendChild(renderSiteLogoPickerMediaPreview(asset));
+
+  const body = createElement('div', { className: 'cms-admin-static-media-picker-card-body' });
+  const titleRow = createElement('div', { className: 'cms-admin-media-card-title-row' });
+  titleRow.appendChild(createElement('h6', { text: asset.fileName || 'media' }));
+  titleRow.appendChild(renderBadge(getSiteLogoMediaKindLabel(asset.mediaKind), asset.mediaKind === 'video' ? 'warning' : asset.mediaKind === 'unknown' ? 'default' : 'success'));
+  body.appendChild(titleRow);
+
+  const details = createElement('dl', { className: 'cms-admin-media-detail-list' });
+  [
+    ['Phòng/item/section', getSiteLogoPickerTargetText(asset)],
+    ['Field upload', asset.fieldName || 'Không có'],
+    ['Dung lượng', formatSiteLogoFileBytes(asset.sizeBytes)],
+    ['Ngày upload', asset.createdAt ? formatDateTime(asset.createdAt) : 'Không rõ'],
+    ['Trạng thái', asset.status || 'Không rõ'],
+  ].forEach(([label, value]) => {
+    details.appendChild(createElement('dt', { text: label }));
+    details.appendChild(createElement('dd', { text: value }));
+  });
+  body.appendChild(details);
+
+  if (asset.storagePath) {
+    body.appendChild(createElement('p', { className: 'cms-admin-media-path', text: asset.storagePath }));
+  }
+
+  if (!asset.hasSafeUrl) {
+    body.appendChild(createElement('div', { className: 'cms-admin-alert cms-admin-alert-warning', text: 'Đường dẫn media không thuộc nguồn được phép. Không thể chọn media này.' }));
+  } else if (!compatibility.allowed) {
+    body.appendChild(createElement('div', { className: 'cms-admin-alert cms-admin-alert-warning', text: compatibility.reason }));
+  }
+
+  const actions = createElement('div', { className: 'cms-admin-actions cms-admin-static-media-picker-actions cms-admin-site-logo-media-picker-actions' });
+  const choose = createElement('button', {
+    className: 'cms-admin-button cms-admin-button-primary cms-admin-button-small',
+    type: 'button',
+    text: 'Chọn logo này',
+  });
+  choose.disabled = !asset.hasSafeUrl || !compatibility.allowed;
+  choose.addEventListener('click', () => handleAttachSiteLogoPickerMedia(asset));
+  const cancel = createElement('button', { className: 'cms-admin-button cms-admin-button-ghost cms-admin-button-small', type: 'button', text: 'Hủy chọn' });
+  cancel.addEventListener('click', () => closeSiteLogoMediaPicker());
+  appendChildren(actions, [choose, cancel]);
+  body.appendChild(actions);
+
+  card.appendChild(body);
+  return card;
+}
+
+function renderSiteLogoPickerMediaPreview(asset = {}) {
+  const media = createElement('div', { className: 'cms-admin-static-media-picker-preview' });
+  if (!asset.hasSafeUrl) {
+    media.classList.add('has-error');
+    media.appendChild(createElement('span', { text: 'Không có preview an toàn' }));
+    return media;
+  }
+  if (asset.mediaKind === 'image' || asset.mediaKind === 'poster') {
+    const image = createElement('img', {
+      attrs: { src: asset.safeUrl, alt: asset.fileName || 'Logo trong thư viện', loading: 'lazy' },
+    });
+    image.addEventListener('error', () => {
+      image.hidden = true;
+      media.classList.add('has-error');
+      media.appendChild(createElement('span', { text: 'Không tải được ảnh' }));
+    }, { once: true });
+    media.appendChild(image);
+    return media;
+  }
+  media.classList.add('has-error');
+  media.appendChild(createElement('span', { text: 'Không preview trong picker logo' }));
+  return media;
+}
+
+function handleToggleSiteLogoMediaPicker() {
+  if (siteLogoMediaPickerState.open) {
+    closeSiteLogoMediaPicker();
+    return;
+  }
+  siteLogoMediaPickerState.open = true;
+  siteLogoMediaPickerState.search = '';
+  siteLogoMediaPickerState.mediaKindFilter = 'compatible';
+  siteLogoMediaPickerState.error = '';
+  renderAdminShell();
+}
+
+function closeSiteLogoMediaPicker() {
+  siteLogoMediaPickerState.open = false;
+  siteLogoMediaPickerState.error = '';
+  renderAdminShell();
+}
+
+function handleAttachSiteLogoPickerMedia(asset = {}) {
+  const state = getState();
+  if (!state.siteSettingsEdit?.isEditing) {
+    siteLogoMediaPickerState.error = 'Form Thông tin website không còn ở chế độ chỉnh sửa. Hãy mở lại picker.';
+    renderAdminShell();
+    return;
+  }
+
+  const safeUrl = normalizeSafeSiteLogoMediaUrl(asset.rawUrl);
+  if (!safeUrl) {
+    siteLogoMediaPickerState.error = 'Đường dẫn media không thuộc nguồn được phép. Không thể chọn media này.';
+    renderAdminShell();
+    return;
+  }
+
+  const compatibility = getSiteLogoPickerCompatibility(asset);
+  if (!compatibility.allowed) {
+    siteLogoMediaPickerState.error = compatibility.reason;
+    renderAdminShell();
+    return;
+  }
+
+  updateSiteSettingsDraftField('logo_url', safeUrl);
+  siteLogoMediaPickerState.open = false;
+  siteLogoMediaPickerState.error = '';
+  setSiteSettingsEditState({
+    saveSuccess: 'Đã gắn logo vào bản nháp Thông tin website. Website public chưa thay đổi cho đến khi bạn lưu và công khai.',
+    saveError: null,
+  });
+  renderAdminShell();
+}
+
+function matchesSiteLogoPickerFilters(asset = {}) {
+  const kind = String(siteLogoMediaPickerState.mediaKindFilter || 'compatible');
+  if (kind === 'compatible' && !['image', 'poster'].includes(asset.mediaKind)) return false;
+  if (kind !== 'compatible' && kind !== 'all' && asset.mediaKind !== kind) return false;
+  const search = String(siteLogoMediaPickerState.search || '').trim().toLowerCase();
+  if (!search) return true;
+  return asset.searchText.includes(search);
+}
+
+function getSiteLogoPickerCompatibility(asset = {}) {
+  if (!asset.hasSafeUrl) return { allowed: false, reason: 'Đường dẫn media không thuộc nguồn được phép. Không thể chọn media này.' };
+  if (!['image', 'poster'].includes(asset.mediaKind)) {
+    return { allowed: false, reason: 'Media này không phù hợp với logo website.' };
+  }
+  return { allowed: true, reason: '' };
+}
+
+function normalizeSiteLogoPickerMediaAsset(asset = {}) {
+  const publicUrl = firstAvailableSiteLogoMediaValue(asset, ['public_url', 'publicUrl', 'url']);
+  const storagePath = firstAvailableSiteLogoMediaValue(asset, ['storage_path', 'storagePath', 'path', 'file_name', 'fileName']);
+  const rawUrl = publicUrl || storagePath || '';
+  const safeUrl = normalizeSafeSiteLogoMediaUrl(rawUrl);
+  const fieldName = firstAvailableSiteLogoMediaValue(asset, ['field_name', 'fieldName']);
+  const mediaKind = normalizeSiteLogoMediaKind(
+    firstAvailableSiteLogoMediaValue(asset, ['media_kind', 'mediaKind', 'asset_type', 'assetType']),
+    fieldName,
+    firstAvailableSiteLogoMediaValue(asset, ['mime_type', 'mimeType']),
+    storagePath || publicUrl,
+  );
+  const roomKey = firstAvailableSiteLogoMediaValue(asset, ['room_key', 'roomKey']);
+  const itemId = firstAvailableSiteLogoMediaValue(asset, ['item_id', 'itemId']);
+  const artworkCode = firstAvailableSiteLogoMediaValue(asset, ['artwork_code', 'artworkCode']);
+  const sectionKey = firstAvailableSiteLogoMediaValue(asset, ['section_key', 'sectionKey']);
+  const fileName = getSiteLogoMediaFileName(storagePath, safeUrl || publicUrl);
+  const searchText = [
+    fileName,
+    storagePath,
+    publicUrl,
+    mediaKind,
+    fieldName,
+    roomKey,
+    itemId,
+    artworkCode,
+    sectionKey,
+    firstAvailableSiteLogoMediaValue(asset, ['target_type', 'targetType']),
+  ].join(' ').toLowerCase();
+
+  return {
+    ...asset,
+    id: firstAvailableSiteLogoMediaValue(asset, ['id']) || storagePath || publicUrl || fileName,
+    rawUrl,
+    safeUrl,
+    hasSafeUrl: Boolean(safeUrl),
+    storagePath,
+    fileName,
+    mediaKind,
+    mimeType: firstAvailableSiteLogoMediaValue(asset, ['mime_type', 'mimeType']),
+    sizeBytes: Number(firstAvailableSiteLogoMediaValue(asset, ['size_bytes', 'sizeBytes'])) || 0,
+    targetType: firstAvailableSiteLogoMediaValue(asset, ['target_type', 'targetType']),
+    roomKey,
+    sectionKey,
+    itemId,
+    artworkCode,
+    fieldName,
+    status: firstAvailableSiteLogoMediaValue(asset, ['status']),
+    createdAt: firstAvailableSiteLogoMediaValue(asset, ['created_at', 'createdAt']),
+    searchText,
+  };
+}
+
+function normalizeSafeSiteLogoMediaUrl(value = '') {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  const lower = raw.toLowerCase();
+  if (lower.startsWith('javascript:') || lower.startsWith('data:') || lower.startsWith('blob:') || lower.startsWith('file:')) return '';
+  if (isAllowedSiteLogoRelativeMediaPath(raw)) return raw;
+  try {
+    const parsed = new URL(raw);
+    if (parsed.protocol !== 'https:') return '';
+    const allowedOrigins = new Set(safeArray(STATIC_CMS_DRAFT_CONFIG.allowedMediaOrigins).map((origin) => String(origin || '').trim()).filter(Boolean));
+    const allowedHosts = new Set(safeArray(STATIC_CMS_DRAFT_CONFIG.allowedMediaHosts).map((host) => String(host || '').trim().toLowerCase()).filter(Boolean));
+    if (allowedOrigins.has(parsed.origin) || allowedHosts.has(parsed.hostname.toLowerCase()) || allowedHosts.has(parsed.host.toLowerCase())) {
+      return parsed.href;
+    }
+  } catch {
+    return '';
+  }
+  return '';
+}
+
+function isAllowedSiteLogoRelativeMediaPath(value = '') {
+  const raw = String(value || '').trim();
+  if (!raw || raw.startsWith('//') || raw.includes('..') || raw.includes('\\')) return false;
+  if (/^[a-z][a-z0-9+.-]*:/i.test(raw)) return false;
+  return safeArray(STATIC_CMS_DRAFT_CONFIG.allowedMediaPathPrefixes).some((prefix) => {
+    const normalizedPrefix = String(prefix || '').trim();
+    return normalizedPrefix && raw.startsWith(normalizedPrefix);
+  });
+}
+
+function normalizeSiteLogoMediaKind(value = '', fieldName = '', mimeType = '', path = '') {
+  const raw = String(value || '').toLowerCase();
+  const field = String(fieldName || '').toLowerCase();
+  const mime = String(mimeType || '').toLowerCase();
+  const source = String(path || '').split('?')[0].toLowerCase();
+  if (raw.includes('video') || mime.startsWith('video/') || field.includes('video') || /\.(mp4|webm|mov)$/i.test(source)) return 'video';
+  if (raw.includes('poster') || field.includes('poster')) return 'poster';
+  if (raw.includes('image') || raw.includes('ảnh') || mime.startsWith('image/') || field.includes('image') || /\.(jpg|jpeg|png|webp|gif|avif)$/i.test(source)) return 'image';
+  return 'unknown';
+}
+
+function formatSiteLogoFileBytes(bytes = 0) {
+  const value = Number(bytes) || 0;
+  if (value <= 0) return 'Không rõ';
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+  return `${(value / (1024 * 1024)).toFixed(2)} MB`;
+}
+
+function getSiteLogoMediaKindLabel(mediaKind = '') {
+  const kind = String(mediaKind || '').toLowerCase();
+  if (kind === 'video') return 'Video';
+  if (kind === 'poster') return 'Poster';
+  if (kind === 'image') return 'Ảnh';
+  return 'Không rõ';
+}
+
+function getSiteLogoPickerTargetText(asset = {}) {
+  const room = asset.roomKey ? getRoomLabel(asset.roomKey) : '';
+  const item = asset.artworkCode || asset.itemId || asset.sectionKey || '';
+  if (room && item) return `${room} / ${item}`;
+  return room || item || 'Không có metadata';
+}
+
+function getSiteLogoMediaFileName(storagePath = '', publicUrl = '') {
+  const source = String(storagePath || publicUrl || '').split('?')[0];
+  const pieces = source.split('/').filter(Boolean);
+  const rawName = pieces[pieces.length - 1] || source || 'media';
+  try {
+    return decodeURIComponent(rawName);
+  } catch {
+    return rawName;
+  }
+}
+
+function firstAvailableSiteLogoMediaValue(object = {}, keys = []) {
+  for (const key of keys) {
+    const value = object?.[key];
+    if (value !== undefined && value !== null && String(value).trim() !== '') return String(value).trim();
+  }
+  return '';
+}
+
+function normalizeSiteLogoDraftValue(value = '') {
+  return String(value || '').trim();
 }
 
 function renderEditableTextField(fieldName, label, editState, options = {}) {
@@ -1611,10 +2065,14 @@ async function handleSaveSiteSettingsDraft() {
   renderAdminShell();
 
   const latestState = getState();
+  const valuesToSave = {
+    ...validation.values,
+    logo_url: normalizeSiteLogoDraftValue(latestState.siteSettingsEdit?.draftValues?.logo_url),
+  };
   const { error } = await updateSiteSettingsDraft(
     latestState.supabase,
     latestState.data.siteSettings?.id,
-    validation.values,
+    valuesToSave,
     latestState.session?.user?.id || null
   );
 

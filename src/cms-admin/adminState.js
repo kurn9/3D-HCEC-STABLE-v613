@@ -136,12 +136,13 @@ export function extractSiteSettingsEditableValues(siteSettings = {}) {
     phone: siteSettings.phone || '',
     fax: siteSettings.fax || '',
     email: siteSettings.email || '',
+    logo_url: siteSettings.logo_url || '',
     default_language: siteSettings.default_language || 'vi',
   };
 }
 
 export function hasSiteSettingsDraftChanged(draftValues = {}, originalValues = {}) {
-  const keys = ['site_title', 'organization_name', 'address', 'phone', 'fax', 'email', 'default_language'];
+  const keys = ['site_title', 'organization_name', 'address', 'phone', 'fax', 'email', 'logo_url', 'default_language'];
   return keys.some((key) => normalizeDraftValue(draftValues[key]) !== normalizeDraftValue(originalValues[key]));
 }
 
