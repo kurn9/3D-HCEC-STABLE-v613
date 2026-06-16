@@ -89,6 +89,14 @@ const siteLogoMediaPickerState = {
   error: '',
 };
 
+const homeMediaPickerState = {
+  open: false,
+  search: '',
+  mediaKindFilter: 'compatible',
+  targetField: '',
+  error: '',
+};
+
 
 
 boot();
@@ -2682,18 +2690,30 @@ function renderHomeHeroEditableTextField(fieldName, label, editState, options = 
 function renderHomeHeroMediaEditGroup(section, editState, copy) {
   const group = createElement('section', { className: 'cms-admin-home-form-section cms-admin-home-media-edit-group' });
   group.appendChild(createElement('h4', { className: 'cms-admin-data-group-title', text: copy.groups.media }));
-  group.appendChild(renderCompactNotice(copy.mediaReadonlyNote));
+  group.appendChild(renderCompactNotice('Có thể chỉnh chú thích và chọn media đã upload cho các field media hiện có của Trang chủ. Website public chưa thay đổi cho đến khi bạn lưu và công khai.'));
 
   const fields = createElement('div', { className: 'cms-admin-edit-field-grid' });
   fields.appendChild(renderHomeHeroMediaTextField('caption', copy.fields.mediaCaption, editState, { placeholder: copy.placeholders.mediaCaption }));
   group.appendChild(fields);
 
   const media = normalizePlainObject(section?.media_json);
-  const readonlyRows = getMediaReadonlyRows(media, copy);
-  if (readonlyRows.length) {
-    const readonlyGrid = createElement('div', { className: 'cms-admin-readonly-field-grid cms-admin-home-media-readonly-grid' });
-    readonlyRows.forEach(([label, value]) => readonlyGrid.appendChild(renderReadonlyField(label, value, copy.mediaReadonlyNote)));
-    group.appendChild(readonlyGrid);
+  const descriptors = getHomeHeroMediaFieldDescriptors(media, editState);
+  if (descriptors.length) {
+    const pickerGrid = createElement('div', { className: 'cms-admin-home-media-library-field-grid' });
+    descriptors.forEach((descriptor) => pickerGrid.appendChild(renderHomeHeroMediaLibraryField(descriptor)));
+    group.appendChild(pickerGrid);
+
+    const activeDescriptor = descriptors.find((descriptor) => descriptor.fieldName === homeMediaPickerState.targetField) || descriptors[0];
+    if (homeMediaPickerState.open && activeDescriptor) {
+      group.appendChild(renderHomeMediaPicker(getState(), activeDescriptor));
+    }
+  } else {
+    const readonlyRows = getMediaReadonlyRows(media, copy);
+    if (readonlyRows.length) {
+      const readonlyGrid = createElement('div', { className: 'cms-admin-readonly-field-grid cms-admin-home-media-readonly-grid' });
+      readonlyRows.forEach(([label, value]) => readonlyGrid.appendChild(renderReadonlyField(label, value, copy.mediaReadonlyNote)));
+      group.appendChild(readonlyGrid);
+    }
   }
   return group;
 }
@@ -2831,6 +2851,389 @@ function getMediaReadonlyRows(media = {}, copy) {
   const typeValue = firstValue(media, ['type', 'kind', 'mimeType', 'mime_type']);
   if (!isBlank(typeValue)) rows.push([copy.fields.mediaType, typeValue]);
   return rows;
+}
+
+const HOME_MEDIA_PATH_FIELD_KEYS = ['videoUrl', 'video_url', 'video', 'mp4', 'src', 'url', 'imageUrl', 'image_url', 'image', 'poster', 'posterUrl', 'poster_url', 'thumbnail', 'path'];
+
+function getHomeHeroMediaFieldDescriptors(media = {}, editState = {}) {
+  const draftMedia = editState.draftValues?.media || {};
+  return HOME_MEDIA_PATH_FIELD_KEYS
+    .filter((fieldName) => Object.prototype.hasOwnProperty.call(media || {}, fieldName) || Object.prototype.hasOwnProperty.call(draftMedia || {}, fieldName))
+    .map((fieldName) => {
+      const currentValue = !isBlank(draftMedia?.[fieldName]) || Object.prototype.hasOwnProperty.call(draftMedia || {}, fieldName)
+        ? draftMedia[fieldName]
+        : media[fieldName];
+      const allowedKind = getHomeMediaAllowedKind(fieldName, currentValue);
+      return {
+        fieldName,
+        currentValue: String(currentValue || '').trim(),
+        label: getHomeMediaFieldLabel(fieldName),
+        allowedKind,
+        allowedLabel: allowedKind === 'video' ? 'Video' : 'Ảnh / Poster',
+        actionLabel: getHomeMediaPickerOpenLabel(allowedKind),
+        chooseLabel: getHomeMediaPickerChooseLabel(allowedKind),
+      };
+    });
+}
+
+function renderHomeHeroMediaLibraryField(descriptor = {}) {
+  const card = createElement('section', { className: 'cms-admin-home-media-library-field' });
+  const header = createElement('div', { className: 'cms-admin-home-media-library-field-header' });
+  const title = createElement('div');
+  title.appendChild(createElement('span', { className: 'cms-admin-edit-label', text: descriptor.label }));
+  title.appendChild(createElement('p', {
+    className: 'cms-admin-readonly-note',
+    text: 'Field media hiện có trong media_json. Chọn từ thư viện chỉ cập nhật bản nháp local, chưa tự lưu hoặc công khai.',
+  }));
+  const button = createElement('button', {
+    className: 'cms-admin-button cms-admin-button-secondary cms-admin-button-small',
+    type: 'button',
+    text: homeMediaPickerState.open && homeMediaPickerState.targetField === descriptor.fieldName ? 'Đóng thư viện media' : descriptor.actionLabel,
+    attrs: { 'aria-expanded': homeMediaPickerState.open && homeMediaPickerState.targetField === descriptor.fieldName ? 'true' : 'false' },
+  });
+  button.addEventListener('click', () => handleToggleHomeMediaPicker(descriptor));
+  appendChildren(header, [title, button]);
+  card.appendChild(header);
+
+  const value = createElement('div', { className: 'cms-admin-home-media-library-current' });
+  value.appendChild(renderHomeMediaCurrentPreview(descriptor));
+  const valueText = createElement('div', { className: 'cms-admin-site-logo-current-value' });
+  valueText.appendChild(createElement('span', { className: 'cms-admin-readonly-value cms-admin-mono', text: toDisplayText(descriptor.currentValue) }));
+  valueText.appendChild(createElement('span', { className: 'cms-admin-readonly-note', text: `Loại hợp lệ: ${descriptor.allowedLabel}.` }));
+  value.appendChild(valueText);
+  card.appendChild(value);
+  return card;
+}
+
+function renderHomeMediaCurrentPreview(descriptor = {}) {
+  const frame = createElement('div', { className: 'cms-admin-home-media-current-preview' });
+  const safeUrl = normalizeSafeSiteLogoMediaUrl(descriptor.currentValue);
+  if (!safeUrl) {
+    frame.classList.add('has-error');
+    frame.appendChild(createElement('span', { text: 'Chưa có media hợp lệ' }));
+    return frame;
+  }
+  if (descriptor.allowedKind === 'video') {
+    const video = createElement('video', { attrs: { src: safeUrl, controls: 'true', preload: 'metadata' } });
+    video.addEventListener('error', () => {
+      video.hidden = true;
+      frame.classList.add('has-error');
+      frame.appendChild(createElement('span', { text: 'Không tải được video' }));
+    }, { once: true });
+    frame.appendChild(video);
+    return frame;
+  }
+  const image = createElement('img', { attrs: { src: safeUrl, alt: descriptor.label || 'Media Trang chủ', loading: 'lazy' } });
+  image.addEventListener('error', () => {
+    image.hidden = true;
+    frame.classList.add('has-error');
+    frame.appendChild(createElement('span', { text: 'Không tải được ảnh' }));
+  }, { once: true });
+  frame.appendChild(image);
+  return frame;
+}
+
+function renderHomeMediaPicker(state = {}, descriptor = {}) {
+  const sourceAssets = safeArray(state.data?.cmsMediaUploads).map(normalizeHomePickerMediaAsset);
+  const mediaError = state.data?.errors?.cmsMediaUploads || null;
+  const filteredAssets = sourceAssets.filter((asset) => matchesHomeMediaPickerFilters(asset, descriptor));
+  const panel = createElement('section', { className: 'cms-admin-static-media-picker-panel cms-admin-home-media-picker-panel' });
+  const header = createElement('div', { className: 'cms-admin-static-media-picker-header' });
+  const heading = createElement('div');
+  heading.appendChild(createElement('h5', { text: getHomeMediaPickerTitle(descriptor.allowedKind) }));
+  heading.appendChild(createElement('p', {
+    className: 'cms-admin-help-text',
+    text: 'Chọn media đã upload để gắn vào bản nháp Trang chủ. Website public chưa thay đổi cho đến khi bạn lưu và công khai.',
+  }));
+  const closeButton = createElement('button', { className: 'cms-admin-button cms-admin-button-ghost cms-admin-button-small', type: 'button', text: 'Đóng' });
+  closeButton.addEventListener('click', () => closeHomeMediaPicker());
+  appendChildren(header, [heading, closeButton]);
+  panel.appendChild(header);
+
+  panel.appendChild(renderHomeMediaPickerContext(descriptor));
+
+  if (mediaError) {
+    panel.appendChild(renderErrorBox(mediaError, 'Không đọc được cms_media_uploads'));
+    return panel;
+  }
+
+  if (!sourceAssets.length) {
+    panel.appendChild(renderEmptyState('Chưa có media trong thư viện upload.'));
+    return panel;
+  }
+
+  panel.appendChild(renderHomeMediaPickerControls(descriptor));
+
+  if (homeMediaPickerState.error) {
+    panel.appendChild(createElement('div', { className: 'cms-admin-alert cms-admin-alert-error', text: homeMediaPickerState.error }));
+  }
+
+  if (!filteredAssets.length) {
+    panel.appendChild(createElement('div', { className: 'cms-admin-media-filter-empty', text: 'Không có media nào khớp bộ lọc hiện tại.' }));
+    return panel;
+  }
+
+  const list = createElement('div', { className: 'cms-admin-static-media-picker-grid cms-admin-home-media-picker-grid' });
+  filteredAssets.forEach((asset) => list.appendChild(renderHomeMediaPickerCard(asset, descriptor)));
+  panel.appendChild(list);
+  return panel;
+}
+
+function renderHomeMediaPickerContext(descriptor = {}) {
+  const meta = createElement('div', { className: 'cms-admin-static-media-picker-context cms-admin-home-media-picker-context' });
+  meta.appendChild(renderInfoTile('Trang chủ', 'Khu vực đầu trang'));
+  meta.appendChild(renderInfoTile('Field đích', `media_json.${descriptor.fieldName}`, true));
+  meta.appendChild(renderInfoTile('Loại hợp lệ', descriptor.allowedLabel));
+  meta.appendChild(renderInfoTile('Trạng thái', 'Bản nháp local'));
+  return meta;
+}
+
+function renderHomeMediaPickerControls(descriptor = {}) {
+  const controls = createElement('div', { className: 'cms-admin-static-media-picker-controls cms-admin-home-media-picker-controls' });
+  const search = createElement('input', {
+    className: 'cms-admin-input cms-admin-static-media-picker-search',
+    value: homeMediaPickerState.search,
+    placeholder: 'Tìm theo tên file, path, phòng, item, section...',
+    attrs: { type: 'search', autocomplete: 'off', 'aria-label': 'Tìm media Trang chủ trong thư viện upload' },
+  });
+  search.addEventListener('input', () => {
+    homeMediaPickerState.search = search.value;
+    renderAdminShell();
+  });
+
+  const filter = createElement('select', {
+    className: 'cms-admin-select cms-admin-static-media-picker-filter',
+    attrs: { 'aria-label': 'Lọc loại media cho Trang chủ' },
+  });
+  getHomeMediaFilterOptions(descriptor.allowedKind).forEach((option) => filter.appendChild(createElement('option', { value: option.value, text: option.label })));
+  const allowedValues = getHomeMediaFilterOptions(descriptor.allowedKind).map((option) => option.value);
+  filter.value = allowedValues.includes(homeMediaPickerState.mediaKindFilter) ? homeMediaPickerState.mediaKindFilter : 'compatible';
+  filter.addEventListener('change', () => {
+    homeMediaPickerState.mediaKindFilter = filter.value;
+    renderAdminShell();
+  });
+  appendChildren(controls, [search, filter]);
+  return controls;
+}
+
+function renderHomeMediaPickerCard(asset = {}, descriptor = {}) {
+  const compatibility = getHomeMediaPickerCompatibility(asset, descriptor);
+  const card = createElement('article', {
+    className: [
+      'cms-admin-static-media-picker-card',
+      'cms-admin-home-media-picker-card',
+      asset.hasSafeUrl && compatibility.allowed ? 'is-selectable' : 'is-disabled',
+    ].filter(Boolean).join(' '),
+  });
+
+  card.appendChild(renderHomeMediaPickerPreview(asset));
+
+  const body = createElement('div', { className: 'cms-admin-static-media-picker-card-body' });
+  const titleRow = createElement('div', { className: 'cms-admin-media-card-title-row' });
+  titleRow.appendChild(createElement('h6', { text: asset.fileName || 'media' }));
+  titleRow.appendChild(renderBadge(getSiteLogoMediaKindLabel(asset.mediaKind), asset.mediaKind === 'video' ? 'warning' : asset.mediaKind === 'unknown' ? 'default' : 'success'));
+  body.appendChild(titleRow);
+
+  const details = createElement('dl', { className: 'cms-admin-media-detail-list' });
+  [
+    ['Phòng/item/section', getSiteLogoPickerTargetText(asset)],
+    ['Field upload', asset.fieldName || 'Không có'],
+    ['Dung lượng', formatSiteLogoFileBytes(asset.sizeBytes)],
+    ['Ngày upload', asset.createdAt ? formatDateTime(asset.createdAt) : 'Không rõ'],
+    ['Trạng thái', asset.status || 'Không rõ'],
+  ].forEach(([label, value]) => {
+    details.appendChild(createElement('dt', { text: label }));
+    details.appendChild(createElement('dd', { text: value }));
+  });
+  body.appendChild(details);
+
+  if (asset.storagePath) {
+    body.appendChild(createElement('p', { className: 'cms-admin-media-path', text: asset.storagePath }));
+  }
+
+  if (!asset.hasSafeUrl) {
+    body.appendChild(createElement('div', { className: 'cms-admin-alert cms-admin-alert-warning', text: 'Đường dẫn media không thuộc nguồn được phép. Không thể chọn media này.' }));
+  } else if (!compatibility.allowed) {
+    body.appendChild(createElement('div', { className: 'cms-admin-alert cms-admin-alert-warning', text: compatibility.reason }));
+  }
+
+  const actions = createElement('div', { className: 'cms-admin-actions cms-admin-static-media-picker-actions cms-admin-home-media-picker-actions' });
+  const choose = createElement('button', {
+    className: 'cms-admin-button cms-admin-button-primary cms-admin-button-small',
+    type: 'button',
+    text: descriptor.chooseLabel,
+  });
+  choose.disabled = !asset.hasSafeUrl || !compatibility.allowed;
+  choose.addEventListener('click', () => handleAttachHomeMediaPickerMedia(asset, descriptor));
+  const cancel = createElement('button', { className: 'cms-admin-button cms-admin-button-ghost cms-admin-button-small', type: 'button', text: 'Hủy chọn' });
+  cancel.addEventListener('click', () => closeHomeMediaPicker());
+  appendChildren(actions, [choose, cancel]);
+  body.appendChild(actions);
+
+  card.appendChild(body);
+  return card;
+}
+
+function renderHomeMediaPickerPreview(asset = {}) {
+  const media = createElement('div', { className: 'cms-admin-static-media-picker-preview' });
+  if (!asset.hasSafeUrl) {
+    media.classList.add('has-error');
+    media.appendChild(createElement('span', { text: 'Không có preview an toàn' }));
+    return media;
+  }
+  if (asset.mediaKind === 'video') {
+    const video = createElement('video', { attrs: { src: asset.safeUrl, controls: 'true', preload: 'metadata' } });
+    video.addEventListener('error', () => {
+      video.hidden = true;
+      media.classList.add('has-error');
+      media.appendChild(createElement('span', { text: 'Không tải được video' }));
+    }, { once: true });
+    media.appendChild(video);
+    return media;
+  }
+  if (asset.mediaKind === 'image' || asset.mediaKind === 'poster') {
+    const image = createElement('img', { attrs: { src: asset.safeUrl, alt: asset.fileName || 'Media Trang chủ', loading: 'lazy' } });
+    image.addEventListener('error', () => {
+      image.hidden = true;
+      media.classList.add('has-error');
+      media.appendChild(createElement('span', { text: 'Không tải được ảnh' }));
+    }, { once: true });
+    media.appendChild(image);
+    return media;
+  }
+  media.classList.add('has-error');
+  media.appendChild(createElement('span', { text: 'Không preview trong picker Trang chủ' }));
+  return media;
+}
+
+function handleToggleHomeMediaPicker(descriptor = {}) {
+  if (homeMediaPickerState.open && homeMediaPickerState.targetField === descriptor.fieldName) {
+    closeHomeMediaPicker();
+    return;
+  }
+  homeMediaPickerState.open = true;
+  homeMediaPickerState.search = '';
+  homeMediaPickerState.mediaKindFilter = 'compatible';
+  homeMediaPickerState.targetField = descriptor.fieldName || '';
+  homeMediaPickerState.error = '';
+  renderAdminShell();
+}
+
+function closeHomeMediaPicker() {
+  homeMediaPickerState.open = false;
+  homeMediaPickerState.error = '';
+  homeMediaPickerState.targetField = '';
+  renderAdminShell();
+}
+
+function handleAttachHomeMediaPickerMedia(asset = {}, descriptor = {}) {
+  const state = getState();
+  if (!state.homeEdit?.isEditing || state.homeEdit?.editingSectionKey !== 'hero') {
+    homeMediaPickerState.error = 'Form Trang chủ không còn ở chế độ chỉnh sửa. Hãy mở lại picker.';
+    renderAdminShell();
+    return;
+  }
+
+  const safeUrl = normalizeSafeSiteLogoMediaUrl(asset.rawUrl);
+  if (!safeUrl) {
+    homeMediaPickerState.error = 'Đường dẫn media không thuộc nguồn được phép. Không thể chọn media này.';
+    renderAdminShell();
+    return;
+  }
+
+  const compatibility = getHomeMediaPickerCompatibility(asset, descriptor);
+  if (!compatibility.allowed) {
+    homeMediaPickerState.error = compatibility.reason;
+    renderAdminShell();
+    return;
+  }
+
+  updateHomeHeroMediaDraftField(descriptor.fieldName, safeUrl);
+  homeMediaPickerState.open = false;
+  homeMediaPickerState.error = '';
+  homeMediaPickerState.targetField = '';
+  setHomeEditState({
+    saveSuccess: 'Đã gắn media vào bản nháp Trang chủ. Website public chưa thay đổi cho đến khi bạn lưu và công khai.',
+    saveError: null,
+  });
+  renderAdminShell();
+}
+
+function matchesHomeMediaPickerFilters(asset = {}, descriptor = {}) {
+  const kind = String(homeMediaPickerState.mediaKindFilter || 'compatible');
+  if (kind === 'compatible' && !getHomeMediaPickerCompatibility(asset, descriptor).allowed) return false;
+  if (kind !== 'compatible' && kind !== 'all' && asset.mediaKind !== kind) return false;
+  const search = String(homeMediaPickerState.search || '').trim().toLowerCase();
+  if (!search) return true;
+  return asset.searchText.includes(search);
+}
+
+function getHomeMediaPickerCompatibility(asset = {}, descriptor = {}) {
+  if (!asset.hasSafeUrl) return { allowed: false, reason: 'Đường dẫn media không thuộc nguồn được phép. Không thể chọn media này.' };
+  if (descriptor.allowedKind === 'video') {
+    if (asset.mediaKind !== 'video') return { allowed: false, reason: 'Media này không phù hợp với field Trang chủ đang chọn.' };
+    return { allowed: true, reason: '' };
+  }
+  if (!['image', 'poster'].includes(asset.mediaKind)) {
+    return { allowed: false, reason: 'Media này không phù hợp với field Trang chủ đang chọn.' };
+  }
+  return { allowed: true, reason: '' };
+}
+
+function normalizeHomePickerMediaAsset(asset = {}) {
+  return normalizeSiteLogoPickerMediaAsset(asset);
+}
+
+function getHomeMediaAllowedKind(fieldName = '', currentValue = '') {
+  const field = String(fieldName || '').toLowerCase();
+  const currentKind = normalizeSiteLogoMediaKind('', fieldName, '', currentValue);
+  if (field.includes('video') || field.includes('mp4') || currentKind === 'video') return 'video';
+  return 'image';
+}
+
+function getHomeMediaFieldLabel(fieldName = '') {
+  const key = String(fieldName || '').trim();
+  if (!key) return 'Media Trang chủ';
+  if (getHomeMediaAllowedKind(key) === 'video') return `Video Trang chủ / ${key}`;
+  if (key.toLowerCase().includes('poster')) return `Poster Trang chủ / ${key}`;
+  return `Ảnh/poster Trang chủ / ${key}`;
+}
+
+function getHomeMediaPickerTitle(allowedKind = '') {
+  if (allowedKind === 'video') return 'Chọn video từ thư viện';
+  if (allowedKind === 'poster') return 'Chọn poster từ thư viện';
+  return 'Chọn ảnh từ thư viện';
+}
+
+function getHomeMediaPickerOpenLabel(allowedKind = '') {
+  if (allowedKind === 'video') return 'Chọn video từ thư viện';
+  if (allowedKind === 'poster') return 'Chọn poster từ thư viện';
+  return 'Chọn ảnh từ thư viện';
+}
+
+function getHomeMediaPickerChooseLabel(allowedKind = '') {
+  if (allowedKind === 'video') return 'Chọn video này';
+  if (allowedKind === 'poster') return 'Chọn poster này';
+  return 'Chọn ảnh này';
+}
+
+function getHomeMediaFilterOptions(allowedKind = '') {
+  if (allowedKind === 'video') {
+    return [
+      { value: 'compatible', label: 'Video phù hợp' },
+      { value: 'video', label: 'Video' },
+      { value: 'image', label: 'Ảnh (không phù hợp)' },
+      { value: 'poster', label: 'Poster (không phù hợp)' },
+      { value: 'all', label: 'Tất cả loại media' },
+    ];
+  }
+  return [
+    { value: 'compatible', label: 'Ảnh & poster phù hợp' },
+    { value: 'image', label: 'Ảnh' },
+    { value: 'poster', label: 'Poster' },
+    { value: 'video', label: 'Video (không phù hợp)' },
+    { value: 'all', label: 'Tất cả loại media' },
+  ];
 }
 
 

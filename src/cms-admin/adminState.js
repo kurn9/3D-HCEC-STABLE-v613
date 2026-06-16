@@ -33,6 +33,23 @@ const initialState = {
 let state = structuredCloneSafe(initialState);
 const listeners = new Set();
 
+const HOME_HERO_MEDIA_PATH_KEYS = [
+  'videoUrl',
+  'video_url',
+  'video',
+  'mp4',
+  'src',
+  'url',
+  'imageUrl',
+  'image_url',
+  'image',
+  'poster',
+  'posterUrl',
+  'poster_url',
+  'thumbnail',
+  'path',
+];
+
 export function getState() {
   return state;
 }
@@ -366,6 +383,14 @@ export function updateHomeHeroMediaDraftField(fieldName, value) {
       [fieldName]: value,
     },
   };
+
+  if (fieldName !== 'caption') {
+    draftValues.originalMediaJson = {
+      ...normalizeObjectValue(current.draftValues?.originalMediaJson),
+      [fieldName]: value,
+    };
+  }
+
   return setState({
     homeEdit: {
       ...current,
@@ -477,9 +502,13 @@ export function hasHomeHeroDraftChanged(draftValues = {}, originalValues = {}) {
 
 function extractHomeHeroMediaEditableValues(media = {}) {
   const object = normalizeObjectValue(media);
-  return {
+  const out = {
     caption: firstText(object, ['caption', 'alt', 'title', 'label']),
   };
+  HOME_HERO_MEDIA_PATH_KEYS.forEach((key) => {
+    if (hasOwn(object, key)) out[key] = normalizeDraftValue(object[key]);
+  });
+  return out;
 }
 
 function extractHomeHeroItemsEditableValues(items = []) {
@@ -513,9 +542,7 @@ function normalizeHomeHeroDraftForCompare(values = {}) {
     subtitle: normalizeDraftValue(values.subtitle),
     lead: normalizeDraftValue(values.lead),
     body: normalizeDraftValue(values.body),
-    media: {
-      caption: normalizeDraftValue(values.media?.caption),
-    },
+    media: normalizeHomeHeroMediaDraftForCompare(values.media),
     items: safeArrayClone(values.items).map((item) => ({
       kind: item.kind || 'object',
       text: normalizeDraftValue(item.text),
@@ -527,6 +554,14 @@ function normalizeHomeHeroDraftForCompare(values = {}) {
       editable: Boolean(values.cta?.editable),
     },
   };
+}
+
+function normalizeHomeHeroMediaDraftForCompare(media = {}) {
+  const out = { caption: normalizeDraftValue(media?.caption) };
+  HOME_HERO_MEDIA_PATH_KEYS.forEach((key) => {
+    if (hasOwn(media, key)) out[key] = normalizeDraftValue(media[key]);
+  });
+  return out;
 }
 
 function normalizeArrayValue(value) {
