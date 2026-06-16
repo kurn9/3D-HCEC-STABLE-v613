@@ -967,7 +967,7 @@ function getMediaFileName(storagePath = '', publicUrl = '') {
 function buildMediaUsageContext(state = {}) {
   const sources = [];
   const addSource = (source = {}) => {
-    if (!source.value) return;
+    if (!isMediaUsageScannableValue(source.value)) return;
     sources.push({
       key: source.key || `source-${sources.length}`,
       sourceType: source.sourceType || 'cms',
@@ -977,79 +977,145 @@ function buildMediaUsageContext(state = {}) {
     });
   };
 
+  const canonicalValue = getCanonicalCmsReferenceValue(state.data?.canonicalCms);
   addSource({
     key: 'public-canonical',
     sourceType: 'public',
     area: 'Website public',
     label: 'Website public / CMS public JSON',
-    value: state.data?.canonicalCms?.json,
+    value: canonicalValue,
   });
 
   addSource({
-    key: 'static-cms-draft',
+    key: 'static-cms-draft-current',
     sourceType: 'draft',
     area: 'Bản nháp CMS',
-    label: 'Bản nháp CMS / Static CMS draft',
+    label: 'Bản nháp đang mở / Static CMS draft',
     value: state.staticCmsDraft?.draftJson,
+  });
+
+  addSource({
+    key: 'static-cms-draft-baseline',
+    sourceType: 'cms',
+    area: 'Nội dung phòng 3D',
+    label: 'CMS / Static CMS baseline',
+    value: state.staticCmsDraft?.baselineJson,
   });
 
   safeArray(state.data?.indexSections).forEach((section, index) => {
     addSource({
-      key: `draft-index-section-${section?.id || section?.section_key || index}`,
-      sourceType: 'draft',
+      key: `cms-index-section-${section?.id || section?.section_key || index}`,
+      sourceType: 'cms',
       area: 'Trang chủ',
-      label: `Bản nháp CMS / Trang chủ / ${getHomeSectionReferenceLabel(section?.section_key)}`,
+      label: `CMS / Trang chủ / ${getHomeSectionReferenceLabel(section?.section_key)}`,
       value: section,
     });
   });
 
   addSource({
-    key: 'draft-site-settings',
-    sourceType: 'draft',
+    key: 'cms-site-settings',
+    sourceType: 'cms',
     area: 'Thông tin website',
-    label: 'Bản nháp CMS / Thông tin website',
+    label: 'CMS / Thông tin website',
     value: state.data?.siteSettings,
   });
 
   addSource({
-    key: 'draft-site-settings-local',
+    key: 'local-site-settings-draft',
     sourceType: 'draft',
     area: 'Thông tin website',
     label: 'Bản nháp local / Thông tin website',
     value: state.siteSettingsEdit?.draftValues,
   });
 
+  addSource({
+    key: 'local-site-settings-original',
+    sourceType: 'cms',
+    area: 'Thông tin website',
+    label: 'CMS / Thông tin website / Dữ liệu gốc form',
+    value: state.siteSettingsEdit?.originalValues,
+  });
+
   safeArray(state.data?.artworks).forEach((artwork, index) => {
     addSource({
-      key: `draft-artwork-${artwork?.id || artwork?.artwork_code || index}`,
-      sourceType: 'draft',
+      key: `cms-artwork-${artwork?.id || artwork?.artwork_code || index}`,
+      sourceType: 'cms',
       area: 'Nội dung phòng 3D',
-      label: `Bản nháp CMS / Nội dung phòng 3D / ${artwork?.artwork_code || artwork?.title || `Item ${index + 1}`}`,
+      label: `CMS / Nội dung phòng 3D / ${artwork?.artwork_code || artwork?.title || `Item ${index + 1}`}`,
       value: artwork,
     });
   });
 
+  safeArray(state.data?.rooms).forEach((room, index) => {
+    addSource({
+      key: `cms-room-${room?.id || room?.room_key || index}`,
+      sourceType: 'cms',
+      area: 'Không gian 3D',
+      label: `CMS / Không gian 3D / ${getRoomLabel(room?.room_key || room?.id || '')}`,
+      value: room,
+    });
+  });
+
   addSource({
-    key: 'draft-gate-content',
-    sourceType: 'draft',
+    key: 'cms-gate-content',
+    sourceType: 'cms',
     area: 'Cổng vào triển lãm',
-    label: 'Bản nháp CMS / Cổng vào triển lãm',
+    label: 'CMS / Cổng vào triển lãm',
     value: state.data?.gateContent,
   });
 
   addSource({
-    key: 'home-edit-local',
+    key: 'local-home-draft',
     sourceType: 'draft',
     area: 'Trang chủ',
     label: 'Bản nháp local / Trang chủ',
     value: state.homeEdit?.draftValues,
   });
 
+  addSource({
+    key: 'local-home-original',
+    sourceType: 'cms',
+    area: 'Trang chủ',
+    label: 'CMS / Trang chủ / Dữ liệu gốc form',
+    value: state.homeEdit?.originalValues,
+  });
+
+  safeArray(state.data?.publishedBundles).forEach((bundle, index) => {
+    addSource({
+      key: `published-bundle-${bundle?.id || bundle?.version || index}`,
+      sourceType: 'cms',
+      area: 'Lịch sử công khai',
+      label: `CMS / Lịch sử công khai / ${bundle?.version || bundle?.id || `Bản ${index + 1}`}`,
+      value: bundle,
+    });
+  });
+
   return {
     sources,
+    hasScannableSource: sources.length > 0,
     hasPublicSource: sources.some((source) => source.sourceType === 'public'),
     hasDraftSource: sources.some((source) => source.sourceType === 'draft'),
+    hasCmsSource: sources.some((source) => source.sourceType === 'cms'),
   };
+}
+
+function getCanonicalCmsReferenceValue(canonicalCms = null) {
+  if (!canonicalCms) return null;
+  if (canonicalCms.json) return canonicalCms.json;
+  if (canonicalCms.content_json) return canonicalCms.content_json;
+  if (canonicalCms.contentJson) return canonicalCms.contentJson;
+  if (canonicalCms.content) return canonicalCms.content;
+  if (canonicalCms.data) return canonicalCms.data;
+  if (canonicalCms.sections || canonicalCms.rooms || canonicalCms.site || canonicalCms.home || canonicalCms.index) return canonicalCms;
+  return null;
+}
+
+function isMediaUsageScannableValue(value) {
+  if (value === null || value === undefined) return false;
+  if (typeof value === 'string') return value.trim() !== '';
+  if (Array.isArray(value)) return value.length > 0;
+  if (typeof value === 'object') return Object.keys(value).length > 0;
+  return false;
 }
 
 function getHomeSectionReferenceLabel(sectionKey = '') {
@@ -1108,7 +1174,7 @@ function getMediaUsage(asset, context = {}) {
     };
   }
 
-  if (!context.hasPublicSource || !context.hasDraftSource) {
+  if (!context.hasScannableSource) {
     return {
       key: 'insufficient',
       label: ADMIN_COPY.media.usageLabels.insufficient,
@@ -1129,9 +1195,11 @@ function getMediaUsage(asset, context = {}) {
 
 function buildMediaAssetIdentity(asset = {}) {
   const strong = new Set();
+  const storageBucket = String(asset.storageBucket || 'cms-media').trim() || 'cms-media';
   [asset.publicUrl, asset.publicUrlRaw, asset.storagePath].forEach((value) => {
     normalizeMediaReferenceCandidates(value).forEach((candidate) => strong.add(candidate));
   });
+  addStoragePathReferenceCandidates(strong, asset.storagePath, storageBucket);
   return {
     strongValues: Array.from(strong),
     strongSet: strong,
@@ -1194,23 +1262,95 @@ function normalizeMediaReferenceCandidates(value) {
     addMediaReferenceCandidate(candidates, safeUrl);
     try {
       const parsed = new URL(safeUrl, globalThis.location?.origin || 'https://cms.local');
-      addMediaReferenceCandidate(candidates, parsed.pathname);
-      addMediaReferenceCandidate(candidates, decodeURIComponent(parsed.pathname));
-      const storagePublicMarker = '/storage/v1/object/public/';
-      const markerIndex = parsed.pathname.indexOf(storagePublicMarker);
-      if (markerIndex >= 0) {
-        addMediaReferenceCandidate(candidates, parsed.pathname.slice(markerIndex + storagePublicMarker.length));
-      }
+      addUrlPathReferenceCandidates(candidates, parsed.pathname);
     } catch {
       // Safe URL parsing is best-effort for reference matching only.
     }
   }
 
-  if (isSafeStoragePathCandidate(raw)) {
-    addMediaReferenceCandidate(candidates, raw);
+  addStoragePathReferenceCandidates(candidates, raw);
+  return Array.from(candidates);
+}
+
+function addUrlPathReferenceCandidates(candidates, pathname = '') {
+  const rawPath = String(pathname || '').trim();
+  if (!rawPath) return;
+  addMediaReferenceCandidate(candidates, rawPath);
+  addMediaReferenceCandidate(candidates, rawPath.replace(/^\/+/, ''));
+  let decodedPath = rawPath;
+  try {
+    decodedPath = decodeURIComponent(rawPath);
+  } catch {
+    decodedPath = rawPath;
+  }
+  addMediaReferenceCandidate(candidates, decodedPath);
+  addMediaReferenceCandidate(candidates, decodedPath.replace(/^\/+/, ''));
+  addStorageObjectSuffixCandidates(candidates, rawPath);
+  if (decodedPath !== rawPath) {
+    addStorageObjectSuffixCandidates(candidates, decodedPath);
+  }
+}
+
+function addStorageObjectSuffixCandidates(candidates, value = '') {
+  const raw = String(value || '').trim();
+  if (!raw) return;
+  const storagePublicMarker = '/storage/v1/object/public/';
+  const markerIndex = raw.indexOf(storagePublicMarker);
+  if (markerIndex >= 0) {
+    const suffix = raw.slice(markerIndex + storagePublicMarker.length).replace(/^\/+/, '');
+    addMediaReferenceCandidate(candidates, suffix);
+    const withoutBucket = removeKnownMediaBucketPrefix(suffix);
+    addMediaReferenceCandidate(candidates, withoutBucket);
+    return;
   }
 
-  return Array.from(candidates);
+  const compact = raw.replace(/^\/+/, '');
+  if (compact.startsWith('storage/v1/object/public/')) {
+    const suffix = compact.slice('storage/v1/object/public/'.length).replace(/^\/+/, '');
+    addMediaReferenceCandidate(candidates, suffix);
+    addMediaReferenceCandidate(candidates, removeKnownMediaBucketPrefix(suffix));
+  }
+}
+
+function addStoragePathReferenceCandidates(candidates, value = '', bucket = 'cms-media') {
+  const raw = String(value || '').trim();
+  if (!isSafeStoragePathCandidate(raw)) return;
+  const variants = new Set();
+  variants.add(raw);
+  variants.add(raw.replace(/^\.\//, ''));
+  variants.add(raw.replace(/^\/+/, ''));
+  try {
+    variants.add(decodeURIComponent(raw));
+  } catch {
+    // Decoding is best-effort for storage path matching only.
+  }
+
+  Array.from(variants).forEach((variant) => {
+    const normalized = String(variant || '').trim();
+    if (!normalized) return;
+    addMediaReferenceCandidate(candidates, normalized);
+    addMediaReferenceCandidate(candidates, normalized.replace(/^\.\//, ''));
+    addMediaReferenceCandidate(candidates, normalized.replace(/^\/+/, ''));
+    addStorageObjectSuffixCandidates(candidates, normalized);
+    const compact = normalized.replace(/^\.\//, '').replace(/^\/+/, '');
+    const withoutBucket = removeKnownMediaBucketPrefix(compact);
+    addMediaReferenceCandidate(candidates, withoutBucket);
+    const normalizedBucket = String(bucket || '').trim().replace(/^\/+|\/+$/g, '');
+    if (normalizedBucket && withoutBucket && !compact.startsWith(`${normalizedBucket}/`)) {
+      addMediaReferenceCandidate(candidates, `${normalizedBucket}/${withoutBucket}`);
+    }
+  });
+}
+
+function removeKnownMediaBucketPrefix(value = '') {
+  const raw = String(value || '').trim().replace(/^\/+/, '');
+  const knownBuckets = ['cms-media'];
+  for (const bucket of knownBuckets) {
+    if (raw.startsWith(`${bucket}/`)) {
+      return raw.slice(bucket.length + 1);
+    }
+  }
+  return raw;
 }
 
 function addMediaReferenceCandidate(candidates, value) {
@@ -1221,7 +1361,12 @@ function addMediaReferenceCandidate(candidates, value) {
 function normalizeMediaReferenceString(value) {
   const raw = String(value || '').trim();
   if (!raw) return '';
-  const withoutQuery = raw.split('#')[0].split('?')[0].replace(/\/+$/, '');
+  let withoutQuery = raw.split('#')[0].split('?')[0].replace(/\/+$/, '');
+  try {
+    withoutQuery = decodeURIComponent(withoutQuery);
+  } catch {
+    // Keep encoded form when decoding fails.
+  }
   return withoutQuery;
 }
 
