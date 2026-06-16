@@ -251,6 +251,8 @@ export const ADMIN_COPY = Object.freeze({
       locked: 'Chỉ một số màn được chỉnh sửa bản nháp. Upload, công khai và khôi phục vẫn đang khóa.',
       publicSafe: 'Đây là khóa chủ động để bảo vệ dữ liệu, không phải lỗi. Website public không bị ảnh hưởng trong bước này.',
       warningEmpty: 'Hiện chưa có cảnh báo nội dung cần xử lý.',
+      canonicalWarningHint: 'Bấm để mở Nội dung phòng 3D. Các cảnh báo bên dưới được tính từ nội dung CMS public JSON đang công khai.',
+      fallbackWarningHint: 'Bấm để mở Nội dung phòng 3D. Dashboard đang dùng DB catalog làm nguồn dự phòng. Các cảnh báo này chỉ là dữ liệu tham chiếu.',
       warningHint: 'Bấm để mở Nội dung phòng 3D. Các cảnh báo DB catalog chỉ là dữ liệu tham chiếu, website public đổi qua bản nháp CMS.',
     },
     safety: {

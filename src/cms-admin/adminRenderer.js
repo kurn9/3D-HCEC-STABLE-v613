@@ -785,6 +785,9 @@ function renderDashboard(state) {
     warningMessages: usingCanonicalSummary ? safeArray(dashboardSummary.warnings) : [],
     warningCount: dashboardSummary.warningCount || 0,
     mediaCount: usingCanonicalSummary ? dashboardSummary.mediaPresentCount : mediaAssets.length,
+    warningHint: usingCanonicalSummary
+      ? ADMIN_COPY.dashboard.tasks.canonicalWarningHint
+      : ADMIN_COPY.dashboard.tasks.fallbackWarningHint,
   }));
   top.appendChild(renderQuickActionsPanel());
 
@@ -3070,7 +3073,7 @@ function renderLatestBundlePanel(bundle) {
   return panel;
 }
 
-function renderTaskPanel({ warningItems = [], warningMessages = [], warningCount = 0, mediaCount = 0 } = {}) {
+function renderTaskPanel({ warningItems = [], warningMessages = [], warningCount = 0, mediaCount = 0, warningHint = ADMIN_COPY.dashboard.tasks.warningHint } = {}) {
   const panel = createElement('section', { className: 'cms-admin-help-panel cms-admin-task-panel' });
   panel.appendChild(createElement('h3', { text: ADMIN_COPY.dashboard.tasks.title }));
   const list = createElement('ul', { className: 'cms-admin-task-list' });
@@ -3101,7 +3104,7 @@ function renderTaskPanel({ warningItems = [], warningMessages = [], warningCount
       switchAdminTab('staticDraft');
     });
     panel.appendChild(action);
-    panel.appendChild(renderCompactNotice(ADMIN_COPY.dashboard.tasks.warningHint));
+    panel.appendChild(renderCompactNotice(warningHint));
   }
   return panel;
 }
