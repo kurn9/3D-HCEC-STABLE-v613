@@ -12,7 +12,6 @@ const initialState = {
   homeEdit: createEmptyHomeEditState(),
   roomsEdit: createEmptyRoomsEditState(),
   artworksEdit: createEmptyArtworksEditState(),
-  artworksList: createEmptyArtworksListState(),
   staticCmsDraft: createEmptyStaticCmsDraftState(),
   publishHistory: createEmptyPublishHistoryState(),
   storageCleanup: createEmptyStorageCleanupState(),
@@ -762,51 +761,6 @@ function normalizeHomeExperienceDraftForCompare(values = {}) {
 }
 
 
-export function startRoomEdit(room = {}) {
-  const draftValues = extractRoomEditableValues(room);
-  return setState({
-    roomsEdit: {
-      ...createEmptyRoomsEditState(),
-      isEditing: true,
-      editingRoomId: room.id || null,
-      editingRoomKey: room.room_key || null,
-      draftValues: { ...draftValues },
-      originalValues: { ...draftValues },
-    },
-  });
-}
-
-export function updateRoomDraftField(fieldName, value) {
-  const current = state.roomsEdit || createEmptyRoomsEditState();
-  const draftValues = {
-    ...current.draftValues,
-    [fieldName]: value,
-  };
-  return setState({
-    roomsEdit: {
-      ...current,
-      draftValues,
-      dirty: hasRoomDraftChanged(draftValues, current.originalValues),
-      saveError: null,
-      saveSuccess: null,
-    },
-  });
-}
-
-export function setRoomsEditState(patch = {}) {
-  const current = state.roomsEdit || createEmptyRoomsEditState();
-  return setState({
-    roomsEdit: {
-      ...current,
-      ...patch,
-    },
-  });
-}
-
-export function resetRoomsEdit() {
-  return setState({ roomsEdit: createEmptyRoomsEditState() });
-}
-
 export function createEmptyRoomsEditState() {
   return {
     isEditing: false,
@@ -835,117 +789,6 @@ export function hasRoomDraftChanged(draftValues = {}, originalValues = {}) {
     || normalizeDraftValue(draftValues.description) !== normalizeDraftValue(originalValues.description);
 }
 
-
-export function startArtworkTextEdit(artwork = {}) {
-  const draftValues = extractArtworkTextEditableValues(artwork);
-  return setState({
-    artworksEdit: {
-      ...createEmptyArtworksEditState(),
-      isEditing: true,
-      editingArtworkId: artwork.id || null,
-      editingArtworkCode: artwork.artwork_code || null,
-      draftValues: { ...draftValues },
-      originalValues: { ...draftValues },
-    },
-  });
-}
-
-export function updateArtworkTextDraftField(fieldName, value) {
-  const current = state.artworksEdit || createEmptyArtworksEditState();
-  const draftValues = {
-    ...current.draftValues,
-    [fieldName]: value,
-  };
-  return setState({
-    artworksEdit: {
-      ...current,
-      draftValues,
-      dirty: hasArtworkTextDraftChanged(draftValues, current.originalValues),
-      saveError: null,
-      saveSuccess: null,
-    },
-  });
-}
-
-export function setArtworksEditState(patch = {}) {
-  const current = state.artworksEdit || createEmptyArtworksEditState();
-  return setState({
-    artworksEdit: {
-      ...current,
-      ...patch,
-    },
-  });
-}
-
-export function resetArtworksEdit() {
-  return setState({ artworksEdit: createEmptyArtworksEditState() });
-}
-
-export function createEmptyArtworksListState() {
-  const defaultPageSize = ADMIN_UI.defaultArtworkPageSize || 50;
-  return {
-    items: [],
-    page: 1,
-    pageSize: defaultPageSize,
-    totalCount: 0,
-    search: '',
-    roomFilter: 'all',
-    warningFilter: 'all',
-    from: 0,
-    to: 0,
-    loading: false,
-    error: null,
-    requestId: 0,
-    lastEditedArtworkId: null,
-    lastLoadedAt: null,
-    notice: null,
-  };
-}
-
-export function setArtworksListState(patch = {}) {
-  const current = state.artworksList || createEmptyArtworksListState();
-  return setState({
-    artworksList: {
-      ...current,
-      ...patch,
-    },
-  });
-}
-
-export function applyArtworksPageResult(result = {}, requestId = null) {
-  const current = state.artworksList || createEmptyArtworksListState();
-  if (requestId !== null && current.requestId !== requestId) return state;
-  const items = Array.isArray(result.items) ? result.items : [];
-  return setState({
-    artworksList: {
-      ...current,
-      items,
-      page: result.page || current.page || 1,
-      pageSize: result.pageSize || current.pageSize || ADMIN_UI.defaultArtworkPageSize || 50,
-      totalCount: Number.isFinite(result.totalCount) ? result.totalCount : 0,
-      search: result.search ?? current.search ?? '',
-      roomFilter: result.roomFilter || current.roomFilter || 'all',
-      warningFilter: result.warningFilter || current.warningFilter || 'all',
-      from: result.from || 0,
-      to: result.to || 0,
-      loading: false,
-      error: null,
-      lastLoadedAt: new Date().toISOString(),
-    },
-  });
-}
-
-export function applyArtworksPageError(error, requestId = null) {
-  const current = state.artworksList || createEmptyArtworksListState();
-  if (requestId !== null && current.requestId !== requestId) return state;
-  return setState({
-    artworksList: {
-      ...current,
-      loading: false,
-      error,
-    },
-  });
-}
 
 export function createEmptyArtworksEditState() {
   return {

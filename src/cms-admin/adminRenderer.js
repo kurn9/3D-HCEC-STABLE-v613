@@ -36,7 +36,6 @@ import {
   resetRoomDraftToOriginal,
   resetSiteSettingsDraftToOriginal,
   setActiveTab,
-  applyArtworksPageResult,
   setError,
   setLoading,
   setNestedData,
@@ -150,9 +149,6 @@ async function loadDashboardData(client) {
   setError(null);
   const { data, errors } = await fetchDashboardData(client);
   setNestedData({ ...data, errors });
-  if (data?.artworksPage) {
-    applyArtworksPageResult(data.artworksPage);
-  }
   setLoading(false);
 }
 
@@ -255,7 +251,6 @@ function renderAccessDenied(access) {
 }
 
 function renderAdminShell() {
-  const focusSnapshot = captureArtworkSearchFocusSnapshot();
   clearNode(root);
   let state = getState();
   const normalizedActiveTab = normalizeOperatorTabKey(state.activeTab);
@@ -279,42 +274,6 @@ function renderAdminShell() {
   shell.appendChild(main);
   root.appendChild(shell);
   focusPendingEditTarget();
-  restoreArtworkSearchFocusSnapshot(focusSnapshot);
-}
-
-function captureArtworkSearchFocusSnapshot() {
-  if (!root || getState().activeTab !== 'artworks') return null;
-  const active = document.activeElement;
-  if (!active || !active.classList || !active.classList.contains('cms-admin-artwork-search')) return null;
-  if (document.querySelector('.cms-admin-help-backdrop')) return null;
-  const selectionStart = typeof active.selectionStart === 'number' ? active.selectionStart : null;
-  const selectionEnd = typeof active.selectionEnd === 'number' ? active.selectionEnd : selectionStart;
-  return {
-    value: String(active.value || ''),
-    selectionStart,
-    selectionEnd,
-  };
-}
-
-function restoreArtworkSearchFocusSnapshot(snapshot) {
-  if (!snapshot || getState().activeTab !== 'artworks') return;
-  requestAnimationFrame(() => {
-    if (getState().activeTab !== 'artworks') return;
-    if (document.querySelector('.cms-admin-help-backdrop')) return;
-    const currentActive = document.activeElement;
-    if (currentActive && currentActive !== document.body && !currentActive.classList?.contains('cms-admin-artwork-search')) return;
-    const search = root?.querySelector('.cms-admin-artwork-search');
-    if (!search || search.disabled) return;
-    search.focus({ preventScroll: true });
-    const length = String(search.value || '').length;
-    const start = Number.isFinite(snapshot.selectionStart) ? Math.min(snapshot.selectionStart, length) : length;
-    const end = Number.isFinite(snapshot.selectionEnd) ? Math.min(snapshot.selectionEnd, length) : start;
-    try {
-      search.setSelectionRange(start, end);
-    } catch (_error) {
-      // Some browser/input combinations can reject selection range on search inputs.
-    }
-  });
 }
 
 function renderRuntimeFallbackPanel(error) {
@@ -3086,26 +3045,6 @@ function cellText(text, className = '') {
 
 function cellNode(node, className = '') {
   return { node, className };
-}
-
-function renderRoomIdentity(room) {
-  const wrap = createElement('div', { className: 'cms-admin-cell-stack' });
-  wrap.appendChild(createElement('span', { className: 'cms-admin-cell-main', text: room.name || getRoomLabel(room.room_key) }));
-  wrap.appendChild(createElement('span', { className: 'cms-admin-cell-sub cms-admin-mono', text: `Mã: ${toDisplayText(room.room_key)}` }));
-  return wrap;
-}
-
-function renderRoomNameOnly(roomKey) {
-  const wrap = createElement('div', { className: 'cms-admin-cell-stack' });
-  wrap.appendChild(createElement('span', { className: 'cms-admin-cell-main', text: getRoomLabel(roomKey) }));
-  return wrap;
-}
-
-function renderArtworkIdentity(item) {
-  const wrap = createElement('div', { className: 'cms-admin-artwork-identity cms-admin-cell-stack' });
-  wrap.appendChild(createElement('span', { className: 'cms-admin-artwork-title cms-admin-cell-main', text: item.title || '—' }));
-  wrap.appendChild(createElement('span', { className: 'cms-admin-artwork-code cms-admin-cell-sub cms-admin-mono', text: `Mã: ${item.artwork_code || '—'}` }));
-  return wrap;
 }
 
 function renderStatCard(label, value, note, options = {}) {

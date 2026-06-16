@@ -593,25 +593,6 @@ body.cms-admin-page * {
   min-width: 780px;
 }
 
-.cms-admin-artworks-table {
-  min-width: 1120px;
-  table-layout: fixed;
-}
-
-.cms-admin-artworks-table th:nth-child(1) { width: 84px; }
-.cms-admin-artworks-table th:nth-child(2) { width: 280px; }
-.cms-admin-artworks-table th:nth-child(3) { width: 150px; }
-.cms-admin-artworks-table th:nth-child(4) { width: 92px; }
-.cms-admin-artworks-table th:nth-child(5) { width: 94px; }
-.cms-admin-artworks-table th:nth-child(6) { width: 104px; }
-.cms-admin-artworks-table th:nth-child(7) { width: 170px; }
-.cms-admin-artworks-table th:nth-child(8) { width: 146px; }
-
-.cms-admin-rooms-table,
-.cms-admin-history-table {
-  min-width: 860px;
-}
-
 .cms-admin-table th,
 .cms-admin-table td {
   border-bottom: 1px solid rgba(226, 232, 240, 0.07);
@@ -666,13 +647,6 @@ body.cms-admin-page * {
   font-weight: 780;
 }
 
-.cms-admin-room-cell,
-.cms-admin-artist-cell {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .cms-admin-warning-cell {
   color: #fde68a;
 }
@@ -682,26 +656,6 @@ body.cms-admin-page * {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.cms-admin-artwork-identity {
-  display: grid;
-  min-width: 0;
-  gap: 3px;
-}
-
-.cms-admin-artwork-title {
-  display: block;
-  overflow: hidden;
-  color: var(--cms-admin-text);
-  font-weight: 800;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.cms-admin-artwork-code {
-  color: var(--cms-admin-dim);
-  font-size: 0.72rem;
 }
 
 .cms-admin-empty {
@@ -989,23 +943,6 @@ body.cms-admin-page * {
   padding-bottom: 6px;
 }
 
-.cms-admin-artworks-table {
-  min-width: 1180px;
-}
-
-.cms-admin-artworks-table th:nth-child(1) { width: 150px; }
-.cms-admin-artworks-table th:nth-child(2) { width: 270px; }
-.cms-admin-artworks-table th:nth-child(3) { width: 140px; }
-.cms-admin-artworks-table th:nth-child(4) { width: 118px; }
-.cms-admin-artworks-table th:nth-child(5) { width: 132px; }
-.cms-admin-artworks-table th:nth-child(6) { width: 88px; }
-.cms-admin-artworks-table th:nth-child(7) { width: 112px; }
-.cms-admin-artworks-table th:nth-child(8) { width: 148px; }
-
-.cms-admin-rooms-table {
-  min-width: 840px;
-}
-
 .cms-admin-history-table {
   min-width: 940px;
 }
@@ -1276,15 +1213,6 @@ body.cms-admin-page * {
   font-weight: 760;
 }
 
-.cms-admin-section-intro p,
-.cms-admin-planning-lead,
-.cms-admin-room-description {
-  margin: 0;
-  color: var(--cms-admin-muted);
-  font-size: 0.86rem;
-  line-height: 1.55;
-}
-
 .cms-admin-planning-panel {
   max-width: 920px;
 }
@@ -1332,45 +1260,8 @@ body.cms-admin-page * {
   font-weight: 900;
 }
 
-.cms-admin-room-card-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.cms-admin-room-card {
-  display: grid;
-  gap: 13px;
-  border: 1px solid rgba(226, 232, 240, 0.09);
-  border-radius: var(--cms-admin-radius-lg);
-  background: linear-gradient(150deg, rgba(12, 22, 32, 0.94), rgba(5, 12, 20, 0.94));
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.16);
-  padding: 15px;
-}
-
-.cms-admin-room-card-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.cms-admin-room-card-head .cms-admin-cell-main {
-  font-size: 1.08rem;
-}
-
-.cms-admin-room-info-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-}
-
 .cms-admin-info-tile.is-technical {
   opacity: 0.72;
-}
-
-.cms-admin-room-card-action {
-  justify-self: start;
 }
 
 .cms-admin-media-view {
@@ -1472,12 +1363,6 @@ body.cms-admin-page * {
     grid-template-columns: 1fr;
   }
 
-  .cms-admin-quick-action-grid,
-  .cms-admin-room-card-grid,
-  .cms-admin-settings-grouped-view {
-    grid-template-columns: 1fr;
-  }
-
   .cms-admin-settings-grouped-view > .cms-admin-panel:first-child {
     grid-row: auto;
   }
@@ -1491,14 +1376,6 @@ body.cms-admin-page * {
   .cms-admin-nav-group + .cms-admin-nav-group {
     padding-top: 0;
     border-top: 0;
-  }
-
-  .cms-admin-metric-grid,
-  .cms-admin-room-info-grid,
-  .cms-admin-feature-list-grid,
-  .cms-admin-media-upload-types ul,
-  .cms-admin-workflow-list {
-    grid-template-columns: 1fr;
   }
 }
 
@@ -1575,10 +1452,6 @@ body.cms-admin-page * {
   margin-top: 8px;
 }
 
-.cms-admin-artwork-warning-filter {
-  min-width: 168px;
-}
-
 .cms-admin-media-empty-icon.is-locked {
   width: auto;
   min-width: 58px;
@@ -1624,12 +1497,6 @@ body.cms-admin-page * {
     align-items: flex-start;
     flex-direction: column;
   }
-}
-
-/* V6.11.21-B4-D: final read-only presentation clarity polish */
-.cms-admin-artworks-view .cms-admin-table-toolbar {
-  grid-template-columns: minmax(280px, 1fr) minmax(160px, 220px) minmax(160px, 190px);
-  align-items: center;
 }
 
 .cms-admin-data-group {
@@ -1695,12 +1562,6 @@ body.cms-admin-page * {
   color: var(--cms-admin-muted);
   border-color: rgba(125, 211, 252, 0.18);
   background: rgba(14, 116, 144, 0.08);
-}
-
-@media (max-width: 760px) {
-  .cms-admin-artworks-view .cms-admin-table-toolbar {
-    grid-template-columns: 1fr;
-  }
 }
 
 /* V6.11.21-B5-B: safe edit MVP for Site Settings only */
@@ -1943,23 +1804,6 @@ body.cms-admin-page * {
   background: rgba(14, 116, 144, 0.04);
 }
 
-/* V6.11.21-B5-F_B: production edit flow + responsive polish */
-.cms-admin-edit-panel-highlight,
-.cms-admin-table tr.is-editing > td,
-.cms-admin-room-card.is-editing {
-  border-color: rgba(214, 178, 94, 0.42) !important;
-  box-shadow:
-    0 0 0 1px rgba(214, 178, 94, 0.18) inset,
-    0 18px 42px rgba(0, 0, 0, 0.2);
-}
-
-.cms-admin-edit-panel-highlight.is-scroll-focus,
-.cms-admin-table tr.is-scroll-focus > td,
-.cms-admin-room-card.is-scroll-focus {
-  outline: 2px solid rgba(214, 178, 94, 0.42);
-  outline-offset: 2px;
-}
-
 .cms-admin-table tr.is-editing > td,
 .cms-admin-table tr.is-recently-saved > td {
   background: rgba(214, 178, 94, 0.075);
@@ -1969,46 +1813,12 @@ body.cms-admin-page * {
   box-shadow: inset 3px 0 0 rgba(94, 227, 161, 0.72);
 }
 
-.cms-admin-artwork-edit-row > td {
-  padding: 12px !important;
-  background: rgba(2, 6, 12, 0.28);
-}
-
-.cms-admin-artwork-edit-panel {
-  margin: 2px 0;
-  border: 1px solid rgba(214, 178, 94, 0.26);
-  border-radius: var(--cms-admin-radius-lg);
-  background: linear-gradient(145deg, rgba(17, 29, 41, 0.96), rgba(8, 16, 24, 0.96));
-  padding: 14px;
-}
-
-.cms-admin-artwork-actions-cell {
-  text-align: right;
-}
-
-.cms-admin-artwork-edit-actions {
-  display: flex;
-  justify-content: flex-end;
-}
-
-.cms-admin-artwork-edit-actions .cms-admin-mini-action {
-  min-width: 48px;
-  min-height: 28px;
-  padding: 5px 10px;
-  font-size: 0.74rem;
-  box-shadow: none;
-}
-
 .cms-admin-readonly-field-grid .cms-admin-readonly-field {
   min-width: 0;
 }
 
 .cms-admin-readonly-field-grid .cms-admin-readonly-note:empty {
   display: none;
-}
-
-.cms-admin-artworks-table-wrap {
-  max-width: 100%;
 }
 
 .cms-admin-runtime-error-panel {
@@ -2067,15 +1877,6 @@ body.cms-admin-page * {
     font-size: 0.8rem;
   }
 
-  .cms-admin-artworks-view .cms-admin-table-toolbar {
-    grid-template-columns: minmax(220px, 1fr) minmax(142px, 170px) minmax(142px, 170px);
-    gap: 8px;
-  }
-
-  .cms-admin-artworks-table {
-    min-width: 1040px;
-  }
-
   .cms-admin-table th,
   .cms-admin-table td {
     padding: 7px 8px;
@@ -2085,10 +1886,6 @@ body.cms-admin-page * {
     min-height: 32px;
     padding: 7px 11px;
     font-size: 0.82rem;
-  }
-
-  .cms-admin-artwork-edit-panel {
-    padding: 12px;
   }
 }
 
@@ -2103,26 +1900,6 @@ body.cms-admin-page * {
 
   .cms-admin-status-row {
     justify-content: flex-start;
-  }
-
-  .cms-admin-artworks-view .cms-admin-table-toolbar {
-    grid-template-columns: 1fr;
-  }
-
-  .cms-admin-artwork-search,
-  .cms-admin-artwork-filter,
-  .cms-admin-artwork-warning-filter {
-    width: 100%;
-    min-width: 0;
-  }
-
-  .cms-admin-content-card-grid,
-  .cms-admin-gate-room-grid,
-  .cms-admin-room-card-grid,
-  .cms-admin-dashboard-top-grid,
-  .cms-admin-dashboard-reference-grid,
-  .cms-admin-settings-grouped-view {
-    grid-template-columns: 1fr;
   }
 }
 
@@ -2178,15 +1955,6 @@ body.cms-admin-page * {
   line-height: 1.42;
 }
 
-.cms-admin-artwork-identity-action-wrap {
-  display: grid;
-  gap: 8px;
-}
-
-.cms-admin-artwork-inline-actions {
-  display: none;
-}
-
 .cms-admin-edit-action-row {
   position: sticky;
   bottom: 10px;
@@ -2200,39 +1968,6 @@ body.cms-admin-page * {
 
 .cms-admin-edit-panel-highlight {
   scroll-margin-top: 92px;
-}
-
-.cms-admin-artworks-table td[data-label="Tác phẩm"] {
-  min-width: 0;
-}
-
-@media (max-width: 1440px) {
-  .cms-admin-artworks-table th:nth-child(9),
-  .cms-admin-artworks-table td:nth-child(9) {
-    display: none;
-  }
-
-  .cms-admin-artwork-inline-actions {
-    display: flex;
-    justify-content: flex-start;
-  }
-
-  .cms-admin-artwork-inline-actions .cms-admin-artwork-edit-actions {
-    justify-content: flex-start;
-  }
-
-  .cms-admin-artworks-table {
-    min-width: 860px;
-  }
-
-  .cms-admin-artworks-table th:nth-child(1) { width: 120px; }
-  .cms-admin-artworks-table th:nth-child(2) { width: 310px; }
-  .cms-admin-artworks-table th:nth-child(3) { width: 132px; }
-  .cms-admin-artworks-table th:nth-child(4) { width: 104px; }
-  .cms-admin-artworks-table th:nth-child(5) { width: 112px; }
-  .cms-admin-artworks-table th:nth-child(6) { width: 78px; }
-  .cms-admin-artworks-table th:nth-child(7) { width: 100px; }
-  .cms-admin-artworks-table th:nth-child(8) { width: 132px; }
 }
 
 @media (max-width: 1366px) {
@@ -2326,10 +2061,6 @@ body.cms-admin-page * {
   .cms-admin-main {
     padding: 14px 12px 24px;
   }
-
-  .cms-admin-artworks-table {
-    min-width: 720px;
-  }
 }
 
 @media (max-width: 767px) {
@@ -2399,79 +2130,10 @@ body.cms-admin-page * {
     font-size: 0.68rem;
   }
 
-  .cms-admin-panel,
-  .cms-admin-view-panel,
-  .cms-admin-data-card,
-  .cms-admin-room-card,
-  .cms-admin-home-hero-edit-panel,
-  .cms-admin-artwork-edit-panel {
-    border-radius: 12px;
-    padding: 10px;
-  }
-
   .cms-admin-table-wrap {
     overflow: visible;
     border: 0;
     background: transparent;
-  }
-
-  .cms-admin-artworks-table,
-  .cms-admin-artworks-table thead,
-  .cms-admin-artworks-table tbody,
-  .cms-admin-artworks-table tr,
-  .cms-admin-artworks-table th,
-  .cms-admin-artworks-table td {
-    display: block;
-    width: 100%;
-    min-width: 0;
-  }
-
-  .cms-admin-artworks-table thead {
-    display: none;
-  }
-
-  .cms-admin-artworks-table tr {
-    margin: 0 0 10px;
-    border: 1px solid rgba(226, 232, 240, 0.1);
-    border-radius: 12px;
-    background: rgba(2, 6, 12, 0.22);
-    overflow: hidden;
-  }
-
-  .cms-admin-artworks-table td {
-    display: grid;
-    grid-template-columns: minmax(88px, 34%) minmax(0, 1fr);
-    gap: 8px;
-    border-bottom: 1px solid rgba(226, 232, 240, 0.06);
-    padding: 8px 10px;
-  }
-
-  .cms-admin-artworks-table td::before {
-    content: attr(data-label);
-    color: var(--cms-admin-dim);
-    font-size: 0.68rem;
-    font-weight: 850;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-  }
-
-  .cms-admin-artworks-table td[data-label="Tác phẩm"] {
-    display: block;
-  }
-
-  .cms-admin-artworks-table td[data-label="Tác phẩm"]::before {
-    display: block;
-    margin-bottom: 5px;
-  }
-
-  .cms-admin-artworks-table th:nth-child(9),
-  .cms-admin-artworks-table td:nth-child(9),
-  .cms-admin-artwork-inline-actions {
-    display: none;
-  }
-
-  .cms-admin-artwork-edit-row {
-    display: none !important;
   }
 
   .cms-admin-edit-action-row {
@@ -2486,63 +2148,12 @@ body.cms-admin-page * {
     min-height: 44px;
     padding: 9px 13px;
   }
-
-  .cms-admin-edit-field-grid,
-  .cms-admin-readonly-field-grid,
-  .cms-admin-room-info-grid,
-  .cms-admin-dashboard-top-grid,
-  .cms-admin-content-card-grid,
-  .cms-admin-gate-room-grid,
-  .cms-admin-room-card-grid,
-  .cms-admin-settings-grouped-view {
-    grid-template-columns: 1fr !important;
-  }
 }
 
 @media (max-width: 430px) {
   .cms-admin-status-row .cms-admin-badge {
     max-width: 96px;
   }
-
-  .cms-admin-artworks-table td {
-    grid-template-columns: 1fr;
-  }
-
-  .cms-admin-artworks-table td::before {
-    margin-bottom: 2px;
-  }
-}
-
-/* V6.11.21-B5-F_D_B: edit layout isolation + density + reset hotfix */
-.cms-admin-room-card-stack,
-.cms-admin-focused-edit-panel {
-  display: grid;
-  gap: 10px;
-}
-
-.cms-admin-room-card-grid,
-.cms-admin-content-card-grid,
-.cms-admin-gate-room-grid {
-  align-items: start;
-}
-
-.cms-admin-room-card,
-.cms-admin-data-card,
-.cms-admin-index-section-card,
-.cms-admin-gate-room-card {
-  align-self: start;
-}
-
-.cms-admin-focused-edit-panel > .cms-admin-home-hero-edit-panel,
-.cms-admin-room-card-stack > .cms-admin-room-edit-panel {
-  width: 100%;
-}
-
-.cms-admin-room-card.is-editing,
-.cms-admin-index-section-card.is-editing {
-  border-color: rgba(214, 178, 94, 0.34);
-  background: linear-gradient(150deg, rgba(24, 31, 39, 0.96), rgba(7, 16, 24, 0.96));
-  box-shadow: 0 0 0 1px rgba(214, 178, 94, 0.10), 0 18px 42px rgba(0, 0, 0, 0.18);
 }
 
 .cms-admin-editing-inline-note {
@@ -2565,25 +2176,6 @@ body.cms-admin-page * {
 
 .cms-admin-reset-draft-button:disabled {
   opacity: 0.42;
-}
-
-.cms-admin-edit-form,
-.cms-admin-home-form-section,
-.cms-admin-gate-form-section,
-.cms-admin-home-media-edit-group,
-.cms-admin-home-items-edit-group,
-.cms-admin-home-cta-edit-group,
-.cms-admin-room-edit-metadata,
-.cms-admin-artwork-edit-metadata {
-  gap: 10px;
-}
-
-.cms-admin-home-hero-edit-panel,
-.cms-admin-gate-edit-panel,
-.cms-admin-room-edit-panel,
-.cms-admin-artwork-edit-panel {
-  gap: 10px;
-  padding: 13px;
 }
 
 .cms-admin-edit-field-grid,
@@ -2609,17 +2201,6 @@ body.cms-admin-page * {
   min-height: 74px;
 }
 
-.cms-admin-readonly-field-grid.cms-admin-home-technical-strip,
-.cms-admin-readonly-field-grid.cms-admin-room-technical-strip,
-.cms-admin-readonly-field-grid.cms-admin-artwork-technical-strip,
-.cms-admin-readonly-field-grid.cms-admin-artwork-media-strip {
-  gap: 7px;
-  border: 1px solid rgba(226, 232, 240, 0.055);
-  border-radius: var(--cms-admin-radius-md);
-  background: rgba(2, 6, 12, 0.12);
-  padding: 9px;
-}
-
 .cms-admin-readonly-field {
   gap: 3px;
   padding: 7px 8px;
@@ -2636,117 +2217,23 @@ body.cms-admin-page * {
   line-height: 1.42;
 }
 
-.cms-admin-artworks-table td,
-.cms-admin-artworks-table th {
-  padding-block: 8px;
-}
-
-.cms-admin-artworks-table .cms-admin-cell-main,
-.cms-admin-artworks-table .cms-admin-cell-sub {
-  line-height: 1.28;
-}
-
-.cms-admin-artwork-edit-panel .cms-admin-edit-textarea {
-  min-height: 86px;
-}
-
 .cms-admin-edit-action-row {
   gap: 7px;
   padding: 7px;
 }
 
 @media (max-width: 1440px) {
-  .cms-admin-panel,
-  .cms-admin-view-panel,
-  .cms-admin-data-card,
-  .cms-admin-room-card {
-    padding: 12px;
-  }
 
   .cms-admin-grid {
     gap: 12px;
   }
 }
 
-@media (max-width: 1279px) {
-  .cms-admin-home-hero-edit-panel,
-  .cms-admin-gate-edit-panel,
-  .cms-admin-room-edit-panel,
-  .cms-admin-artwork-edit-panel {
-    padding: 11px;
-  }
-
-  .cms-admin-readonly-field-grid.cms-admin-home-technical-strip,
-  .cms-admin-readonly-field-grid.cms-admin-room-technical-strip,
-  .cms-admin-readonly-field-grid.cms-admin-artwork-technical-strip,
-  .cms-admin-readonly-field-grid.cms-admin-artwork-media-strip {
-    grid-template-columns: 1fr;
-  }
-}
-
 @media (max-width: 767px) {
-  .cms-admin-room-card-stack,
-  .cms-admin-focused-edit-panel {
-    gap: 8px;
-  }
-
-  .cms-admin-home-hero-edit-panel,
-  .cms-admin-gate-edit-panel,
-  .cms-admin-room-edit-panel,
-  .cms-admin-artwork-edit-panel {
-    padding: 10px;
-  }
 
   .cms-admin-edit-action-block {
     gap: 5px;
   }
-}
-
-/* B5-H_B: Artworks server-side pagination/search */
-.cms-admin-artworks-pagination-toolbar {
-  align-items: center;
-  gap: 10px;
-}
-
-.cms-admin-artwork-page-size-control {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--cms-muted, #9aa5b1);
-  font-size: 0.84rem;
-  white-space: nowrap;
-}
-
-.cms-admin-artwork-page-size-control .cms-admin-select {
-  min-width: 82px;
-}
-
-.cms-admin-artwork-pagination {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-left: auto;
-  color: var(--cms-muted, #9aa5b1);
-  font-size: 0.84rem;
-}
-
-.cms-admin-artwork-pagination.is-bottom {
-  justify-content: space-between;
-  margin: 12px 0 0;
-  padding-top: 10px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.cms-admin-artwork-range-summary,
-.cms-admin-artwork-page-summary {
-  white-space: nowrap;
-}
-
-.cms-admin-inline-loading,
-.cms-admin-artworks-empty-block {
-  margin: 12px 0;
 }
 
 .cms-admin-inline-loading {
@@ -2756,34 +2243,6 @@ body.cms-admin-page * {
   background: rgba(214, 178, 94, 0.08);
   color: #f1d890;
   font-weight: 700;
-}
-
-.cms-admin-artworks-empty-block {
-  display: grid;
-  gap: 10px;
-}
-
-@media (max-width: 1440px) {
-  .cms-admin-artworks-pagination-toolbar {
-    align-items: stretch;
-  }
-
-  .cms-admin-artwork-pagination {
-    width: 100%;
-    justify-content: flex-start;
-    margin-left: 0;
-  }
-}
-
-@media (max-width: 768px) {
-  .cms-admin-artwork-page-size-control,
-  .cms-admin-artwork-pagination {
-    width: 100%;
-  }
-
-  .cms-admin-artwork-pagination .cms-admin-mini-action {
-    min-height: 44px;
-  }
 }
 
 /* V6.11.21-B6-F_K_O_I_I — CMS Admin static draft UX professionalization */
@@ -4309,82 +3768,12 @@ body.cms-admin-page * {
   }
 }
 
-/* v6.14.041.002 — Room artwork canonical draft bridge */
-.cms-admin-artwork-bridge-panel {
-  display: grid;
-  gap: 10px;
-  padding: 14px;
-  border: 1px solid rgba(234, 190, 82, 0.24);
-  border-radius: 18px;
-  background: rgba(234, 190, 82, 0.06);
-  margin: 12px 0;
-}
-
-.cms-admin-artwork-bridge-title,
-.cms-admin-artwork-bridge-actions,
-.cms-admin-artwork-media-upload-row {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.cms-admin-artwork-bridge-badges {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
-  min-width: 150px;
-}
-
-.cms-admin-artwork-bridge-badges .cms-admin-badge {
-  width: fit-content;
-}
-
-.cms-admin-artwork-bridge-cell {
-  min-width: 170px;
-}
-
-.cms-admin-artworks-table tr.is-db-only td,
-.cms-admin-artworks-table tr.is-scene-missing td {
-  background: rgba(234, 190, 82, 0.035);
-}
-
-.cms-admin-artwork-canonical-form .cms-admin-home-form-section {
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 16px;
-  padding: 14px;
-  background: rgba(7, 16, 25, 0.42);
-}
-
-.cms-admin-artwork-media-edit-grid {
-  grid-template-columns: minmax(220px, 1fr) minmax(220px, 1fr);
-}
-
-.cms-admin-artwork-media-edit-field {
-  padding: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 14px;
-  background: rgba(0, 0, 0, 0.14);
-}
-
-.cms-admin-artwork-media-file-input {
-  max-width: 260px;
-  color: var(--cms-admin-text-muted, #aeb8c5);
-}
-
 .cms-admin-success-text {
   color: #69d39f;
 }
 
 .cms-admin-danger-text {
   color: #ff9b9b;
-}
-
-@media (max-width: 900px) {
-  .cms-admin-artwork-media-edit-grid {
-    grid-template-columns: 1fr;
-  }
 }
 
 .cms-admin-static-primary-actions {
