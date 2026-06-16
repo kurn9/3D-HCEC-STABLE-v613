@@ -30,10 +30,8 @@ import {
   resetHomeEdit,
   resetSiteSettingsEdit,
   resetActiveEditSession,
-  resetArtworkTextDraftToOriginal,
   resetGateDraftToOriginal,
   resetHomeDraftToOriginal,
-  resetRoomDraftToOriginal,
   resetSiteSettingsDraftToOriginal,
   setActiveTab,
   setError,
@@ -495,10 +493,6 @@ function getFocusTargetForActiveSession(session = getActiveEditSession(getState(
       const panelType = sectionKey === 'hero' ? 'home-hero' : sectionKey === 'guide' ? 'home-guide' : sectionKey === 'experience' ? 'home-experience' : 'home';
       return { type: panelType, id: currentState.homeEdit?.editingSectionId || sectionKey, fieldName: 'title' };
     }
-    case 'room':
-      return { type: 'room', id: currentState.roomsEdit?.editingRoomId || currentState.roomsEdit?.editingRoomKey || 'room', fieldName: 'name' };
-    case 'artwork':
-      return { type: 'artwork', id: currentState.artworksEdit?.editingArtworkId || currentState.artworksEdit?.editingArtworkCode || 'artwork', fieldName: 'title' };
     default:
       return null;
   }
@@ -523,12 +517,6 @@ function handleResetActiveDraft(expectedType) {
       break;
     case 'home':
       resetHomeDraftToOriginal();
-      break;
-    case 'room':
-      resetRoomDraftToOriginal();
-      break;
-    case 'artwork':
-      resetArtworkTextDraftToOriginal();
       break;
     default:
       return;

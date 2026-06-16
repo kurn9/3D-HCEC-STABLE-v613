@@ -10,8 +10,6 @@ const initialState = {
   siteSettingsEdit: createEmptySiteSettingsEditState(),
   gateEdit: createEmptyGateEditState(),
   homeEdit: createEmptyHomeEditState(),
-  roomsEdit: createEmptyRoomsEditState(),
-  artworksEdit: createEmptyArtworksEditState(),
   staticCmsDraft: createEmptyStaticCmsDraftState(),
   publishHistory: createEmptyPublishHistoryState(),
   storageCleanup: createEmptyStorageCleanupState(),
@@ -761,84 +759,6 @@ function normalizeHomeExperienceDraftForCompare(values = {}) {
 }
 
 
-export function createEmptyRoomsEditState() {
-  return {
-    isEditing: false,
-    editingRoomId: null,
-    editingRoomKey: null,
-    draftValues: {},
-    originalValues: {},
-    dirty: false,
-    saving: false,
-    saveError: null,
-    saveSuccess: null,
-    validationErrors: {},
-    validationWarnings: {},
-  };
-}
-
-export function extractRoomEditableValues(room = {}) {
-  return {
-    name: room.name || '',
-    description: room.description || '',
-  };
-}
-
-export function hasRoomDraftChanged(draftValues = {}, originalValues = {}) {
-  return normalizeDraftValue(draftValues.name) !== normalizeDraftValue(originalValues.name)
-    || normalizeDraftValue(draftValues.description) !== normalizeDraftValue(originalValues.description);
-}
-
-
-export function createEmptyArtworksEditState() {
-  return {
-    isEditing: false,
-    editingArtworkId: null,
-    editingArtworkCode: null,
-    editingRoomKey: null,
-    editingCanonicalIndex: -1,
-    editingBridgeStatus: '',
-    editingSource: '',
-    draftValues: {},
-    originalValues: {},
-    dirty: false,
-    saving: false,
-    mediaUploading: false,
-    mediaUploadError: null,
-    mediaUploadStatus: {},
-    saveError: null,
-    saveSuccess: null,
-    validationErrors: {},
-    validationWarnings: {},
-  };
-}
-
-export function extractArtworkTextEditableValues(artwork = {}) {
-  const realSize = artwork.realSize ?? artwork.real_size ?? '';
-  return {
-    title: artwork.title || '',
-    subtitle: artwork.subtitle || '',
-    description: artwork.description || '',
-    content: artwork.content || '',
-    author: artwork.author || '',
-    artist: artwork.artist || artwork.author || '',
-    year: artwork.year || '',
-    material: artwork.material || '',
-    realSize,
-    real_size: realSize,
-    note: artwork.note || '',
-    imageUrl: artwork.imageUrl || artwork.image_url || artwork.image || artwork.src || artwork.url || '',
-    thumbnailUrl: artwork.thumbnailUrl || artwork.thumbnail_url || artwork.thumbnail || '',
-    posterUrl: artwork.posterUrl || artwork.poster_url || artwork.poster || '',
-    videoUrl: artwork.videoUrl || artwork.video_url || '',
-  };
-}
-
-export function hasArtworkTextDraftChanged(draftValues = {}, originalValues = {}) {
-  const keys = ['title', 'subtitle', 'description', 'content', 'author', 'artist', 'year', 'material', 'realSize', 'real_size', 'note', 'imageUrl', 'thumbnailUrl', 'posterUrl', 'videoUrl'];
-  return keys.some((key) => normalizeDraftValue(draftValues[key]) !== normalizeDraftValue(originalValues[key]));
-}
-
 
 export function createEmptyStaticCmsDraftState() {
   return {
@@ -1223,8 +1143,6 @@ export function getAllActiveEditSessions(currentState = state) {
     currentState.siteSettingsEdit?.isEditing ? { type: 'site-settings', id: 'site-settings', label: 'Thông tin website', dirty: Boolean(currentState.siteSettingsEdit.dirty), saving: Boolean(currentState.siteSettingsEdit.saving) } : null,
     currentState.gateEdit?.isEditing ? { type: 'gate', id: 'gate', label: 'Cổng vào triển lãm', dirty: Boolean(currentState.gateEdit.dirty), saving: Boolean(currentState.gateEdit.saving) } : null,
     currentState.homeEdit?.isEditing ? { type: 'home', id: String(currentState.homeEdit.editingSectionId || currentState.homeEdit.editingSectionKey || 'home'), key: currentState.homeEdit.editingSectionKey || '', label: 'Trang chủ', dirty: Boolean(currentState.homeEdit.dirty), saving: Boolean(currentState.homeEdit.saving) } : null,
-    currentState.roomsEdit?.isEditing ? { type: 'room', id: String(currentState.roomsEdit.editingRoomId || currentState.roomsEdit.editingRoomKey || 'room'), key: currentState.roomsEdit.editingRoomKey || '', label: 'Phòng trưng bày', dirty: Boolean(currentState.roomsEdit.dirty), saving: Boolean(currentState.roomsEdit.saving) } : null,
-    currentState.artworksEdit?.isEditing ? { type: 'artwork', id: String(currentState.artworksEdit.editingArtworkId || currentState.artworksEdit.editingArtworkCode || 'artwork'), key: currentState.artworksEdit.editingArtworkCode || '', label: 'Tác phẩm', dirty: Boolean(currentState.artworksEdit.dirty), saving: Boolean(currentState.artworksEdit.saving) } : null,
     currentState.staticCmsDraft?.draftJson ? { type: 'static-cms-draft', id: 'static-cms-draft', label: 'Nội dung phòng 3D', dirty: Boolean(currentState.staticCmsDraft.dirty), saving: Boolean(currentState.staticCmsDraft.isSavingDraft) } : null,
   ].filter(Boolean);
 }
@@ -1250,8 +1168,6 @@ export function resetActiveEditSession() {
     siteSettingsEdit: createEmptySiteSettingsEditState(),
     gateEdit: createEmptyGateEditState(),
     homeEdit: createEmptyHomeEditState(),
-    roomsEdit: createEmptyRoomsEditState(),
-    artworksEdit: createEmptyArtworksEditState(),
     staticCmsDraft: createEmptyStaticCmsDraftState(),
   });
 }
@@ -1290,19 +1206,6 @@ export function resetHomeDraftToOriginal() {
   if (!current.isEditing) return state;
   return setState({ homeEdit: restoreDraftFromOriginal(current) });
 }
-
-export function resetRoomDraftToOriginal() {
-  const current = state.roomsEdit || createEmptyRoomsEditState();
-  if (!current.isEditing) return state;
-  return setState({ roomsEdit: restoreDraftFromOriginal(current) });
-}
-
-export function resetArtworkTextDraftToOriginal() {
-  const current = state.artworksEdit || createEmptyArtworksEditState();
-  if (!current.isEditing) return state;
-  return setState({ artworksEdit: restoreDraftFromOriginal(current) });
-}
-
 export function resetState() {
   state = structuredCloneSafe(initialState);
   notify();
