@@ -1,4 +1,4 @@
-import { ADMIN_FEATURE_FLAGS, ADMIN_ROLES, getSupabaseConfigStatus } from './adminConfig.js';
+import { ADMIN_FEATURE_FLAGS, ADMIN_ROLES, STATIC_CMS_DRAFT_CONFIG, getSupabaseConfigStatus } from './adminConfig.js';
 import {
   createSupabaseClient,
   onAuthStateChange,
@@ -809,8 +809,8 @@ function renderDashboard(state) {
 }
 
 function renderMediaTab(state) {
-  const mediaAssets = safeArray(state.data.mediaAssets).map(normalizeMediaLibraryAsset);
-  const mediaError = state.data.errors?.mediaAssets;
+  const mediaAssets = safeArray(state.data.cmsMediaUploads).map(normalizeMediaLibraryAsset);
+  const mediaError = state.data.errors?.cmsMediaUploads;
   const usageContext = buildMediaUsageContext(state);
   const enrichedAssets = mediaAssets.map((asset) => ({
     ...asset,
@@ -854,17 +854,21 @@ function renderMediaTab(state) {
 }
 
 function normalizeMediaLibraryAsset(asset = {}) {
-  const publicUrl = firstAvailableValue(asset, ['public_url', 'publicUrl', 'url']);
+  const publicUrlRaw = firstAvailableValue(asset, ['public_url', 'publicUrl', 'url']);
+  const publicUrl = normalizeSafeMediaUrl(publicUrlRaw);
   const storagePath = firstAvailableValue(asset, ['storage_path', 'storagePath', 'path', 'file_name', 'fileName']);
   const fieldName = firstAvailableValue(asset, ['field_name', 'fieldName']);
   const mediaKind = normalizeMediaKind(firstAvailableValue(asset, ['media_kind', 'mediaKind', 'asset_type', 'assetType']), fieldName, firstAvailableValue(asset, ['mime_type', 'mimeType']));
   return {
     ...asset,
     id: firstAvailableValue(asset, ['id']) || storagePath || publicUrl || '',
+    publicUrlRaw,
     publicUrl,
+    hasSafePublicUrl: Boolean(publicUrl),
+    publicUrlSafetyMessage: publicUrl ? '' : ADMIN_COPY.media.unsafeUrl,
     storageBucket: firstAvailableValue(asset, ['storage_bucket', 'storageBucket']) || 'cms-media',
     storagePath,
-    fileName: getMediaFileName(storagePath, publicUrl),
+    fileName: getMediaFileName(storagePath, publicUrl || publicUrlRaw),
     mediaKind,
     mimeType: firstAvailableValue(asset, ['mime_type', 'mimeType']),
     sizeBytes: Number(firstAvailableValue(asset, ['size_bytes', 'sizeBytes'])) || 0,
@@ -877,6 +881,44 @@ function normalizeMediaLibraryAsset(asset = {}) {
     status: firstAvailableValue(asset, ['status']) || '',
     createdAt: firstAvailableValue(asset, ['created_at', 'createdAt']),
   };
+}
+
+function normalizeSafeMediaUrl(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+
+  const lower = raw.toLowerCase();
+  if (lower.startsWith('javascript:') || lower.startsWith('data:') || lower.startsWith('blob:') || lower.startsWith('file:')) {
+    return '';
+  }
+
+  if (isAllowedRelativeMediaPath(raw)) {
+    return raw;
+  }
+
+  try {
+    const parsed = new URL(raw);
+    if (parsed.protocol !== 'https:') return '';
+    const allowedOrigins = new Set(safeArray(STATIC_CMS_DRAFT_CONFIG.allowedMediaOrigins).map((origin) => String(origin || '').trim()).filter(Boolean));
+    const allowedHosts = new Set(safeArray(STATIC_CMS_DRAFT_CONFIG.allowedMediaHosts).map((host) => String(host || '').trim().toLowerCase()).filter(Boolean));
+    if (allowedOrigins.has(parsed.origin) || allowedHosts.has(parsed.hostname.toLowerCase())) {
+      return parsed.href;
+    }
+  } catch {
+    return '';
+  }
+
+  return '';
+}
+
+function isAllowedRelativeMediaPath(value = '') {
+  const raw = String(value || '').trim();
+  if (!raw || raw.startsWith('//')) return false;
+  if (/^[a-z][a-z0-9+.-]*:/i.test(raw)) return false;
+  return safeArray(STATIC_CMS_DRAFT_CONFIG.allowedMediaPathPrefixes).some((prefix) => {
+    const normalizedPrefix = String(prefix || '').trim();
+    return normalizedPrefix && raw.startsWith(normalizedPrefix);
+  });
 }
 
 function firstAvailableValue(object = {}, keys = []) {
@@ -1091,32 +1133,29 @@ function renderMediaLibraryCard(asset = {}) {
     [ADMIN_COPY.media.fields.status, formatMediaUploadStatus(asset.status)],
   ].forEach(([label, value]) => appendMediaDetail(details, label, value));
 
+  const statusNote = asset.status
+    ? createElement('p', { className: 'cms-admin-help-text cms-admin-media-status-note', text: ADMIN_COPY.media.statusNote })
+    : null;
   const path = createElement('p', { className: 'cms-admin-media-path', text: asset.storagePath || asset.publicUrl || '—' });
 
   const actions = createElement('div', { className: 'cms-admin-media-actions' });
-  if (asset.publicUrl) {
+  if (asset.hasSafePublicUrl) {
     const copyButton = createElement('button', { className: 'cms-admin-button cms-admin-button-ghost', text: ADMIN_COPY.media.actions.copyUrl, type: 'button' });
     copyButton.addEventListener('click', () => copyMediaUrl(copyButton, asset.publicUrl));
-    const openLink = createElement('a', {
-      className: 'cms-admin-button cms-admin-button-ghost',
-      text: ADMIN_COPY.media.actions.openUrl,
-      href: asset.publicUrl,
-      attrs: { target: '_blank', rel: 'noopener noreferrer' },
-    });
-    appendChildren(actions, [copyButton, openLink]);
+    actions.appendChild(copyButton);
   } else {
-    actions.appendChild(createElement('span', { className: 'cms-admin-help-text', text: 'Media này chưa có đường dẫn public.' }));
+    actions.appendChild(createElement('span', { className: 'cms-admin-help-text cms-admin-media-url-warning', text: asset.publicUrlRaw ? ADMIN_COPY.media.unsafeUrl : 'Media này chưa có đường dẫn public.' }));
   }
 
-  appendChildren(body, [titleRow, badges, details, path, actions]);
+  appendChildren(body, [titleRow, badges, details, statusNote, path, actions]);
   card.appendChild(body);
   return card;
 }
 
 function renderMediaPreview(asset = {}) {
   const preview = createElement('div', { className: 'cms-admin-media-preview' });
-  if (!asset.publicUrl) {
-    preview.appendChild(createElement('span', { text: ADMIN_COPY.media.previewUnavailable }));
+  if (!asset.hasSafePublicUrl) {
+    preview.appendChild(createElement('span', { text: asset.publicUrlRaw ? ADMIN_COPY.media.unsafeUrl : ADMIN_COPY.media.previewUnavailable }));
     return preview;
   }
 
@@ -1230,15 +1269,10 @@ function formatMediaFieldName(fieldName = '') {
 }
 
 function formatMediaUploadStatus(status = '') {
-  const value = String(status || '').trim();
-  const labels = {
-    draft: 'Trong bản nháp',
-    attached: 'Đã gắn vào draft',
-    published: 'Đã từng công khai',
-    orphaned: 'Có thể chưa dùng',
-    deleted: 'Đã đánh dấu xóa',
-  };
-  return labels[value] || value || '—';
+  const value = String(status || '').trim().toLowerCase();
+  const neutralValues = new Set(['draft', 'attached', 'published', 'orphaned', 'deleted']);
+  if (neutralValues.has(value)) return value;
+  return String(status || '').trim() || '—';
 }
 
 function formatBytes(value = 0) {

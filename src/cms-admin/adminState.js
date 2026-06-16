@@ -22,6 +22,7 @@ const initialState = {
     artworkStats: { total: 0, indoor: 0, outdoor: 0, warning: 0 },
     publishedBundles: [],
     mediaAssets: [],
+    cmsMediaUploads: [],
     canonicalCms: null,
     canonicalSummary: null,
     canonicalError: null,

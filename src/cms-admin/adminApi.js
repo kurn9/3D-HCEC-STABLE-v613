@@ -24,6 +24,7 @@ export async function fetchDashboardData(client) {
     artworkStats,
     publishedBundles,
     mediaAssets,
+    cmsMediaUploads,
     canonicalCms,
   ] = await Promise.all([
     fetchSiteSettings(client),
@@ -34,6 +35,7 @@ export async function fetchDashboardData(client) {
     fetchArtworkStats(client),
     fetchPublishedBundles(client),
     fetchMediaAssets(client),
+    fetchCmsMediaUploads(client),
     fetchDashboardCanonicalCmsContent(),
   ]);
 
@@ -46,6 +48,7 @@ export async function fetchDashboardData(client) {
     artworkStats,
     publishedBundles,
     mediaAssets,
+    cmsMediaUploads,
   });
 
   return {
@@ -58,6 +61,7 @@ export async function fetchDashboardData(client) {
       artworkStats: artworkStats.data || createEmptyArtworkStats(),
       publishedBundles: safeArray(publishedBundles.data),
       mediaAssets: safeArray(mediaAssets.data),
+      cmsMediaUploads: safeArray(cmsMediaUploads.data),
       canonicalCms: canonicalCms.data || null,
       canonicalSummary: canonicalCms.data?.summary || null,
       canonicalError: canonicalCms.error || null,
@@ -281,6 +285,17 @@ export async function fetchPublishedBundles(client) {
 
 export async function fetchMediaAssets(client) {
   return runReadQuery('mediaAssets', async () => {
+    const { data, error } = await client
+      .from(ADMIN_TABLES.mediaAssets)
+      .select('id,asset_type,file_name,storage_path,public_url,mime_type,size_bytes,width,height,duration_seconds,alt_text,caption,created_at,created_by,is_published')
+      .order('created_at', { ascending: false })
+      .limit(500);
+    return { data: safeArray(data), error };
+  });
+}
+
+export async function fetchCmsMediaUploads(client) {
+  return runReadQuery('cmsMediaUploads', async () => {
     const { data, error } = await client
       .from(ADMIN_TABLES.cmsMediaUploads)
       .select('id,storage_bucket,storage_path,public_url,media_kind,mime_type,size_bytes,sha256,target_type,room_key,section_key,item_id,artwork_code,field_name,draft_id,status,created_by,updated_by,created_at,updated_at,note')
@@ -1090,6 +1105,7 @@ function createEmptyDashboardData() {
     artworkStats: createEmptyArtworkStats(),
     publishedBundles: [],
     mediaAssets: [],
+    cmsMediaUploads: [],
     canonicalCms: null,
     canonicalSummary: null,
     canonicalError: null,
