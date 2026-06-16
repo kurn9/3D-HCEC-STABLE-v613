@@ -4823,3 +4823,32 @@ body.cms-admin-page * {
     width: 100%;
   }
 }
+
+/* v6.14.043.006 — Media Library usage/reference badges */
+.cms-admin-media-usage-references {
+  display: grid;
+  gap: 6px;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: var(--cms-admin-radius-sm);
+  background: rgba(15, 23, 42, 0.18);
+  padding: 9px 10px;
+}
+
+.cms-admin-media-usage-references strong {
+  color: var(--cms-admin-text);
+  font-size: 0.78rem;
+}
+
+.cms-admin-media-usage-references p,
+.cms-admin-media-usage-references ul {
+  margin: 0;
+  color: var(--cms-admin-muted);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.cms-admin-media-usage-references ul {
+  display: grid;
+  gap: 4px;
+  padding-left: 16px;
+}

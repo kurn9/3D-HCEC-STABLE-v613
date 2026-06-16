@@ -965,35 +965,301 @@ function getMediaFileName(storagePath = '', publicUrl = '') {
 }
 
 function buildMediaUsageContext(state = {}) {
+  const sources = [];
+  const addSource = (source = {}) => {
+    if (!source.value) return;
+    sources.push({
+      key: source.key || `source-${sources.length}`,
+      sourceType: source.sourceType || 'cms',
+      area: source.area || 'CMS',
+      label: source.label || source.area || 'CMS',
+      value: source.value,
+    });
+  };
+
+  addSource({
+    key: 'public-canonical',
+    sourceType: 'public',
+    area: 'Website public',
+    label: 'Website public / CMS public JSON',
+    value: state.data?.canonicalCms?.json,
+  });
+
+  addSource({
+    key: 'static-cms-draft',
+    sourceType: 'draft',
+    area: 'Bản nháp CMS',
+    label: 'Bản nháp CMS / Static CMS draft',
+    value: state.staticCmsDraft?.draftJson,
+  });
+
+  safeArray(state.data?.indexSections).forEach((section, index) => {
+    addSource({
+      key: `draft-index-section-${section?.id || section?.section_key || index}`,
+      sourceType: 'draft',
+      area: 'Trang chủ',
+      label: `Bản nháp CMS / Trang chủ / ${getHomeSectionReferenceLabel(section?.section_key)}`,
+      value: section,
+    });
+  });
+
+  addSource({
+    key: 'draft-site-settings',
+    sourceType: 'draft',
+    area: 'Thông tin website',
+    label: 'Bản nháp CMS / Thông tin website',
+    value: state.data?.siteSettings,
+  });
+
+  addSource({
+    key: 'draft-site-settings-local',
+    sourceType: 'draft',
+    area: 'Thông tin website',
+    label: 'Bản nháp local / Thông tin website',
+    value: state.siteSettingsEdit?.draftValues,
+  });
+
+  safeArray(state.data?.artworks).forEach((artwork, index) => {
+    addSource({
+      key: `draft-artwork-${artwork?.id || artwork?.artwork_code || index}`,
+      sourceType: 'draft',
+      area: 'Nội dung phòng 3D',
+      label: `Bản nháp CMS / Nội dung phòng 3D / ${artwork?.artwork_code || artwork?.title || `Item ${index + 1}`}`,
+      value: artwork,
+    });
+  });
+
+  addSource({
+    key: 'draft-gate-content',
+    sourceType: 'draft',
+    area: 'Cổng vào triển lãm',
+    label: 'Bản nháp CMS / Cổng vào triển lãm',
+    value: state.data?.gateContent,
+  });
+
+  addSource({
+    key: 'home-edit-local',
+    sourceType: 'draft',
+    area: 'Trang chủ',
+    label: 'Bản nháp local / Trang chủ',
+    value: state.homeEdit?.draftValues,
+  });
+
   return {
-    publicText: collectJsonStringValues(state.data?.canonicalCms?.json).join('\n'),
-    draftText: collectJsonStringValues(state.staticCmsDraft?.draftJson).join('\n'),
+    sources,
+    hasPublicSource: sources.some((source) => source.sourceType === 'public'),
+    hasDraftSource: sources.some((source) => source.sourceType === 'draft'),
   };
 }
 
-function collectJsonStringValues(value, out = []) {
-  if (typeof value === 'string') {
-    out.push(value);
-    return out;
-  }
-  if (Array.isArray(value)) {
-    value.forEach((entry) => collectJsonStringValues(entry, out));
-    return out;
-  }
-  if (value && typeof value === 'object') {
-    Object.values(value).forEach((entry) => collectJsonStringValues(entry, out));
-  }
-  return out;
+function getHomeSectionReferenceLabel(sectionKey = '') {
+  const normalized = String(sectionKey || '').trim().toLowerCase();
+  const labels = {
+    hero: 'Khu vực đầu trang',
+    guide: 'Hướng dẫn tham quan',
+    experience: 'Khu vực trải nghiệm',
+    contact: 'Thông tin liên hệ',
+  };
+  return labels[normalized] || normalized || 'Section';
 }
 
 function getMediaUsage(asset, context = {}) {
-  const needles = [asset.publicUrl, asset.storagePath].map((value) => String(value || '').trim()).filter(Boolean);
-  const inPublic = needles.some((value) => context.publicText.includes(value));
-  const inDraft = needles.some((value) => context.draftText.includes(value));
-  if (inPublic && inDraft) return { key: 'publicAndDraft', label: ADMIN_COPY.media.usageLabels.publicAndDraft, variant: 'success' };
-  if (inPublic) return { key: 'public', label: ADMIN_COPY.media.usageLabels.public, variant: 'success' };
-  if (inDraft) return { key: 'draft', label: ADMIN_COPY.media.usageLabels.draft, variant: 'warning' };
-  return { key: 'uncertain', label: ADMIN_COPY.media.usageLabels.uncertain, variant: 'default' };
+  const identity = buildMediaAssetIdentity(asset);
+  if (!identity.strongValues.length) {
+    return {
+      key: 'insufficient',
+      label: ADMIN_COPY.media.usageLabels.insufficient,
+      variant: 'default',
+      references: [],
+      note: ADMIN_COPY.media.usageNotes.insufficient,
+    };
+  }
+
+  const references = collectMediaUsageReferences(context.sources, identity);
+  const strongReferences = references.filter((reference) => reference.matchType === 'strong');
+  const publicReferences = strongReferences.filter((reference) => reference.sourceType === 'public');
+  const draftReferences = strongReferences.filter((reference) => reference.sourceType === 'draft');
+  const cmsReferences = strongReferences.filter((reference) => reference.sourceType === 'cms');
+
+  if (publicReferences.length) {
+    return {
+      key: 'public',
+      label: ADMIN_COPY.media.usageLabels.public,
+      variant: 'success',
+      references: strongReferences,
+    };
+  }
+
+  if (draftReferences.length) {
+    return {
+      key: 'draft',
+      label: ADMIN_COPY.media.usageLabels.draft,
+      variant: 'warning',
+      references: strongReferences,
+    };
+  }
+
+  if (cmsReferences.length) {
+    return {
+      key: 'cms',
+      label: ADMIN_COPY.media.usageLabels.cms,
+      variant: 'default',
+      references: strongReferences,
+    };
+  }
+
+  if (!context.hasPublicSource || !context.hasDraftSource) {
+    return {
+      key: 'insufficient',
+      label: ADMIN_COPY.media.usageLabels.insufficient,
+      variant: 'default',
+      references: [],
+      note: ADMIN_COPY.media.usageNotes.insufficient,
+    };
+  }
+
+  return {
+    key: 'none',
+    label: ADMIN_COPY.media.usageLabels.none,
+    variant: 'default',
+    references: [],
+    note: ADMIN_COPY.media.usageNotes.none,
+  };
+}
+
+function buildMediaAssetIdentity(asset = {}) {
+  const strong = new Set();
+  [asset.publicUrl, asset.publicUrlRaw, asset.storagePath].forEach((value) => {
+    normalizeMediaReferenceCandidates(value).forEach((candidate) => strong.add(candidate));
+  });
+  return {
+    strongValues: Array.from(strong),
+    strongSet: strong,
+  };
+}
+
+function collectMediaUsageReferences(sources = [], identity = {}) {
+  const references = [];
+  safeArray(sources).forEach((source) => {
+    scanMediaUsageValue(source.value, source, identity, references, source.area || 'CMS', 0);
+  });
+  return dedupeMediaReferences(references);
+}
+
+function scanMediaUsageValue(value, source, identity, references, path, depth) {
+  if (depth > 8 || value === null || value === undefined) return;
+  if (typeof value === 'function') return;
+
+  if (typeof Element !== 'undefined' && value instanceof Element) return;
+
+  if (typeof value === 'string') {
+    const candidates = normalizeMediaReferenceCandidates(value);
+    const hasStrongMatch = candidates.some((candidate) => identity.strongSet.has(candidate));
+    if (hasStrongMatch) {
+      references.push({
+        sourceType: source.sourceType || 'cms',
+        area: source.area || 'CMS',
+        field: path,
+        label: buildMediaReferenceLabel(source, path),
+        matchType: 'strong',
+      });
+    }
+    return;
+  }
+
+  if (typeof value !== 'object') return;
+
+  if (Array.isArray(value)) {
+    value.slice(0, 200).forEach((entry, index) => {
+      scanMediaUsageValue(entry, source, identity, references, `${path}[${index}]`, depth + 1);
+    });
+    return;
+  }
+
+  Object.entries(value).slice(0, 250).forEach(([key, entry]) => {
+    scanMediaUsageValue(entry, source, identity, references, path ? `${path}.${key}` : key, depth + 1);
+  });
+}
+
+function normalizeMediaReferenceCandidates(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return [];
+  const lower = raw.toLowerCase();
+  if (lower.startsWith('javascript:') || lower.startsWith('data:') || lower.startsWith('blob:') || lower.startsWith('file:')) return [];
+  if (raw.startsWith('//') || raw.includes('..') || raw.includes('\\')) return [];
+
+  const candidates = new Set();
+  const safeUrl = normalizeSafeMediaUrl(raw);
+  if (safeUrl) {
+    addMediaReferenceCandidate(candidates, safeUrl);
+    try {
+      const parsed = new URL(safeUrl, globalThis.location?.origin || 'https://cms.local');
+      addMediaReferenceCandidate(candidates, parsed.pathname);
+      addMediaReferenceCandidate(candidates, decodeURIComponent(parsed.pathname));
+      const storagePublicMarker = '/storage/v1/object/public/';
+      const markerIndex = parsed.pathname.indexOf(storagePublicMarker);
+      if (markerIndex >= 0) {
+        addMediaReferenceCandidate(candidates, parsed.pathname.slice(markerIndex + storagePublicMarker.length));
+      }
+    } catch {
+      // Safe URL parsing is best-effort for reference matching only.
+    }
+  }
+
+  if (isSafeStoragePathCandidate(raw)) {
+    addMediaReferenceCandidate(candidates, raw);
+  }
+
+  return Array.from(candidates);
+}
+
+function addMediaReferenceCandidate(candidates, value) {
+  const normalized = normalizeMediaReferenceString(value);
+  if (normalized) candidates.add(normalized);
+}
+
+function normalizeMediaReferenceString(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  const withoutQuery = raw.split('#')[0].split('?')[0].replace(/\/+$/, '');
+  return withoutQuery;
+}
+
+function isSafeStoragePathCandidate(value = '') {
+  const raw = String(value || '').trim();
+  if (!raw || raw.startsWith('//')) return false;
+  if (/^[a-z][a-z0-9+.-]*:/i.test(raw)) return false;
+  if (raw.includes('..') || raw.includes('\\')) return false;
+  return raw.includes('/') || raw.startsWith('./') || raw.startsWith('/');
+}
+
+function dedupeMediaReferences(references = []) {
+  const seen = new Set();
+  const out = [];
+  safeArray(references).forEach((reference) => {
+    const key = [reference.sourceType, reference.area, reference.field, reference.label, reference.matchType].join('|');
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(reference);
+  });
+  return out;
+}
+
+function buildMediaReferenceLabel(source = {}, path = '') {
+  const fieldLabel = getMediaReferenceFieldLabel(path);
+  return fieldLabel ? `${source.label || source.area || 'CMS'} / ${fieldLabel}` : (source.label || source.area || 'CMS');
+}
+
+function getMediaReferenceFieldLabel(path = '') {
+  const normalized = String(path || '').toLowerCase();
+  if (normalized.includes('logo_url') || normalized.includes('logourl')) return 'Logo website';
+  if (normalized.includes('videourl') || normalized.includes('video_url') || normalized.endsWith('.video') || normalized.includes('.mp4') || normalized.endsWith('.src')) return 'Video';
+  if (normalized.includes('posterurl') || normalized.includes('poster_url') || normalized.includes('poster')) return 'Poster video';
+  if (normalized.includes('thumbnailurl') || normalized.includes('thumbnail_url') || normalized.includes('thumbnail')) return 'Thumbnail';
+  if (normalized.includes('imageurl') || normalized.includes('image_url') || normalized.endsWith('.image')) return 'Ảnh';
+  if (normalized.includes('audio_url') || normalized.includes('audiourl')) return 'Audio';
+  if (normalized.includes('media_json')) return 'Media JSON';
+  return '';
 }
 
 function summarizeMediaLibrary(assets = []) {
@@ -1002,7 +1268,7 @@ function summarizeMediaLibrary(assets = []) {
     acc[asset.mediaKind] = (acc[asset.mediaKind] || 0) + 1;
     acc[asset.usage?.key] = (acc[asset.usage?.key] || 0) + 1;
     return acc;
-  }, { total: 0, image: 0, poster: 0, video: 0, unknown: 0, public: 0, publicAndDraft: 0, draft: 0, uncertain: 0 });
+  }, { total: 0, image: 0, poster: 0, video: 0, unknown: 0, public: 0, draft: 0, cms: 0, none: 0, insufficient: 0 });
 }
 
 function renderMediaLibraryReadOnlyBanner() {
@@ -1034,13 +1300,12 @@ function renderMediaLibraryEmptyState() {
 function renderMediaLibrarySummary(summary = {}) {
   const grid = createElement('div', { className: 'cms-admin-media-summary-grid' });
   [
-    ['Tất cả media', summary.total],
-    [ADMIN_COPY.media.kindLabels.image, summary.image],
-    [ADMIN_COPY.media.kindLabels.poster, summary.poster],
-    [ADMIN_COPY.media.kindLabels.video, summary.video],
-    ['Đang dùng trên website', Number(summary.public || 0) + Number(summary.publicAndDraft || 0)],
-    ['Bản nháp đang mở', Number(summary.draft || 0) + Number(summary.publicAndDraft || 0)],
-    ['Chưa đủ dữ liệu', summary.uncertain],
+    ['Tổng media', summary.total],
+    [ADMIN_COPY.media.usageLabels.public, summary.public],
+    [ADMIN_COPY.media.usageLabels.draft, summary.draft],
+    [ADMIN_COPY.media.usageLabels.cms, summary.cms],
+    [ADMIN_COPY.media.usageLabels.none, summary.none],
+    [ADMIN_COPY.media.usageLabels.insufficient, summary.insufficient],
   ].forEach(([label, value]) => {
     const card = createElement('div', { className: 'cms-admin-media-summary-card' });
     appendChildren(card, [
@@ -1068,10 +1333,11 @@ function renderMediaLibraryControls(assets = []) {
     ['unknown', ADMIN_COPY.media.kindLabels.unknown],
   ]);
   const usageSelect = renderMediaFilterSelect('usage', ADMIN_COPY.media.filters.allUsage, [
-    ['publicAndDraft', ADMIN_COPY.media.usageLabels.publicAndDraft],
     ['public', ADMIN_COPY.media.usageLabels.public],
     ['draft', ADMIN_COPY.media.usageLabels.draft],
-    ['uncertain', ADMIN_COPY.media.usageLabels.uncertain],
+    ['cms', ADMIN_COPY.media.usageLabels.cms],
+    ['none', ADMIN_COPY.media.usageLabels.none],
+    ['insufficient', ADMIN_COPY.media.usageLabels.insufficient],
   ]);
   const targetOptions = Array.from(new Set(safeArray(assets).map((asset) => asset.targetType || 'unknown')))
     .sort()
@@ -1118,7 +1384,7 @@ function renderMediaLibraryCard(asset = {}) {
     className: 'cms-admin-media-card',
     attrs: {
       'data-media-kind': asset.mediaKind,
-      'data-media-usage': asset.usage?.key || 'uncertain',
+      'data-media-usage': asset.usage?.key || 'insufficient',
       'data-media-target': asset.targetType || 'unknown',
       'data-media-search-text': buildMediaSearchText(asset),
     },
@@ -1134,7 +1400,7 @@ function renderMediaLibraryCard(asset = {}) {
   ]);
 
   const badges = createElement('div', { className: 'cms-admin-media-card-badges' });
-  badges.appendChild(renderBadge(asset.usage?.label || ADMIN_COPY.media.usageLabels.uncertain, asset.usage?.variant || 'default'));
+  badges.appendChild(renderBadge(asset.usage?.label || ADMIN_COPY.media.usageLabels.insufficient, asset.usage?.variant || 'default'));
   badges.appendChild(renderBadge(getMediaTargetLabel(asset), 'default'));
 
   const details = createElement('dl', { className: 'cms-admin-media-detail-list' });
@@ -1150,6 +1416,7 @@ function renderMediaLibraryCard(asset = {}) {
   const statusNote = asset.status
     ? createElement('p', { className: 'cms-admin-help-text cms-admin-media-status-note', text: ADMIN_COPY.media.statusNote })
     : null;
+  const usageReferences = renderMediaUsageReferences(asset);
   const path = createElement('p', { className: 'cms-admin-media-path', text: asset.storagePath || asset.publicUrl || '—' });
 
   const actions = createElement('div', { className: 'cms-admin-media-actions' });
@@ -1161,9 +1428,30 @@ function renderMediaLibraryCard(asset = {}) {
     actions.appendChild(createElement('span', { className: 'cms-admin-help-text cms-admin-media-url-warning', text: asset.publicUrlRaw ? ADMIN_COPY.media.unsafeUrl : 'Media này chưa có đường dẫn public.' }));
   }
 
-  appendChildren(body, [titleRow, badges, details, statusNote, path, actions]);
+  appendChildren(body, [titleRow, badges, details, statusNote, usageReferences, path, actions]);
   card.appendChild(body);
   return card;
+}
+
+function renderMediaUsageReferences(asset = {}) {
+  const references = safeArray(asset.usage?.references);
+  const wrap = createElement('div', { className: 'cms-admin-media-usage-references' });
+  wrap.appendChild(createElement('strong', { text: ADMIN_COPY.media.referencesTitle }));
+
+  if (!references.length) {
+    wrap.appendChild(createElement('p', { text: asset.usage?.note || ADMIN_COPY.media.usageNotes.insufficient }));
+    return wrap;
+  }
+
+  const list = createElement('ul');
+  references.slice(0, 3).forEach((reference) => {
+    list.appendChild(createElement('li', { text: reference.label || reference.area || 'CMS reference' }));
+  });
+  if (references.length > 3) {
+    list.appendChild(createElement('li', { text: `+${formatCount(references.length - 3)} tham chiếu khác` }));
+  }
+  wrap.appendChild(list);
+  return wrap;
 }
 
 function renderMediaPreview(asset = {}) {
@@ -1231,6 +1519,7 @@ function buildMediaSearchText(asset = {}) {
     asset.fieldName,
     asset.status,
     asset.usage?.label,
+    safeArray(asset.usage?.references).map((reference) => reference.label).join(' '),
   ].map((value) => String(value || '').toLowerCase()).join(' ');
 }
 

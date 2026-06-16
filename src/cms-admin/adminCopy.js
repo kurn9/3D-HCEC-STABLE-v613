@@ -702,11 +702,17 @@ export const ADMIN_COPY = Object.freeze({
       unknown: 'Chưa rõ nơi dùng',
     },
     usageLabels: {
-      publicAndDraft: 'Đang dùng trên website và bản nháp',
       public: 'Đang dùng trên website',
-      draft: 'Đang nằm trong bản nháp đang mở',
-      uncertain: 'Không đủ dữ liệu để kết luận',
+      draft: 'Đang dùng trong bản nháp',
+      cms: 'Đang dùng trong CMS',
+      none: 'Chưa thấy tham chiếu',
+      insufficient: 'Không đủ dữ liệu để kết luận',
     },
+    usageNotes: {
+      none: 'Chưa thấy tham chiếu trong dữ liệu đã kiểm tra. Không đồng nghĩa media an toàn để xóa.',
+      insufficient: 'Không đủ dữ liệu để kết luận media đang dùng hay không.',
+    },
+    referencesTitle: 'Tham chiếu tìm thấy',
     fields: {
       uploadTime: 'Ngày upload',
       fileSize: 'Dung lượng',
@@ -717,7 +723,7 @@ export const ADMIN_COPY = Object.freeze({
       status: 'Trạng thái kỹ thuật từ nhật ký upload',
       url: 'Đường dẫn',
     },
-    statusNote: 'Trạng thái này chỉ là metadata upload, không dùng để kết luận media đang dùng hay có thể xóa.',
+    statusNote: 'Trạng thái này chỉ là metadata upload, không dùng để kết luận media đang dùng hay vòng đời media.',
     actions: {
       copyUrl: 'Sao chép đường dẫn',
       copied: 'Đã sao chép',
