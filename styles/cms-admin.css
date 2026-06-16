@@ -4330,3 +4330,207 @@ body.cms-admin-page * {
     transition: none !important;
   }
 }
+
+/* v6.14.042.002 — Read-only CMS Media Library browser */
+.cms-admin-media-library-readonly-view {
+  gap: 18px;
+}
+
+.cms-admin-media-readonly-banner,
+.cms-admin-media-controls,
+.cms-admin-media-card-badges,
+.cms-admin-media-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.cms-admin-media-readonly-banner {
+  border: 1px solid rgba(214, 178, 94, 0.22);
+  border-radius: var(--cms-admin-radius-md);
+  background: rgba(214, 178, 94, 0.08);
+  color: var(--cms-admin-muted);
+  line-height: 1.5;
+  padding: 11px 12px;
+  margin-bottom: 14px;
+}
+
+.cms-admin-media-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.cms-admin-media-summary-card {
+  display: grid;
+  gap: 5px;
+  border: 1px solid rgba(226, 232, 240, 0.09);
+  border-radius: var(--cms-admin-radius-md);
+  background: rgba(2, 6, 12, 0.18);
+  padding: 11px 12px;
+}
+
+.cms-admin-media-summary-card span {
+  color: var(--cms-admin-muted);
+  font-size: 0.78rem;
+}
+
+.cms-admin-media-summary-card strong {
+  color: var(--cms-admin-text);
+  font-size: 1.05rem;
+}
+
+.cms-admin-media-controls {
+  margin-bottom: 14px;
+}
+
+.cms-admin-media-search {
+  min-width: min(100%, 340px);
+  flex: 1 1 320px;
+}
+
+.cms-admin-media-filter {
+  min-width: 190px;
+  flex: 0 1 220px;
+}
+
+.cms-admin-media-grid-wrap {
+  display: grid;
+  gap: 12px;
+}
+
+.cms-admin-media-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+}
+
+.cms-admin-media-card {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid rgba(226, 232, 240, 0.09);
+  border-radius: var(--cms-admin-radius-lg);
+  background: rgba(2, 6, 12, 0.18);
+}
+
+.cms-admin-media-preview {
+  min-height: 190px;
+  display: grid;
+  place-items: center;
+  background: rgba(15, 23, 42, 0.42);
+  color: var(--cms-admin-muted);
+  text-align: center;
+}
+
+.cms-admin-media-preview img,
+.cms-admin-media-preview video {
+  width: 100%;
+  height: 220px;
+  display: block;
+  object-fit: cover;
+  background: rgba(0, 0, 0, 0.26);
+}
+
+.cms-admin-media-preview video {
+  object-fit: contain;
+}
+
+.cms-admin-media-preview.has-error {
+  min-height: 190px;
+  padding: 18px;
+  color: #fecaca;
+  background: rgba(127, 29, 29, 0.14);
+}
+
+.cms-admin-media-card-body {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.cms-admin-media-card-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.cms-admin-media-card-title-row h3 {
+  margin: 0;
+  color: var(--cms-admin-text);
+  font-size: 0.98rem;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.cms-admin-media-detail-list {
+  display: grid;
+  grid-template-columns: minmax(92px, 0.42fr) minmax(0, 1fr);
+  gap: 7px 10px;
+  margin: 0;
+}
+
+.cms-admin-media-detail-list dt {
+  color: var(--cms-admin-muted);
+  font-size: 0.78rem;
+}
+
+.cms-admin-media-detail-list dd {
+  margin: 0;
+  color: var(--cms-admin-text);
+  font-size: 0.82rem;
+  word-break: break-word;
+}
+
+.cms-admin-media-path {
+  margin: 0;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: var(--cms-admin-radius-sm);
+  background: rgba(15, 23, 42, 0.2);
+  color: var(--cms-admin-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  padding: 8px 9px;
+  word-break: break-all;
+}
+
+.cms-admin-media-filter-empty {
+  border: 1px dashed rgba(214, 178, 94, 0.22);
+  border-radius: var(--cms-admin-radius-md);
+  color: var(--cms-admin-muted);
+  padding: 16px;
+  text-align: center;
+}
+
+.cms-admin-media-safety-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.cms-admin-media-safety-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--cms-admin-muted);
+  line-height: 1.5;
+}
+
+@media (max-width: 760px) {
+  .cms-admin-media-controls {
+    display: grid;
+  }
+
+  .cms-admin-media-search,
+  .cms-admin-media-filter {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .cms-admin-media-grid {
+    grid-template-columns: 1fr;
+  }
+}

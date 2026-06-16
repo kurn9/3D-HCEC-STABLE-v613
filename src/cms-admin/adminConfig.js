@@ -11,6 +11,7 @@ export const ADMIN_TABLES = Object.freeze({
   rooms: 'rooms',
   artworks: 'artworks',
   mediaAssets: 'media_assets',
+  cmsMediaUploads: 'cms_media_uploads',
   publishedBundles: 'published_bundles',
   cmsDrafts: 'cms_drafts',
   cmsPublishLogs: 'cms_publish_logs',

@@ -809,36 +809,476 @@ function renderDashboard(state) {
 }
 
 function renderMediaTab(state) {
-  const mediaAssets = safeArray(state.data.mediaAssets);
-  const panel = createElement('section', { className: 'cms-admin-grid cms-admin-media-view' });
+  const mediaAssets = safeArray(state.data.mediaAssets).map(normalizeMediaLibraryAsset);
+  const mediaError = state.data.errors?.mediaAssets;
+  const usageContext = buildMediaUsageContext(state);
+  const enrichedAssets = mediaAssets.map((asset) => ({
+    ...asset,
+    usage: getMediaUsage(asset, usageContext),
+  }));
+  const summary = summarizeMediaLibrary(enrichedAssets);
+
+  const panel = createElement('section', { className: 'cms-admin-grid cms-admin-media-view cms-admin-media-library-readonly-view' });
   const library = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel cms-admin-media-library-panel' });
-  library.appendChild(renderPanelTitle(ADMIN_COPY.media.mainTitle, `${formatCount(mediaAssets.length)} ${ADMIN_COPY.media.countLabel}`));
+  library.appendChild(renderPanelTitle(ADMIN_COPY.media.mainTitle, `${formatCount(enrichedAssets.length)} ${ADMIN_COPY.media.countLabel}`));
+  library.appendChild(renderMediaLibraryReadOnlyBanner());
 
-  if (!mediaAssets.length) {
-    const empty = createElement('div', { className: 'cms-admin-media-empty-state' });
-    empty.appendChild(createElement('div', { className: 'cms-admin-media-empty-icon is-locked', text: ADMIN_COPY.media.emptyBadge }));
-    empty.appendChild(createElement('h3', { text: ADMIN_COPY.media.emptyTitle }));
-    empty.appendChild(createElement('p', { text: ADMIN_COPY.media.intro }));
-    empty.appendChild(createElement('p', { text: ADMIN_COPY.media.body }));
-
-    const listBlock = createElement('div', { className: 'cms-admin-media-upload-types' });
-    listBlock.appendChild(createElement('strong', { text: ADMIN_COPY.media.uploadTypesTitle }));
-    const list = createElement('ul');
-    ADMIN_COPY.media.uploadTypes.forEach((item) => list.appendChild(createElement('li', { text: item })));
-    listBlock.appendChild(list);
-    empty.appendChild(listBlock);
-    empty.appendChild(renderLockedNotice(ADMIN_COPY.media.safeNotice));
-    library.appendChild(empty);
-  } else {
-    library.appendChild(renderEmptyState('Danh sách tệp sẽ được trình bày dạng lưới ở bước sau.'));
+  if (mediaError) {
+    library.appendChild(renderErrorBox(mediaError, 'Không đọc được danh sách media upload'));
   }
+
+  if (!enrichedAssets.length) {
+    library.appendChild(renderMediaLibraryEmptyState());
+  } else {
+    library.appendChild(renderMediaLibrarySummary(summary));
+    library.appendChild(renderMediaLibraryControls(enrichedAssets));
+    library.appendChild(renderMediaLibraryGrid(enrichedAssets));
+  }
+
+  const safety = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel cms-admin-media-safety-panel' });
+  safety.appendChild(renderPanelTitle('Giới hạn an toàn của phase này', ADMIN_COPY.media.readOnlyBadge));
+  const safetyList = createElement('ul', { className: 'cms-admin-media-safety-list' });
+  [
+    ADMIN_COPY.media.safeNotice,
+    ADMIN_COPY.media.readOnlyNotice,
+    ADMIN_COPY.media.deleteDisabled,
+  ].forEach((item) => safetyList.appendChild(createElement('li', { text: item })));
+  safety.appendChild(safetyList);
 
   const technical = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel cms-admin-technical-subtle-panel' });
   technical.appendChild(renderPanelTitle(ADMIN_COPY.media.technicalTitle));
   technical.appendChild(renderTechnicalKeyValueList(ADMIN_COPY.media.technicalRows));
 
-  appendChildren(panel, [library, technical]);
+  appendChildren(panel, [library, safety, technical]);
   return panel;
+}
+
+function normalizeMediaLibraryAsset(asset = {}) {
+  const publicUrl = firstAvailableValue(asset, ['public_url', 'publicUrl', 'url']);
+  const storagePath = firstAvailableValue(asset, ['storage_path', 'storagePath', 'path', 'file_name', 'fileName']);
+  const fieldName = firstAvailableValue(asset, ['field_name', 'fieldName']);
+  const mediaKind = normalizeMediaKind(firstAvailableValue(asset, ['media_kind', 'mediaKind', 'asset_type', 'assetType']), fieldName, firstAvailableValue(asset, ['mime_type', 'mimeType']));
+  return {
+    ...asset,
+    id: firstAvailableValue(asset, ['id']) || storagePath || publicUrl || '',
+    publicUrl,
+    storageBucket: firstAvailableValue(asset, ['storage_bucket', 'storageBucket']) || 'cms-media',
+    storagePath,
+    fileName: getMediaFileName(storagePath, publicUrl),
+    mediaKind,
+    mimeType: firstAvailableValue(asset, ['mime_type', 'mimeType']),
+    sizeBytes: Number(firstAvailableValue(asset, ['size_bytes', 'sizeBytes'])) || 0,
+    targetType: firstAvailableValue(asset, ['target_type', 'targetType']) || '',
+    roomKey: firstAvailableValue(asset, ['room_key', 'roomKey']) || '',
+    sectionKey: firstAvailableValue(asset, ['section_key', 'sectionKey']) || '',
+    itemId: firstAvailableValue(asset, ['item_id', 'itemId']) || '',
+    artworkCode: firstAvailableValue(asset, ['artwork_code', 'artworkCode']) || '',
+    fieldName,
+    status: firstAvailableValue(asset, ['status']) || '',
+    createdAt: firstAvailableValue(asset, ['created_at', 'createdAt']),
+  };
+}
+
+function firstAvailableValue(object = {}, keys = []) {
+  for (const key of keys) {
+    const value = object?.[key];
+    if (value !== null && value !== undefined && String(value).trim() !== '') return value;
+  }
+  return '';
+}
+
+function normalizeMediaKind(value, fieldName = '', mimeType = '') {
+  const raw = String(value || '').toLowerCase();
+  const field = String(fieldName || '').toLowerCase();
+  const mime = String(mimeType || '').toLowerCase();
+  if (raw.includes('video') || mime.startsWith('video/') || field.includes('video')) return 'video';
+  if (raw.includes('poster') || field.includes('poster')) return 'poster';
+  if (raw.includes('image') || mime.startsWith('image/') || field.includes('image')) return 'image';
+  return 'unknown';
+}
+
+function getMediaFileName(storagePath = '', publicUrl = '') {
+  const source = String(storagePath || publicUrl || '').split('?')[0];
+  const pieces = source.split('/').filter(Boolean);
+  const rawName = pieces[pieces.length - 1] || source || 'media';
+  try {
+    return decodeURIComponent(rawName);
+  } catch {
+    return rawName;
+  }
+}
+
+function buildMediaUsageContext(state = {}) {
+  return {
+    publicText: collectJsonStringValues(state.data?.canonicalCms?.json).join('\n'),
+    draftText: collectJsonStringValues(state.staticCmsDraft?.draftJson).join('\n'),
+  };
+}
+
+function collectJsonStringValues(value, out = []) {
+  if (typeof value === 'string') {
+    out.push(value);
+    return out;
+  }
+  if (Array.isArray(value)) {
+    value.forEach((entry) => collectJsonStringValues(entry, out));
+    return out;
+  }
+  if (value && typeof value === 'object') {
+    Object.values(value).forEach((entry) => collectJsonStringValues(entry, out));
+  }
+  return out;
+}
+
+function getMediaUsage(asset, context = {}) {
+  const needles = [asset.publicUrl, asset.storagePath].map((value) => String(value || '').trim()).filter(Boolean);
+  const inPublic = needles.some((value) => context.publicText.includes(value));
+  const inDraft = needles.some((value) => context.draftText.includes(value));
+  if (inPublic && inDraft) return { key: 'publicAndDraft', label: ADMIN_COPY.media.usageLabels.publicAndDraft, variant: 'success' };
+  if (inPublic) return { key: 'public', label: ADMIN_COPY.media.usageLabels.public, variant: 'success' };
+  if (inDraft) return { key: 'draft', label: ADMIN_COPY.media.usageLabels.draft, variant: 'warning' };
+  return { key: 'uncertain', label: ADMIN_COPY.media.usageLabels.uncertain, variant: 'default' };
+}
+
+function summarizeMediaLibrary(assets = []) {
+  return safeArray(assets).reduce((acc, asset) => {
+    acc.total += 1;
+    acc[asset.mediaKind] = (acc[asset.mediaKind] || 0) + 1;
+    acc[asset.usage?.key] = (acc[asset.usage?.key] || 0) + 1;
+    return acc;
+  }, { total: 0, image: 0, poster: 0, video: 0, unknown: 0, public: 0, publicAndDraft: 0, draft: 0, uncertain: 0 });
+}
+
+function renderMediaLibraryReadOnlyBanner() {
+  const banner = createElement('div', { className: 'cms-admin-media-readonly-banner' });
+  appendChildren(banner, [
+    renderBadge(ADMIN_COPY.media.readOnlyBadge, 'warning'),
+    createElement('span', { text: ADMIN_COPY.media.safeNotice }),
+  ]);
+  return banner;
+}
+
+function renderMediaLibraryEmptyState() {
+  const empty = createElement('div', { className: 'cms-admin-media-empty-state' });
+  empty.appendChild(createElement('div', { className: 'cms-admin-media-empty-icon is-locked', text: ADMIN_COPY.media.emptyBadge }));
+  empty.appendChild(createElement('h3', { text: ADMIN_COPY.media.emptyTitle }));
+  empty.appendChild(createElement('p', { text: ADMIN_COPY.media.intro }));
+  empty.appendChild(createElement('p', { text: ADMIN_COPY.media.body }));
+
+  const listBlock = createElement('div', { className: 'cms-admin-media-upload-types' });
+  listBlock.appendChild(createElement('strong', { text: ADMIN_COPY.media.uploadTypesTitle }));
+  const list = createElement('ul');
+  ADMIN_COPY.media.uploadTypes.forEach((item) => list.appendChild(createElement('li', { text: item })));
+  listBlock.appendChild(list);
+  empty.appendChild(listBlock);
+  empty.appendChild(renderLockedNotice(ADMIN_COPY.media.readOnlyNotice));
+  return empty;
+}
+
+function renderMediaLibrarySummary(summary = {}) {
+  const grid = createElement('div', { className: 'cms-admin-media-summary-grid' });
+  [
+    ['Tất cả media', summary.total],
+    [ADMIN_COPY.media.kindLabels.image, summary.image],
+    [ADMIN_COPY.media.kindLabels.poster, summary.poster],
+    [ADMIN_COPY.media.kindLabels.video, summary.video],
+    ['Đang dùng trên website', Number(summary.public || 0) + Number(summary.publicAndDraft || 0)],
+    ['Bản nháp đang mở', Number(summary.draft || 0) + Number(summary.publicAndDraft || 0)],
+    ['Chưa đủ dữ liệu', summary.uncertain],
+  ].forEach(([label, value]) => {
+    const card = createElement('div', { className: 'cms-admin-media-summary-card' });
+    appendChildren(card, [
+      createElement('span', { text: label }),
+      createElement('strong', { text: formatCount(value) }),
+    ]);
+    grid.appendChild(card);
+  });
+  return grid;
+}
+
+function renderMediaLibraryControls(assets = []) {
+  const controls = createElement('div', { className: 'cms-admin-media-controls' });
+  const search = createElement('input', {
+    className: 'cms-admin-input cms-admin-media-search',
+    type: 'search',
+    placeholder: ADMIN_COPY.media.searchPlaceholder,
+    attrs: { 'data-media-search': 'true' },
+  });
+
+  const kindSelect = renderMediaFilterSelect('kind', ADMIN_COPY.media.filters.allKinds, [
+    ['image', ADMIN_COPY.media.kindLabels.image],
+    ['poster', ADMIN_COPY.media.kindLabels.poster],
+    ['video', ADMIN_COPY.media.kindLabels.video],
+    ['unknown', ADMIN_COPY.media.kindLabels.unknown],
+  ]);
+  const usageSelect = renderMediaFilterSelect('usage', ADMIN_COPY.media.filters.allUsage, [
+    ['publicAndDraft', ADMIN_COPY.media.usageLabels.publicAndDraft],
+    ['public', ADMIN_COPY.media.usageLabels.public],
+    ['draft', ADMIN_COPY.media.usageLabels.draft],
+    ['uncertain', ADMIN_COPY.media.usageLabels.uncertain],
+  ]);
+  const targetOptions = Array.from(new Set(safeArray(assets).map((asset) => asset.targetType || 'unknown')))
+    .sort()
+    .map((value) => [value, getMediaTargetLabel({ targetType: value })]);
+  const targetSelect = renderMediaFilterSelect('target', ADMIN_COPY.media.filters.allTargets, targetOptions);
+
+  const applyFilters = () => applyMediaLibraryFilters(controls.closest('.cms-admin-media-library-panel'));
+  [search, kindSelect, usageSelect, targetSelect].forEach((control) => {
+    control.addEventListener('input', applyFilters);
+    control.addEventListener('change', applyFilters);
+  });
+
+  appendChildren(controls, [search, kindSelect, usageSelect, targetSelect]);
+  return controls;
+}
+
+function renderMediaFilterSelect(filterName, allLabel, options = []) {
+  const select = createElement('select', {
+    className: 'cms-admin-input cms-admin-media-filter',
+    attrs: { 'data-media-filter': filterName },
+  });
+  select.appendChild(createElement('option', { value: 'all', text: allLabel }));
+  safeArray(options).forEach(([value, label]) => {
+    select.appendChild(createElement('option', { value, text: label }));
+  });
+  return select;
+}
+
+function renderMediaLibraryGrid(assets = []) {
+  const wrap = createElement('div', { className: 'cms-admin-media-grid-wrap' });
+  const grid = createElement('div', { className: 'cms-admin-media-grid', attrs: { 'data-media-grid': 'true' } });
+  safeArray(assets).forEach((asset) => grid.appendChild(renderMediaLibraryCard(asset)));
+  const empty = createElement('div', {
+    className: 'cms-admin-media-filter-empty cms-admin-hidden',
+    text: ADMIN_COPY.media.emptyFiltered,
+    attrs: { 'data-media-filter-empty': 'true' },
+  });
+  appendChildren(wrap, [grid, empty]);
+  return wrap;
+}
+
+function renderMediaLibraryCard(asset = {}) {
+  const card = createElement('article', {
+    className: 'cms-admin-media-card',
+    attrs: {
+      'data-media-kind': asset.mediaKind,
+      'data-media-usage': asset.usage?.key || 'uncertain',
+      'data-media-target': asset.targetType || 'unknown',
+      'data-media-search-text': buildMediaSearchText(asset),
+    },
+  });
+
+  card.appendChild(renderMediaPreview(asset));
+
+  const body = createElement('div', { className: 'cms-admin-media-card-body' });
+  const titleRow = createElement('div', { className: 'cms-admin-media-card-title-row' });
+  appendChildren(titleRow, [
+    createElement('h3', { text: asset.fileName || 'media' }),
+    renderBadge(getMediaKindLabel(asset.mediaKind), asset.mediaKind === 'video' ? 'warning' : 'default'),
+  ]);
+
+  const badges = createElement('div', { className: 'cms-admin-media-card-badges' });
+  badges.appendChild(renderBadge(asset.usage?.label || ADMIN_COPY.media.usageLabels.uncertain, asset.usage?.variant || 'default'));
+  badges.appendChild(renderBadge(getMediaTargetLabel(asset), 'default'));
+
+  const details = createElement('dl', { className: 'cms-admin-media-detail-list' });
+  [
+    [ADMIN_COPY.media.fields.uploadTime, formatDateTime(asset.createdAt)],
+    [ADMIN_COPY.media.fields.fileSize, formatBytes(asset.sizeBytes)],
+    [ADMIN_COPY.media.fields.room, asset.roomKey ? getRoomLabel(asset.roomKey) : '—'],
+    [ADMIN_COPY.media.fields.item, asset.itemId || asset.artworkCode || '—'],
+    [ADMIN_COPY.media.fields.field, formatMediaFieldName(asset.fieldName)],
+    [ADMIN_COPY.media.fields.status, formatMediaUploadStatus(asset.status)],
+  ].forEach(([label, value]) => appendMediaDetail(details, label, value));
+
+  const path = createElement('p', { className: 'cms-admin-media-path', text: asset.storagePath || asset.publicUrl || '—' });
+
+  const actions = createElement('div', { className: 'cms-admin-media-actions' });
+  if (asset.publicUrl) {
+    const copyButton = createElement('button', { className: 'cms-admin-button cms-admin-button-ghost', text: ADMIN_COPY.media.actions.copyUrl, type: 'button' });
+    copyButton.addEventListener('click', () => copyMediaUrl(copyButton, asset.publicUrl));
+    const openLink = createElement('a', {
+      className: 'cms-admin-button cms-admin-button-ghost',
+      text: ADMIN_COPY.media.actions.openUrl,
+      href: asset.publicUrl,
+      attrs: { target: '_blank', rel: 'noopener noreferrer' },
+    });
+    appendChildren(actions, [copyButton, openLink]);
+  } else {
+    actions.appendChild(createElement('span', { className: 'cms-admin-help-text', text: 'Media này chưa có đường dẫn public.' }));
+  }
+
+  appendChildren(body, [titleRow, badges, details, path, actions]);
+  card.appendChild(body);
+  return card;
+}
+
+function renderMediaPreview(asset = {}) {
+  const preview = createElement('div', { className: 'cms-admin-media-preview' });
+  if (!asset.publicUrl) {
+    preview.appendChild(createElement('span', { text: ADMIN_COPY.media.previewUnavailable }));
+    return preview;
+  }
+
+  if (asset.mediaKind === 'video') {
+    const video = createElement('video', {
+      attrs: {
+        controls: 'true',
+        preload: 'metadata',
+        playsinline: 'true',
+        src: asset.publicUrl,
+      },
+    });
+    video.addEventListener('error', () => showMediaPreviewError(preview));
+    preview.appendChild(video);
+    return preview;
+  }
+
+  if (asset.mediaKind === 'image' || asset.mediaKind === 'poster') {
+    const image = createElement('img', {
+      attrs: {
+        src: asset.publicUrl,
+        alt: asset.fileName || 'CMS media',
+        loading: 'lazy',
+        decoding: 'async',
+      },
+    });
+    image.addEventListener('error', () => showMediaPreviewError(preview));
+    preview.appendChild(image);
+    return preview;
+  }
+
+  preview.appendChild(createElement('span', { text: ADMIN_COPY.media.previewUnavailable }));
+  return preview;
+}
+
+function showMediaPreviewError(preview) {
+  if (!preview) return;
+  clearNode(preview);
+  preview.classList.add('has-error');
+  preview.appendChild(createElement('span', { text: ADMIN_COPY.media.previewError }));
+}
+
+function appendMediaDetail(parent, label, value) {
+  parent.appendChild(createElement('dt', { text: label }));
+  parent.appendChild(createElement('dd', { text: toDisplayText(value) }));
+}
+
+function buildMediaSearchText(asset = {}) {
+  return [
+    asset.fileName,
+    asset.publicUrl,
+    asset.storagePath,
+    asset.mediaKind,
+    asset.targetType,
+    asset.roomKey,
+    asset.sectionKey,
+    asset.itemId,
+    asset.artworkCode,
+    asset.fieldName,
+    asset.status,
+    asset.usage?.label,
+  ].map((value) => String(value || '').toLowerCase()).join(' ');
+}
+
+function applyMediaLibraryFilters(panel) {
+  if (!panel) return;
+  const searchValue = String(panel.querySelector('[data-media-search]')?.value || '').trim().toLowerCase();
+  const kindValue = panel.querySelector('[data-media-filter="kind"]')?.value || 'all';
+  const usageValue = panel.querySelector('[data-media-filter="usage"]')?.value || 'all';
+  const targetValue = panel.querySelector('[data-media-filter="target"]')?.value || 'all';
+  const cards = Array.from(panel.querySelectorAll('.cms-admin-media-card'));
+  let visibleCount = 0;
+
+  cards.forEach((card) => {
+    const matchesSearch = !searchValue || String(card.getAttribute('data-media-search-text') || '').includes(searchValue);
+    const matchesKind = kindValue === 'all' || card.getAttribute('data-media-kind') === kindValue;
+    const matchesUsage = usageValue === 'all' || card.getAttribute('data-media-usage') === usageValue;
+    const matchesTarget = targetValue === 'all' || card.getAttribute('data-media-target') === targetValue;
+    const visible = matchesSearch && matchesKind && matchesUsage && matchesTarget;
+    card.classList.toggle('cms-admin-hidden', !visible);
+    if (visible) visibleCount += 1;
+  });
+
+  const empty = panel.querySelector('[data-media-filter-empty]');
+  if (empty) empty.classList.toggle('cms-admin-hidden', visibleCount !== 0);
+}
+
+function getMediaKindLabel(kind) {
+  return ADMIN_COPY.media.kindLabels?.[kind] || ADMIN_COPY.media.kindLabels.unknown;
+}
+
+function getMediaTargetLabel(asset = {}) {
+  const targetType = asset.targetType || 'unknown';
+  return ADMIN_COPY.media.targetLabels?.[targetType] || ADMIN_COPY.media.targetLabels.unknown;
+}
+
+function formatMediaFieldName(fieldName = '') {
+  const normalized = String(fieldName || '').trim();
+  if (!normalized) return '—';
+  const labels = {
+    image: 'Ảnh',
+    imageUrl: 'Ảnh',
+    image_url: 'Ảnh',
+    poster: 'Poster',
+    posterUrl: 'Poster',
+    poster_url: 'Poster',
+    videoUrl: 'Video',
+    video_url: 'Video',
+  };
+  return labels[normalized] || normalized;
+}
+
+function formatMediaUploadStatus(status = '') {
+  const value = String(status || '').trim();
+  const labels = {
+    draft: 'Trong bản nháp',
+    attached: 'Đã gắn vào draft',
+    published: 'Đã từng công khai',
+    orphaned: 'Có thể chưa dùng',
+    deleted: 'Đã đánh dấu xóa',
+  };
+  return labels[value] || value || '—';
+}
+
+function formatBytes(value = 0) {
+  const bytes = Number(value || 0);
+  if (!Number.isFinite(bytes) || bytes <= 0) return '—';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  let amount = bytes;
+  let unitIndex = 0;
+  while (amount >= 1024 && unitIndex < units.length - 1) {
+    amount /= 1024;
+    unitIndex += 1;
+  }
+  return `${amount >= 10 || unitIndex === 0 ? amount.toFixed(0) : amount.toFixed(1)} ${units[unitIndex]}`;
+}
+
+async function copyMediaUrl(button, url) {
+  const originalText = button.textContent;
+  button.disabled = true;
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(url);
+    } else {
+      const textarea = createElement('textarea', { value: url, attrs: { readonly: 'true' } });
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      textarea.remove();
+    }
+    button.textContent = ADMIN_COPY.media.actions.copied;
+  } catch (error) {
+    console.warn('[cms-admin] copy media URL failed', error);
+    button.textContent = ADMIN_COPY.media.actions.copyFailed;
+  } finally {
+    window.setTimeout(() => {
+      button.textContent = originalText;
+      button.disabled = false;
+    }, 1400);
+  }
 }
 
 function renderPublishTab(state) {
