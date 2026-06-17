@@ -500,14 +500,18 @@ function renderEditActionBlock(editState = {}, copy = {}, handlers = {}) {
   const cancelButton = createElement('button', {
     className: 'cms-admin-button cms-admin-button-ghost',
     text: copy.cancel || ADMIN_COPY.globalEdit?.cancel || 'Hủy',
+    title: copy.cancelTitle || copy.cancelAria || 'Hủy phiên chỉnh sửa hiện tại',
     type: 'button',
+    ariaLabel: copy.cancelAria || copy.cancelTitle || 'Hủy phiên chỉnh sửa hiện tại',
   });
   cancelButton.addEventListener('click', () => handlers.onCancel?.());
 
   const resetButton = createElement('button', {
     className: 'cms-admin-button cms-admin-button-secondary cms-admin-reset-draft-button',
     text: copy.reset || ADMIN_COPY.globalEdit?.reset || 'Đặt lại thay đổi',
+    title: copy.resetTitle || copy.resetAria || 'Đặt lại các thay đổi chưa lưu trong form hiện tại',
     type: 'button',
+    ariaLabel: copy.resetAria || copy.resetTitle || 'Đặt lại các thay đổi chưa lưu trong form hiện tại',
     attrs: { 'data-cms-reset-draft': 'true' },
   });
   resetButton.disabled = Boolean(editState.saving) || !Boolean(editState.dirty);
@@ -516,7 +520,9 @@ function renderEditActionBlock(editState = {}, copy = {}, handlers = {}) {
   const saveButton = createElement('button', {
     className: 'cms-admin-button cms-admin-button-primary',
     text: editState.saving ? (copy.saving || 'Đang lưu...') : (copy.save || 'Lưu bản nháp'),
+    title: copy.saveTitle || copy.saveAria || 'Lưu nội dung vào bản nháp CMS',
     type: 'submit',
+    ariaLabel: copy.saveAria || copy.saveTitle || 'Lưu nội dung vào bản nháp CMS',
   });
   saveButton.disabled = Boolean(editState.saving) || !Boolean(editState.dirty);
 
@@ -3261,6 +3267,7 @@ function renderHomeContactSourceOfTruthBlock(state, section, homeCopy) {
   block.appendChild(renderDataCardTitle(copy.title || 'Nguồn dữ liệu liên hệ chính thức', copy.readonly || 'Chỉ xem'));
   block.appendChild(renderCompactNotice(copy.notice || 'Thông tin liên hệ chính thức được quản lý tại Thông tin website.'));
   block.appendChild(renderCompactNotice(copy.detail || 'Địa chỉ, điện thoại, fax và email không chỉnh tại section này để tránh lệch dữ liệu.'));
+  if (copy.publicNote) block.appendChild(renderCompactNotice(copy.publicNote));
 
   const fieldCopy = copy.fields || {};
   const missing = copy.missing || 'Chưa khai báo';
@@ -3288,7 +3295,9 @@ function renderHomeContactSourceOfTruthBlock(state, section, homeCopy) {
   const openButton = createElement('button', {
     className: 'cms-admin-button cms-admin-button-ghost',
     text: copy.openSettings || 'Mở Thông tin website',
+    title: copy.openSettingsTitle || 'Mở tab Thông tin website để chỉnh dữ liệu liên hệ chính thức',
     type: 'button',
+    ariaLabel: copy.openSettingsAria || 'Mở Thông tin website để chỉnh dữ liệu liên hệ chính thức',
   });
   openButton.addEventListener('click', () => switchAdminTab('settings'));
   actions.appendChild(openButton);
@@ -3961,7 +3970,9 @@ function renderHomeGuideEditActions(state, section) {
     const editButton = createElement('button', {
       className: 'cms-admin-button cms-admin-button-primary',
       text: copy.button || 'Chỉnh sửa phần này',
+      title: copy.buttonTitle || 'Chỉnh sửa chữ hiển thị của Hướng dẫn tham quan',
       type: 'button',
+      ariaLabel: copy.buttonAria || 'Chỉnh sửa chữ hiển thị của Hướng dẫn tham quan',
     });
     editButton.addEventListener('click', () => {
       const editId = section.id || section.section_key || 'guide';
@@ -3984,6 +3995,7 @@ function renderHomeGuideEditPanel(state, section, editState = {}) {
   const panel = createElement('section', { className: 'cms-admin-home-hero-edit-panel cms-admin-home-guide-edit-panel cms-admin-edit-panel-highlight', dataset: { cmsEditPanel: 'home-guide', cmsEditId: section.id || section.section_key || 'guide' } });
   panel.appendChild(renderDataCardTitle(copy.title || 'Chỉnh sửa Hướng dẫn tham quan', copy.enabledScope || 'Chỉ bật chỉnh sửa Hướng dẫn tham quan'));
   panel.appendChild(renderCompactNotice(copy.safeNote || 'Chức năng này chỉ lưu bản nháp CMS, không công khai lên website.'));
+  panel.appendChild(renderCompactNotice(copy.publicNote || 'Website public chưa thay đổi cho đến khi bạn lưu bản nháp và công khai nội dung.'));
   panel.appendChild(renderCompactNotice(copy.jsonSafeNote || 'Bạn chỉ sửa chữ hiển thị của Hướng dẫn tham quan. Dữ liệu kỹ thuật được khóa ở bước này.'));
   if (copy.readOnlyScope) panel.appendChild(renderCompactNotice(copy.readOnlyScope));
 
@@ -4045,14 +4057,14 @@ function renderHomeGuideEditableTextField(fieldName, label, editState, options =
       className: 'cms-admin-edit-input cms-admin-edit-textarea',
       value,
       placeholder: options.placeholder || '',
-      attrs: { name: fieldName, rows: options.rows || '3' },
+      attrs: { name: fieldName, rows: options.rows || '3', 'aria-label': options.ariaLabel || `${label} trong Hướng dẫn tham quan` },
     })
     : createElement('input', {
       className: 'cms-admin-edit-input',
       type: 'text',
       value,
       placeholder: options.placeholder || '',
-      attrs: { name: fieldName, autocomplete: 'off' },
+      attrs: { name: fieldName, autocomplete: 'off', 'aria-label': options.ariaLabel || `${label} trong Hướng dẫn tham quan` },
     });
   input.addEventListener('input', () => updateHomeGuideDraftField(fieldName, input.value));
   appendChildren(field, [input, renderFieldMessage(fieldName, editState)]);
@@ -4063,6 +4075,7 @@ function renderHomeGuideItemsEditGroup(section, editState, copy) {
   const group = createElement('section', { className: 'cms-admin-home-form-section cms-admin-home-items-edit-group cms-admin-home-guide-items-edit-group' });
   group.appendChild(createElement('h4', { className: 'cms-admin-data-group-title', text: copy.groups?.items || 'Danh sách bước hướng dẫn' }));
   group.appendChild(renderCompactNotice(copy.itemsReadonlyNote || 'Không thể thêm, xóa hoặc sắp xếp lại bước hướng dẫn ở bước này.'));
+  if (copy.itemContractNote) group.appendChild(renderCompactNotice(copy.itemContractNote));
 
   const originalItems = normalizeJsonValue(section?.items_json);
   if (!Array.isArray(originalItems)) {
@@ -4117,14 +4130,14 @@ function renderHomeGuideItemTextField(index, fieldName, label, item, editState, 
       className: 'cms-admin-edit-input cms-admin-edit-textarea',
       value,
       placeholder: options.placeholder || '',
-      attrs: { name: fullFieldName, rows: '3' },
+      attrs: { name: fullFieldName, rows: '3', 'aria-label': options.ariaLabel || `${label} của bước hướng dẫn ${index + 1}` },
     })
     : createElement('input', {
       className: 'cms-admin-edit-input',
       type: 'text',
       value,
       placeholder: options.placeholder || '',
-      attrs: { name: fullFieldName, autocomplete: 'off' },
+      attrs: { name: fullFieldName, autocomplete: 'off', 'aria-label': options.ariaLabel || `${label} của bước hướng dẫn ${index + 1}` },
     });
   input.addEventListener('input', () => updateHomeGuideItemDraftField(index, fieldName, input.value));
   appendChildren(field, [input, renderFieldMessage(fullFieldName, editState)]);
@@ -4133,7 +4146,10 @@ function renderHomeGuideItemTextField(index, fieldName, label, item, editState, 
 
 function renderHomeGuideTechnicalReadonlyBlock(section, copy) {
   const originalItems = normalizeJsonValue(section?.items_json);
-  const block = createElement('section', { className: 'cms-admin-readonly-field-grid cms-admin-home-technical-strip cms-admin-home-guide-technical-strip' });
+  const block = createElement('section', {
+    className: 'cms-admin-readonly-field-grid cms-admin-home-technical-strip cms-admin-home-guide-technical-strip',
+    attrs: { 'aria-label': copy.technicalAria || 'Thông tin kỹ thuật chỉ xem của Hướng dẫn tham quan' },
+  });
   block.appendChild(renderReadonlyField(copy.fields?.sectionKey || 'Mã section', section?.section_key, copy.technicalReadonlyNote || 'Thông tin kỹ thuật chỉ xem, không chỉnh trong bước này.'));
   block.appendChild(renderReadonlyField(copy.fields?.sortOrder || 'Thứ tự hiển thị', section?.sort_order, copy.technicalReadonlyNote || 'Thông tin kỹ thuật chỉ xem, không chỉnh trong bước này.'));
   block.appendChild(renderReadonlyField(copy.fields?.visible || 'Trạng thái hiển thị', getVisibleLabel(section?.is_visible), copy.technicalReadonlyNote || 'Thông tin kỹ thuật chỉ xem, không chỉnh trong bước này.'));
@@ -4244,7 +4260,9 @@ function renderHomeExperienceEditActions(state, section) {
     const editButton = createElement('button', {
       className: 'cms-admin-button cms-admin-button-primary',
       text: copy?.button || 'Chỉnh sửa phần này',
+      title: copy?.buttonTitle || 'Chỉnh sửa chữ hiển thị của Khu vực trải nghiệm',
       type: 'button',
+      ariaLabel: copy?.buttonAria || 'Chỉnh sửa chữ hiển thị của Khu vực trải nghiệm',
     });
     editButton.addEventListener('click', () => {
       const editId = section.id || section.section_key || 'experience';
@@ -4267,6 +4285,7 @@ function renderHomeExperienceEditPanel(state, section, editState = {}) {
   const panel = createElement('section', { className: 'cms-admin-home-hero-edit-panel cms-admin-home-experience-edit-panel cms-admin-edit-panel-highlight', dataset: { cmsEditPanel: 'home-experience', cmsEditId: section.id || section.section_key || 'experience' } });
   panel.appendChild(renderDataCardTitle(copy?.title || 'Chỉnh sửa Khu vực trải nghiệm', copy?.enabledScope || 'Chỉ bật chỉnh sửa Khu vực trải nghiệm'));
   panel.appendChild(renderCompactNotice(copy?.safeNote || 'Chức năng này chỉ lưu bản nháp CMS, không công khai lên website.'));
+  panel.appendChild(renderCompactNotice(copy?.publicNote || 'Website public chưa thay đổi cho đến khi bạn lưu bản nháp và công khai nội dung.'));
   panel.appendChild(renderCompactNotice(copy?.jsonSafeNote || 'Bạn chỉ sửa chữ hiển thị. Mã phòng, đường dẫn tham quan và nhãn nút vào phòng được khóa ở bước này.'));
 
   if (editState.saveError) {
@@ -4324,14 +4343,14 @@ function renderHomeExperienceEditableTextField(fieldName, label, editState, opti
       className: 'cms-admin-edit-input cms-admin-edit-textarea',
       value,
       placeholder: options.placeholder || '',
-      attrs: { name: fieldName, rows: options.rows || '3' },
+      attrs: { name: fieldName, rows: options.rows || '3', 'aria-label': options.ariaLabel || `${label} trong Khu vực trải nghiệm` },
     })
     : createElement('input', {
       className: 'cms-admin-edit-input',
       type: 'text',
       value,
       placeholder: options.placeholder || '',
-      attrs: { name: fieldName, autocomplete: 'off' },
+      attrs: { name: fieldName, autocomplete: 'off', 'aria-label': options.ariaLabel || `${label} trong Khu vực trải nghiệm` },
     });
   input.addEventListener('input', () => updateHomeExperienceDraftField(fieldName, input.value));
   appendChildren(field, [input, renderFieldMessage(fieldName, editState)]);
@@ -4343,6 +4362,7 @@ function renderHomeExperienceItemsEditGroup(section, editState, copy) {
   group.appendChild(createElement('h4', { className: 'cms-admin-data-group-title', text: copy.groups?.items || 'Danh sách card trải nghiệm' }));
   group.appendChild(renderCompactNotice(copy.itemsReadonlyNote || 'Không thể thêm, xóa hoặc sắp xếp lại card trải nghiệm ở bước này.'));
   group.appendChild(renderCompactNotice(copy.routeReadonlyNote || 'Mã phòng, nhãn nút vào phòng và đường dẫn tham quan chỉ xem ở bước này.'));
+  if (copy.protectedContractNote) group.appendChild(renderCompactNotice(copy.protectedContractNote));
 
   const originalItems = normalizeJsonValue(section?.items_json);
   if (!Array.isArray(originalItems)) {
@@ -4397,14 +4417,14 @@ function renderHomeExperienceItemTextField(index, fieldName, label, item, editSt
       className: 'cms-admin-edit-input cms-admin-edit-textarea',
       value,
       placeholder: options.placeholder || '',
-      attrs: { name: fullFieldName, rows: '3' },
+      attrs: { name: fullFieldName, rows: '3', 'aria-label': options.ariaLabel || `${label} của card trải nghiệm ${index + 1}` },
     })
     : createElement('input', {
       className: 'cms-admin-edit-input',
       type: 'text',
       value,
       placeholder: options.placeholder || '',
-      attrs: { name: fullFieldName, autocomplete: 'off' },
+      attrs: { name: fullFieldName, autocomplete: 'off', 'aria-label': options.ariaLabel || `${label} của card trải nghiệm ${index + 1}` },
     });
   input.addEventListener('input', () => updateHomeExperienceItemDraftField(index, fieldName, input.value));
   appendChildren(field, [input, renderFieldMessage(fullFieldName, editState)]);
@@ -4413,7 +4433,10 @@ function renderHomeExperienceItemTextField(index, fieldName, label, item, editSt
 
 function renderHomeExperienceTechnicalReadonlyBlock(section, copy) {
   const originalItems = normalizeJsonValue(section?.items_json);
-  const block = createElement('section', { className: 'cms-admin-readonly-field-grid cms-admin-home-technical-strip cms-admin-home-experience-technical-strip' });
+  const block = createElement('section', {
+    className: 'cms-admin-readonly-field-grid cms-admin-home-technical-strip cms-admin-home-experience-technical-strip',
+    attrs: { 'aria-label': copy.technicalAria || 'Thông tin kỹ thuật chỉ xem của Khu vực trải nghiệm' },
+  });
   block.appendChild(renderReadonlyField(copy.fields?.sectionKey || 'Mã section', section?.section_key, copy.technicalReadonlyNote || 'Thông tin kỹ thuật chỉ xem, không chỉnh trong bước này.'));
   block.appendChild(renderReadonlyField(copy.fields?.sortOrder || 'Thứ tự hiển thị', section?.sort_order, copy.technicalReadonlyNote || 'Thông tin kỹ thuật chỉ xem, không chỉnh trong bước này.'));
   block.appendChild(renderReadonlyField(copy.fields?.visible || 'Trạng thái hiển thị', getVisibleLabel(section?.is_visible), copy.technicalReadonlyNote || 'Thông tin kỹ thuật chỉ xem, không chỉnh trong bước này.'));

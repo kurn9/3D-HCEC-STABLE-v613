@@ -1618,6 +1618,20 @@ body.cms-admin-page * {
   font-weight: 850;
 }
 
+
+.cms-admin-home-edit-actions .cms-admin-button:focus-visible,
+.cms-admin-edit-action-row .cms-admin-button:focus-visible,
+.cms-admin-home-guide-edit-panel .cms-admin-edit-input:focus-visible,
+.cms-admin-home-experience-edit-panel .cms-admin-edit-input:focus-visible {
+  outline: 2px solid rgba(250, 204, 21, 0.9);
+  outline-offset: 3px;
+}
+
+.cms-admin-home-guide-edit-panel .cms-admin-compact-notice,
+.cms-admin-home-experience-edit-panel .cms-admin-compact-notice,
+.cms-admin-contact-source-panel .cms-admin-compact-notice {
+  max-width: 72rem;
+}
 .cms-admin-edit-input {
   width: 100%;
   min-height: 38px;
