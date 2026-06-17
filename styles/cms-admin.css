@@ -5134,3 +5134,65 @@ body.cms-admin-page * {
   color: var(--cms-admin-dim);
   text-align: right;
 }
+
+/* v6.14.048.002 — operator-first checklist panels */
+.cms-admin-operator-step-panel,
+.cms-admin-static-operator-steps,
+.cms-admin-cleanup-step-panel {
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(15, 23, 42, 0.34);
+}
+
+.cms-admin-operator-step-list {
+  display: grid;
+  gap: 10px;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cms-admin-operator-step-list li {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  align-items: start;
+  padding: 10px 12px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 14px;
+  background: rgba(2, 6, 23, 0.22);
+}
+
+.cms-admin-operator-step-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.82rem;
+  background: rgba(59, 130, 246, 0.16);
+  border: 1px solid rgba(59, 130, 246, 0.28);
+}
+
+.cms-admin-operator-step-body {
+  display: grid;
+  gap: 3px;
+  line-height: 1.45;
+}
+
+.cms-admin-operator-step-body small,
+.cms-admin-operator-step-note {
+  color: var(--cms-admin-muted, #94a3b8);
+}
+
+.cms-admin-operator-step-note {
+  margin: 12px 0 0;
+  font-size: 0.92rem;
+}
+
+@media (max-width: 720px) {
+  .cms-admin-operator-step-list li {
+    padding: 9px 10px;
+  }
+}

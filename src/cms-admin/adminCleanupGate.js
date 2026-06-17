@@ -13,14 +13,34 @@ import {
   safeArray,
 } from './adminUtils.js';
 
+function renderCleanupOperatorSteps(copy = {}) {
+  const config = copy.operatorSteps || {};
+  const steps = safeArray(config.steps);
+  if (!config.title && !steps.length) return createElement('div');
+  const panel = createElement('section', { className: 'cms-admin-cleanup-step-panel cms-admin-operator-step-panel' });
+  panel.appendChild(createElement('h3', { className: 'cms-admin-panel-title', text: config.title || 'Các bước quét & dọn tệp' }));
+  if (config.subtitle) panel.appendChild(createElement('p', { className: 'cms-admin-help-text', text: config.subtitle }));
+  const list = createElement('ol', { className: 'cms-admin-operator-step-list' });
+  steps.forEach((step, index) => {
+    const item = createElement('li');
+    item.appendChild(createElement('span', { className: 'cms-admin-operator-step-number', text: String(index + 1) }));
+    item.appendChild(createElement('span', { className: 'cms-admin-operator-step-body', text: step }));
+    list.appendChild(item);
+  });
+  panel.appendChild(list);
+  if (config.note) panel.appendChild(createElement('p', { className: 'cms-admin-operator-step-note', text: config.note }));
+  return panel;
+}
+
 export function renderCmsStorageCleanupTab(state = getState(), options = {}) {
   const copy = ADMIN_COPY.cleanup || {};
   const panel = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel cms-admin-cleanup-view' });
   panel.appendChild(renderCleanupTitle(copy));
+  panel.appendChild(renderCleanupOperatorSteps(copy));
   panel.appendChild(renderCleanupNotice(copy));
 
   if (!canUseCleanupScan(state)) {
-    panel.appendChild(renderErrorBox('V6.12-A1 chỉ admin đang hoạt động được quét/dry-run cleanup.', 'Không có quyền cleanup'));
+    panel.appendChild(renderErrorBox('Chỉ quản trị viên đang hoạt động được quét và dọn dẹp có xác nhận.', 'Không có quyền dọn dẹp'));
     return panel;
   }
 
@@ -32,21 +52,21 @@ export function renderCmsStorageCleanupTab(state = getState(), options = {}) {
 function renderCleanupTitle(copy = {}) {
   const header = createElement('div', { className: 'cms-admin-cleanup-header' });
   const left = createElement('div');
-  left.appendChild(createElement('h3', { className: 'cms-admin-section-title', text: copy.title || 'Media Library / Storage Cleanup' }));
-  left.appendChild(createElement('p', { className: 'cms-admin-compact-copy', text: copy.intro || 'Chỉ scan/dry-run. Không xóa dữ liệu.' }));
+  left.appendChild(createElement('h3', { className: 'cms-admin-section-title', text: copy.title || 'Quét & dọn tệp' }));
+  left.appendChild(createElement('p', { className: 'cms-admin-compact-copy', text: copy.intro || 'Chỉ quét và kiểm tra. Không xóa dữ liệu.' }));
   const badges = createElement('div', { className: 'cms-admin-cleanup-badges' });
-  badges.appendChild(renderBadge(copy.status || 'Scan/Dry-run only', 'warning'));
-  badges.appendChild(renderBadge('Delete disabled', 'success'));
-  badges.appendChild(renderBadge('Purge disabled', 'success'));
+  badges.appendChild(renderBadge(copy.status || 'Quét và kiểm tra trước', 'warning'));
+  badges.appendChild(renderBadge('Dọn dẹp tự do đang tắt', 'success'));
+  badges.appendChild(renderBadge('Không dọn nội dung website', 'success'));
   appendChildren(header, [left, badges]);
   return header;
 }
 
 function renderCleanupNotice(copy = {}) {
   const wrap = createElement('div', { className: 'cms-admin-alert cms-admin-alert-info' });
-  wrap.appendChild(createElement('strong', { text: 'V6.12-A2 an toàn dữ liệu' }));
-  wrap.appendChild(createElement('p', { text: copy.deleteDisabled || 'Delete/purge đang bị tắt ở cả UI và server-side.' }));
-  wrap.appendChild(createElement('p', { text: 'Frontend không có service-role và không gọi Storage delete trực tiếp.' }));
+  wrap.appendChild(createElement('strong', { text: 'An toàn dữ liệu' }));
+  wrap.appendChild(createElement('p', { text: copy.deleteDisabled || 'Dọn dẹp tự do đang bị tắt ở cả giao diện và server.' }));
+  wrap.appendChild(createElement('p', { text: 'Màn này không tự xóa tệp khi chỉ mở, quét hoặc kiểm tra.' }));
   return wrap;
 }
 
@@ -88,7 +108,7 @@ function renderCleanupControls(state, options = {}) {
 
   const dryRunButton = createElement('button', {
     className: 'cms-admin-button cms-admin-button-secondary',
-    text: cleanup.loading && cleanup.action === 'dryRun' ? (copy.controls?.dryRunning || 'Đang dry-run...') : (copy.controls?.dryRun || 'Dry-run dọn dẹp'),
+    text: cleanup.loading && cleanup.action === 'dryRun' ? (copy.controls?.dryRunning || 'Đang kiểm tra tệp...') : (copy.controls?.dryRun || 'Kiểm tra tệp có thể dọn'),
     type: 'button',
   });
   dryRunButton.disabled = cleanup.loading || !ADMIN_FEATURE_FLAGS.allowCmsStorageCleanupScan;
@@ -117,7 +137,7 @@ function renderCleanupResult(state, options = {}) {
   const result = cleanup.dryRunResult || cleanup.scanResult;
   const resultWrap = createElement('section', { className: 'cms-admin-cleanup-result' });
 
-  if (cleanup.error) resultWrap.appendChild(renderErrorBox(cleanup.error, 'Không thể quét/dry-run cleanup'));
+  if (cleanup.error) resultWrap.appendChild(renderErrorBox(cleanup.error, 'Không thể quét hoặc kiểm tra tệp'));
   if (!result) {
     resultWrap.appendChild(renderEmptyState(copy.noResult || 'Chưa có kết quả cleanup.'));
     return resultWrap;
@@ -136,18 +156,18 @@ function renderCleanupSummary(result = {}) {
   const summary = result.summary || {};
   const cards = createElement('div', { className: 'cms-admin-cleanup-summary-grid' });
   const rows = [
-    ['Run ID', result.runId || '—'],
-    ['Action', result.action || '—'],
-    ['Plan hash', result.planHash || '—'],
-    ['cms-media objects', formatCount(summary.cmsMediaObjects)],
-    ['version objects', formatCount(summary.cmsPublicVersionObjects)],
-    ['metadata rows', formatCount(summary.metadataRows)],
-    ['draft rows', formatCount(summary.draftRows)],
-    ['logs', formatCount(summary.publishLogRows)],
-    ['eligible', formatCount(summary.eligibleCount)],
-    ['blocked', formatCount(summary.blockedCount)],
-    ['recoverable bytes', formatCount(summary.estimatedBytesRecoverable)],
-    ['unsafe', formatCount(summary.unsafeToDelete)],
+    ['Mã lần quét', result.runId || '—'],
+    ['Thao tác', result.action === 'dryRun' ? 'Kiểm tra tệp có thể dọn' : result.action === 'scan' ? 'Quét tệp' : (result.action || '—')],
+    ['Mã kế hoạch kiểm tra', result.planHash || '—'],
+    ['Tệp media', formatCount(summary.cmsMediaObjects)],
+    ['Phiên bản cũ', formatCount(summary.cmsPublicVersionObjects)],
+    ['Dòng thông tin quản lý', formatCount(summary.metadataRows)],
+    ['Bản nháp', formatCount(summary.draftRows)],
+    ['Lịch sử vận hành', formatCount(summary.publishLogRows)],
+    ['Có thể dọn', formatCount(summary.eligibleCount)],
+    ['Không được dọn', formatCount(summary.blockedCount)],
+    ['Dung lượng có thể giảm', formatCount(summary.estimatedBytesRecoverable)],
+    ['Không an toàn để dọn', formatCount(summary.unsafeToDelete)],
   ];
   rows.forEach(([label, value]) => {
     const card = createElement('div', { className: 'cms-admin-cleanup-summary-card' });
@@ -170,7 +190,7 @@ function renderWarnings(warnings = []) {
 function renderSafeDeleteResult(result = {}) {
   const box = createElement('div', { className: 'cms-admin-alert cms-admin-alert-info cms-admin-safe-delete-result' });
   box.appendChild(createElement('strong', { text: `Kết quả dọn dẹp có kiểm soát: ${result.executionStatus || result.error || 'result'}` }));
-  box.appendChild(createElement('p', { text: `Deleted: ${formatCount(result.deletedCount || 0)} · Failed: ${formatCount(result.failedCount || 0)} · Skipped: ${formatCount(result.skippedCount || 0)}` }));
+  box.appendChild(createElement('p', { text: `Đã dọn: ${formatCount(result.deletedCount || 0)} · Lỗi: ${formatCount(result.failedCount || 0)} · Bỏ qua: ${formatCount(result.skippedCount || 0)}` }));
   return box;
 }
 
@@ -188,26 +208,26 @@ function renderSafeDeletePanel(state, result = {}, options = {}) {
   if (result.action !== 'dryRun' || !result.runId || !result.planHash) return null;
   if (result.graphIncomplete || summary.graphIncomplete) {
     return renderSafeDeleteLockedPanel(
-      copy.safeDeleteTitle || 'Xóa an toàn theo dry-run',
+      copy.safeDeleteTitle || 'Dọn dẹp có xác nhận',
       copy.safeDeleteGraphIncomplete || 'Không thể xóa vì dependency graph chưa đầy đủ.',
     );
   }
   if (responseLooksLimited) {
     return renderSafeDeleteLockedPanel(
-      copy.safeDeleteTitle || 'Xóa an toàn theo dry-run',
+      copy.safeDeleteTitle || 'Dọn dẹp có xác nhận',
       copy.safeDeleteLimited || 'Danh sách candidate cleanup có dấu hiệu bị giới hạn hoặc chưa tải đầy đủ. Dọn dẹp có kiểm soát đang bị khóa để tránh xác nhận khi chưa thấy rõ object sẽ xử lý.',
     );
   }
   if (responseHasEligibleButNoCandidates) {
     return renderSafeDeleteLockedPanel(
-      copy.safeDeleteTitle || 'Xóa an toàn theo dry-run',
-      copy.safeDeleteCandidateMissing || 'Có eligible item trong summary nhưng danh sách candidate A2 chưa được tải/hiển thị đầy đủ. Dọn dẹp có kiểm soát đang bị khóa để tránh xác nhận khi chưa thấy rõ object sẽ xử lý.',
+      copy.safeDeleteTitle || 'Dọn dẹp có xác nhận',
+      copy.safeDeleteCandidateMissing || 'Có tệp có thể dọn trong tổng quan nhưng danh sách chưa hiển thị đầy đủ. Dọn dẹp đang khóa để tránh thao tác khi chưa thấy rõ tệp sẽ xử lý.',
     );
   }
   if (!candidateItems.length) {
     return renderSafeDeleteNoticePanel(
-      copy.safeDeleteTitle || 'Xóa an toàn theo dry-run',
-      copy.safeDeleteNoCandidates || 'Không có candidate đủ điều kiện dọn dẹp có kiểm soát trong dry-run hiện tại.',
+      copy.safeDeleteTitle || 'Dọn dẹp có xác nhận',
+      copy.safeDeleteNoCandidates || 'Không có tệp nào đủ điều kiện dọn trong lần kiểm tra hiện tại.',
     );
   }
 
@@ -215,17 +235,17 @@ function renderSafeDeletePanel(state, result = {}, options = {}) {
   const currentPhrase = cleanup.safeDeleteConfirmPhrase || '';
   const phraseMatches = String(currentPhrase).trim() === expectedPhrase;
   const panel = createElement('section', { className: 'cms-admin-safe-delete-panel' });
-  panel.appendChild(createElement('h4', { className: 'cms-admin-subsection-title', text: copy.safeDeleteTitle || 'Xóa an toàn theo dry-run' }));
+  panel.appendChild(createElement('h4', { className: 'cms-admin-subsection-title', text: copy.safeDeleteTitle || 'Dọn dẹp có xác nhận' }));
   panel.appendChild(createElement('p', { className: 'cms-admin-danger-copy', text: copy.safeDeleteWarning || 'Thao tác này sẽ xóa object trong Supabase Storage và không thể hoàn tác nếu không có backup.' }));
 
   const meta = createElement('div', { className: 'cms-admin-safe-delete-meta' });
   const metaRows = [
-    ['Run ID', result.runId],
-    ['Plan hash', result.planHash],
-    ['Eligible A2 items', formatCount(candidateItems.length)],
-    ['Recoverable bytes', formatCount(summary.estimatedBytesRecoverable || 0)],
-    ['Retention days', formatCount(result.retentionDays || cleanup.retentionDays || 30)],
-    ['Keep last versions', formatCount(result.keepLastVersions || cleanup.keepLastVersions || 20)],
+    ['Mã lần quét', result.runId],
+    ['Mã kế hoạch kiểm tra', result.planHash],
+    ['Tệp có thể dọn', formatCount(candidateItems.length)],
+    ['Dung lượng có thể giảm', formatCount(summary.estimatedBytesRecoverable || 0)],
+    ['Số ngày giữ lại', formatCount(result.retentionDays || cleanup.retentionDays || 30)],
+    ['Số phiên bản giữ lại', formatCount(result.keepLastVersions || cleanup.keepLastVersions || 20)],
   ];
   metaRows.forEach(([label, value]) => {
     const item = createElement('div', { className: 'cms-admin-safe-delete-meta-item' });
@@ -252,8 +272,8 @@ function renderSafeDeletePanel(state, result = {}, options = {}) {
     className: 'cms-admin-button cms-admin-button-danger',
     type: 'button',
     text: cleanup.loading && cleanup.action === 'safeDelete'
-      ? (copy.controls?.safeDeleting || 'Đang xóa an toàn...')
-      : (copy.controls?.safeDelete || 'Xóa an toàn theo dry-run'),
+      ? (copy.controls?.safeDeleting || 'Đang dọn dẹp...')
+      : (copy.controls?.safeDelete || 'Dọn dẹp có xác nhận'),
   });
   deleteButton.disabled = cleanup.loading || !phraseMatches;
   deleteButton.addEventListener('click', () => handleSafeDeleteAction(result, options));
@@ -330,7 +350,7 @@ function renderCleanupItems(result = {}) {
 
   if (!uniqueItems.length) {
     const row = createElement('tr');
-    const cell = createElement('td', { text: 'Không có item trong response hoặc response đã bị giới hạn.', attrs: { colspan: '8' } });
+    const cell = createElement('td', { text: 'Không có tệp trong kết quả hoặc kết quả đã bị giới hạn.', attrs: { colspan: '8' } });
     row.appendChild(cell);
     tbody.appendChild(row);
   }
@@ -373,7 +393,7 @@ async function handleSafeDeleteAction(result = {}, options = {}) {
   const cleanup = current.storageCleanup || {};
   const expectedPhrase = `DELETE ${String(result.runId || '').slice(0, 8)}`;
   if (String(cleanup.safeDeleteConfirmPhrase || '').trim() !== expectedPhrase) {
-    setCmsStorageCleanupState({ error: 'Confirm phrase chưa đúng. Yêu cầu dọn dẹp có kiểm soát chưa được gửi.' });
+    setCmsStorageCleanupState({ error: 'Cụm xác nhận chưa đúng. Yêu cầu dọn dẹp chưa được gửi.' });
     options.onRerender?.();
     return;
   }

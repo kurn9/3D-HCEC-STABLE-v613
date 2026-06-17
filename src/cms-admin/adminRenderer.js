@@ -849,6 +849,7 @@ function renderDashboard(state) {
 
   const top = createElement('div', { className: 'cms-admin-dashboard-top-grid' });
   top.appendChild(renderWebsiteStatusPanel({ published, errors, siteSettings: data.siteSettings, dashboardSummary, canonicalError: data.canonicalError }));
+  top.appendChild(renderOperatorStepPanel(ADMIN_COPY.dashboard.nextSteps, { status: 'Hướng dẫn', variant: 'success' }));
   top.appendChild(renderTaskPanel({
     warningItems: usingCanonicalSummary ? [] : getWarningItems(artworks),
     warningMessages: usingCanonicalSummary ? safeArray(dashboardSummary.warnings) : [],
@@ -919,7 +920,7 @@ function renderMediaTab(state) {
   technical.appendChild(renderPanelTitle(ADMIN_COPY.media.technicalTitle));
   technical.appendChild(renderTechnicalKeyValueList(ADMIN_COPY.media.technicalRows));
 
-  appendChildren(panel, [library, safety, technical]);
+  appendChildren(panel, [library, renderOperatorStepPanel(ADMIN_COPY.media.operatorSteps, { status: 'Chỉ xem' }), safety, technical]);
   return panel;
 }
 
@@ -1037,8 +1038,8 @@ function buildMediaUsageContext(state = {}) {
   addSource({
     key: 'public-canonical',
     sourceType: 'public',
-    area: 'Website public',
-    label: 'Website public / CMS public JSON',
+    area: 'Website',
+    label: 'Nội dung website đang dùng',
     value: canonicalValue,
   });
 
@@ -1046,7 +1047,7 @@ function buildMediaUsageContext(state = {}) {
     key: 'static-cms-draft-current',
     sourceType: 'draft',
     area: 'Bản nháp CMS',
-    label: 'Bản nháp đang mở / Static CMS draft',
+    label: 'Bản nháp đang mở',
     value: state.staticCmsDraft?.draftJson,
   });
 
@@ -2034,6 +2035,8 @@ function renderPublishTab(state) {
   const data = state.data || {};
   const bundle = getCurrentPublishedBundle(data.publishedBundles);
   const panel = createElement('section', { className: 'cms-admin-grid cms-admin-publish-view' });
+  panel.appendChild(renderOperatorStepPanel(ADMIN_COPY.publish.operatorSteps, { status: 'Không tự ghi' }));
+
   const summary = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel cms-admin-publish-summary-panel' });
   summary.appendChild(renderPanelTitle(ADMIN_COPY.publish.currentTitle, bundle ? getStatusLabel(bundle.status) : 'Chưa có'));
   if (bundle) {
@@ -2077,15 +2080,15 @@ function renderPublishReadinessPanel(state = {}, bundle = null) {
   const validation = draftState.validation || null;
   const dryRun = draftState.publishDryRunResult || null;
   const rows = [
-    [fields.canonicalJson, canonicalKnown ? 'Không có lỗi canonical được ghi nhận trong state hiện tại' : `Cần kiểm tra: ${normalizeErrorMessage(data.canonicalError)}`],
-    [fields.publicBundle, bundle?.version ? `DB tham chiếu/cache ${bundle.version} · không phải nguồn public canonical` : 'Chưa đọc được DB bundle tham chiếu'],
-    [fields.savedDraft, draftState.currentDraftId ? `Đã lưu draft ${draftState.currentDraftId}` : 'Chỉ có thể publish từ bản nháp đã lưu trong Nội dung phòng 3D'],
-    [fields.dirtyState, draftState.dirty ? 'Đang có thay đổi chưa lưu — phải lưu trước publish' : 'Không ghi nhận dirty changes trong draft đang mở'],
-    [fields.validation, validation ? (validation.valid ? 'Validation hiện tại đạt' : 'Validation còn lỗi/cảnh báo cần xử lý') : 'Chưa có validation draft trong state hiện tại'],
-    [fields.dryRun, dryRun?.ok === true && dryRun?.dryRun === true ? 'Dry-run gần nhất đạt' : 'Chưa có dry-run PASS cho bản nháp hiện tại'],
-    [fields.mainTabWrite, 'Đã khóa — tab này chỉ là readiness/status surface'],
-    [fields.publishGate, 'Dùng cổng publish trong Nội dung phòng 3D với draftId đã lưu'],
-    [fields.history, 'Lịch sử/rollback là quy trình riêng, không tự chạy từ màn này'],
+    [fields.canonicalJson, canonicalKnown ? 'Chưa ghi nhận lỗi ở nội dung website đang dùng' : `Cần kiểm tra: ${normalizeErrorMessage(data.canonicalError)}`],
+    [fields.publicBundle, bundle?.version ? `Bản ghi tham chiếu ${bundle.version} · chỉ để đối chiếu` : 'Chưa đọc được bản ghi tham chiếu'],
+    [fields.savedDraft, draftState.currentDraftId ? `Đã lưu bản nháp ${draftState.currentDraftId}` : 'Chỉ có thể công khai từ bản nháp đã lưu trong Nội dung phòng 3D'],
+    [fields.dirtyState, draftState.dirty ? 'Đang có thay đổi chưa lưu — phải lưu trước khi công khai' : 'Không ghi nhận thay đổi chưa lưu trong bản nháp đang mở'],
+    [fields.validation, validation ? (validation.valid ? 'Kiểm tra nội dung hiện tại đạt' : 'Kiểm tra nội dung còn lỗi/cảnh báo cần xử lý') : 'Chưa có kết quả kiểm tra nội dung trong trạng thái hiện tại'],
+    [fields.dryRun, dryRun?.ok === true && dryRun?.dryRun === true ? 'Kiểm tra an toàn gần nhất đạt' : 'Chưa có kiểm tra an toàn đạt cho bản nháp hiện tại'],
+    [fields.mainTabWrite, 'Đã khóa — màn này chỉ hướng dẫn và xem trạng thái'],
+    [fields.publishGate, 'Dùng bước công khai trong Nội dung phòng 3D sau khi lưu bản nháp'],
+    [fields.history, 'Lịch sử/khôi phục là quy trình riêng, không tự chạy từ màn này'],
   ];
 
   const panel = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel cms-admin-publish-readiness-panel' });
@@ -2115,6 +2118,8 @@ function renderSettingsTab(state) {
   if (editState.saveSuccess && !editState.isEditing) {
     wrap.appendChild(renderNoticeBox(editState.saveSuccess, 'success'));
   }
+
+  wrap.appendChild(renderOperatorStepPanel(ADMIN_COPY.settings.operatorSteps, { status: 'Bản nháp' }));
 
   if (siteSettings && editState.isEditing) {
     wrap.appendChild(renderSiteSettingsEditPanel(state, siteSettings, editState));
@@ -3095,6 +3100,8 @@ function renderHomeDataView(state) {
     wrap.appendChild(renderNoticeBox(editState.saveSuccess, 'success'));
   }
 
+  wrap.appendChild(renderOperatorStepPanel(copy.operatorSteps, { status: 'Bản nháp' }));
+
   const panel = createElement('section', {
     className: 'cms-admin-panel cms-admin-view-panel',
     dataset: { cmsReferenceTarget: 'home', cmsReferenceId: 'home' },
@@ -3128,6 +3135,8 @@ function renderGateDataView(state) {
   if (editState.saveSuccess && !editState.isEditing) {
     wrap.appendChild(renderNoticeBox(editState.saveSuccess, 'success'));
   }
+
+  wrap.appendChild(renderOperatorStepPanel(copy.operatorSteps, { status: 'Bản nháp' }));
 
   const panel = createElement('section', {
     className: 'cms-admin-panel cms-admin-view-panel',
@@ -5308,6 +5317,34 @@ function renderRequirementList(title, items = []) {
   const list = createElement('ul');
   safeArray(items).forEach((item) => list.appendChild(createElement('li', { text: item })));
   panel.appendChild(list);
+  return panel;
+}
+
+function renderOperatorStepPanel(config = {}, options = {}) {
+  const steps = safeArray(config.steps);
+  if (!config.title && !steps.length) return createElement('div');
+  const panel = createElement('section', {
+    className: ['cms-admin-panel', 'cms-admin-view-panel', 'cms-admin-operator-step-panel', options.className || ''].filter(Boolean).join(' '),
+  });
+  const titleRow = createElement('div', { className: 'cms-admin-panel-title-row' });
+  titleRow.appendChild(createElement('h3', { className: 'cms-admin-panel-title', text: config.title || 'Các bước thực hiện' }));
+  if (options.status || config.status) titleRow.appendChild(renderBadge(options.status || config.status, options.variant || 'default'));
+  panel.appendChild(titleRow);
+  if (config.subtitle) panel.appendChild(createElement('p', { className: 'cms-admin-help-text', text: config.subtitle }));
+  const list = createElement('ol', { className: 'cms-admin-operator-step-list' });
+  steps.forEach((step, index) => {
+    const item = createElement('li');
+    item.appendChild(createElement('span', { className: 'cms-admin-operator-step-number', text: String(index + 1) }));
+    const text = typeof step === 'string' ? step : step?.label;
+    const note = typeof step === 'string' ? '' : step?.note;
+    const body = createElement('span', { className: 'cms-admin-operator-step-body' });
+    body.appendChild(createElement('strong', { text: text || `Bước ${index + 1}` }));
+    if (note) body.appendChild(createElement('small', { text: note }));
+    item.appendChild(body);
+    list.appendChild(item);
+  });
+  panel.appendChild(list);
+  if (config.note) panel.appendChild(createElement('p', { className: 'cms-admin-operator-step-note', text: config.note }));
   return panel;
 }
 
