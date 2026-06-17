@@ -852,7 +852,7 @@ function renderFeaturedImageReplacePanel(draftState = {}, item = {}, sourceIndex
   heading.appendChild(createElement('h4', { text: 'Thay ảnh cho tác phẩm này' }));
   heading.appendChild(createElement('p', {
     className: 'cms-admin-help-text',
-    text: 'Chọn ảnh từ máy là cách khuyến nghị. Ảnh chỉ được gắn vào bản nháp sau khi bạn bấm “Dùng ảnh này”; website công khai chưa thay đổi.',
+    text: 'Chọn ảnh từ máy là cách khuyến nghị. Upload chỉ tạo media trong kho và chỉ gắn vào bản nháp sau khi bạn bấm “Dùng ảnh này”; website public chưa thay đổi cho đến khi lưu và công khai.',
   }));
   header.appendChild(heading);
   panel.appendChild(header);
@@ -868,7 +868,7 @@ function renderFeaturedImageReplacePanel(draftState = {}, item = {}, sourceIndex
   panel.appendChild(renderFeaturedUrlReplaceArea(draftState, item, sourceIndex, handlers));
   panel.appendChild(createElement('div', {
     className: 'cms-admin-alert cms-admin-alert-warning',
-    text: 'Upload hoặc thay URL không tự lưu và không tự công khai. Sau khi bấm “Dùng ảnh này”, hãy bấm “Lưu vào bản nháp”, rồi dùng quy trình công khai hiện có.',
+    text: 'Upload hoặc thay URL không tự lưu và không tự công khai. Sau khi bấm “Dùng ảnh này”, hãy bấm “Lưu vào bản nháp”, rồi dùng quy trình công khai hiện có để cập nhật website public.',
   }));
   return panel;
 }
@@ -882,7 +882,7 @@ function renderFeaturedLocalUploadArea(draftState = {}, item = {}, sourceIndex =
   wrap.appendChild(title);
   wrap.appendChild(createElement('p', {
     className: 'cms-admin-help-text',
-    text: `Ảnh JPG, PNG hoặc WebP; tối đa ${formatUploadSizeLimit('image')}. Upload đi qua cổng máy chủ an toàn, không ghi trực tiếp vào Storage từ trình duyệt.`,
+    text: `Ảnh JPG, PNG hoặc WebP; tối đa ${formatUploadSizeLimit('image')}. Upload đi qua cổng máy chủ an toàn; sau upload vẫn cần bấm “Dùng ảnh này” và lưu bản nháp.`,
   }));
 
   const hasDraftId = Boolean(String(draftState.currentDraftId || '').trim());
@@ -901,6 +901,7 @@ function renderFeaturedLocalUploadArea(draftState = {}, item = {}, sourceIndex =
       id: `cms-admin-featured-image-file-${makeCmsControlIdToken(itemKey, `item-${sourceIndex}`)}`,
       name: `featuredImageFile-${sourceIndex}`,
       accept: getUploadAccept('image'),
+      'aria-label': 'Chọn ảnh từ máy cho Tác phẩm tiêu biểu',
     },
   });
   fileInput.disabled = !hasDraftId || featuredImageReplaceState.localStatus === 'uploading';
@@ -940,6 +941,7 @@ function renderFeaturedLocalUploadArea(draftState = {}, item = {}, sourceIndex =
     className: 'cms-admin-button cms-admin-button-primary cms-admin-button-small',
     type: 'button',
     text: featuredImageReplaceState.localStatus === 'uploading' ? 'Đang tải ảnh lên...' : 'Tải ảnh lên',
+    attrs: { 'aria-label': 'Tải ảnh lên kho media cho bản nháp Tác phẩm tiêu biểu' },
   });
   uploadButton.disabled = !hasDraftId || !featuredImageReplaceState.localFile || featuredImageReplaceState.localStatus === 'uploading';
   uploadButton.addEventListener('click', () => handleUploadFeaturedLocalImage(draftState, item, sourceIndex, handlers));
@@ -948,6 +950,7 @@ function renderFeaturedLocalUploadArea(draftState = {}, item = {}, sourceIndex =
     className: 'cms-admin-button cms-admin-button-secondary cms-admin-button-small',
     type: 'button',
     text: 'Dùng ảnh này',
+    attrs: { 'aria-label': 'Gắn ảnh đã upload vào bản nháp Tác phẩm tiêu biểu' },
   });
   useButton.disabled = !featuredImageReplaceState.uploadedUrl || featuredImageReplaceState.uploadedPreviewStatus !== 'success';
   useButton.addEventListener('click', () => handleUseFeaturedUploadedImage(draftState, item, sourceIndex, handlers));
@@ -1026,6 +1029,7 @@ function renderFeaturedUrlReplaceArea(draftState = {}, item = {}, sourceIndex = 
     className: 'cms-admin-button cms-admin-button-primary cms-admin-button-small',
     type: 'button',
     text: 'Dùng ảnh này',
+    attrs: { 'aria-label': 'Gắn ảnh đã upload vào bản nháp Tác phẩm tiêu biểu' },
   });
   useButton.addEventListener('click', () => handleUseFeaturedImageCandidate(draftState, item, sourceIndex, input.value, handlers));
   const cancelButton = createElement('button', {
@@ -1092,7 +1096,7 @@ function renderFeaturedMediaLibraryPicker(draftState = {}, item = {}, sourceInde
   }
 
   if (!filteredAssets.length) {
-    panel.appendChild(createElement('div', { className: 'cms-admin-media-filter-empty', text: 'Không có media nào khớp bộ lọc hiện tại.' }));
+    panel.appendChild(createElement('div', { className: 'cms-admin-media-filter-empty', text: 'Không có media nào khớp bộ lọc hiện tại. Hãy đổi từ khóa hoặc loại media.' }));
     return panel;
   }
 
@@ -2125,7 +2129,7 @@ function renderMediaUploadGate(draftState = {}, item = {}, handlers = {}) {
   const wrap = createElement('section', { className: 'cms-admin-static-upload-gate' });
   const heading = createElement('div', { className: 'cms-admin-static-upload-heading' });
   heading.appendChild(createElement('h5', { text: 'Ảnh & video' }));
-  heading.appendChild(createElement('p', { text: 'Chọn file từ máy hoặc dùng URL có sẵn. Upload chỉ gắn URL vào bản nháp, chưa công khai website.' }));
+  heading.appendChild(createElement('p', { text: 'Chọn file từ máy hoặc dùng URL có sẵn. Upload chỉ gắn URL vào bản nháp hiện tại; website public chưa thay đổi cho đến khi lưu và công khai.' }));
   wrap.appendChild(heading);
 
   if (!ADMIN_FEATURE_FLAGS.allowStaticCmsMediaUpload || !CMS_MEDIA_UPLOAD_CONFIG.enabled) {
@@ -2147,7 +2151,7 @@ function renderMediaUploadGate(draftState = {}, item = {}, handlers = {}) {
     wrap.appendChild(renderErrorBox(draftState.mediaUploadError, 'Upload media chưa thành công'));
   }
   if (draftState.lastMediaUpload?.publicUrl) {
-    wrap.appendChild(createElement('div', { className: 'cms-admin-alert cms-admin-alert-success', text: `Upload thành công: ${draftState.lastMediaUpload.fieldName || ''} đã được gắn vào bản nháp. Website public chưa thay đổi.` }));
+    wrap.appendChild(createElement('div', { className: 'cms-admin-alert cms-admin-alert-success', text: `Upload thành công: ${draftState.lastMediaUpload.fieldName || ''} đã được gắn vào bản nháp. Website public chưa thay đổi cho đến khi lưu và công khai.` }));
   }
   return wrap;
 }
@@ -2159,7 +2163,7 @@ function renderMediaUploadTarget(draftState = {}, item = {}, target = {}, handle
   const status = draftState.mediaUploadStatus?.[statusKey] || {};
   const card = createElement('article', { className: 'cms-admin-static-upload-card' });
   card.appendChild(createElement('strong', { text: target.label }));
-  card.appendChild(createElement('p', { className: 'cms-admin-help-text', text: `${target.help} Giới hạn: ${formatUploadSizeLimit(target.mediaKind)}.` }));
+  card.appendChild(createElement('p', { className: 'cms-admin-help-text', text: `${target.help} Giới hạn: ${formatUploadSizeLimit(target.mediaKind)}. Upload chỉ cập nhật bản nháp, không tự công khai.` }));
 
   const uploadFieldToken = makeCmsControlIdToken(target.fieldName || target.key || 'media');
   const input = createElement('input', {
@@ -2169,12 +2173,14 @@ function renderMediaUploadTarget(draftState = {}, item = {}, target = {}, handle
       id: `cms-admin-static-media-upload-${makeCmsControlIdToken(roomKey)}-${makeCmsControlIdToken(itemCode, 'item')}-${uploadFieldToken}`,
       name: `staticMediaUpload-${uploadFieldToken}`,
       accept: getUploadAccept(target.mediaKind),
+      'aria-label': `Chọn file upload cho ${target.label}`,
     },
   });
   const uploadButton = createElement('button', {
     className: 'cms-admin-button cms-admin-button-secondary cms-admin-button-small',
     type: 'button',
     text: status.loading ? 'Đang upload...' : 'Upload vào bản nháp',
+    attrs: { 'aria-label': `Upload ${target.label} vào bản nháp hiện tại` },
   });
   uploadButton.disabled = Boolean(status.loading || draftState.isUploadingMedia || !itemCode);
   uploadButton.addEventListener('click', () => handleUploadStaticCmsMedia({ input, target, handlers }));
@@ -2323,7 +2329,7 @@ function renderStaticMediaLibraryPicker(draftState = {}, item = {}, handlers = {
   heading.appendChild(createElement('h5', { text: 'Chọn media từ thư viện' }));
   heading.appendChild(createElement('p', {
     className: 'cms-admin-help-text',
-    text: 'Chọn media đã upload để gắn vào bản nháp hiện tại. Website public chưa thay đổi cho đến khi bạn lưu và công khai.',
+    text: 'Chọn media đã upload để gắn vào bản nháp hiện tại. Website public chưa thay đổi cho đến khi bạn lưu và công khai; chọn media không tự publish.',
   }));
   const closeButton = createElement('button', { className: 'cms-admin-button cms-admin-button-ghost cms-admin-button-small', type: 'button', text: 'Đóng' });
   closeButton.addEventListener('click', () => closeStaticMediaLibraryPicker(handlers));
@@ -2354,7 +2360,7 @@ function renderStaticMediaLibraryPicker(draftState = {}, item = {}, handlers = {
   });
 
   if (!filteredAssets.length) {
-    panel.appendChild(createElement('div', { className: 'cms-admin-media-filter-empty', text: 'Không có media nào khớp bộ lọc hiện tại.' }));
+    panel.appendChild(createElement('div', { className: 'cms-admin-media-filter-empty', text: 'Không có media nào khớp bộ lọc hiện tại. Hãy đổi từ khóa hoặc loại media.' }));
   } else {
     panel.appendChild(list);
   }
@@ -2456,6 +2462,7 @@ function renderStaticPickerMediaCard(asset = {}, draftState = {}, item = {}, fie
     className: 'cms-admin-button cms-admin-button-primary cms-admin-button-small',
     type: 'button',
     text: getPickerActionLabel(fieldName),
+    attrs: { 'aria-label': `${getPickerActionLabel(fieldName)} cho bản nháp hiện tại` },
   });
   choose.disabled = !asset.hasSafeUrl || !compatibility.allowed;
   choose.addEventListener('click', () => handleAttachStaticPickerMedia(asset, draftState, item, fieldName, handlers));

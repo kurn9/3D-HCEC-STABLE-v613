@@ -907,6 +907,7 @@ function renderMediaTab(state) {
     ADMIN_COPY.media.deleteDisabled,
   ].forEach((item) => safetyList.appendChild(createElement('li', { text: item })));
   safety.appendChild(safetyList);
+  safety.appendChild(renderMediaOperatorHandoffNotes());
 
   const technical = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel cms-admin-technical-subtle-panel' });
   technical.appendChild(renderPanelTitle(ADMIN_COPY.media.technicalTitle));
@@ -1543,9 +1544,14 @@ function summarizeMediaLibrary(assets = []) {
 
 function renderMediaLibraryReadOnlyBanner() {
   const banner = createElement('div', { className: 'cms-admin-media-readonly-banner' });
+  const copy = createElement('div', { className: 'cms-admin-media-readonly-copy' });
+  appendChildren(copy, [
+    createElement('span', { text: ADMIN_COPY.media.safeNotice }),
+    createElement('span', { className: 'cms-admin-media-readonly-subcopy', text: ADMIN_COPY.media.readOnlyNotice }),
+  ]);
   appendChildren(banner, [
     renderBadge(ADMIN_COPY.media.readOnlyBadge, 'warning'),
-    createElement('span', { text: ADMIN_COPY.media.safeNotice }),
+    copy,
   ]);
   return banner;
 }
@@ -1565,6 +1571,17 @@ function renderMediaLibraryEmptyState() {
   empty.appendChild(listBlock);
   empty.appendChild(renderLockedNotice(ADMIN_COPY.media.readOnlyNotice));
   return empty;
+}
+
+function renderMediaOperatorHandoffNotes() {
+  const notes = safeArray(ADMIN_COPY.media.operatorHandoffNotes);
+  const wrap = createElement('div', { className: 'cms-admin-media-operator-notes' });
+  if (!notes.length) return wrap;
+  wrap.appendChild(createElement('strong', { text: 'Ghi chú vận hành' }));
+  const list = createElement('ul');
+  notes.forEach((note) => list.appendChild(createElement('li', { text: note })));
+  wrap.appendChild(list);
+  return wrap;
 }
 
 function renderMediaLibrarySummary(summary = {}) {
@@ -1593,7 +1610,10 @@ function renderMediaLibraryControls(assets = []) {
     className: 'cms-admin-input cms-admin-media-search',
     type: 'search',
     placeholder: ADMIN_COPY.media.searchPlaceholder,
-    attrs: { 'data-media-search': 'true' },
+    attrs: {
+      'data-media-search': 'true',
+      'aria-label': ADMIN_COPY.media.searchAriaLabel || ADMIN_COPY.media.searchPlaceholder,
+    },
   });
 
   const kindSelect = renderMediaFilterSelect('kind', ADMIN_COPY.media.filters.allKinds, [
@@ -1627,7 +1647,10 @@ function renderMediaLibraryControls(assets = []) {
 function renderMediaFilterSelect(filterName, allLabel, options = []) {
   const select = createElement('select', {
     className: 'cms-admin-input cms-admin-media-filter',
-    attrs: { 'data-media-filter': filterName },
+    attrs: {
+      'data-media-filter': filterName,
+      'aria-label': ADMIN_COPY.media.filterAriaLabels?.[filterName] || allLabel,
+    },
   });
   select.appendChild(createElement('option', { value: 'all', text: allLabel }));
   safeArray(options).forEach(([value, label]) => {
@@ -1643,7 +1666,7 @@ function renderMediaLibraryGrid(assets = []) {
   const empty = createElement('div', {
     className: 'cms-admin-media-filter-empty cms-admin-hidden',
     text: ADMIN_COPY.media.emptyFiltered,
-    attrs: { 'data-media-filter-empty': 'true' },
+    attrs: { 'data-media-filter-empty': 'true', role: 'status', 'aria-live': 'polite' },
   });
   appendChildren(wrap, [grid, empty]);
   return wrap;
@@ -1691,7 +1714,12 @@ function renderMediaLibraryCard(asset = {}) {
 
   const actions = createElement('div', { className: 'cms-admin-media-actions' });
   if (asset.hasSafePublicUrl) {
-    const copyButton = createElement('button', { className: 'cms-admin-button cms-admin-button-ghost', text: ADMIN_COPY.media.actions.copyUrl, type: 'button' });
+    const copyButton = createElement('button', {
+      className: 'cms-admin-button cms-admin-button-ghost',
+      text: ADMIN_COPY.media.actions.copyUrl,
+      type: 'button',
+      attrs: { 'aria-label': buildCopyMediaUrlLabel(asset) },
+    });
     copyButton.addEventListener('click', () => copyMediaUrl(copyButton, asset.publicUrl));
     actions.appendChild(copyButton);
   } else {
@@ -1705,27 +1733,55 @@ function renderMediaLibraryCard(asset = {}) {
 
 function renderMediaUsageReferences(asset = {}) {
   const references = safeArray(asset.usage?.references);
-  const wrap = createElement('div', { className: 'cms-admin-media-usage-references' });
-  wrap.appendChild(createElement('strong', { text: ADMIN_COPY.media.referencesTitle }));
+  const wrap = createElement('div', {
+    className: 'cms-admin-media-usage-references',
+    attrs: { 'aria-label': ADMIN_COPY.media.referencesTitle },
+  });
+  const header = createElement('div', { className: 'cms-admin-media-reference-header' });
+  header.appendChild(createElement('strong', { text: ADMIN_COPY.media.referencesTitle }));
+  if (references.length) {
+    header.appendChild(createElement('span', { text: formatCount(references.length) }));
+  }
+  wrap.appendChild(header);
 
   if (!references.length) {
     wrap.appendChild(createElement('p', { text: asset.usage?.note || ADMIN_COPY.media.usageNotes.insufficient }));
     return wrap;
   }
 
-  const list = createElement('ul');
+  wrap.appendChild(createElement('p', { className: 'cms-admin-media-reference-intro', text: ADMIN_COPY.media.referencesIntro }));
+
+  const list = createElement('ul', { className: 'cms-admin-media-reference-list' });
   references.slice(0, 3).forEach((reference) => {
-    const item = createElement('li');
-    item.appendChild(createElement('span', { text: reference.label || reference.area || 'CMS reference' }));
-    const button = renderMediaReferenceNavigationButton(reference);
-    if (button) item.appendChild(button);
-    list.appendChild(item);
+    list.appendChild(renderMediaReferenceDetailItem(reference));
   });
   if (references.length > 3) {
-    list.appendChild(createElement('li', { text: `+${formatCount(references.length - 3)} tham chiếu khác` }));
+    list.appendChild(createElement('li', { className: 'cms-admin-media-reference-more', text: `+${formatCount(references.length - 3)} ${ADMIN_COPY.media.referenceMore || 'tham chiếu khác'}` }));
   }
   wrap.appendChild(list);
   return wrap;
+}
+
+function renderMediaReferenceDetailItem(reference = {}) {
+  const target = getResolvedMediaReferenceTarget(reference);
+  const labels = ADMIN_COPY.media.referenceFields || {};
+  const item = createElement('li', { className: 'cms-admin-media-reference-detail' });
+  item.appendChild(createElement('span', { className: 'cms-admin-media-reference-label', text: reference.label || reference.area || 'CMS reference' }));
+
+  const detailRows = [
+    [labels.source || 'Nguồn', formatMediaReferenceSource(reference.sourceType)],
+    [labels.area || 'Khu vực', reference.area || 'CMS'],
+    [labels.field || 'Field/path', reference.field || '—'],
+    [labels.target || 'Màn điều hướng', target?.label || getTabLabel(target?.tab) || 'Không xác định'],
+    [labels.confidence || 'Độ khớp', formatMediaReferenceMatch(reference.matchType)],
+  ];
+  const details = createElement('dl', { className: 'cms-admin-media-reference-details' });
+  detailRows.forEach(([label, value]) => appendMediaDetail(details, label, value));
+  item.appendChild(details);
+
+  const button = renderMediaReferenceNavigationButton(reference);
+  if (button) item.appendChild(button);
+  return item;
 }
 
 function renderMediaReferenceNavigationButton(reference = {}) {
@@ -1735,10 +1791,39 @@ function renderMediaReferenceNavigationButton(reference = {}) {
     className: 'cms-admin-button cms-admin-button-ghost cms-admin-media-reference-nav-button',
     text: ADMIN_COPY.media.actions.goToReference || 'Đi tới nơi dùng',
     type: 'button',
-    attrs: { title: ADMIN_COPY.media.referenceNavigationHint || 'Chỉ điều hướng trong CMS, không thay đổi website.' },
+    attrs: {
+      title: ADMIN_COPY.media.referenceNavigationHint || 'Chỉ điều hướng trong CMS, không thay đổi website.',
+      'aria-label': buildReferenceNavigationAriaLabel(reference, target),
+    },
   });
   button.addEventListener('click', () => handleNavigateToMediaReference(reference));
   return button;
+}
+
+function buildCopyMediaUrlLabel(asset = {}) {
+  const name = asset.fileName || asset.storagePath || ADMIN_COPY.media.actions.copyUrlAria || ADMIN_COPY.media.actions.copyUrl;
+  return `${ADMIN_COPY.media.actions.copyUrlAria || ADMIN_COPY.media.actions.copyUrl}: ${name}`;
+}
+
+function buildReferenceNavigationAriaLabel(reference = {}, target = {}) {
+  const label = reference.label || reference.area || 'tham chiếu media';
+  const targetLabel = target?.label || getTabLabel(target?.tab) || 'màn CMS liên quan';
+  return `${ADMIN_COPY.media.actions.goToReference || 'Đi tới nơi dùng'}: ${label} (${targetLabel})`;
+}
+
+function getTabLabel(tabKey = '') {
+  const key = String(tabKey || '').trim();
+  return safeArray(ADMIN_COPY.nav).find((item) => item.key === key)?.label || key;
+}
+
+function formatMediaReferenceSource(sourceType = '') {
+  const key = String(sourceType || '').trim().toLowerCase();
+  return ADMIN_COPY.media.referenceSourceLabels?.[key] || ADMIN_COPY.media.referenceSourceLabels?.unknown || 'Không rõ nguồn';
+}
+
+function formatMediaReferenceMatch(matchType = '') {
+  const key = String(matchType || '').trim().toLowerCase();
+  return ADMIN_COPY.media.referenceMatchLabels?.[key] || ADMIN_COPY.media.referenceMatchLabels?.unknown || 'Không rõ';
 }
 
 function getResolvedMediaReferenceTarget(reference = {}) {
