@@ -2031,9 +2031,10 @@ async function copyMediaUrl(button, url) {
 }
 
 function renderPublishTab(state) {
-  const bundle = getCurrentPublishedBundle(state.data.publishedBundles);
+  const data = state.data || {};
+  const bundle = getCurrentPublishedBundle(data.publishedBundles);
   const panel = createElement('section', { className: 'cms-admin-grid cms-admin-publish-view' });
-  const summary = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel' });
+  const summary = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel cms-admin-publish-summary-panel' });
   summary.appendChild(renderPanelTitle(ADMIN_COPY.publish.currentTitle, bundle ? getStatusLabel(bundle.status) : 'Chưa có'));
   if (bundle) {
     summary.appendChild(renderKeyValueList([
@@ -2047,17 +2048,51 @@ function renderPublishTab(state) {
   } else {
     summary.appendChild(renderEmptyState(ADMIN_COPY.publish.noCurrent));
   }
+  summary.appendChild(renderCompactNotice(ADMIN_COPY.publish.currentHint));
 
-  const workflow = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel' });
+  const readiness = renderPublishReadinessPanel(state, bundle);
+
+  const workflow = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel cms-admin-publish-workflow-panel' });
   workflow.appendChild(renderPanelTitle(ADMIN_COPY.publish.workflowTitle, ADMIN_COPY.publish.workflowStatus));
+  workflow.appendChild(renderCompactNotice(ADMIN_COPY.publish.surfaceBody));
   workflow.appendChild(renderWorkflowSteps(ADMIN_COPY.publish.workflowSteps));
-  workflow.appendChild(renderDisabledActionRow(ADMIN_COPY.publish.actions));
+  workflow.appendChild(renderDisabledActionRow(ADMIN_COPY.publish.actions, ADMIN_COPY.publish.disabledActionReason));
   workflow.appendChild(renderLockedNotice(ADMIN_COPY.publish.lockedNote));
   workflow.appendChild(renderRequirementList(ADMIN_COPY.publish.requirementsTitle, ADMIN_COPY.publish.requirements));
+  workflow.appendChild(renderRequirementList(ADMIN_COPY.publish.disabledReasonsTitle, ADMIN_COPY.publish.disabledReasons));
   workflow.appendChild(renderPublicLink(ADMIN_COPY.publish.publicLink, './index.html'));
-  workflow.appendChild(renderCompactNotice(ADMIN_COPY.publish.notice));
+  workflow.appendChild(renderCompactWarning(ADMIN_COPY.publish.notice));
 
-  appendChildren(panel, [summary, workflow]);
+  appendChildren(panel, [summary, readiness, workflow]);
+  return panel;
+}
+
+function renderPublishReadinessPanel(state = {}, bundle = null) {
+  const copy = ADMIN_COPY.publish;
+  const data = state.data || {};
+  const draftState = state.staticCmsDraft || {};
+  const fields = copy.readinessFields || {};
+  const canonicalKnown = !data.canonicalError;
+  const validation = draftState.validation || null;
+  const dryRun = draftState.publishDryRunResult || null;
+  const rows = [
+    [fields.publicBundle, bundle?.version ? `Đã đọc ${bundle.version}` : 'Chưa đọc được phiên bản public'],
+    [fields.canonicalJson, canonicalKnown ? 'Không có lỗi canonical được ghi nhận trong state hiện tại' : `Cần kiểm tra: ${normalizeErrorMessage(data.canonicalError)}`],
+    [fields.savedDraft, draftState.currentDraftId ? `Đã lưu draft ${draftState.currentDraftId}` : 'Chỉ có thể publish từ bản nháp đã lưu trong Nội dung phòng 3D'],
+    [fields.dirtyState, draftState.dirty ? 'Đang có thay đổi chưa lưu — phải lưu trước publish' : 'Không ghi nhận dirty changes trong draft đang mở'],
+    [fields.validation, validation ? (validation.valid ? 'Validation hiện tại đạt' : 'Validation còn lỗi/cảnh báo cần xử lý') : 'Chưa có validation draft trong state hiện tại'],
+    [fields.dryRun, dryRun?.ok === true && dryRun?.dryRun === true ? 'Dry-run gần nhất đạt' : 'Chưa có dry-run PASS cho bản nháp hiện tại'],
+    [fields.mainTabWrite, 'Đã khóa — tab này chỉ là readiness/status surface'],
+    [fields.publishGate, 'Dùng cổng publish trong Nội dung phòng 3D với draftId đã lưu'],
+    [fields.history, 'Lịch sử/rollback là quy trình riêng, không tự chạy từ màn này'],
+  ];
+
+  const panel = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel cms-admin-publish-readiness-panel' });
+  panel.appendChild(renderPanelTitle(copy.readinessTitle, copy.readinessStatus));
+  panel.appendChild(renderCompactNotice(copy.readinessIntro));
+  const grid = createElement('div', { className: 'cms-admin-publish-readiness-grid' });
+  rows.forEach(([label, value]) => grid.appendChild(renderInfoTile(label, value || '—')));
+  panel.appendChild(grid);
   return panel;
 }
 
@@ -5273,14 +5308,19 @@ function renderWorkflowSteps(steps) {
   return list;
 }
 
-function renderDisabledActionRow(labels) {
+function renderDisabledActionRow(labels, reason = '') {
   const row = createElement('div', { className: 'cms-admin-disabled-actions' });
   labels.forEach((label) => {
     row.appendChild(createElement('button', {
       className: 'cms-admin-button cms-admin-button-ghost cms-admin-button-disabled-action',
       text: label,
       type: 'button',
-      attrs: { disabled: 'true', 'aria-disabled': 'true' },
+      attrs: {
+        disabled: 'true',
+        'aria-disabled': 'true',
+        title: reason || 'Thao tác đang khóa ở màn này.',
+        'aria-label': reason ? `${label}. ${reason}` : label,
+      },
     }));
   });
   return row;

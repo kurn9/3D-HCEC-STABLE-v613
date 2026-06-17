@@ -2844,26 +2844,32 @@ function renderPublishInspectorPanel(draftState = {}, appState = {}, handlers = 
   const readiness = getPublishReadiness(draftState, access);
   const dryRunReady = hasCurrentDryRunPass(draftState);
   const panel = createElement('section', { className: 'cms-admin-panel cms-admin-static-publish-panel cms-admin-static-inspector-card' });
-  panel.appendChild(renderStaticPanelTitle('Công khai', dryRunReady ? 'Đã kiểm tra' : readiness.ready ? 'Sẵn sàng kiểm tra' : 'Chưa sẵn sàng'));
+  panel.appendChild(renderStaticPanelTitle('Công khai', dryRunReady ? 'Dry-run đã đạt' : readiness.ready ? 'Sẵn sàng kiểm tra' : 'Chưa sẵn sàng'));
 
   const statusText = draftState.publishStatus
     || draftState.publishError
-    || (dryRunReady ? 'Đã kiểm tra xong. Có thể công khai nội dung.' : readiness.ready ? 'Bản nháp đã lưu. Hãy kiểm tra trước khi công khai.' : readiness.reason);
+    || (dryRunReady
+      ? 'Dry-run đã đạt. Publish thật vẫn cần bấm nút Công khai và xác nhận rõ ràng.'
+      : readiness.ready
+        ? 'Bản nháp đã lưu. Hãy chạy kiểm tra trước khi công khai; website public chưa thay đổi.'
+        : readiness.reason);
   panel.appendChild(createElement('div', {
     className: draftState.publishError ? 'cms-admin-alert cms-admin-alert-error' : dryRunReady || draftState.publishResult?.ok ? 'cms-admin-alert cms-admin-alert-success' : 'cms-admin-alert cms-admin-alert-warning',
     text: statusText,
   }));
 
   const mini = createElement('div', { className: 'cms-admin-static-readiness-grid' });
-  mini.appendChild(renderInfoTile('Bản nháp', draftState.currentDraftId ? 'Đã lưu' : 'Chưa lưu'));
-  mini.appendChild(renderInfoTile('Kiểm tra', draftState.validation?.valid ? 'Nội dung hợp lệ' : 'Cần xử lý'));
-  mini.appendChild(renderInfoTile('Công khai', dryRunReady ? 'Có thể công khai' : 'Cần kiểm tra trước'));
+  mini.appendChild(renderInfoTile('Bản nháp', draftState.currentDraftId ? 'Đã lưu server-side' : 'Chưa lưu'));
+  mini.appendChild(renderInfoTile('Validation', draftState.validation?.valid ? 'Nội dung hợp lệ' : 'Cần xử lý'));
+  mini.appendChild(renderInfoTile('Publish thật', dryRunReady ? 'Cần xác nhận' : 'Cần dry-run PASS'));
   panel.appendChild(mini);
 
   const detailsButton = createElement('button', {
     className: 'cms-admin-button cms-admin-button-ghost cms-admin-button-small',
     type: 'button',
     text: 'Chi tiết kỹ thuật',
+    title: 'Xem checklist và chi tiết kỹ thuật của cổng công khai',
+    ariaLabel: 'Xem chi tiết kỹ thuật cổng công khai nội dung',
   });
   detailsButton.addEventListener('click', () => {
     setStaticCmsDraftDrawer('publishDetails');
@@ -2879,7 +2885,11 @@ function renderPublishGatePanel(draftState = {}, appState = {}, handlers = {}, c
   panel.appendChild(renderStaticPanelTitle('Công khai nội dung', draftState.publishResult?.publishedVersion || 'Kiểm tra hệ thống'));
   panel.appendChild(createElement('p', {
     className: 'cms-admin-help-text',
-    text: 'Công khai sẽ thay đổi website public. Phase này chỉ cho admin publish bản nháp đã lưu server-side qua Edge Function publish-cms-json, có backup, verify và rollback tự động nếu lỗi.',
+    text: 'Công khai thật sẽ thay đổi website public. Cổng này chỉ dùng bản nháp đã lưu server-side theo draftId qua Edge Function publish-cms-json; trình duyệt không gửi JSON thô để ghi public.',
+  }));
+  panel.appendChild(createElement('p', {
+    className: 'cms-admin-help-text cms-admin-static-publish-guard-note',
+    text: 'Luôn lưu bản nháp trước, chạy kiểm tra server-side, rồi mới bấm Công khai nội dung và xác nhận. Nếu chỉ mở màn hoặc xem trạng thái thì không ghi dữ liệu public.',
   }));
 
   if (!ADMIN_FEATURE_FLAGS.allowStaticCmsPublishGate || !CMS_PUBLISH_GATE_CONFIG.enabled) {
@@ -2897,14 +2907,18 @@ function renderPublishGatePanel(draftState = {}, appState = {}, handlers = {}, c
   if (!readiness.ready) {
     panel.appendChild(createElement('div', { className: 'cms-admin-alert cms-admin-alert-warning', text: readiness.reason }));
   } else {
-    panel.appendChild(createElement('div', { className: 'cms-admin-alert cms-admin-alert-success', text: 'Bản nháp đã lưu và đủ điều kiện kiểm tra. Hãy kiểm tra trước khi công khai.' }));
+    panel.appendChild(createElement('div', { className: 'cms-admin-alert cms-admin-alert-success', text: 'Bản nháp đã lưu và đủ điều kiện dry-run. Website public chưa thay đổi cho đến khi publish thật được xác nhận.' }));
   }
+
+  panel.appendChild(renderPublishGateSafetyChecklist(draftState, access, readiness, dryRunReady));
 
   const actions = createElement('div', { className: 'cms-admin-actions cms-admin-static-publish-actions' });
   const dryRunButton = createElement('button', {
     className: 'cms-admin-button cms-admin-button-secondary',
     type: 'button',
     text: draftState.isPublishingCms ? 'Đang kiểm tra...' : 'Kiểm tra trước khi công khai',
+    title: readiness.ready ? 'Chạy dry-run server-side bằng draftId đã lưu. Website public chưa thay đổi.' : readiness.reason,
+    ariaLabel: readiness.ready ? 'Kiểm tra trước khi công khai bằng dry-run server-side' : `Chưa thể kiểm tra trước khi công khai: ${readiness.reason}`,
   });
   dryRunButton.disabled = draftState.isPublishingCms || !readiness.ready;
   dryRunButton.addEventListener('click', () => handlePublishStaticCmsDraft({ dryRun: true, handlers }));
@@ -2913,6 +2927,8 @@ function renderPublishGatePanel(draftState = {}, appState = {}, handlers = {}, c
     className: 'cms-admin-button cms-admin-button-primary',
     type: 'button',
     text: draftState.isPublishingCms ? 'Đang công khai...' : 'Công khai nội dung',
+    title: !readiness.ready ? readiness.reason : dryRunReady ? 'Công khai thật sau dry-run PASS và xác nhận 2 bước.' : 'Cần dry-run PASS trước khi công khai thật.',
+    ariaLabel: !readiness.ready ? `Chưa thể công khai: ${readiness.reason}` : dryRunReady ? 'Công khai nội dung sau khi xác nhận' : 'Chưa thể công khai: cần kiểm tra trước khi công khai đạt',
   });
   publishButton.disabled = draftState.isPublishingCms || !readiness.ready || !dryRunReady;
   publishButton.addEventListener('click', () => handlePublishStaticCmsDraft({ dryRun: false, handlers }));
@@ -2922,6 +2938,28 @@ function renderPublishGatePanel(draftState = {}, appState = {}, handlers = {}, c
   panel.appendChild(renderPublishGateStatus(draftState));
   panel.appendChild(renderPublishGateHelp(draftState));
   return panel;
+}
+
+function renderPublishGateSafetyChecklist(draftState = {}, access = {}, readiness = {}, dryRunReady = false) {
+  const list = createElement('ul', { className: 'cms-admin-static-publish-safety-list' });
+  const items = [
+    ['Admin active', access.allowed ? 'Đạt' : (access.reason || 'Chưa đủ quyền')],
+    ['Bản nháp đã lưu', draftState.currentDraftId ? 'Đạt' : 'Cần lưu bản nháp trước'],
+    ['Không dirty', draftState.dirty ? 'Cần lưu thay đổi trước' : 'Đạt'],
+    ['Validation', draftState.validation?.valid ? 'Đạt' : 'Cần xử lý lỗi/cảnh báo'],
+    ['Không đang xử lý', draftState.isSavingDraft || draftState.isUploadingMedia || draftState.isPublishingCms ? 'Đang xử lý, chờ hoàn tất' : 'Đạt'],
+    ['Dry-run', dryRunReady ? 'Đạt cho version hiện tại' : 'Cần chạy kiểm tra trước'],
+    ['Publish thật', readiness.ready && dryRunReady ? 'Cần bấm Công khai và xác nhận' : 'Đang khóa cho đến khi đủ điều kiện'],
+  ];
+  items.forEach(([label, value]) => {
+    const item = createElement('li');
+    item.appendChild(createElement('strong', { text: `${label}: ` }));
+    item.appendChild(createElement('span', { text: value }));
+    list.appendChild(item);
+  });
+  const wrap = createElement('div', { className: 'cms-admin-static-publish-safety' });
+  wrap.appendChild(list);
+  return wrap;
 }
 
 function renderPublishGateStatus(draftState = {}) {
@@ -2947,7 +2985,7 @@ function renderPublishGateStatus(draftState = {}) {
   ];
   entries.forEach(([label, value]) => grid.appendChild(renderStatusChip(label, String(value || '—'), label === 'Trạng thái' && value === 'PASS' ? 'success' : 'default')));
   const details = createElement('details', { className: 'cms-admin-static-technical-details cms-admin-static-publish-technical-details' });
-  details.appendChild(createElement('summary', { text: 'Chi tiết kỹ thuật publish' }));
+  details.appendChild(createElement('summary', { text: 'Chi tiết kỹ thuật publish / dry-run' }));
   details.appendChild(grid);
   wrap.appendChild(details);
   if (result.rollbackAttempted) {
@@ -2963,9 +3001,10 @@ function renderPublishGateHelp() {
   const wrap = createElement('div', { className: 'cms-admin-static-publish-help' });
   const steps = createElement('ol', { className: 'cms-admin-static-steps' });
   [
-    'Lưu bản nháp trước khi công khai.',
-    'Bấm “Kiểm tra trước khi công khai” để Edge Function validate bản nháp trên server.',
-    'Nếu PASS, bấm “Công khai nội dung” và xác nhận 2 bước. Edge Function sẽ backup latest, ghi versioned object, ghi latest, verify và rollback tự động nếu lỗi.',
+    'Lưu bản nháp trước khi công khai; save draft không làm đổi website public.',
+    'Bấm “Kiểm tra trước khi công khai” để Edge Function validate bản nháp đã lưu trên server bằng draftId.',
+    'Nếu dry-run PASS, bấm “Công khai nội dung” và xác nhận 2 bước. Lúc này website public mới có thể thay đổi.',
+    'History/rollback là quy trình riêng để xử lý sau publish; không tự chạy khi chỉ mở màn này.',
   ].forEach((step) => steps.appendChild(createElement('li', { text: step })));
   wrap.appendChild(createElement('p', { className: 'cms-admin-help-text', text: 'Không gọi script I_F từ browser. Script I_F vẫn là operator fallback khi cần xử lý thủ công có kiểm soát.' }));
   wrap.appendChild(steps);

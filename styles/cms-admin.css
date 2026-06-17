@@ -5019,3 +5019,53 @@ body.cms-admin-page * {
     grid-template-columns: 1fr;
   }
 }
+
+/* v6.14.044.004 — publish workflow safety/readiness polish */
+.cms-admin-publish-readiness-panel,
+.cms-admin-publish-workflow-panel {
+  border-color: rgba(214, 178, 94, 0.28);
+}
+
+.cms-admin-publish-readiness-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  margin-top: 12px;
+}
+
+.cms-admin-publish-workflow-panel .cms-admin-requirement-panel + .cms-admin-requirement-panel {
+  margin-top: 12px;
+}
+
+.cms-admin-static-publish-guard-note {
+  border-left: 3px solid rgba(214, 178, 94, 0.75);
+  padding-left: 10px;
+}
+
+.cms-admin-static-publish-safety {
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 14px;
+  margin-top: 12px;
+  padding: 12px 14px;
+}
+
+.cms-admin-static-publish-safety-list {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.cms-admin-static-publish-safety-list li {
+  align-items: baseline;
+  color: var(--cms-admin-text);
+  display: flex;
+  gap: 6px;
+  justify-content: space-between;
+}
+
+.cms-admin-static-publish-safety-list span {
+  color: var(--cms-admin-dim);
+  text-align: right;
+}
