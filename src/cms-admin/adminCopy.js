@@ -874,6 +874,33 @@ export const ADMIN_COPY = Object.freeze({
     lockedNotice: 'Khôi phục phiên bản sẽ được bật ở bước sau, sau khi có kiểm tra và xác nhận an toàn.',
   },
 
+  rollbackHistoryOperator: {
+    highRiskTitle: 'Rollback là thao tác high-risk',
+    highRiskIntro: 'Lịch sử phiên bản có thể khôi phục website public khi tài khoản admin active thực hiện đủ bước. Đây không phải màn chỉ xem thuần.',
+    highRiskNotes: [
+      'Mở màn này hoặc tải lại lịch sử chỉ đọc log, không tự rollback.',
+      'Preview chỉ đọc file version public đã chọn.',
+      'Dry-run gọi Edge Function để kiểm tra; source server-side chưa được audit trong workspace này.',
+      'Rollback thật sẽ thay đổi website public và luôn cần xác nhận rõ.',
+    ],
+    readinessTitle: 'Preflight rollback',
+    readinessIntro: 'Các mục dưới đây chỉ dùng state đã có để nhắc operator trước khi dry-run hoặc rollback thật.',
+    disabledReasonsTitle: 'Chưa đủ điều kiện rollback vì',
+    reasonHelp: 'Nhập lý do vận hành cụ thể, ví dụ sự cố nội dung, bản cần phục hồi hoặc mã ticket. Lý do này được gửi cùng request rollback hiện có.',
+    serverSourceWarning: 'Chưa audit được source Edge Function rollback-cms-json trong workspace này, nên UI không claim production rollback readiness.',
+    previewNote: 'Preview chỉ đọc bản public đã chọn và không thay đổi website.',
+    dryRunNote: 'Dry-run là backend check qua Edge Function; không được coi là rollback thật.',
+    realRollbackNote: 'Rollback thật sẽ ghi lại website public nếu qua đủ gate và xác nhận hai bước.',
+    actions: {
+      refresh: 'Làm mới lịch sử phiên bản. Chỉ đọc log, không rollback.',
+      preview: 'Xem trước bản public đã chọn. Chỉ đọc dữ liệu.',
+      select: 'Chọn bản này làm nguồn rollback.',
+      dryRun: 'Kiểm tra khôi phục bằng Edge Function hiện có. Không bấm nếu chưa được phép chạy dry-run.',
+      reason: 'Lý do khôi phục để gửi cùng request rollback hiện có.',
+      rollback: 'Khôi phục thật bản đã chọn. Thay đổi website public nếu xác nhận đủ bước.',
+    },
+  },
+
   cleanup: {
     title: 'Media Library / Storage Cleanup',
     status: 'Scan/Dry-run + dọn dẹp có kiểm soát',

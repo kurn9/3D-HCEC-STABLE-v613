@@ -1,4 +1,5 @@
 import { ADMIN_FEATURE_FLAGS, CMS_ROLLBACK_GATE_CONFIG } from './adminConfig.js';
+import { ADMIN_COPY } from './adminCopy.js';
 import { listCmsPublishLogs, previewCmsPublishedVersion, rollbackCmsJson } from './adminApi.js';
 import {
   appendChildren,
@@ -18,6 +19,8 @@ import {
 } from './adminState.js';
 
 let historyLoadQueued = false;
+
+const ROLLBACK_COPY = ADMIN_COPY.rollbackHistoryOperator || {};
 
 const STATUS_LABELS = Object.freeze({
   published: 'Đã công khai',
@@ -58,6 +61,7 @@ function renderHistoryIntro(state = {}, historyState = {}, handlers = {}) {
     className: 'cms-admin-help-text',
     text: 'Chọn một bản có thể khôi phục, xem trước, kiểm tra an toàn rồi mới khôi phục. Website chỉ thay đổi ở bước cuối sau hai lần xác nhận.',
   }));
+  panel.appendChild(renderRollbackRiskIntro());
   panel.appendChild(createElement('div', {
     className: 'cms-admin-alert cms-admin-alert-warning',
     text: 'Hệ thống vẫn bắt buộc kiểm tra khôi phục, lý do, mã xác nhận và xác minh bản đang công khai. Phiên bản, bản sao lưu và log không bị xóa.',
@@ -67,6 +71,8 @@ function renderHistoryIntro(state = {}, historyState = {}, handlers = {}) {
     className: 'cms-admin-button cms-admin-button-secondary',
     type: 'button',
     text: historyState.loading ? 'Đang tải...' : 'Làm mới danh sách',
+    title: ROLLBACK_COPY.actions?.refresh || 'Làm mới lịch sử phiên bản',
+    ariaLabel: ROLLBACK_COPY.actions?.refresh || 'Làm mới lịch sử phiên bản',
   });
   refreshButton.disabled = Boolean(historyState.loading || historyState.isRollingBack) || !isRollbackAdmin(state);
   refreshButton.addEventListener('click', () => handleLoadPublishHistory(handlers, { resetWorkflow: true }));
@@ -76,6 +82,27 @@ function renderHistoryIntro(state = {}, historyState = {}, handlers = {}) {
     panel.appendChild(createElement('div', { className: 'cms-admin-alert cms-admin-alert-warning', text: 'Chỉ quản trị viên đang hoạt động được xem lịch sử và thực hiện khôi phục.' }));
   }
   return panel;
+}
+
+function renderRollbackRiskIntro() {
+  const wrap = createElement('div', { className: 'cms-admin-rollback-risk-panel' });
+  wrap.appendChild(createElement('strong', { text: ROLLBACK_COPY.highRiskTitle || 'Rollback là thao tác high-risk' }));
+  wrap.appendChild(createElement('p', {
+    className: 'cms-admin-help-text',
+    text: ROLLBACK_COPY.highRiskIntro || 'Lịch sử phiên bản có thể khôi phục website public khi admin active thực hiện đủ bước.',
+  }));
+  const list = createElement('ul', { className: 'cms-admin-rollback-safety-list' });
+  safeArray(ROLLBACK_COPY.highRiskNotes).forEach((note) => list.appendChild(createElement('li', { text: note })));
+  if (!list.childElementCount) {
+    [
+      'Mở màn này hoặc tải lại lịch sử chỉ đọc log, không tự rollback.',
+      'Preview chỉ đọc file version public đã chọn.',
+      'Dry-run gọi Edge Function để kiểm tra; source server-side chưa được audit trong workspace này.',
+      'Rollback thật sẽ thay đổi website public và cần xác nhận rõ.',
+    ].forEach((note) => list.appendChild(createElement('li', { text: note })));
+  }
+  wrap.appendChild(list);
+  return wrap;
 }
 
 function renderHistoryListPanel(state = {}, historyState = {}, handlers = {}) {
@@ -268,6 +295,8 @@ function renderRestorePointCard(point, state = {}, historyState = {}, handlers =
     className: 'cms-admin-button cms-admin-button-secondary',
     type: 'button',
     text: historyState.isPreviewing && historyState.previewRequestPath === point.sourcePath ? 'Đang xem...' : 'Xem trước',
+    title: `${ROLLBACK_COPY.actions?.preview || 'Xem trước bản public đã chọn'} ${point.sourceFile}`,
+    ariaLabel: `${ROLLBACK_COPY.actions?.preview || 'Xem trước bản public đã chọn'} ${point.sourceFile}`,
   });
   previewButton.disabled = !isRollbackAdmin(state) || historyState.isPreviewing || historyState.isRollingBack;
   previewButton.addEventListener('click', () => handleSelectRestorePoint(point, handlers, { preview: true }));
@@ -276,6 +305,8 @@ function renderRestorePointCard(point, state = {}, historyState = {}, handlers =
     className: 'cms-admin-button cms-admin-button-ghost',
     type: 'button',
     text: selected ? 'Đã chọn' : 'Chọn bản này',
+    title: `${ROLLBACK_COPY.actions?.select || 'Chọn bản này làm nguồn rollback'} ${point.sourceFile}`,
+    ariaLabel: `${ROLLBACK_COPY.actions?.select || 'Chọn bản này làm nguồn rollback'} ${point.sourceFile}`,
   });
   selectButton.disabled = !isRollbackAdmin(state) || historyState.isRollingBack || selected;
   selectButton.addEventListener('click', () => handleSelectRestorePoint(point, handlers));
@@ -329,6 +360,10 @@ function renderVersionPreviewPanel(state = {}, historyState = {}, handlers = {})
   const selectedPoint = findRestorePointByPath(historyState.items, selectedPath);
 
   panel.appendChild(createElement('h3', { className: 'cms-admin-panel-title', text: 'Bước 2 — Xem trước bản sẽ khôi phục' }));
+  panel.appendChild(createElement('p', {
+    className: 'cms-admin-help-text',
+    text: ROLLBACK_COPY.previewNote || 'Preview chỉ đọc bản public đã chọn và không thay đổi website.',
+  }));
   if (!selectedPath) {
     panel.appendChild(renderEmptyState('Hãy chọn một bản trong danh sách. Xem trước chỉ đọc dữ liệu và không thay đổi website.'));
     return panel;
@@ -344,6 +379,8 @@ function renderVersionPreviewPanel(state = {}, historyState = {}, handlers = {})
     className: 'cms-admin-button cms-admin-button-secondary',
     type: 'button',
     text: historyState.isPreviewing ? 'Đang đọc bản đã chọn...' : (preview ? 'Xem lại bản đã chọn' : 'Xem trước bản đã chọn'),
+    title: ROLLBACK_COPY.actions?.preview || 'Xem trước bản public đã chọn. Chỉ đọc dữ liệu.',
+    ariaLabel: ROLLBACK_COPY.actions?.preview || 'Xem trước bản public đã chọn. Chỉ đọc dữ liệu.',
   });
   previewButton.disabled = !isRollbackAdmin(state) || historyState.isPreviewing || historyState.isRollingBack;
   previewButton.addEventListener('click', () => handlePreviewVersion(selectedPath, handlers));
@@ -417,6 +454,14 @@ function renderPreviewSummary(preview = {}) {
 function renderRollbackPanel(state = {}, historyState = {}, handlers = {}) {
   const panel = createElement('section', { className: 'cms-admin-panel cms-admin-rollback-action-panel' });
   panel.appendChild(createElement('h3', { className: 'cms-admin-panel-title', text: 'Bước 3–4 — Kiểm tra và khôi phục' }));
+  panel.appendChild(createElement('p', {
+    className: 'cms-admin-help-text',
+    text: ROLLBACK_COPY.dryRunNote || 'Dry-run là backend check qua Edge Function; không được coi là rollback thật.',
+  }));
+  panel.appendChild(createElement('p', {
+    className: 'cms-admin-help-text',
+    text: ROLLBACK_COPY.realRollbackNote || 'Rollback thật sẽ ghi lại website public nếu qua đủ gate và xác nhận hai bước.',
+  }));
 
   const selectedPath = String(historyState.selectedSourcePath || '').trim();
   const selectedPoint = findRestorePointByPath(historyState.items, selectedPath);
@@ -426,6 +471,12 @@ function renderRollbackPanel(state = {}, historyState = {}, handlers = {}) {
   const ready = canDoRealRollback(historyState, selectedPath);
 
   panel.appendChild(renderFlowSteps({ selectedPath, previewMatches, dryRunMatches, ready }));
+  panel.appendChild(renderRollbackReadinessPanel(state, historyState, {
+    selectedPath,
+    previewMatches,
+    dryRunMatches,
+    hasReason,
+  }));
 
   if (!selectedPath) {
     panel.appendChild(renderEmptyState('Hãy chọn một bản cần khôi phục ở danh sách.'));
@@ -441,6 +492,8 @@ function renderRollbackPanel(state = {}, historyState = {}, handlers = {}) {
     className: 'cms-admin-button cms-admin-button-secondary',
     type: 'button',
     text: historyState.isRollingBack ? 'Đang kiểm tra...' : 'Kiểm tra khôi phục',
+    title: getDryRunDisabledReason(state, historyState, selectedPath) || ROLLBACK_COPY.actions?.dryRun || 'Kiểm tra khôi phục bằng Edge Function hiện có.',
+    ariaLabel: getDryRunDisabledReason(state, historyState, selectedPath) || ROLLBACK_COPY.actions?.dryRun || 'Kiểm tra khôi phục bằng Edge Function hiện có.',
   });
   dryRunButton.disabled = !isRollbackAdmin(state) || !selectedPath || historyState.isRollingBack;
   dryRunButton.addEventListener('click', () => handleRollbackCmsJson({ sourcePath: selectedPath, dryRun: true, handlers }));
@@ -450,10 +503,16 @@ function renderRollbackPanel(state = {}, historyState = {}, handlers = {}) {
   const reasonInput = createElement('textarea', {
     className: 'cms-admin-input',
     value: historyState.rollbackReason || '',
+    title: ROLLBACK_COPY.actions?.reason || 'Lý do khôi phục',
+    ariaLabel: ROLLBACK_COPY.actions?.reason || 'Lý do khôi phục',
     attrs: { rows: '3', placeholder: 'Ví dụ: Khôi phục bản sạch sau khi hoàn tất kiểm tra UAT' },
   });
   reasonInput.disabled = !selectedPath || historyState.isRollingBack;
   panel.appendChild(labeledControl('Lý do khôi phục', reasonInput));
+  panel.appendChild(createElement('p', {
+    className: 'cms-admin-help-text cms-admin-rollback-reason-help',
+    text: ROLLBACK_COPY.reasonHelp || 'Nhập lý do vận hành cụ thể trước khi rollback thật.',
+  }));
 
   const conditionChecklist = renderConditionChecklist({ selected: Boolean(selectedPath), dryRunMatches, hasReason });
   panel.appendChild(conditionChecklist.node);
@@ -468,6 +527,8 @@ function renderRollbackPanel(state = {}, historyState = {}, handlers = {}) {
     className: 'cms-admin-button cms-admin-button-danger',
     type: 'button',
     text: historyState.isRollingBack ? 'Đang khôi phục...' : 'Khôi phục bản này',
+    title: getRollbackDisabledReason(state, historyState, selectedPath, dryRunMatches, hasReason) || ROLLBACK_COPY.actions?.rollback || 'Khôi phục thật bản đã chọn.',
+    ariaLabel: getRollbackDisabledReason(state, historyState, selectedPath, dryRunMatches, hasReason) || ROLLBACK_COPY.actions?.rollback || 'Khôi phục thật bản đã chọn.',
   });
   rollbackButton.disabled = !isRollbackAdmin(state) || historyState.isRollingBack || !ready;
   rollbackButton.addEventListener('click', () => handleRollbackCmsJson({ sourcePath: selectedPath, dryRun: false, handlers }));
@@ -480,6 +541,8 @@ function renderRollbackPanel(state = {}, historyState = {}, handlers = {}) {
     conditionChecklist.setReason(reasonReady);
     const nowReady = Boolean(selectedPath && dryRunMatches && reasonReady);
     rollbackButton.disabled = !isRollbackAdmin(state) || historyState.isRollingBack || !nowReady;
+    rollbackButton.title = getRollbackDisabledReason(state, historyState, selectedPath, dryRunMatches, reasonReady) || ROLLBACK_COPY.actions?.rollback || 'Khôi phục thật bản đã chọn.';
+    rollbackButton.setAttribute('aria-label', rollbackButton.title);
     guidance.className = `cms-admin-rollback-guidance${nowReady ? ' is-ready' : ''}`;
     guidance.textContent = getRollbackGuidance({ selectedPath, dryRunMatches, hasReason: reasonReady });
   });
@@ -501,6 +564,10 @@ function renderRollbackPanel(state = {}, historyState = {}, handlers = {}) {
     className: 'cms-admin-help-text',
     text: 'Khôi phục thật vẫn sao lưu bản đang công khai, ghi bản nguồn đã chọn, xác minh lại và tự phục hồi bản trước nếu xác minh thất bại.',
   }));
+  panel.appendChild(createElement('p', {
+    className: 'cms-admin-help-text',
+    text: ROLLBACK_COPY.serverSourceWarning || 'Chưa audit được source Edge Function rollback-cms-json trong workspace này, nên UI không claim production rollback readiness.',
+  }));
   return panel;
 }
 
@@ -518,6 +585,92 @@ function renderFlowSteps({ selectedPath = '', previewMatches = false, dryRunMatc
     steps.appendChild(item);
   });
   return steps;
+}
+
+function renderRollbackReadinessPanel(state = {}, historyState = {}, flags = {}) {
+  const selectedPath = String(flags.selectedPath || '').trim();
+  const selected = Boolean(selectedPath && isSafeVersionPath(selectedPath));
+  const historyItems = safeArray(historyState.items);
+  const entries = [
+    ['Tài khoản admin active', isRollbackAdminSession(state), 'Tài khoản admin đang hoạt động mới có thể chạy dry-run/rollback.'],
+    ['Rollback gate đã bật', isRollbackFeatureEnabled(), 'Rollback gate phải được bật trong cấu hình hiện có.'],
+    ['Lịch sử đã tải', Boolean(historyState.loadedAt || historyItems.length), 'Lịch sử chỉ đọc từ log công khai đã tải.'],
+    ['Đã chọn restore point', selected, 'Chỉ chọn path version hợp lệ trong published/versions/.'],
+    ['Preview đã đọc bản chọn', Boolean(flags.previewMatches), 'Preview chỉ đọc public JSON của bản đã chọn.'],
+    ['Dry-run PASS đúng bản chọn', Boolean(flags.dryRunMatches), 'Dry-run gọi Edge Function; chưa claim server-side no-side-effect.'],
+    ['Có lý do vận hành', Boolean(flags.hasReason), 'Cần lý do vận hành trước khi rollback thật.'],
+    ['Cổng xác nhận thật sẵn sàng', Boolean(flags.dryRunMatches && flags.hasReason), 'Hai hộp xác nhận vẫn xuất hiện tại thời điểm bấm rollback thật.'],
+  ];
+  const blockedReasons = getRollbackBlockedReasons(state, historyState, {
+    selectedPath,
+    previewMatches: Boolean(flags.previewMatches),
+    dryRunMatches: Boolean(flags.dryRunMatches),
+    hasReason: Boolean(flags.hasReason),
+  });
+
+  const wrap = createElement('div', { className: 'cms-admin-rollback-readiness-panel' });
+  const head = createElement('div', { className: 'cms-admin-panel-title-row' });
+  head.appendChild(createElement('strong', { text: ROLLBACK_COPY.readinessTitle || 'Preflight rollback' }));
+  head.appendChild(renderBadge(blockedReasons.length ? 'Đang bị chặn' : 'Đủ điều kiện UI', blockedReasons.length ? 'warning' : 'success'));
+  wrap.appendChild(head);
+  wrap.appendChild(createElement('p', {
+    className: 'cms-admin-help-text',
+    text: ROLLBACK_COPY.readinessIntro || 'Các mục dưới đây chỉ dùng state đã có để nhắc operator trước khi rollback.',
+  }));
+  const list = createElement('ul', { className: 'cms-admin-rollback-readiness-list' });
+  entries.forEach(([label, ok, detail]) => {
+    const item = createElement('li', { className: ok ? 'is-complete' : '' });
+    item.appendChild(createElement('span', { className: 'cms-admin-rollback-condition-icon', text: ok ? '✓' : '□' }));
+    const textWrap = createElement('span', { className: 'cms-admin-rollback-readiness-text' });
+    textWrap.appendChild(createElement('strong', { text: label }));
+    textWrap.appendChild(createElement('small', { text: detail }));
+    item.appendChild(textWrap);
+    list.appendChild(item);
+  });
+  wrap.appendChild(list);
+
+  if (blockedReasons.length) {
+    const blocked = createElement('div', { className: 'cms-admin-rollback-blocked-reasons' });
+    blocked.appendChild(createElement('strong', { text: ROLLBACK_COPY.disabledReasonsTitle || 'Chưa đủ điều kiện rollback vì' }));
+    const reasonList = createElement('ul');
+    blockedReasons.forEach((reason) => reasonList.appendChild(createElement('li', { text: reason })));
+    blocked.appendChild(reasonList);
+    wrap.appendChild(blocked);
+  }
+
+  return wrap;
+}
+
+function getRollbackBlockedReasons(state = {}, historyState = {}, flags = {}) {
+  const reasons = [];
+  if (!isRollbackAdminSession(state)) reasons.push('Tài khoản hiện tại không phải admin active.');
+  if (!isRollbackFeatureEnabled()) reasons.push('Feature rollback gate chưa bật trong cấu hình hiện có.');
+  if (!historyState.loadedAt && !safeArray(historyState.items).length) reasons.push('Chưa tải lịch sử phiên bản.');
+  if (!flags.selectedPath) reasons.push('Chưa chọn restore point.');
+  if (flags.selectedPath && !isSafeVersionPath(flags.selectedPath)) reasons.push('Đường dẫn bản được chọn không thuộc published/versions hợp lệ.');
+  if (!flags.previewMatches) reasons.push('Chưa có preview đọc đúng bản đang chọn.');
+  if (!flags.dryRunMatches) reasons.push('Chưa có dry-run PASS cho đúng bản đang chọn.');
+  if (!flags.hasReason) reasons.push('Chưa nhập lý do rollback.');
+  if (historyState.isRollingBack) reasons.push('Đang có thao tác kiểm tra/rollback chạy.');
+  return reasons;
+}
+
+function getDryRunDisabledReason(state = {}, historyState = {}, selectedPath = '') {
+  if (!isRollbackAdmin(state)) return 'Chỉ admin active mới chạy được kiểm tra khôi phục.';
+  if (!selectedPath) return 'Hãy chọn restore point trước khi kiểm tra khôi phục.';
+  if (!isSafeVersionPath(selectedPath)) return 'Đường dẫn bản được chọn không hợp lệ.';
+  if (historyState.isRollingBack) return 'Đang có thao tác rollback/dry-run chạy.';
+  return '';
+}
+
+function getRollbackDisabledReason(state = {}, historyState = {}, selectedPath = '', dryRunMatches = false, hasReason = false) {
+  if (!isRollbackAdmin(state)) return 'Chỉ admin active mới rollback thật.';
+  if (!selectedPath) return 'Hãy chọn restore point trước khi rollback.';
+  if (!isSafeVersionPath(selectedPath)) return 'Đường dẫn bản được chọn không hợp lệ.';
+  if (!dryRunMatches) return 'Rollback thật bị chặn cho đến khi dry-run PASS đúng bản đã chọn.';
+  if (!hasReason) return 'Rollback thật bị chặn cho đến khi có lý do vận hành.';
+  if (historyState.isRollingBack) return 'Đang có thao tác rollback/dry-run chạy.';
+  return '';
 }
 
 function renderConditionChecklist({ selected = false, dryRunMatches = false, hasReason = false } = {}) {
@@ -905,8 +1058,16 @@ function hasUatOrTestMarker(json = {}) {
 }
 
 function isRollbackAdmin(state = {}) {
+  return Boolean(isRollbackAdminSession(state) && isRollbackFeatureEnabled());
+}
+
+function isRollbackAdminSession(state = {}) {
   const role = String(state.profile?.role || '').trim().toLowerCase();
-  return Boolean(state.session?.user?.id && state.profile?.is_active === true && role === 'admin' && ADMIN_FEATURE_FLAGS.allowStaticCmsRollbackGate && CMS_ROLLBACK_GATE_CONFIG.enabled);
+  return Boolean(state.session?.user?.id && state.profile?.is_active === true && role === 'admin');
+}
+
+function isRollbackFeatureEnabled() {
+  return Boolean(ADMIN_FEATURE_FLAGS.allowStaticCmsRollbackGate && CMS_ROLLBACK_GATE_CONFIG.enabled);
 }
 
 function isSafeVersionPath(path = '') {
