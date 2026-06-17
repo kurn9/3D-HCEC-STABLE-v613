@@ -2049,6 +2049,7 @@ function renderPublishTab(state) {
     summary.appendChild(renderEmptyState(ADMIN_COPY.publish.noCurrent));
   }
   summary.appendChild(renderCompactNotice(ADMIN_COPY.publish.currentHint));
+  summary.appendChild(renderCompactWarning(ADMIN_COPY.publish.dbReferenceHint));
 
   const readiness = renderPublishReadinessPanel(state, bundle);
 
@@ -2076,8 +2077,8 @@ function renderPublishReadinessPanel(state = {}, bundle = null) {
   const validation = draftState.validation || null;
   const dryRun = draftState.publishDryRunResult || null;
   const rows = [
-    [fields.publicBundle, bundle?.version ? `Đã đọc ${bundle.version}` : 'Chưa đọc được phiên bản public'],
     [fields.canonicalJson, canonicalKnown ? 'Không có lỗi canonical được ghi nhận trong state hiện tại' : `Cần kiểm tra: ${normalizeErrorMessage(data.canonicalError)}`],
+    [fields.publicBundle, bundle?.version ? `DB tham chiếu/cache ${bundle.version} · không phải nguồn public canonical` : 'Chưa đọc được DB bundle tham chiếu'],
     [fields.savedDraft, draftState.currentDraftId ? `Đã lưu draft ${draftState.currentDraftId}` : 'Chỉ có thể publish từ bản nháp đã lưu trong Nội dung phòng 3D'],
     [fields.dirtyState, draftState.dirty ? 'Đang có thay đổi chưa lưu — phải lưu trước publish' : 'Không ghi nhận dirty changes trong draft đang mở'],
     [fields.validation, validation ? (validation.valid ? 'Validation hiện tại đạt' : 'Validation còn lỗi/cảnh báo cần xử lý') : 'Chưa có validation draft trong state hiện tại'],
@@ -2090,6 +2091,7 @@ function renderPublishReadinessPanel(state = {}, bundle = null) {
   const panel = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel cms-admin-publish-readiness-panel' });
   panel.appendChild(renderPanelTitle(copy.readinessTitle, copy.readinessStatus));
   panel.appendChild(renderCompactNotice(copy.readinessIntro));
+  panel.appendChild(renderCompactNotice(copy.canonicalHint));
   const grid = createElement('div', { className: 'cms-admin-publish-readiness-grid' });
   rows.forEach(([label, value]) => grid.appendChild(renderInfoTile(label, value || '—')));
   panel.appendChild(grid);
@@ -4958,10 +4960,14 @@ function renderWebsiteStatusPanel({ published, errors, siteSettings, dashboardSu
   const sourceDetail = canonicalError && usingFallback
     ? `${sourceLabel} · ${normalizeErrorMessage(canonicalError)}`
     : sourceLabel;
+  const dbReferenceVersion = published?.version
+    ? `${published.version} · ${getStatusLabel(published.status)}`
+    : 'Chưa đọc được bản ghi DB tham chiếu';
   const panel = createElement('section', { className: 'cms-admin-panel cms-admin-dashboard-status-panel' });
   panel.appendChild(renderPanelTitle(copy.title, hasErrors || usingFallback ? 'Cần kiểm tra' : 'Ổn định'));
   panel.appendChild(renderKeyValueList([
-    [copy.currentVersion, dashboardSummary?.version || published?.version || '—'],
+    [copy.currentVersion, dashboardSummary?.version || '—'],
+    [copy.dbReferenceVersion, dbReferenceVersion],
     [copy.publishedAt, formatDateTime(published?.published_at)],
     [copy.cmsRecordStatus, getStatusLabel(siteSettings?.site_status)],
     [copy.dataSource, sourceDetail],
@@ -4969,6 +4975,9 @@ function renderWebsiteStatusPanel({ published, errors, siteSettings, dashboardSu
     [copy.website, hasErrors ? 'Cần kiểm tra kết nối dữ liệu' : copy.active],
   ]));
   panel.appendChild(renderCompactNotice(copy.sourceNote));
+  if (published) {
+    panel.appendChild(renderCompactWarning(copy.dbReferenceNote));
+  }
   return panel;
 }
 
@@ -5169,6 +5178,7 @@ function renderLatestBundlePanel(bundle) {
   panel.appendChild(renderPanelTitle(ADMIN_COPY.dashboard.panels.contentPublished, bundle ? getStatusLabel(bundle.status) : 'Chưa có'));
   if (!bundle) {
     panel.appendChild(renderEmptyState(ADMIN_COPY.publish.noCurrent));
+    panel.appendChild(renderCompactNotice(ADMIN_COPY.publish.dbReferenceHint));
     return panel;
   }
 
@@ -5180,6 +5190,7 @@ function renderLatestBundlePanel(bundle) {
     [ADMIN_COPY.publish.fields.createdAt, formatDateTime(bundle.created_at)],
     [ADMIN_COPY.publish.fields.note, getFriendlyNote(bundle.note)],
   ]));
+  panel.appendChild(renderCompactWarning(ADMIN_COPY.publish.dbReferenceHint));
   return panel;
 }
 

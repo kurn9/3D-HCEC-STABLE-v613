@@ -127,7 +127,7 @@ export const ADMIN_COPY = Object.freeze({
   pages: {
     dashboard: {
       title: 'Tổng quan',
-      subtitle: 'Theo dõi nội dung đang hiển thị trên website triển lãm.',
+      subtitle: 'Theo dõi CMS public JSON, log vận hành và các bản ghi tham chiếu của website triển lãm.',
     },
     home: {
       title: 'Trang chủ',
@@ -147,7 +147,7 @@ export const ADMIN_COPY = Object.freeze({
     },
     publish: {
       title: 'Công khai nội dung',
-      subtitle: 'Kiểm tra phiên bản nội dung đang công khai trên website.',
+      subtitle: 'Kiểm tra readiness công khai dựa trên CMS public JSON trong Storage và log vận hành.',
     },
     history: {
       title: 'Lịch sử phiên bản',
@@ -196,19 +196,21 @@ export const ADMIN_COPY = Object.freeze({
     websiteLink: 'Xem website',
     status: {
       title: 'Trạng thái website',
-      currentVersion: 'Phiên bản website đang công khai',
+      currentVersion: 'Phiên bản CMS public JSON',
       cmsRecordStatus: 'Trạng thái bản ghi CMS',
       dataSource: 'Dữ liệu CMS đang đọc',
       readOnlyMode: 'Chế độ hiện tại',
-      publishedAt: 'Thời điểm công khai',
+      publishedAt: 'Thời điểm DB bundle tham chiếu',
       website: 'Website đang hoạt động',
       safety: 'Chế độ xem an toàn',
       active: 'Đang hoạt động',
       safe: 'Chỉ xem, không thay đổi dữ liệu',
       readOnly: 'Chỉ xem',
-      sourceNote: 'Website public dùng nội dung đã công khai từ CMS JSON. Nếu CMS public JSON chưa đọc được, Tổng quan dùng DB catalog làm dự phòng.',
-      canonicalSource: 'Nguồn chính: CMS public JSON',
-      fallbackSource: 'Nguồn dự phòng: DB catalog',
+      sourceNote: 'Nội dung public thực tế lấy từ CMS public JSON trong Storage. DB bundle nếu còn hiển thị chỉ là bản ghi tham chiếu/legacy cache và có thể lệch nếu không sync.',
+      canonicalSource: 'Nguồn chính: Storage latest / CMS public JSON',
+      fallbackSource: 'Nguồn dự phòng: DB catalog tham chiếu',
+      dbReferenceVersion: 'Phiên bản DB bundle tham chiếu',
+      dbReferenceNote: 'DB bundle không phải nguồn public canonical trong flow Edge publish/rollback hiện tại.',
     },
     quickActions: {
       title: 'Đi nhanh',
@@ -233,8 +235,8 @@ export const ADMIN_COPY = Object.freeze({
     },
     cards: {
       currentContent: {
-        label: 'Nội dung đang công khai',
-        emptyNote: 'Chưa có nội dung công khai',
+        label: 'CMS public JSON trong Storage',
+        emptyNote: 'Chưa đọc được CMS public JSON',
       },
       connection: {
         label: 'Kết nối dữ liệu',
@@ -261,7 +263,7 @@ export const ADMIN_COPY = Object.freeze({
     },
     panels: {
       siteSettings: 'Thông tin website',
-      contentPublished: 'Phiên bản website đang công khai',
+      contentPublished: 'DB bundle tham chiếu / legacy cache',
     },
   },
   contentViews: {
@@ -802,9 +804,11 @@ export const ADMIN_COPY = Object.freeze({
     ],
   },
   publish: {
-    currentTitle: 'Nội dung đang công khai',
-    noCurrent: 'Chưa đọc được nội dung đang công khai.',
-    currentHint: 'Đây là trạng thái phiên bản website đang dùng. Màn này không tự công khai và không ghi dữ liệu khi mở.',
+    currentTitle: 'DB bundle tham chiếu / legacy cache',
+    noCurrent: 'Chưa đọc được bản ghi DB bundle tham chiếu.',
+    currentHint: 'Bản ghi DB bundle chỉ là tham chiếu/legacy cache. Nội dung public thật lấy từ CMS public JSON trong Storage; lịch sử publish/rollback lấy từ cms_publish_logs. Màn này không tự công khai và không ghi dữ liệu khi mở.',
+    canonicalHint: 'Nguồn public canonical là cms-public/published/cms_public_content.json trong Storage. Nếu DB bundle lệch Storage latest, ưu tiên Storage latest và cms_publish_logs.',
+    dbReferenceHint: 'published_bundles là bản ghi DB tham chiếu/legacy cache; Edge Functions hiện không sync bảng này trong publish/rollback chuẩn.',
     surfaceTitle: 'Bề mặt trạng thái công khai',
     surfaceStatus: 'Chỉ xem / readiness',
     surfaceBody: 'Màn Công khai nội dung chỉ tổng hợp trạng thái và điều kiện trước khi công khai. Thao tác công khai thật vẫn nằm trong Nội dung phòng 3D / cổng công khai bản nháp đã lưu.',
@@ -823,13 +827,13 @@ export const ADMIN_COPY = Object.freeze({
     publicLink: 'Kiểm tra website public',
     readinessTitle: 'Preflight đọc nhanh',
     readinessStatus: 'Không ghi dữ liệu',
-    readinessIntro: 'Các mục dưới đây chỉ đọc trạng thái đã tải sẵn để nhắc operator trước khi dùng cổng công khai thật.',
+    readinessIntro: 'Các mục dưới đây chỉ đọc trạng thái đã tải sẵn. Ưu tiên Storage latest / CMS public JSON và log vận hành; DB bundle chỉ là tham chiếu nếu còn hiển thị.',
     disabledReasonsTitle: 'Vì sao tab này không có nút công khai trực tiếp',
     disabledReasons: [
       'Cần dùng bản nháp CMS đã lưu trên server, không dùng JSON thô từ trình duyệt.',
       'Dry-run server-side phải đạt trước khi publish thật.',
       'Publish thật phải có quyền admin active và xác nhận rõ ràng.',
-      'Edge Function publish-cms-json chưa được audit trong workspace này, nên màn chính không claim production readiness.',
+      'Edge Function publish-cms-json là đường publish chuẩn; production readiness vẫn cần UAT/deploy evidence riêng.',
       'History/rollback là quy trình riêng, không được tự động kích hoạt từ màn trạng thái này.',
     ],
     requirementsTitle: 'Điều kiện trước khi công khai thật',
@@ -844,13 +848,13 @@ export const ADMIN_COPY = Object.freeze({
       version: 'Mã phiên bản',
       schema: 'Định dạng nội dung',
       status: 'Trạng thái',
-      publishedAt: 'Thời điểm công khai',
+      publishedAt: 'Thời điểm DB bundle tham chiếu',
       createdAt: 'Thời điểm tạo',
       note: 'Ghi chú',
     },
     readinessFields: {
-      publicBundle: 'Phiên bản public',
-      canonicalJson: 'CMS public JSON',
+      publicBundle: 'DB bundle tham chiếu',
+      canonicalJson: 'Storage latest / CMS public JSON',
       savedDraft: 'Bản nháp đã lưu',
       dirtyState: 'Trạng thái dirty',
       validation: 'Validation',
@@ -866,12 +870,12 @@ export const ADMIN_COPY = Object.freeze({
     headers: ['Mã phiên bản', 'Định dạng nội dung', 'Trạng thái', 'Thời điểm công khai', 'Thời điểm tạo', 'Ghi chú', 'Thao tác'],
     empty: 'Chưa đọc được lịch sử phiên bản hoặc tài khoản chưa có quyền xem.',
     statusHelp: {
-      published: 'Đang công khai: phiên bản website đang sử dụng.',
+      published: 'DB bundle có trạng thái published; chỉ dùng tham chiếu/legacy cache, không phải nguồn public canonical.',
       archived: 'Đã lưu trữ: phiên bản cũ, dùng để đối chiếu khi cần.',
     },
     actions: ['Xem chi tiết — sẽ bật sau', 'So sánh — sẽ bật sau'],
     actionDisabled: 'Chưa bật ở chế độ chỉ xem',
-    lockedNotice: 'Khôi phục phiên bản sẽ được bật ở bước sau, sau khi có kiểm tra và xác nhận an toàn.',
+    lockedNotice: 'Bảng này là legacy/reference. Lịch sử rollback vận hành lấy từ cms_publish_logs và preview version JSON trong Storage.',
   },
 
   rollbackHistoryOperator: {
