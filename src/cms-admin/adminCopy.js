@@ -818,9 +818,9 @@ export const ADMIN_COPY = Object.freeze({
 
   cleanup: {
     title: 'Media Library / Storage Cleanup',
-    status: 'Scan/Dry-run + Safe Delete gated',
-    intro: 'V6.12-A2 chỉ cho safe delete hẹp theo dry-run plan đã xác nhận. Không purge, không xóa cms-public.',
-    adminOnly: 'Chỉ admin đang hoạt động được scan/dry-run/safe-delete cleanup.',
+    status: 'Scan/Dry-run + dọn dẹp có kiểm soát',
+    intro: 'V6.12-A2 chỉ cho dọn dẹp có kiểm soát theo dry-run plan đã xác nhận. Không purge, không xóa cms-public.',
+    adminOnly: 'Chỉ admin đang hoạt động được scan/dry-run/dọn dẹp có kiểm soát.',
     controls: {
       scope: 'Phạm vi',
       retentionDays: 'Retention tối thiểu (ngày)',
@@ -841,14 +841,14 @@ export const ADMIN_COPY = Object.freeze({
     summaryTitle: 'Tổng quan kết quả',
     itemsTitle: 'Danh sách phân loại',
     noResult: 'Chưa có kết quả. Hãy chạy Quét lưu trữ hoặc Dry-run.',
-    deleteDisabled: 'Delete/purge tự do vẫn bị tắt. A2 chỉ có safeDelete hẹp nếu bật feature flag và confirm dry-run plan.',
+    deleteDisabled: 'Delete/purge tự do vẫn bị tắt. A2 chỉ cho dọn dẹp có kiểm soát nếu bật feature flag và xác nhận dry-run plan.',
     safeDeleteTitle: 'Xóa an toàn theo dry-run',
     safeDeleteWarning: 'Thao tác này sẽ xóa object trong Supabase Storage và không thể hoàn tác nếu không có backup.',
     safeDeleteGraphIncomplete: 'Không thể xóa vì dependency graph chưa đầy đủ.',
     safeDeleteNoEligible: 'Không có object eligible để xóa an toàn.',
-    safeDeleteNoCandidates: 'Không có candidate đủ điều kiện Safe Delete trong dry-run hiện tại.',
-    safeDeleteCandidateMissing: 'Có eligible item trong summary nhưng danh sách candidate A2 chưa được tải/hiển thị đầy đủ. Safe Delete đang bị khóa để tránh xác nhận khi chưa thấy rõ object sẽ xóa.',
-    safeDeleteLimited: 'Danh sách candidate cleanup có dấu hiệu bị giới hạn hoặc chưa tải đầy đủ. Safe Delete đang bị khóa để tránh xác nhận khi chưa thấy rõ object sẽ xóa.',
+    safeDeleteNoCandidates: 'Không có candidate đủ điều kiện dọn dẹp có kiểm soát trong dry-run hiện tại.',
+    safeDeleteCandidateMissing: 'Có eligible item trong summary nhưng danh sách candidate A2 chưa được tải/hiển thị đầy đủ. Dọn dẹp có kiểm soát đang bị khóa để tránh xác nhận khi chưa thấy rõ object sẽ xử lý.',
+    safeDeleteLimited: 'Danh sách candidate cleanup có dấu hiệu bị giới hạn hoặc chưa tải đầy đủ. Dọn dẹp có kiểm soát đang bị khóa để tránh xác nhận khi chưa thấy rõ object sẽ xử lý.',
     safeDeleteConfirmHelp: 'Nhập đúng cụm xác nhận để bật nút xóa an toàn.',
     headers: ['Bucket', 'Path', 'Loại', 'Phân loại', 'Eligible', 'Dung lượng', 'References', 'Lý do chặn'],
     filters: {

@@ -169,7 +169,7 @@ function renderWarnings(warnings = []) {
 
 function renderSafeDeleteResult(result = {}) {
   const box = createElement('div', { className: 'cms-admin-alert cms-admin-alert-info cms-admin-safe-delete-result' });
-  box.appendChild(createElement('strong', { text: `Safe delete: ${result.executionStatus || result.error || 'result'}` }));
+  box.appendChild(createElement('strong', { text: `Kết quả dọn dẹp có kiểm soát: ${result.executionStatus || result.error || 'result'}` }));
   box.appendChild(createElement('p', { text: `Deleted: ${formatCount(result.deletedCount || 0)} · Failed: ${formatCount(result.failedCount || 0)} · Skipped: ${formatCount(result.skippedCount || 0)}` }));
   return box;
 }
@@ -195,19 +195,19 @@ function renderSafeDeletePanel(state, result = {}, options = {}) {
   if (responseLooksLimited) {
     return renderSafeDeleteLockedPanel(
       copy.safeDeleteTitle || 'Xóa an toàn theo dry-run',
-      copy.safeDeleteLimited || 'Danh sách candidate cleanup có dấu hiệu bị giới hạn hoặc chưa tải đầy đủ. Safe Delete đang bị khóa để tránh xác nhận khi chưa thấy rõ object sẽ xóa.',
+      copy.safeDeleteLimited || 'Danh sách candidate cleanup có dấu hiệu bị giới hạn hoặc chưa tải đầy đủ. Dọn dẹp có kiểm soát đang bị khóa để tránh xác nhận khi chưa thấy rõ object sẽ xử lý.',
     );
   }
   if (responseHasEligibleButNoCandidates) {
     return renderSafeDeleteLockedPanel(
       copy.safeDeleteTitle || 'Xóa an toàn theo dry-run',
-      copy.safeDeleteCandidateMissing || 'Có eligible item trong summary nhưng danh sách candidate A2 chưa được tải/hiển thị đầy đủ. Safe Delete đang bị khóa để tránh xác nhận khi chưa thấy rõ object sẽ xóa.',
+      copy.safeDeleteCandidateMissing || 'Có eligible item trong summary nhưng danh sách candidate A2 chưa được tải/hiển thị đầy đủ. Dọn dẹp có kiểm soát đang bị khóa để tránh xác nhận khi chưa thấy rõ object sẽ xử lý.',
     );
   }
   if (!candidateItems.length) {
     return renderSafeDeleteNoticePanel(
       copy.safeDeleteTitle || 'Xóa an toàn theo dry-run',
-      copy.safeDeleteNoCandidates || 'Không có candidate đủ điều kiện Safe Delete trong dry-run hiện tại.',
+      copy.safeDeleteNoCandidates || 'Không có candidate đủ điều kiện dọn dẹp có kiểm soát trong dry-run hiện tại.',
     );
   }
 
@@ -373,7 +373,7 @@ async function handleSafeDeleteAction(result = {}, options = {}) {
   const cleanup = current.storageCleanup || {};
   const expectedPhrase = `DELETE ${String(result.runId || '').slice(0, 8)}`;
   if (String(cleanup.safeDeleteConfirmPhrase || '').trim() !== expectedPhrase) {
-    setCmsStorageCleanupState({ error: 'Confirm phrase chưa đúng. Safe delete chưa được gửi.' });
+    setCmsStorageCleanupState({ error: 'Confirm phrase chưa đúng. Yêu cầu dọn dẹp có kiểm soát chưa được gửi.' });
     options.onRerender?.();
     return;
   }
