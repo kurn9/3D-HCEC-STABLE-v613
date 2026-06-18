@@ -83,6 +83,7 @@ let pendingEditFocusTarget = null;
 let pendingEntityHighlight = null;
 let pendingReferenceFocusTarget = null;
 let beforeUnloadGuardBound = false;
+const workspaceTabState = Object.create(null);
 const siteLogoMediaPickerState = {
   open: false,
   search: '',
@@ -806,26 +807,329 @@ function renderActiveTab(state) {
 
   switch (state.activeTab) {
     case 'dashboard':
-      return renderDashboard(state);
+      return renderWorkspaceShell('dashboard', renderDashboard(state), state);
     case 'home':
-      return renderHomeTab(state);
+      return renderWorkspaceShell('home', renderHomeTab(state), state);
     case 'gate':
-      return renderGateTab(state);
+      return renderWorkspaceShell('gate', renderGateTab(state), state);
     case 'media':
-      return renderMediaTab(state);
+      return renderWorkspaceShell('media', renderMediaTab(state), state);
     case 'staticDraft':
-      return renderStaticCmsDraftTab(state, { onRerender: renderAdminShell, onOpenHistory: () => switchAdminTab('history') });
+      return renderWorkspaceShell('staticDraft', renderStaticCmsDraftTab(state, { onRerender: renderAdminShell, onOpenHistory: () => switchAdminTab('history') }), state);
     case 'publish':
-      return renderPublishTab(state);
+      return renderWorkspaceShell('publish', renderPublishTab(state), state);
     case 'history':
-      return renderRollbackHistoryTab(state, { onRerender: renderAdminShell });
+      return renderWorkspaceShell('history', renderRollbackHistoryTab(state, { onRerender: renderAdminShell }), state);
     case 'cleanup':
-      return renderCmsStorageCleanupTab(state, { onRerender: renderAdminShell });
+      return renderWorkspaceShell('cleanup', renderCmsStorageCleanupTab(state, { onRerender: renderAdminShell }), state);
     case 'settings':
-      return renderSettingsTab(state);
+      return renderWorkspaceShell('settings', renderSettingsTab(state), state);
     default:
-      return renderDashboard(state);
+      return renderWorkspaceShell('dashboard', renderDashboard(state), state);
   }
+}
+
+const WORKSPACE_TAB_DEFINITIONS = Object.freeze({
+  dashboard: [
+    { key: 'overview', label: 'Tổng quan', summary: 'Xem nhanh trạng thái website và chỉ số chính.' },
+    { key: 'tasks', label: 'Việc cần làm', summary: 'Tập trung vào cảnh báo, bước tiếp theo và thao tác nhanh.' },
+    { key: 'reference', label: 'Dữ liệu tham chiếu', summary: 'Xem dữ liệu đối chiếu và nguồn đọc hiện tại.' },
+  ],
+  home: [
+    { key: 'content', label: 'Nội dung', summary: 'Xem các phần chính của Trang chủ.' },
+    { key: 'edit', label: 'Chỉnh sửa', summary: 'Mở khu vực sửa nội dung đã được phép chỉnh.' },
+    { key: 'media', label: 'Media / liên kết', summary: 'Kiểm tra ảnh, video hoặc liên kết liên quan.' },
+    { key: 'details', label: 'Chi tiết', summary: 'Xem ghi chú phụ và thông tin kỹ thuật khi cần.' },
+  ],
+  gate: [
+    { key: 'content', label: 'Nội dung', summary: 'Xem nội dung chính của Cổng vào triển lãm.' },
+    { key: 'spaces', label: 'Không gian', summary: 'Kiểm tra nội dung trong nhà và ngoài trời.' },
+    { key: 'edit', label: 'Chỉnh sửa', summary: 'Mở khu vực sửa nội dung cổng vào.' },
+    { key: 'details', label: 'Chi tiết', summary: 'Xem dữ liệu phụ hoặc mã kỹ thuật khi cần.' },
+  ],
+  staticDraft: [
+    { key: 'select', label: 'Chọn item', summary: 'Chọn phòng và item cần chỉnh.' },
+    { key: 'edit', label: 'Chỉnh nội dung', summary: 'Sửa nội dung, trạng thái và thông tin hiển thị.' },
+    { key: 'media', label: 'Ảnh & video', summary: 'Kiểm tra media gắn với item đang chọn.' },
+    { key: 'check', label: 'Kiểm tra', summary: 'Kiểm tra an toàn trước khi công khai bản đã lưu.' },
+  ],
+  media: [
+    { key: 'library', label: 'Thư viện', summary: 'Xem và lọc ảnh/video đã có.' },
+    { key: 'usage', label: 'Đang dùng', summary: 'Xem nơi media đang được tham chiếu trong CMS.' },
+    { key: 'details', label: 'Chi tiết media', summary: 'Xem metadata và giới hạn an toàn.' },
+  ],
+  publish: [
+    { key: 'status', label: 'Trạng thái', summary: 'Xem bản ghi tham chiếu và điều kiện hiện tại.' },
+    { key: 'check', label: 'Kiểm tra', summary: 'Xem checklist trước khi công khai.' },
+    { key: 'publish', label: 'Công khai', summary: 'Hiểu rõ nơi thao tác công khai thật đang được khóa.' },
+    { key: 'history', label: 'Lịch sử liên quan', summary: 'Chuyển sang lịch sử nếu cần kiểm tra hoặc khôi phục.' },
+  ],
+  history: [
+    { key: 'list', label: 'Danh sách', summary: 'Xem các phiên bản đã lưu hoặc đã công khai.' },
+    { key: 'preview', label: 'Xem trước', summary: 'Xem trước bản đã chọn, không thay đổi website.' },
+    { key: 'restore', label: 'Khôi phục', summary: 'Kiểm tra các bước khôi phục có xác nhận.' },
+    { key: 'activity', label: 'Hoạt động', summary: 'Xem ghi chú và thông tin kỹ thuật liên quan.' },
+  ],
+  cleanup: [
+    { key: 'scan', label: 'Quét', summary: 'Quét tệp để biết trạng thái hiện tại.' },
+    { key: 'results', label: 'Kết quả', summary: 'Xem danh sách tệp và kết luận an toàn.' },
+    { key: 'confirm', label: 'Dọn có xác nhận', summary: 'Chỉ dọn khi đã hiểu rõ và xác nhận.' },
+  ],
+  settings: [
+    { key: 'info', label: 'Thông tin', summary: 'Xem thông tin đơn vị và liên hệ.' },
+    { key: 'edit', label: 'Chỉnh sửa', summary: 'Cập nhật bản nháp thông tin website.' },
+    { key: 'identity', label: 'Logo / nhận diện', summary: 'Kiểm tra logo và trạng thái nhận diện.' },
+    { key: 'details', label: 'Chi tiết', summary: 'Xem trạng thái quản trị và thông tin phụ.' },
+  ],
+});
+
+function getWorkspaceTabs(workspaceKey) {
+  return WORKSPACE_TAB_DEFINITIONS[workspaceKey] || WORKSPACE_TAB_DEFINITIONS.dashboard;
+}
+
+function getWorkspaceActiveTab(workspaceKey, tabs) {
+  const requested = workspaceTabState[workspaceKey];
+  return tabs.some((tab) => tab.key === requested) ? requested : tabs[0]?.key;
+}
+
+function setWorkspaceTabState(workspaceKey, tabKey) {
+  workspaceTabState[workspaceKey] = tabKey;
+}
+
+function getWorkspacePageCopy(workspaceKey) {
+  return ADMIN_COPY.pageTitles?.[workspaceKey] || ADMIN_COPY.pageTitles?.dashboard || { title: 'CMS Admin', subtitle: '' };
+}
+
+function getWorkspaceStepConfig(workspaceKey) {
+  const contentViews = ADMIN_COPY.contentViews || {};
+  const configs = {
+    dashboard: ADMIN_COPY.dashboard?.nextSteps,
+    home: contentViews.home?.operatorSteps,
+    gate: contentViews.gate?.operatorSteps,
+    staticDraft: ADMIN_COPY.staticDraft?.operatorSteps,
+    media: ADMIN_COPY.media?.operatorSteps,
+    publish: ADMIN_COPY.publish?.operatorSteps,
+    history: {
+      title: ADMIN_COPY.rollbackHistoryOperator?.readinessTitle || 'Checklist khôi phục phiên bản',
+      subtitle: ADMIN_COPY.rollbackHistoryOperator?.readinessIntro || 'Kiểm tra kỹ trước khi khôi phục.',
+      note: ADMIN_COPY.rollbackHistoryOperator?.serverSourceWarning || '',
+      steps: [
+        'Chọn đúng phiên bản cần xem.',
+        'Xem trước nội dung trước khi thao tác.',
+        'Kiểm tra khôi phục trên server.',
+        'Chỉ khôi phục khi đã nhập lý do và xác nhận.',
+      ],
+    },
+    cleanup: ADMIN_COPY.cleanup?.operatorSteps,
+    settings: ADMIN_COPY.settings?.operatorSteps,
+  };
+  return configs[workspaceKey] || configs.dashboard || {};
+}
+
+function getWorkspaceRailStatus(workspaceKey) {
+  const statuses = {
+    dashboard: 'Tổng quan vận hành',
+    home: 'Bản nháp',
+    gate: 'Bản nháp',
+    staticDraft: 'Bản nháp / công khai có kiểm tra',
+    media: 'Chỉ xem',
+    publish: 'Không tự ghi',
+    history: 'Khôi phục có xác nhận',
+    cleanup: 'Dọn có xác nhận',
+    settings: 'Bản nháp',
+  };
+  return statuses[workspaceKey] || 'Hướng dẫn';
+}
+
+function renderWorkspaceShell(workspaceKey, sourceNode, state = {}) {
+  const tabs = getWorkspaceTabs(workspaceKey);
+  const activeKey = getWorkspaceActiveTab(workspaceKey, tabs);
+  const activeTab = tabs.find((tab) => tab.key === activeKey) || tabs[0];
+  const pageCopy = getWorkspacePageCopy(workspaceKey);
+  const stepConfig = getWorkspaceStepConfig(workspaceKey);
+  const workspace = createElement('section', {
+    className: `cms-admin-workspace cms-admin-workspace-${workspaceKey}`,
+    dataset: { cmsWorkspace: workspaceKey },
+  });
+  const layout = createElement('div', { className: 'cms-admin-workspace-layout' });
+  const main = createElement('div', { className: 'cms-admin-workspace-main' });
+  main.appendChild(renderWorkspaceTabs(workspaceKey, tabs, activeKey));
+
+  const panel = createElement('section', {
+    className: 'cms-admin-workspace-panel',
+    attrs: {
+      role: 'tabpanel',
+      id: `cms-admin-workspace-panel-${workspaceKey}-${activeKey}`,
+      'aria-labelledby': `cms-admin-workspace-tab-${workspaceKey}-${activeKey}`,
+    },
+  });
+
+  if (activeKey === tabs[0]?.key) {
+    panel.appendChild(prepareWorkspaceSourceContent(sourceNode, workspaceKey));
+  } else {
+    panel.appendChild(renderWorkspaceSecondaryPanel(workspaceKey, activeTab, state));
+  }
+
+  main.appendChild(panel);
+  layout.appendChild(main);
+  layout.appendChild(renderWorkspaceRail({ workspaceKey, pageCopy, stepConfig, status: getWorkspaceRailStatus(workspaceKey), activeTab }));
+  workspace.appendChild(layout);
+  return workspace;
+}
+
+function renderWorkspaceTabs(workspaceKey, tabs, activeKey) {
+  const tabList = createElement('div', {
+    className: 'cms-admin-workspace-tabs',
+    attrs: { role: 'tablist', 'aria-label': `Các vùng làm việc ${getWorkspacePageCopy(workspaceKey).title}` },
+  });
+  tabs.forEach((tab) => {
+    const selected = tab.key === activeKey;
+    const button = createElement('button', {
+      className: `cms-admin-workspace-tab${selected ? ' is-active' : ''}`,
+      text: tab.label,
+      type: 'button',
+      attrs: {
+        role: 'tab',
+        id: `cms-admin-workspace-tab-${workspaceKey}-${tab.key}`,
+        'aria-selected': selected ? 'true' : 'false',
+        'aria-controls': `cms-admin-workspace-panel-${workspaceKey}-${tab.key}`,
+        tabindex: selected ? '0' : '-1',
+      },
+    });
+    button.addEventListener('click', () => {
+      setWorkspaceTabState(workspaceKey, tab.key);
+      renderAdminShell();
+    });
+    tabList.appendChild(button);
+  });
+  return tabList;
+}
+
+function prepareWorkspaceSourceContent(sourceNode, workspaceKey) {
+  if (!sourceNode) return renderEmptyState('Chưa có nội dung để hiển thị.');
+  sourceNode.classList.add('cms-admin-workspace-source-content', `cms-admin-workspace-source-${workspaceKey}`);
+  Array.from(sourceNode.children || []).forEach((child) => {
+    if (child.classList?.contains('cms-admin-operator-step-panel')) child.remove();
+  });
+  return sourceNode;
+}
+
+function renderWorkspaceSecondaryPanel(workspaceKey, tab = {}, state = {}) {
+  const panel = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel cms-admin-workspace-secondary-panel' });
+  panel.appendChild(renderPanelTitle(tab.label || 'Khu vực làm việc', 'Tab nội bộ'));
+  if (tab.summary) panel.appendChild(renderCompactNotice(tab.summary));
+
+  const notes = getWorkspaceSecondaryNotes(workspaceKey, tab.key, state);
+  if (notes.length) {
+    const list = createElement('ul', { className: 'cms-admin-workspace-note-list' });
+    notes.forEach((note) => list.appendChild(createElement('li', { text: note })));
+    panel.appendChild(list);
+  }
+
+  const primaryTab = getWorkspaceTabs(workspaceKey)[0];
+  if (primaryTab && tab.key !== primaryTab.key) {
+    const action = createElement('button', {
+      className: 'cms-admin-button cms-admin-button-ghost',
+      text: `Mở ${primaryTab.label}`,
+      type: 'button',
+    });
+    action.addEventListener('click', () => {
+      setWorkspaceTabState(workspaceKey, primaryTab.key);
+      renderAdminShell();
+    });
+    const actions = createElement('div', { className: 'cms-admin-actions' });
+    actions.appendChild(action);
+    panel.appendChild(actions);
+  }
+
+  return panel;
+}
+
+function getWorkspaceSecondaryNotes(workspaceKey, tabKey, state = {}) {
+  const shared = ['Tab này chỉ sắp xếp lại cách xem nội dung trong trình duyệt, không ghi DB/Storage.', 'Các thao tác nguy hiểm vẫn cần đúng màn, đúng quyền và xác nhận rõ ràng.'];
+  const notesByKey = {
+    dashboard: {
+      tasks: ['Dùng rail bên phải để xem các bước vận hành chính.', 'Mở Nội dung phòng 3D khi cần xử lý cảnh báo nội dung.'],
+      reference: ['Bản ghi tham chiếu chỉ dùng để đối chiếu, không phải nguồn public canonical.', 'Nội dung website đang dùng và lịch sử vận hành vẫn là nguồn chính khi công khai/khôi phục.'],
+    },
+    home: {
+      edit: ['Chọn khu vực trong tab Nội dung rồi bấm nút chỉnh sửa tương ứng.', 'Lưu bản nháp chưa làm đổi website.'],
+      media: ['Ảnh/video liên quan được quản lý qua các trường được phép và Thư viện ảnh & video.', 'Không tạo chức năng tải lên hoặc xóa mới trong tab này.'],
+      details: ['Chi tiết kỹ thuật chỉ dùng khi cần kiểm tra nguồn dữ liệu hoặc hỗ trợ lỗi.'],
+    },
+    gate: {
+      spaces: ['Kiểm tra riêng hai không gian trong nhà và ngoài trời trước khi công khai.', 'Tên kỹ thuật vẫn giữ nguyên để không đổi contract.'],
+      edit: ['Chỉ chỉnh nội dung được mở trong CMS draft.', 'Lưu bản nháp chưa làm đổi website.'],
+      details: ['Các mã kỹ thuật chỉ để đối chiếu, không phải nội dung chính cho operator.'],
+    },
+    staticDraft: {
+      edit: ['Chọn item trong tab Chọn item trước khi chỉnh nội dung.', 'Dirty state và validation vẫn được giữ trong màn chính.'],
+      media: ['Media preview và picker hiện có không bị đổi hành vi.', 'Không thêm chức năng tải lên hoặc xóa mới.'],
+      check: ['Kiểm tra an toàn và công khai vẫn đi qua gate hiện có.', 'Không có auto-publish khi chuyển tab.'],
+    },
+    media: {
+      usage: ['Dữ liệu tham chiếu cho biết media đang xuất hiện ở đâu trong CMS.', 'Trạng thái này không tự kết luận vòng đời media nếu thiếu dữ liệu.'],
+      details: ['URL, storage path và metadata dài được hiển thị theo luồng hiện có.', 'Sao chép/xem trước không làm đổi website.'],
+    },
+    publish: {
+      check: ADMIN_COPY.publish?.requirements || shared,
+      publish: ADMIN_COPY.publish?.disabledReasons || shared,
+      history: ['Mở Lịch sử phiên bản nếu cần kiểm tra bản đã công khai hoặc khôi phục.', 'Màn này không tự gọi publish/rollback.'],
+    },
+    history: {
+      preview: [ADMIN_COPY.rollbackHistoryOperator?.previewNote || 'Xem trước chỉ đọc dữ liệu.', 'Chọn bản trong danh sách trước khi xem trước.'],
+      restore: [ADMIN_COPY.rollbackHistoryOperator?.dryRunNote || 'Kiểm tra khôi phục chưa thay đổi website.', ADMIN_COPY.rollbackHistoryOperator?.realRollbackNote || 'Khôi phục thật cần xác nhận rõ.'],
+      activity: ['Phiên bản, bản sao lưu và log không bị xóa trong phase này.', 'Thông tin kỹ thuật nên chỉ mở khi cần đối chiếu.'],
+    },
+    cleanup: {
+      results: ['Bảng kết quả có thể cuộn ngang bên trong bảng nếu dữ liệu dài.', 'Chỉ đọc kết quả scan/check; không tự xóa tệp.'],
+      confirm: ['Dọn dẹp thật chỉ thực hiện khi có feature flag, quyền admin và cụm xác nhận hợp lệ.', 'Không có auto-delete khi chuyển tab.'],
+    },
+    settings: {
+      edit: ['Chỉnh sửa thông tin website chỉ lưu bản nháp CMS.', 'Website vẫn cần công khai bản đã lưu để thay đổi public.'],
+      identity: ['Logo URL dài phải wrap trong layout, không làm vỡ màn.', 'Thay logo chưa bật trong phạm vi hiện tại nếu copy đang ghi rõ.'],
+      details: ['Trạng thái quản trị và dữ liệu kỹ thuật dùng để hỗ trợ vận hành, không phải nội dung chính.'],
+    },
+  };
+  return notesByKey[workspaceKey]?.[tabKey] || shared;
+}
+
+function renderWorkspaceRail({ workspaceKey, pageCopy = {}, stepConfig = {}, status = '', activeTab = {} } = {}) {
+  const rail = createElement('aside', { className: 'cms-admin-workspace-rail', attrs: { 'aria-label': `Hướng dẫn vận hành ${pageCopy.title || ''}` } });
+  const card = createElement('section', { className: 'cms-admin-rail-card cms-admin-rail-status' });
+  card.appendChild(renderPanelTitle(pageCopy.title || 'Màn CMS', status));
+  if (pageCopy.subtitle) card.appendChild(createElement('p', { className: 'cms-admin-help-text', text: pageCopy.subtitle }));
+  if (activeTab?.label) card.appendChild(renderCompactNotice(`Đang xem: ${activeTab.label}.`));
+  rail.appendChild(card);
+
+  const checklist = createElement('section', { className: 'cms-admin-rail-card cms-admin-rail-checklist' });
+  checklist.appendChild(renderPanelTitle(stepConfig.title || 'Các bước vận hành', 'Checklist'));
+  if (stepConfig.subtitle) checklist.appendChild(createElement('p', { className: 'cms-admin-help-text', text: stepConfig.subtitle }));
+  const steps = safeArray(stepConfig.steps);
+  const list = createElement('ol', { className: 'cms-admin-rail-step-list' });
+  steps.slice(0, 5).forEach((step, index) => {
+    const item = createElement('li');
+    item.appendChild(createElement('span', { className: 'cms-admin-rail-step-number', text: String(index + 1) }));
+    item.appendChild(createElement('span', { text: typeof step === 'string' ? step : step?.label || `Bước ${index + 1}` }));
+    list.appendChild(item);
+  });
+  if (!steps.length) list.appendChild(createElement('li', { text: 'Xem nội dung chính, kiểm tra trạng thái rồi thao tác theo quyền hiện có.' }));
+  checklist.appendChild(list);
+  if (stepConfig.note) checklist.appendChild(createElement('p', { className: 'cms-admin-operator-step-note', text: stepConfig.note }));
+  rail.appendChild(checklist);
+
+  const safety = createElement('section', { className: 'cms-admin-rail-card cms-admin-rail-safety' });
+  safety.appendChild(renderPanelTitle('Giới hạn an toàn', 'Không tự ghi'));
+  const safetyItems = [
+    'Chuyển tab nội bộ không công khai, không khôi phục, không dọn tệp.',
+    'Website chỉ thay đổi ở các thao tác đã có xác nhận rõ.',
+    'Chi tiết kỹ thuật chỉ dùng để đối chiếu khi cần.',
+  ];
+  const safetyList = createElement('ul', { className: 'cms-admin-workspace-note-list' });
+  safetyItems.forEach((item) => safetyList.appendChild(createElement('li', { text: item })));
+  safety.appendChild(safetyList);
+  rail.appendChild(safety);
+  return rail;
 }
 
 function renderDashboard(state) {
