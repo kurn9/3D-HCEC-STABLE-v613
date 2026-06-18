@@ -174,6 +174,86 @@ function getDraftTitleForDisplay(draftState = {}) {
     : createOperatorDraftTitle(draftState);
 }
 
+function normalizeStaticRoomKey(roomKey = '') {
+  return String(roomKey || '').toLowerCase() === 'outdoor' ? 'outdoor' : 'indoor';
+}
+
+function getRoomFirstDraftState(draftState = {}, roomKey = 'indoor') {
+  const selectedRoom = normalizeStaticRoomKey(roomKey || draftState.selectedRoom || 'indoor');
+  const roomItems = getDraftRoomItems(draftState.draftJson, selectedRoom);
+  const selectedItemCode = roomItems.some((item) => getItemCode(item) === draftState.selectedItemCode)
+    ? draftState.selectedItemCode
+    : getItemCode(roomItems[0]) || '';
+  return {
+    ...draftState,
+    selectedRoom,
+    selectedItemCode,
+    activeWorkspace: 'room',
+    activeEditorTab: 'content',
+  };
+}
+
+function selectStaticRoomItem(roomKey = 'indoor', itemCode = '', handlers = {}) {
+  const room = normalizeStaticRoomKey(roomKey);
+  setStaticCmsDraftState({
+    selectedRoom: room,
+    selectedItemCode: String(itemCode || ''),
+    exportError: null,
+    exportSuccess: null,
+    draftSaveStatus: '',
+    draftPersistenceError: null,
+    activeWorkspace: 'room',
+    activeEditorTab: 'content',
+    activeDrawer: '',
+  });
+  handlers.onRerender?.();
+}
+
+function getStaticRoomCopy(roomKey = 'indoor') {
+  const room = normalizeStaticRoomKey(roomKey);
+  return room === 'outdoor'
+    ? {
+        key: 'outdoor',
+        title: 'Phòng ngoài trời',
+        status: 'Room outdoor',
+        summary: 'Nội dung trong phòng ngoài trời mà người xem sẽ thấy khi tham quan không gian outdoor.',
+        listTitle: 'Item phòng ngoài trời',
+        editTitle: 'Chỉnh item phòng ngoài trời',
+      }
+    : {
+        key: 'indoor',
+        title: 'Phòng trong nhà',
+        status: 'Room indoor',
+        summary: 'Nội dung trong phòng trong nhà mà người xem sẽ thấy khi tham quan không gian indoor.',
+        listTitle: 'Item phòng trong nhà',
+        editTitle: 'Chỉnh item phòng trong nhà',
+      };
+}
+
+function getStaticDraftItemMissingFields(item = {}) {
+  const missing = [];
+  if (!String(item.title || item.name || '').trim()) missing.push('Tiêu đề');
+  if (!String(item.description || item.content || '').trim()) missing.push('Mô tả / thuyết minh');
+  return missing;
+}
+
+function countRoomItemsMissingMainContent(items = []) {
+  return safeArray(items).filter((item) => getStaticDraftItemMissingFields(item).length > 0).length;
+}
+
+function getItemPrimaryMediaUrl(item = {}) {
+  return getDraftFieldDisplayValue(item, 'imageUrl')
+    || getDraftFieldDisplayValue(item, 'thumbnailUrl')
+    || getDraftFieldDisplayValue(item, 'posterUrl')
+    || getDraftFieldDisplayValue(item, 'videoUrl')
+    || '';
+}
+
+function hasStaticItemMedia(item = {}) {
+  return MEDIA_FIELDS.some((field) => String(item?.[field] || '').trim())
+    || Boolean(getItemPrimaryMediaUrl(item));
+}
+
 function renderStaticOperatorStepPanel(config = {}, options = {}) {
   const steps = safeArray(config.steps);
   if (!config.title && !steps.length) return createElement('div');
@@ -199,15 +279,16 @@ function renderStaticOperatorStepPanel(config = {}, options = {}) {
 
 export function renderStaticCmsDraftTab(state, handlers = {}) {
   const copy = ADMIN_COPY.staticDraft || {};
-  const draftState = state.staticCmsDraft || {};
+  const baseDraftState = state.staticCmsDraft || {};
+  const activeRoomKey = normalizeStaticRoomKey(handlers.activeRoomKey || baseDraftState.selectedRoom || 'indoor');
+  const draftState = getRoomFirstDraftState(baseDraftState, activeRoomKey);
   const currentItem = getSelectedDraftItem(draftState);
   const panel = createElement('section', {
-    className: 'cms-admin-static-draft-shell cms-admin-static-workspace-shell',
-    dataset: { cmsReferenceTarget: 'static-draft', cmsReferenceId: 'static-draft' },
+    className: `cms-admin-static-draft-shell cms-admin-static-workspace-shell cms-admin-static-room-first-shell cms-admin-static-room-first-${activeRoomKey}`,
+    dataset: { cmsReferenceTarget: 'static-draft', cmsReferenceId: activeRoomKey },
   });
 
-  panel.appendChild(renderStaticWorkspaceCommandBar(draftState, state, currentItem, handlers, copy));
-  panel.appendChild(renderStaticOperatorStepPanel(copy.operatorSteps, { status: 'Bản nháp' }));
+  panel.appendChild(renderStaticWorkspaceCommandBar(draftState, state, currentItem, handlers, copy, activeRoomKey));
 
   if (draftState.loadError) {
     panel.appendChild(renderErrorBox(draftState.loadError, 'Không tải được nội dung đang công khai'));
@@ -224,14 +305,13 @@ export function renderStaticCmsDraftTab(state, handlers = {}) {
     return panel;
   }
 
-  panel.appendChild(renderStaticWorkspaceShell(draftState, state, currentItem, handlers, copy));
+  panel.appendChild(renderStaticWorkspaceShell(draftState, state, currentItem, handlers, copy, activeRoomKey));
   panel.appendChild(renderUtilityDrawers(draftState, state, currentItem, handlers, copy));
   return panel;
 }
 
-function renderStaticWorkspaceCommandBar(draftState = {}, appState = {}, currentItem = null, handlers = {}, copy = {}) {
-  const activeWorkspace = getActiveWorkspace(draftState);
-  const featured = getFeaturedOperatorSection(draftState.draftJson);
+function renderStaticWorkspaceCommandBar(draftState = {}, appState = {}, currentItem = null, handlers = {}, copy = {}, activeRoomKey = 'indoor') {
+  const roomCopy = getStaticRoomCopy(activeRoomKey);
   const bar = createElement('section', {
     className: 'cms-admin-panel cms-admin-static-command-bar cms-admin-operator-command-bar',
     dataset: { cmsReferenceTarget: 'static-draft', cmsReferenceId: 'static-draft' },
@@ -240,26 +320,19 @@ function renderStaticWorkspaceCommandBar(draftState = {}, appState = {}, current
   const left = createElement('div', { className: 'cms-admin-static-command-main' });
   left.appendChild(createElement('p', { className: 'cms-admin-eyebrow', text: 'Quản trị nội dung' }));
   const titleRow = createElement('div', { className: 'cms-admin-static-command-title-row' });
-  titleRow.appendChild(createElement('h2', { className: 'cms-admin-static-title', text: 'Chỉnh triển lãm 3D' }));
+  titleRow.appendChild(createElement('h2', { className: 'cms-admin-static-title', text: roomCopy.title }));
   titleRow.appendChild(renderBadge(getFriendlyDraftStateLabel(draftState), getFriendlyDraftStateVariant(draftState)));
   left.appendChild(titleRow);
   left.appendChild(createElement('p', {
     className: 'cms-admin-subtitle cms-admin-static-command-subtitle',
-    text: 'Chỉnh nội dung hiển thị trong phòng 3D và khu Tác phẩm tiêu biểu trên Trang chủ.',
+    text: `${roomCopy.summary} Chọn item, xem nội dung, chỉnh bản nháp và lưu khi đã kiểm tra.`,
   }));
-  left.appendChild(renderWorkspaceSwitch(draftState, handlers));
 
   const context = createElement('div', { className: 'cms-admin-static-command-context' });
-  if (activeWorkspace === 'featured') {
-    context.appendChild(renderInfoTile('Đang sửa', 'Tác phẩm tiêu biểu'));
-    context.appendChild(renderInfoTile('Số mục', String(safeArray(featured.items).length)));
-    context.appendChild(renderInfoTile('Trạng thái', featured.enabled === false ? 'Đang ẩn trên Trang chủ' : 'Đang hiển thị'));
-  } else {
-    const rooms = draftState.draftJson?.rooms || {};
-    context.appendChild(renderInfoTile('Đang sửa', currentItem ? `${getRoomLabel(draftState.selectedRoom)} / ${getItemCode(currentItem) || 'item'}` : 'Chưa chọn item'));
-    context.appendChild(renderInfoTile('Trong nhà', `${safeArray(rooms.indoor?.artworks).length} item`));
-    context.appendChild(renderInfoTile('Ngoài trời', `${safeArray(rooms.outdoor?.artworks).length} item`));
-  }
+  const roomItems = getDraftRoomItems(draftState.draftJson, activeRoomKey);
+  context.appendChild(renderInfoTile('Đang sửa', currentItem ? `${roomCopy.title} / ${getItemCode(currentItem) || 'item'}` : `${roomCopy.title} / chưa chọn item`));
+  context.appendChild(renderInfoTile('Số item', `${roomItems.length} item`));
+  context.appendChild(renderInfoTile('Thiếu nội dung', `${countRoomItemsMissingMainContent(roomItems)} item`));
 
   const actions = createElement('div', { className: 'cms-admin-actions cms-admin-static-command-actions' });
   actions.appendChild(renderMainLoadActions(draftState, handlers));
@@ -329,15 +402,223 @@ function renderDrawerTrigger(label, drawerKey, handlers = {}, variant = 'ghost')
   return button;
 }
 
-function renderStaticWorkspaceShell(draftState = {}, appState = {}, currentItem = null, handlers = {}, copy = {}) {
-  if (getActiveWorkspace(draftState) === 'featured') {
-    return renderFeaturedWorkspaceShell(draftState, appState, handlers, copy);
-  }
-  const shell = createElement('section', { className: 'cms-admin-static-workspace cms-admin-static-room-workspace' });
-  shell.appendChild(renderWorkspaceItemNavigator(draftState, currentItem, handlers));
-  shell.appendChild(renderWorkspaceEditor(draftState, currentItem, handlers, copy));
-  shell.appendChild(renderWorkspaceInspector(draftState, appState, currentItem, handlers, copy));
+function renderStaticWorkspaceShell(draftState = {}, appState = {}, currentItem = null, handlers = {}, copy = {}, activeRoomKey = 'indoor') {
+  return renderStaticRoomFirstWorkspace(draftState, appState, currentItem, handlers, copy, activeRoomKey);
+}
+
+function renderStaticRoomFirstWorkspace(draftState = {}, appState = {}, currentItem = null, handlers = {}, copy = {}, activeRoomKey = 'indoor') {
+  const roomKey = normalizeStaticRoomKey(activeRoomKey || draftState.selectedRoom || 'indoor');
+  const roomCopy = getStaticRoomCopy(roomKey);
+  const roomItems = getDraftRoomItems(draftState.draftJson, roomKey);
+  const shell = createElement('section', {
+    className: `cms-admin-static-room-first-workspace cms-admin-static-room-first-workspace-${roomKey}`,
+    dataset: { cmsStaticRoom: roomKey },
+  });
+  shell.appendChild(renderStaticRoomIntroPanel(draftState, roomItems, currentItem, roomCopy));
+  const layout = createElement('div', { className: 'cms-admin-static-room-first-layout' });
+  layout.appendChild(renderStaticRoomItemList(draftState, roomItems, currentItem, handlers, roomCopy));
+  layout.appendChild(renderStaticRoomSelectedItemPanel(draftState, appState, currentItem, handlers, copy, roomCopy));
+  shell.appendChild(layout);
   return shell;
+}
+
+function renderStaticRoomIntroPanel(draftState = {}, roomItems = [], currentItem = null, roomCopy = {}) {
+  const panel = createElement('section', { className: 'cms-admin-panel cms-admin-static-room-intro-panel' });
+  panel.appendChild(renderStaticPanelTitle(roomCopy.title, roomCopy.status));
+  panel.appendChild(createElement('p', { className: 'cms-admin-help-text', text: roomCopy.summary }));
+  const summary = createElement('div', { className: 'cms-admin-static-room-summary-grid' });
+  summary.appendChild(renderInfoTile('Số item', `${roomItems.length} item`));
+  summary.appendChild(renderInfoTile('Thiếu nội dung chính', `${countRoomItemsMissingMainContent(roomItems)} item`));
+  summary.appendChild(renderInfoTile('Item đang chọn', currentItem ? `${getItemCode(currentItem) || 'item'} — ${currentItem.title || currentItem.name || 'Chưa có tiêu đề'}` : 'Chưa có item'));
+  summary.appendChild(renderInfoTile('Bản nháp', draftState.dirty ? 'Có thay đổi chưa lưu' : 'Sạch'));
+  panel.appendChild(summary);
+  return panel;
+}
+
+function renderStaticRoomItemList(draftState = {}, roomItems = [], currentItem = null, handlers = {}, roomCopy = {}) {
+  const pane = createElement('aside', { className: 'cms-admin-panel cms-admin-static-room-item-pane' });
+  pane.appendChild(renderStaticPanelTitle(roomCopy.listTitle, `${roomItems.length} item`));
+  if (!roomItems.length) {
+    pane.appendChild(renderEmptyState(`${roomCopy.title} chưa có item.`));
+    return pane;
+  }
+  const list = createElement('div', { className: 'cms-admin-static-room-item-list' });
+  const selectedCode = getItemCode(currentItem);
+  roomItems.forEach((item) => {
+    const code = getItemCode(item);
+    const missing = getStaticDraftItemMissingFields(item);
+    const active = code === selectedCode;
+    const button = createElement('button', {
+      className: ['cms-admin-static-room-item-card', active ? 'is-active' : '', missing.length ? 'has-warning' : ''].filter(Boolean).join(' '),
+      type: 'button',
+      attrs: { 'aria-pressed': active ? 'true' : 'false' },
+    });
+    button.appendChild(renderItemTypeBadge(item));
+    const text = createElement('span', { className: 'cms-admin-static-item-card-text' });
+    text.appendChild(createElement('strong', { text: item.title || item.name || code || 'Chưa có tiêu đề' }));
+    text.appendChild(createElement('small', { text: `${code || 'NO_CODE'}${missing.length ? ` · thiếu ${missing.join(', ')}` : ''}` }));
+    button.appendChild(text);
+    button.addEventListener('click', () => selectStaticRoomItem(roomCopy.key, code, handlers));
+    list.appendChild(button);
+  });
+  pane.appendChild(list);
+  return pane;
+}
+
+function renderStaticRoomSelectedItemPanel(draftState = {}, appState = {}, currentItem = null, handlers = {}, copy = {}, roomCopy = {}) {
+  const panel = createElement('section', { className: 'cms-admin-static-room-selected-panel' });
+  if (!currentItem) {
+    const empty = createElement('section', { className: 'cms-admin-panel cms-admin-static-selected-empty' });
+    empty.appendChild(renderEmptyState(`Chưa có item trong ${roomCopy.title}.`));
+    empty.appendChild(createElement('p', { className: 'cms-admin-help-text', text: 'Tab này không hiển thị item của phòng còn lại.' }));
+    panel.appendChild(empty);
+    return panel;
+  }
+  panel.appendChild(renderStaticRoomSelectedPreview(draftState, currentItem, copy, roomCopy));
+  panel.appendChild(renderStaticRoomItemForm(draftState, currentItem, handlers, roomCopy));
+  const secondary = createElement('div', { className: 'cms-admin-static-room-secondary-grid' });
+  secondary.appendChild(renderValidationPanelCompact(draftState, copy));
+  secondary.appendChild(renderPublishInspectorPanel(draftState, appState, handlers));
+  panel.appendChild(secondary);
+  return panel;
+}
+
+function renderStaticRoomSelectedPreview(draftState = {}, currentItem = {}, copy = {}, roomCopy = {}) {
+  const panel = createElement('section', { className: 'cms-admin-panel cms-admin-static-selected-preview-panel' });
+  panel.appendChild(renderStaticPanelTitle('Người xem sẽ thấy', getItemCode(currentItem) || roomCopy.status));
+  const body = createElement('div', { className: 'cms-admin-static-selected-preview-body' });
+  const text = createElement('div', { className: 'cms-admin-static-selected-preview-text' });
+  text.appendChild(createElement('p', { className: 'cms-admin-eyebrow', text: roomCopy.title }));
+  text.appendChild(createElement('h3', { text: currentItem.title || currentItem.name || 'Chưa có tiêu đề' }));
+  text.appendChild(createElement('p', { className: 'cms-admin-help-text', text: currentItem.description || currentItem.content || 'Chưa có mô tả/thuyết minh chính.' }));
+  const facts = createElement('div', { className: 'cms-admin-static-room-facts' });
+  facts.appendChild(renderInfoTile('Mã item', getItemCode(currentItem) || 'NO_CODE', true));
+  facts.appendChild(renderInfoTile('Loại', getItemType(currentItem)));
+  facts.appendChild(renderInfoTile('Media', hasStaticItemMedia(currentItem) ? 'Có dữ liệu' : 'Chưa có'));
+  text.appendChild(facts);
+  body.appendChild(text);
+  const media = createElement('div', { className: 'cms-admin-static-selected-preview-media' });
+  media.appendChild(renderStaticCmsMediaPreview({
+    item: currentItem || {},
+    fieldName: draftState.previewField || '',
+    config: STATIC_CMS_DRAFT_CONFIG,
+  }));
+  body.appendChild(media);
+  panel.appendChild(body);
+  const missing = getStaticDraftItemMissingFields(currentItem);
+  if (missing.length) {
+    panel.appendChild(createElement('div', { className: 'cms-admin-alert cms-admin-alert-warning', text: `Cần bổ sung: ${missing.join(', ')}.` }));
+  }
+  return panel;
+}
+
+function renderStaticRoomItemForm(draftState = {}, item = {}, handlers = {}, roomCopy = {}) {
+  const form = createElement('form', { className: 'cms-admin-form cms-admin-static-draft-form cms-admin-static-room-item-form', attrs: { novalidate: 'true' } });
+  form.addEventListener('submit', (event) => event.preventDefault());
+  form.appendChild(renderStaticRoomMainFieldGroup(draftState, item, handlers));
+  form.appendChild(renderStaticRoomEditActionBlock(draftState, handlers));
+  form.appendChild(renderStaticRoomMediaDetails(draftState, item, handlers));
+  form.appendChild(renderStaticRoomMetadataDetails(draftState, item, handlers));
+  form.appendChild(renderStaticRoomTechnicalDetails(draftState, item, roomCopy));
+  return form;
+}
+
+function renderStaticRoomMainFieldGroup(draftState = {}, item = {}, handlers = {}) {
+  const group = DISPLAY_FIELD_GROUPS.find((entry) => entry.key === 'display') || DISPLAY_FIELD_GROUPS[0];
+  return renderFieldGroup(draftState, item, group, handlers);
+}
+
+function renderStaticRoomEditActionBlock(draftState = {}, handlers = {}) {
+  const block = createElement('section', { className: 'cms-admin-static-room-action-block' });
+  const actions = createElement('div', { className: 'cms-admin-actions cms-admin-static-room-action-row' });
+  const cancelButton = createElement('button', {
+    className: 'cms-admin-button cms-admin-button-ghost',
+    type: 'button',
+    text: 'Hủy',
+    title: 'Hủy thay đổi chưa lưu trong bản nháp đang mở',
+  });
+  cancelButton.disabled = Boolean(draftState.isSavingDraft || !draftState.dirty);
+  cancelButton.addEventListener('click', () => {
+    if (!draftState.dirty) return;
+    const confirmed = globalThis.confirm?.('Hủy các thay đổi chưa lưu trong bản nháp Nội dung phòng 3D?');
+    if (!confirmed) return;
+    resetStaticCmsDraftToBaseline();
+    handlers.onRerender?.();
+  });
+
+  const resetButton = createElement('button', {
+    className: 'cms-admin-button cms-admin-button-secondary',
+    type: 'button',
+    text: 'Đặt lại thay đổi',
+    title: 'Đặt lại bản nháp về nội dung đang công khai/baseline đang mở',
+  });
+  resetButton.disabled = Boolean(draftState.isSavingDraft || !draftState.dirty);
+  resetButton.addEventListener('click', () => {
+    if (!draftState.dirty) return;
+    const confirmed = globalThis.confirm?.('Đặt lại toàn bộ thay đổi chưa lưu về baseline đang mở?');
+    if (!confirmed) return;
+    resetStaticCmsDraftToBaseline();
+    handlers.onRerender?.();
+  });
+
+  const saveButton = createElement('button', {
+    className: 'cms-admin-button cms-admin-button-primary',
+    type: 'button',
+    text: draftState.isSavingDraft ? 'Đang lưu...' : 'Lưu bản nháp',
+    title: draftState.currentDraftId ? 'Cập nhật bản nháp hiện tại.' : 'Tạo bản nháp mới bằng nội dung đang sửa.',
+  });
+  saveButton.disabled = Boolean(draftState.isSavingDraft || !draftState.draftJson || !draftState.validation?.valid);
+  saveButton.addEventListener('click', () => handleSaveStaticCmsDraft({ asNew: !draftState.currentDraftId, handlers }));
+
+  appendChildren(actions, [cancelButton, resetButton, saveButton]);
+  block.appendChild(actions);
+  block.appendChild(createElement('p', {
+    className: 'cms-admin-help-text',
+    text: draftState.dirty ? 'Có thay đổi trong bản nháp. Lưu bản nháp chưa làm đổi website public.' : 'Chưa có thay đổi để lưu.',
+  }));
+  return block;
+}
+
+function renderStaticRoomMediaDetails(draftState = {}, item = {}, handlers = {}) {
+  const details = createElement('details', { className: 'cms-admin-static-room-details cms-admin-static-room-media-details' });
+  details.appendChild(createElement('summary', { text: hasStaticItemMedia(item) ? 'Ảnh & video của item này' : 'Ảnh & video — chưa có dữ liệu chính' }));
+  const group = DISPLAY_FIELD_GROUPS.find((entry) => entry.key === 'media');
+  details.appendChild(renderFieldGroup(draftState, item, group, handlers));
+  return details;
+}
+
+function renderStaticRoomMetadataDetails(draftState = {}, item = {}, handlers = {}) {
+  const details = createElement('details', { className: 'cms-admin-static-room-details cms-admin-static-room-metadata-details' });
+  details.appendChild(createElement('summary', { text: 'Thông tin thêm' }));
+  const group = DISPLAY_FIELD_GROUPS.find((entry) => entry.key === 'metadata');
+  details.appendChild(renderFieldGroup(draftState, item, group, handlers));
+  return details;
+}
+
+function renderStaticRoomTechnicalDetails(draftState = {}, item = {}, roomCopy = {}) {
+  const details = createElement('details', { className: 'cms-admin-static-room-details cms-admin-static-room-technical-details' });
+  details.appendChild(createElement('summary', { text: 'Chi tiết kỹ thuật để đối chiếu' }));
+  const rows = [
+    ['Room key', roomCopy.key || draftState.selectedRoom || 'indoor'],
+    ['Item code', getItemCode(item) || 'NO_CODE'],
+    ['Item id', item.id || '—'],
+    ['Type', getItemType(item)],
+    ['Sort order', item.sortOrder ?? item.sort_order ?? '—'],
+    ['Visible', item.isVisible === false || item.is_visible === false ? 'Không hiển thị' : 'Đang hiển thị'],
+  ];
+  details.appendChild(renderStaticTechnicalKeyValue(rows));
+  details.appendChild(renderTechnicalAliasDetails(item));
+  details.appendChild(createElement('pre', { className: 'cms-admin-code-block', text: JSON.stringify(item, null, 2) }));
+  return details;
+}
+
+function renderStaticTechnicalKeyValue(rows = []) {
+  const list = createElement('dl', { className: 'cms-admin-static-technical-kv' });
+  rows.forEach(([label, value]) => {
+    list.appendChild(createElement('dt', { text: label }));
+    list.appendChild(createElement('dd', { text: toDisplayText(value, '—') }));
+  });
+  return list;
 }
 
 function renderWorkspaceItemNavigator(draftState = {}, currentItem = null, handlers = {}) {

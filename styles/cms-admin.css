@@ -6472,3 +6472,205 @@ body.cms-admin-page * {
     align-items: stretch;
   }
 }
+
+/* v6.14.049.016 - CMS 3D room content room-first workspace */
+.cms-admin-static-room-first-shell {
+  gap: 14px;
+}
+
+.cms-admin-static-room-first-workspace {
+  display: grid;
+  gap: 14px;
+}
+
+.cms-admin-static-room-intro-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.cms-admin-static-room-summary-grid,
+.cms-admin-static-room-facts,
+.cms-admin-static-room-secondary-grid,
+.cms-admin-static-technical-kv {
+  display: grid;
+  gap: 10px;
+}
+
+.cms-admin-static-room-summary-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.cms-admin-static-room-first-layout {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(260px, 0.72fr) minmax(0, 1.7fr);
+  align-items: start;
+}
+
+.cms-admin-static-room-item-pane,
+.cms-admin-static-room-selected-panel {
+  min-width: 0;
+}
+
+.cms-admin-static-room-item-pane {
+  position: sticky;
+  top: 92px;
+}
+
+.cms-admin-static-room-item-list {
+  display: grid;
+  gap: 9px;
+}
+
+.cms-admin-static-room-item-card {
+  align-items: center;
+  border: 1px solid var(--cms-admin-border-soft);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.035);
+  color: var(--cms-admin-text);
+  cursor: pointer;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: auto 1fr;
+  min-width: 0;
+  padding: 11px 12px;
+  text-align: left;
+  transition: border-color 0.16s ease, background 0.16s ease, transform 0.16s ease;
+}
+
+.cms-admin-static-room-item-card:hover,
+.cms-admin-static-room-item-card:focus-visible,
+.cms-admin-static-room-item-card.is-active {
+  border-color: var(--cms-admin-border-strong);
+  background: rgba(214, 178, 94, 0.1);
+  transform: translateY(-1px);
+  outline: none;
+}
+
+.cms-admin-static-room-item-card.has-warning:not(.is-active) {
+  border-color: rgba(214, 178, 94, 0.24);
+}
+
+.cms-admin-static-room-selected-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.cms-admin-static-selected-preview-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.cms-admin-static-selected-preview-body {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.82fr);
+  align-items: start;
+}
+
+.cms-admin-static-selected-preview-text {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.cms-admin-static-selected-preview-text h3 {
+  color: var(--cms-admin-text);
+  font-size: clamp(1.25rem, 2.2vw, 1.72rem);
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  margin: 0;
+}
+
+.cms-admin-static-selected-preview-media {
+  min-width: 0;
+}
+
+.cms-admin-static-room-item-form {
+  display: grid;
+  gap: 12px;
+}
+
+.cms-admin-static-room-action-block {
+  border: 1px solid rgba(214, 178, 94, 0.24);
+  border-radius: 16px;
+  background: rgba(214, 178, 94, 0.08);
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+}
+
+.cms-admin-static-room-action-row {
+  justify-content: flex-start;
+}
+
+.cms-admin-static-room-details {
+  border: 1px solid var(--cms-admin-border-soft);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.025);
+  padding: 12px 14px;
+}
+
+.cms-admin-static-room-details > summary {
+  color: var(--cms-admin-text);
+  cursor: pointer;
+  font-weight: 850;
+}
+
+.cms-admin-static-room-details[open] {
+  display: grid;
+  gap: 12px;
+}
+
+.cms-admin-static-room-details .cms-admin-static-field-section {
+  margin-top: 10px;
+}
+
+.cms-admin-static-room-secondary-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.cms-admin-static-technical-kv {
+  grid-template-columns: max-content minmax(0, 1fr);
+  margin: 0;
+}
+
+.cms-admin-static-technical-kv dt {
+  color: var(--cms-admin-muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.cms-admin-static-technical-kv dd {
+  color: var(--cms-admin-text);
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+@media (max-width: 1180px) {
+  .cms-admin-static-room-summary-grid,
+  .cms-admin-static-room-first-layout,
+  .cms-admin-static-selected-preview-body,
+  .cms-admin-static-room-secondary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .cms-admin-static-room-item-pane {
+    position: static;
+  }
+}
+
+@media (max-width: 760px) {
+  .cms-admin-static-room-action-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .cms-admin-static-room-action-row .cms-admin-button {
+    width: 100%;
+  }
+}

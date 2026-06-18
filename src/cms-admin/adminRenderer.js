@@ -33,6 +33,7 @@ import {
   resetGateDraftToOriginal,
   resetHomeDraftToOriginal,
   resetSiteSettingsDraftToOriginal,
+  resetStaticCmsDraftToBaseline,
   setActiveTab,
   setError,
   setLoading,
@@ -827,7 +828,13 @@ function renderActiveTab(state) {
     case 'media':
       return renderWorkspaceShell('media', renderMediaTab(state), state);
     case 'staticDraft':
-      return renderWorkspaceShell('staticDraft', renderStaticCmsDraftTab(state, { onRerender: renderAdminShell, onOpenHistory: () => switchAdminTab('history') }), state);
+      return renderWorkspaceShell('staticDraft', null, state, {
+        renderContent: ({ activeKey }) => renderStaticCmsDraftTab(state, {
+          activeRoomKey: activeKey,
+          onRerender: renderAdminShell,
+          onOpenHistory: () => switchAdminTab('history'),
+        }),
+      });
     case 'publish':
       return renderWorkspaceShell('publish', renderPublishTab(state), state);
     case 'history':
@@ -859,10 +866,8 @@ const WORKSPACE_TAB_DEFINITIONS = Object.freeze({
     { key: 'outdoor', label: 'Không gian ngoài trời', summary: 'Lựa chọn vào phòng trưng bày ngoài trời.' },
   ],
   staticDraft: [
-    { key: 'select', label: 'Chọn item', summary: 'Chọn phòng và item cần chỉnh.' },
-    { key: 'edit', label: 'Chỉnh nội dung', summary: 'Sửa nội dung, trạng thái và thông tin hiển thị.' },
-    { key: 'media', label: 'Ảnh & video', summary: 'Kiểm tra media gắn với item đang chọn.' },
-    { key: 'check', label: 'Kiểm tra', summary: 'Kiểm tra an toàn trước khi công khai bản đã lưu.' },
+    { key: 'indoor', label: 'Phòng trong nhà', summary: 'Nội dung và item thuộc phòng trưng bày trong nhà.' },
+    { key: 'outdoor', label: 'Phòng ngoài trời', summary: 'Nội dung và item thuộc phòng trưng bày ngoài trời.' },
   ],
   media: [
     { key: 'library', label: 'Thư viện', summary: 'Xem và lọc ảnh/video đã có.' },
@@ -904,6 +909,12 @@ const WORKSPACE_LEGACY_TAB_FALLBACKS = Object.freeze({
     spaces: 'indoor',
     edit: 'intro',
     details: 'intro',
+  },
+  staticDraft: {
+    select: 'indoor',
+    edit: 'indoor',
+    media: 'indoor',
+    check: 'indoor',
   },
 });
 
@@ -1046,6 +1057,7 @@ function handleWorkspaceTabSwitch(workspaceKey, tabKey, currentKey) {
   if (compatibleTabKey === currentKey) return false;
   if (workspaceKey === 'home') return handleHomeWorkspaceTabSwitch(compatibleTabKey);
   if (workspaceKey === 'gate') return handleGateWorkspaceTabSwitch(compatibleTabKey, currentKey);
+  if (workspaceKey === 'staticDraft') return handleStaticDraftWorkspaceTabSwitch(compatibleTabKey, currentKey);
   setWorkspaceTabState(workspaceKey, compatibleTabKey);
   return true;
 }
@@ -1084,6 +1096,26 @@ function handleGateWorkspaceTabSwitch(tabKey, currentKey) {
     syncBeforeUnloadGuard(getState());
   }
   setWorkspaceTabState('gate', tabKey);
+  return true;
+}
+
+function handleStaticDraftWorkspaceTabSwitch(tabKey, currentKey) {
+  const validTab = getWorkspaceTabs('staticDraft').some((tab) => tab.key === tabKey);
+  if (!validTab) return false;
+  const draftState = getState().staticCmsDraft || {};
+  if (tabKey !== currentKey && draftState.draftJson) {
+    if (draftState.isSavingDraft) {
+      window.alert(getSavingBlockedMessage());
+      return false;
+    }
+    if (draftState.dirty) {
+      const shouldLeave = window.confirm(getGlobalLeaveMessage());
+      if (!shouldLeave) return false;
+      resetStaticCmsDraftToBaseline();
+      syncBeforeUnloadGuard(getState());
+    }
+  }
+  setWorkspaceTabState('staticDraft', tabKey);
   return true;
 }
 
@@ -1146,9 +1178,8 @@ function getWorkspaceSecondaryNotes(workspaceKey, tabKey, state = {}) {
       outdoor: ['Không gian ngoài trời chỉ hiển thị dữ liệu phòng outdoor.', 'Route/query kỹ thuật được giữ trong phần đối chiếu phụ.'],
     },
     staticDraft: {
-      edit: ['Chọn item trong tab Chọn item trước khi chỉnh nội dung.', 'Dirty state và validation vẫn được giữ trong màn chính.'],
-      media: ['Media preview và picker hiện có không bị đổi hành vi.', 'Không thêm chức năng tải lên hoặc xóa mới.'],
-      check: ['Kiểm tra an toàn và công khai vẫn đi qua gate hiện có.', 'Không có auto-publish khi chuyển tab.'],
+      indoor: ['Tab này chỉ hiển thị item thuộc phòng trong nhà.', 'Chọn item cần sửa trong danh sách indoor; lưu bản nháp chưa làm đổi website.'],
+      outdoor: ['Tab này chỉ hiển thị item thuộc phòng ngoài trời.', 'Chọn item cần sửa trong danh sách outdoor; lưu bản nháp chưa làm đổi website.'],
     },
     media: {
       usage: ['Dữ liệu tham chiếu cho biết media đang xuất hiện ở đâu trong CMS.', 'Trạng thái này không tự kết luận vòng đời media nếu thiếu dữ liệu.'],
@@ -1252,6 +1283,20 @@ function getWorkspaceRailGuidance(workspaceKey, tabKey, pageCopy = {}, stepConfi
         status: 'Phòng outdoor',
         summary: 'Chỉ kiểm tra tên, mô tả và nút vào phòng ngoài trời. Route/query kỹ thuật chỉ để đối chiếu.',
         steps: ['Kiểm tra tên hiển thị outdoor.', 'Kiểm tra mô tả phòng ngoài trời.', 'Sửa Không gian ngoài trời nếu chữ chưa đúng.'],
+      },
+    },
+    staticDraft: {
+      indoor: {
+        title: 'Bạn đang xem Phòng trong nhà',
+        status: 'Room indoor',
+        summary: 'Chỉ xem danh sách item và nội dung thuộc phòng trong nhà. Chọn item cần sửa, kiểm tra chữ/media trong đúng ngữ cảnh phòng này.',
+        steps: ['Kiểm tra danh sách item indoor.', 'Chọn item cần sửa.', 'Sửa bản nháp nếu chữ hoặc media chưa đúng.', 'Lưu bản nháp chưa làm đổi website.'],
+      },
+      outdoor: {
+        title: 'Bạn đang xem Phòng ngoài trời',
+        status: 'Room outdoor',
+        summary: 'Chỉ xem danh sách item và nội dung thuộc phòng ngoài trời. Chọn item cần sửa, kiểm tra chữ/media trong đúng ngữ cảnh phòng này.',
+        steps: ['Kiểm tra danh sách item outdoor.', 'Chọn item cần sửa.', 'Sửa bản nháp nếu chữ hoặc media chưa đúng.', 'Lưu bản nháp chưa làm đổi website.'],
       },
     },
   };
