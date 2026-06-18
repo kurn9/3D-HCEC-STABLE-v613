@@ -1545,24 +1545,25 @@ function renderHomeSectionWorkspacePanel(state, sections = [], sectionKey = 'her
   const roles = getHomeSectionsByRole(sections);
   const section = roles[sectionKey] || null;
   const meta = getHomeSectionPriorityMeta(sectionKey);
+  const isEditingThisSection = Boolean(editState.isEditing && editState.editingSectionKey === sectionKey);
   const panel = createElement('section', {
-    className: `cms-admin-panel cms-admin-view-panel cms-admin-home-section-panel cms-admin-home-section-${sectionKey}-panel`,
+    className: `cms-admin-panel cms-admin-view-panel cms-admin-home-section-panel cms-admin-home-section-${sectionKey}-panel${sectionKey === 'hero' ? ' is-primary-section' : ''}${isEditingThisSection ? ' is-editing' : ''}`,
     dataset: { cmsReferenceTarget: `home-${sectionKey}`, cmsReferenceId: section?.id || sectionKey },
   });
-  panel.appendChild(renderPanelTitle(getHomeSectionPanelTitle(sectionKey, meta), meta.badge));
-  panel.appendChild(createElement('p', { className: 'cms-admin-operator-summary', text: meta.role }));
+
+  panel.appendChild(renderHomeSectionIntroPanel(sectionKey, section, meta, copy, { isEditing: isEditingThisSection }));
   if (sectionKey === 'hero') panel.appendChild(renderPublicLink(copy.publicLink, './index.html'));
 
   if (!section) {
     panel.appendChild(renderEmptyState(`Chưa tìm thấy ${meta.label} trong dữ liệu Trang chủ.`));
-    panel.appendChild(renderTechnicalSourceNote('Nguồn kỹ thuật phụ', meta.technical));
+    panel.appendChild(renderHomeSectionTechnicalFooter(section, meta));
     return panel;
   }
 
-  const isEditingThisSection = Boolean(editState.isEditing && editState.editingSectionKey === sectionKey);
   if (isEditingThisSection) {
     panel.appendChild(renderHomeSectionEditZone(state, sections, section, sectionKey, copy, editState));
     panel.appendChild(renderHomeSectionTechnicalFooter(section, meta));
+    panel.appendChild(renderLockedNotice(getHomeSectionSafetyNote(sectionKey)));
     return panel;
   }
 
@@ -1579,29 +1580,83 @@ function renderHomeSectionWorkspacePanel(state, sections = [], sectionKey = 'her
   return panel;
 }
 
+function renderHomeSectionIntroPanel(sectionKey, section, meta = getHomeSectionPriorityMeta(sectionKey), copy = ADMIN_COPY.contentViews.home, options = {}) {
+  const intro = createElement('header', { className: `cms-admin-home-section-intro cms-admin-home-section-intro-${sectionKey}` });
+  const text = createElement('div', { className: 'cms-admin-home-section-intro-text' });
+  text.appendChild(renderPanelTitle(meta.label, options.isEditing ? 'Đang sửa bản nháp' : meta.badge));
+  text.appendChild(createElement('p', { className: 'cms-admin-operator-summary', text: meta.role }));
+  if (meta.focus) text.appendChild(createElement('p', { className: 'cms-admin-home-section-focus', text: meta.focus }));
+  intro.appendChild(text);
+
+  const summary = getHomeSectionQuickSummary(section, sectionKey, copy);
+  if (summary.length) {
+    const facts = createElement('div', { className: 'cms-admin-home-section-quick-facts' });
+    summary.forEach(([label, value, tone]) => facts.appendChild(renderHomeSectionFactPill(label, value, tone)));
+    intro.appendChild(facts);
+  }
+  return intro;
+}
+
+function getHomeSectionQuickSummary(section, sectionKey, copy = ADMIN_COPY.contentViews.home) {
+  if (!section) return [['Trạng thái', 'Thiếu dữ liệu', 'warning']];
+  const missing = getMissingIndexSectionFields(section, copy);
+  const media = getHomeMediaHumanSummary(section?.media_json);
+  const cta = getHomeCtaHumanSummary(section?.cta_json);
+  const facts = [
+    ['Hiển thị', getVisibleLabel(section?.is_visible), section?.is_visible === false ? 'warning' : 'success'],
+    ['Cần xem', missing.length ? `${missing.length} mục` : 'Không thấy thiếu chính', missing.length ? 'warning' : 'success'],
+  ];
+  if (sectionKey !== 'contact') facts.push(['Media', media.includes('Chưa') ? 'Cần kiểm tra' : 'Đã có dữ liệu', media.includes('Chưa') ? 'warning' : 'success']);
+  if (sectionKey === 'hero') facts.push(['Nút/CTA', cta.includes('Chưa') || cta.includes('thiếu') ? 'Cần rõ' : 'Đã khai báo', cta.includes('Chưa') || cta.includes('thiếu') ? 'warning' : 'success']);
+  return facts;
+}
+
+function renderHomeSectionFactPill(label, value, tone = '') {
+  const pill = createElement('div', { className: `cms-admin-home-section-fact${tone ? ` is-${tone}` : ''}` });
+  pill.appendChild(createElement('span', { text: label }));
+  pill.appendChild(createElement('strong', { text: value }));
+  return pill;
+}
+
 function getHomeSectionPanelTitle(sectionKey, meta = getHomeSectionPriorityMeta(sectionKey)) {
-  if (sectionKey === 'hero') return `${meta.label} / Hero`;
   return meta.label;
 }
 
 function renderHomeSectionAudienceCard(section, sectionKey, copy = ADMIN_COPY.contentViews.home, meta = getHomeSectionPriorityMeta(sectionKey)) {
-  const card = createElement('article', { className: 'cms-admin-data-card cms-admin-home-section-card cms-admin-home-section-audience-card' });
-  card.appendChild(renderDataCardTitle('Người xem sẽ thấy', sectionKey === 'hero' ? 'Đầu tiên' : meta.badge));
+  const card = createElement('article', { className: `cms-admin-data-card cms-admin-home-section-card cms-admin-home-section-audience-card${sectionKey === 'hero' ? ' is-featured-preview' : ''}` });
+  card.appendChild(renderDataCardTitle(sectionKey === 'contact' ? 'Người xem cần biết' : 'Người xem sẽ thấy gì', sectionKey === 'hero' ? 'Đầu tiên' : meta.badge));
   card.appendChild(createElement('p', { className: 'cms-admin-operator-summary', text: getHomeSectionOperatorHint(sectionKey) }));
-  const rows = filterVisibleRows([
-    ['Tiêu đề chính', section?.title],
-    ['Nhãn nhỏ', section?.eyebrow],
-    ['Mô tả chính', section?.subtitle || section?.lead || section?.body],
-    ['Trạng thái hiển thị', getVisibleLabel(section?.is_visible)],
-  ]);
-  card.appendChild(rows.length ? renderKeyValueList(rows) : renderEmptyState('Phần này chưa có nội dung người xem thấy rõ ràng.'));
+
+  const preview = createElement('div', { className: 'cms-admin-home-section-preview-block' });
+  const eyebrow = normalizeJsonValue(section?.eyebrow);
+  const title = normalizeJsonValue(section?.title);
+  const description = normalizeJsonValue(section?.subtitle || section?.lead || section?.body);
+  if (!isBlank(eyebrow)) preview.appendChild(createElement('p', { className: 'cms-admin-home-section-preview-eyebrow', text: summarizeData(eyebrow) }));
+  preview.appendChild(createElement('h4', { className: 'cms-admin-home-section-preview-title', text: isBlank(title) ? 'Chưa khai báo tiêu đề chính' : summarizeData(title) }));
+  preview.appendChild(createElement('p', { className: 'cms-admin-home-section-preview-description', text: isBlank(description) ? 'Chưa có mô tả đủ rõ cho người xem.' : summarizeData(description, 260) }));
+  preview.appendChild(renderHomeSectionStatusStrip(section, sectionKey));
+  card.appendChild(preview);
+
   if (sectionKey === 'guide') card.appendChild(renderHomeSectionItemsSummary(section, copy));
   return card;
+}
+
+function renderHomeSectionStatusStrip(section, sectionKey) {
+  const strip = createElement('div', { className: 'cms-admin-home-section-status-strip' });
+  const rows = [
+    ['Trạng thái', getVisibleLabel(section?.is_visible)],
+    ['Cập nhật', formatDateTime(section?.updated_at)],
+  ];
+  if (sectionKey === 'hero') rows.push(['Vai trò', 'Ấn tượng đầu tiên']);
+  if (sectionKey === 'contact') rows.push(['Nguồn sửa', 'Thông tin website']);
+  rows.forEach(([label, value]) => strip.appendChild(renderHomeSectionFactPill(label, value)));
+  return strip;
 }
 
 function renderHomeSectionMediaActionCard(section, sectionKey, copy = ADMIN_COPY.contentViews.home) {
   const card = createElement('article', { className: 'cms-admin-data-card cms-admin-home-section-card cms-admin-home-section-media-card' });
   card.appendChild(renderDataCardTitle('Ảnh/video và nút trong khu vực này', sectionKey === 'hero' ? 'Cần rõ' : 'Theo dữ liệu'));
+  card.appendChild(createElement('p', { className: 'cms-admin-operator-summary', text: getHomeSectionMediaHint(sectionKey) }));
   card.appendChild(renderHomeSectionMediaCtaSummary(section, copy));
   if (sectionKey === 'contact') {
     card.appendChild(createElement('p', { className: 'cms-admin-compact-copy', text: 'Thông tin liên hệ thường không cần media riêng. Nếu có dữ liệu media/CTA, chỉ dùng để đối chiếu.' }));
@@ -1609,23 +1664,38 @@ function renderHomeSectionMediaActionCard(section, sectionKey, copy = ADMIN_COPY
   return card;
 }
 
+function getHomeSectionMediaHint(sectionKey) {
+  const hints = {
+    hero: 'Media và nút của khu vực đầu trang cần rõ vì đây là điểm người xem nhìn thấy đầu tiên.',
+    experience: 'Media hoặc nút ở đây chỉ nên bổ trợ cảm giác tham quan, không lặp lại Hero.',
+    guide: 'Media hoặc nút ở đây chỉ nên hỗ trợ hướng dẫn, không thay thế phần hướng dẫn chính.',
+    contact: 'Tab này chủ yếu là thông tin tiện ích; media hoặc CTA chỉ là dữ liệu phụ nếu có.',
+  };
+  return hints[sectionKey] || 'Kiểm tra media và nút gắn với đúng khu vực này.';
+}
+
 function renderHomeSectionReadinessCard(section, sectionKey, copy = ADMIN_COPY.contentViews.home) {
   const missingFields = getMissingIndexSectionFields(section, copy);
-  const card = createElement('article', { className: 'cms-admin-data-card cms-admin-home-section-card cms-admin-home-section-readiness-card' });
-  card.appendChild(renderDataCardTitle('Cần kiểm tra trước khi công khai', missingFields.length ? `${missingFields.length} mục cần xem` : 'Không thấy thiếu chính'));
-  if (missingFields.length) {
-    card.appendChild(renderMissingFieldsNotice('Còn thiếu', missingFields));
-  } else {
-    card.appendChild(renderCompactNotice('Không phát hiện thiếu trường chính trong khu vực này. Vẫn cần kiểm tra bằng mắt trước khi công khai.'));
-  }
-  if (sectionKey === 'hero' && isBlank(normalizeJsonValue(section?.media_json))) {
-    card.appendChild(renderCompactNotice('Khu vực đầu trang chưa có media giới thiệu rõ ràng.'));
-  }
-  card.appendChild(renderDataGroup('Trạng thái khu vực', renderKeyValueList(filterVisibleRows([
-    ['Trạng thái hiển thị', getVisibleLabel(section?.is_visible)],
-    ['Cập nhật gần nhất', formatDateTime(section?.updated_at)],
-  ]))));
+  const isReady = missingFields.length === 0 && !(sectionKey === 'hero' && isBlank(normalizeJsonValue(section?.media_json)));
+  const card = createElement('article', { className: `cms-admin-data-card cms-admin-home-section-card cms-admin-home-section-readiness-card${isReady ? ' is-ready' : ' is-warning'}` });
+  card.appendChild(renderDataCardTitle('Cần kiểm tra trước khi công khai', isReady ? 'Tạm ổn' : `${missingFields.length || 1} mục cần xem`));
+  card.appendChild(createElement('p', { className: 'cms-admin-operator-summary', text: isReady ? 'Không thấy thiếu trường chính trong khu vực này. Vẫn cần kiểm tra bằng mắt trước khi công khai.' : 'Các mục dưới đây nên được xem trước khi chuyển sang workflow công khai.' }));
+  card.appendChild(renderHomeSectionReadinessList(section, sectionKey, missingFields));
   return card;
+}
+
+function renderHomeSectionReadinessList(section, sectionKey, missingFields = []) {
+  const list = createElement('ul', { className: 'cms-admin-home-readiness-list' });
+  if (!missingFields.length && !(sectionKey === 'hero' && isBlank(normalizeJsonValue(section?.media_json)))) {
+    list.appendChild(createElement('li', { text: 'Không phát hiện thiếu dữ liệu chính.' }));
+    list.appendChild(createElement('li', { text: 'Kiểm tra lại nội dung hiển thị bằng mắt trước khi công khai.' }));
+    return list;
+  }
+  missingFields.forEach((field) => list.appendChild(createElement('li', { text: `Cần xem: ${field}` })));
+  if (sectionKey === 'hero' && isBlank(normalizeJsonValue(section?.media_json))) {
+    list.appendChild(createElement('li', { text: 'Khu vực đầu trang chưa có media giới thiệu rõ ràng.' }));
+  }
+  return list;
 }
 
 function renderHomeSectionEditActionCard(state, section, sectionKey, copy = ADMIN_COPY.contentViews.home) {
@@ -1640,9 +1710,9 @@ function renderHomeSectionEditActionCard(state, section, sectionKey, copy = ADMI
 }
 
 function renderHomeSectionEditZone(state, sections = [], section, sectionKey, copy = ADMIN_COPY.contentViews.home, editState = {}) {
-  const zone = createElement('section', { className: 'cms-admin-home-section-edit-zone' });
-  zone.appendChild(renderDataCardTitle(`Đang chỉnh sửa ${getHomeSectionPriorityMeta(sectionKey).label}`, 'Bản nháp'));
-  zone.appendChild(createElement('p', { className: 'cms-admin-operator-summary', text: 'Bạn đang sửa bản nháp CMS. Website public chưa thay đổi cho đến khi lưu bản nháp và chạy workflow công khai riêng.' }));
+  const zone = createElement('section', { className: `cms-admin-home-section-edit-zone cms-admin-home-section-edit-zone-${sectionKey}` });
+  zone.appendChild(renderDataCardTitle(`Đang chỉnh sửa ${getHomeSectionPriorityMeta(sectionKey).label}`, 'Bản nháp CMS'));
+  zone.appendChild(createElement('p', { className: 'cms-admin-operator-summary', text: 'Form này chỉ sửa bản nháp của khu vực đang mở. Website public chưa thay đổi cho đến khi lưu bản nháp và chạy workflow công khai riêng.' }));
   const focusedEditPanel = renderHomeFocusedEditPanel(state, sections, editState);
   if (focusedEditPanel) zone.appendChild(focusedEditPanel);
   else zone.appendChild(renderEmptyState('Không mở được form chỉnh sửa cho khu vực này trong trạng thái hiện tại.'));
@@ -1660,21 +1730,26 @@ function renderHomeContactUtilityCard(state, section, copy = ADMIN_COPY.contentV
 function renderHomeSectionItemsSummary(section, copy = ADMIN_COPY.contentViews.home) {
   const items = normalizeJsonValue(section?.items_json);
   const group = createElement('div', { className: 'cms-admin-home-section-items-summary' });
-  group.appendChild(createElement('h4', { className: 'cms-admin-data-group-title', text: 'Danh sách nội dung con' }));
+  group.appendChild(createElement('h4', { className: 'cms-admin-data-group-title', text: 'Nội dung con / bước hướng dẫn' }));
   const list = renderItemsList(items, copy);
   group.appendChild(list || createElement('p', { className: 'cms-admin-compact-copy', text: 'Chưa có danh sách nội dung con rõ ràng.' }));
   return group;
 }
 
 function renderHomeSectionTechnicalFooter(section, meta = {}) {
-  const footer = createElement('div', { className: 'cms-admin-home-section-technical-footer' });
-  footer.appendChild(renderTechnicalSourceNote('Nguồn kỹ thuật phụ', meta.technical || 'CMS index_sections'));
-  footer.appendChild(renderKeyValueList(filterVisibleRows([
-    ['Mã section', section?.section_key],
-    ['Mã nội dung', section?.id],
-    ['Thứ tự hiển thị', section?.sort_order],
-  ])));
-  return footer;
+  const details = createElement('details', { className: 'cms-admin-home-section-technical-footer' });
+  details.appendChild(createElement('summary', { text: 'Thông tin kỹ thuật để đối chiếu' }));
+  details.appendChild(renderTechnicalSourceNote('Nguồn kỹ thuật phụ', meta.technical || 'CMS index_sections'));
+  if (section) {
+    details.appendChild(renderKeyValueList(filterVisibleRows([
+      ['Mã section', section?.section_key],
+      ['Mã nội dung', section?.id],
+      ['Thứ tự hiển thị', section?.sort_order],
+    ])));
+  } else {
+    details.appendChild(renderCompactNotice('Không có dữ liệu kỹ thuật cho khu vực này.'));
+  }
+  return details;
 }
 
 function getHomeSectionEditHint(sectionKey) {
@@ -1696,16 +1771,22 @@ function renderHomeSectionMediaCtaSummary(section, copy = ADMIN_COPY.contentView
   const box = createElement('div', { className: 'cms-admin-home-media-cta-summary' });
   const media = normalizeJsonValue(section?.media_json);
   const cta = normalizeJsonValue(section?.cta_json);
-  const rows = [
-    ['Ảnh/video', getHomeMediaHumanSummary(media)],
-    ['Nút/CTA', getHomeCtaHumanSummary(cta)],
-  ];
-  box.appendChild(renderDataGroup('Tóm tắt dễ đọc', renderKeyValueList(rows)));
+  const summaryGrid = createElement('div', { className: 'cms-admin-home-media-cta-grid' });
+  summaryGrid.appendChild(renderHomeMiniSummaryCard('Ảnh/video', getHomeMediaHumanSummary(media), isBlank(media) ? 'warning' : 'success'));
+  summaryGrid.appendChild(renderHomeMiniSummaryCard('Nút/CTA', getHomeCtaHumanSummary(cta), isBlank(cta) ? 'warning' : 'success'));
+  box.appendChild(summaryGrid);
   if (!isBlank(media)) {
     const mediaDetails = renderMediaSummary(media, copy);
     if (mediaDetails) box.appendChild(renderDataGroup('Đường dẫn media để đối chiếu', mediaDetails));
   }
   return box;
+}
+
+function renderHomeMiniSummaryCard(label, value, tone = '') {
+  const card = createElement('div', { className: `cms-admin-home-mini-summary${tone ? ` is-${tone}` : ''}` });
+  card.appendChild(createElement('span', { text: label }));
+  card.appendChild(createElement('strong', { text: value }));
+  return card;
 }
 
 function getHomeMediaHumanSummary(value) {
