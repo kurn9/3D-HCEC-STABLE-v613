@@ -5666,3 +5666,123 @@ body.cms-admin-page * {
     padding: 12px;
   }
 }
+
+/* v6.14.049.010 — Home section-first tabbed workspace redesign */
+.cms-admin-workspace-real-home-hero,
+.cms-admin-workspace-real-home-experience,
+.cms-admin-workspace-real-home-guide,
+.cms-admin-workspace-real-home-contact {
+  gap: 14px;
+}
+
+.cms-admin-home-section-panel {
+  border-color: rgba(214, 178, 94, 0.18);
+}
+
+.cms-admin-home-section-panel > .cms-admin-operator-summary {
+  max-width: 80ch;
+}
+
+.cms-admin-home-section-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.18fr) minmax(280px, 0.82fr);
+  gap: 14px;
+  align-items: stretch;
+  margin-top: 14px;
+}
+
+.cms-admin-home-section-layout.is-hero {
+  grid-template-columns: minmax(0, 1.35fr) minmax(300px, 0.65fr);
+}
+
+.cms-admin-home-section-card {
+  min-width: 0;
+}
+
+.cms-admin-home-section-audience-card {
+  grid-column: 1 / -1;
+}
+
+.cms-admin-home-section-hero-panel .cms-admin-home-section-audience-card {
+  border-color: rgba(214, 178, 94, 0.34);
+  background: linear-gradient(145deg, rgba(18, 31, 44, 0.96), rgba(8, 18, 28, 0.94));
+}
+
+.cms-admin-home-section-media-card,
+.cms-admin-home-section-readiness-card,
+.cms-admin-home-section-edit-card,
+.cms-admin-home-contact-utility-card {
+  background: rgba(7, 16, 24, 0.68);
+}
+
+.cms-admin-home-section-edit-zone {
+  display: grid;
+  gap: 14px;
+  margin-top: 14px;
+  border: 1px solid rgba(214, 178, 94, 0.2);
+  border-radius: var(--cms-admin-radius-lg);
+  background: rgba(7, 16, 24, 0.7);
+  padding: 14px;
+}
+
+.cms-admin-home-section-technical-footer {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+  border: 1px dashed rgba(148, 163, 184, 0.16);
+  border-radius: var(--cms-admin-radius-lg);
+  background: rgba(4, 10, 17, 0.26);
+  padding: 12px;
+}
+
+.cms-admin-home-section-technical-footer .cms-admin-kv-list {
+  margin-top: 0;
+}
+
+.cms-admin-home-section-technical-footer .cms-admin-kv-value,
+.cms-admin-home-section-card .cms-admin-kv-value,
+.cms-admin-home-section-edit-zone .cms-admin-kv-value,
+.cms-admin-home-section-items-summary .cms-admin-structured-main,
+.cms-admin-home-section-items-summary .cms-admin-structured-sub {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.cms-admin-home-section-items-summary {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.cms-admin-workspace-real-home-contact .cms-admin-home-section-layout {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.cms-admin-workspace-real-home-contact .cms-admin-home-section-audience-card,
+.cms-admin-workspace-real-home-contact .cms-admin-home-contact-utility-card {
+  grid-column: auto;
+}
+
+@media (min-width: 1521px) {
+  .cms-admin-home-section-layout.is-hero .cms-admin-home-section-audience-card {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 1180px) {
+  .cms-admin-home-section-layout,
+  .cms-admin-home-section-layout.is-hero {
+    grid-template-columns: 1fr;
+  }
+
+  .cms-admin-home-section-audience-card {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 760px) {
+  .cms-admin-home-section-edit-zone,
+  .cms-admin-home-section-technical-footer {
+    padding: 12px;
+  }
+}
