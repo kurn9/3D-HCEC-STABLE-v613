@@ -5558,3 +5558,111 @@ body.cms-admin-page * {
     font-size: 0.9rem;
   }
 }
+
+/* v6.14.049.009 — Home task-first information architecture salvage */
+.cms-admin-workspace-real-home-overview,
+.cms-admin-workspace-real-home-edit,
+.cms-admin-workspace-real-home-check {
+  gap: 14px;
+}
+
+.cms-admin-home-task-panel {
+  border-color: rgba(214, 178, 94, 0.16);
+}
+
+.cms-admin-home-hierarchy {
+  display: grid;
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.cms-admin-home-primary-card {
+  border-color: rgba(214, 178, 94, 0.32);
+  background: linear-gradient(145deg, rgba(18, 31, 44, 0.95), rgba(8, 18, 28, 0.94));
+}
+
+.cms-admin-home-secondary-grid,
+.cms-admin-home-check-grid,
+.cms-admin-home-edit-choice-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+  gap: 14px;
+}
+
+.cms-admin-home-utility-card,
+.cms-admin-home-contact-strip,
+.cms-admin-home-readiness-panel {
+  border: 1px solid var(--cms-admin-border-soft);
+  border-radius: var(--cms-admin-radius-lg);
+  background: rgba(7, 16, 24, 0.64);
+  padding: 14px;
+  min-width: 0;
+}
+
+.cms-admin-home-readiness-panel {
+  margin-top: 14px;
+  border-color: rgba(20, 184, 166, 0.28);
+  background: rgba(8, 47, 73, 0.22);
+}
+
+.cms-admin-home-readiness-panel.is-compact {
+  margin-top: 12px;
+}
+
+.cms-admin-home-media-cta-summary {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.cms-admin-home-edit-panel,
+.cms-admin-home-check-panel {
+  border-color: rgba(214, 178, 94, 0.16);
+}
+
+.cms-admin-home-edit-choice-card,
+.cms-admin-home-check-card,
+.cms-admin-home-secondary-card,
+.cms-admin-home-primary-card {
+  min-width: 0;
+}
+
+.cms-admin-home-check-card .cms-admin-kv-value,
+.cms-admin-home-primary-card .cms-admin-kv-value,
+.cms-admin-home-secondary-card .cms-admin-kv-value,
+.cms-admin-home-utility-card .cms-admin-kv-value,
+.cms-admin-home-media-cta-summary .cms-admin-kv-value {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.cms-admin-home-contact-strip {
+  margin-top: 14px;
+}
+
+.cms-admin-workspace-real-home-overview .cms-admin-data-card-title h3,
+.cms-admin-workspace-real-home-edit .cms-admin-data-card-title h3,
+.cms-admin-workspace-real-home-check .cms-admin-data-card-title h3 {
+  text-wrap: balance;
+}
+
+@media (min-width: 1521px) {
+  .cms-admin-workspace-real-home-overview .cms-admin-home-secondary-grid {
+    grid-template-columns: repeat(2, minmax(300px, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .cms-admin-home-secondary-grid,
+  .cms-admin-home-check-grid,
+  .cms-admin-home-edit-choice-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .cms-admin-home-primary-card,
+  .cms-admin-home-utility-card,
+  .cms-admin-home-contact-strip,
+  .cms-admin-home-readiness-panel {
+    padding: 12px;
+  }
+}
