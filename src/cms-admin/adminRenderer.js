@@ -101,6 +101,10 @@ const homeMediaPickerState = {
   error: '',
 };
 
+const mediaWorkspaceState = {
+  selectedAssetId: '',
+};
+
 
 
 boot();
@@ -826,7 +830,9 @@ function renderActiveTab(state) {
         renderContent: ({ activeKey }) => renderGateWorkspaceContent(state, activeKey),
       });
     case 'media':
-      return renderWorkspaceShell('media', renderMediaTab(state), state);
+      return renderWorkspaceShell('media', null, state, {
+        renderContent: ({ activeKey }) => renderMediaTab(state, activeKey),
+      });
     case 'staticDraft':
       return renderWorkspaceShell('staticDraft', null, state, {
         renderContent: ({ activeKey }) => renderStaticCmsDraftTab(state, {
@@ -2450,33 +2456,83 @@ function renderDashboard(state) {
   return wrap;
 }
 
-function renderMediaTab(state) {
-  const mediaAssets = safeArray(state.data.cmsMediaUploads).map(normalizeMediaLibraryAsset);
-  const mediaError = state.data.errors?.cmsMediaUploads;
+function renderMediaTab(state, activeKey = 'library') {
+  const model = buildMediaWorkspaceModel(state);
+  if (activeKey === 'usage') return renderMediaUsageWorkspace(model);
+  if (activeKey === 'details') return renderMediaDetailsWorkspace(model);
+  return renderMediaLibraryWorkspace(model);
+}
+
+function buildMediaWorkspaceModel(state = {}) {
+  const uploadAssets = safeArray(state.data?.cmsMediaUploads).map(normalizeMediaLibraryAsset);
+  const mediaError = state.data?.errors?.cmsMediaUploads;
   const usageContext = buildMediaUsageContext(state);
-  const enrichedAssets = mediaAssets.map((asset) => ({
+  const enrichedUploads = uploadAssets.map((asset) => ({
     ...asset,
+    sourceKind: 'upload-log',
+    sourceLabel: 'Upload log / cms_media_uploads',
+    hasUploadLogRecord: true,
     usage: getMediaUsage(asset, usageContext),
   }));
-  const summary = summarizeMediaLibrary(enrichedAssets);
+  const virtualReferences = collectVirtualMediaInventoryReferences(usageContext.sources);
+  const virtualAssets = buildVirtualMediaAssets(virtualReferences, enrichedUploads);
+  const allAssets = [...enrichedUploads, ...virtualAssets];
+  if (mediaWorkspaceState.selectedAssetId && !allAssets.some((asset) => asset.id === mediaWorkspaceState.selectedAssetId)) {
+    mediaWorkspaceState.selectedAssetId = '';
+  }
+  const selectedAsset = mediaWorkspaceState.selectedAssetId
+    ? (allAssets.find((asset) => asset.id === mediaWorkspaceState.selectedAssetId) || null)
+    : null;
+  const summary = summarizeMediaLibrary(allAssets);
+  return {
+    state,
+    mediaError,
+    usageContext,
+    uploadAssets: enrichedUploads,
+    virtualAssets,
+    virtualReferences,
+    allAssets,
+    selectedAsset,
+    summary,
+  };
+}
 
-  const panel = createElement('section', { className: 'cms-admin-grid cms-admin-media-view cms-admin-media-library-readonly-view' });
+function renderMediaLibraryWorkspace(model = {}) {
+  const panel = createElement('section', { className: 'cms-admin-media-workspace-tab cms-admin-media-library-workspace' });
   const library = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel cms-admin-media-library-panel' });
-  library.appendChild(renderPanelTitle(ADMIN_COPY.media.mainTitle, `${formatCount(enrichedAssets.length)} ${ADMIN_COPY.media.countLabel}`));
+  library.appendChild(renderPanelTitle(ADMIN_COPY.media.mainTitle, `${formatCount(model.uploadAssets?.length || 0)} ${ADMIN_COPY.media.countLabel}`));
   library.appendChild(renderMediaLibraryReadOnlyBanner());
+  library.appendChild(renderMediaVirtualInventoryNotice(model));
 
-  if (mediaError) {
-    library.appendChild(renderErrorBox(mediaError, 'Không đọc được danh sách media upload'));
+  if (model.mediaError) {
+    library.appendChild(renderErrorBox(model.mediaError, 'Không đọc được danh sách media upload'));
   }
 
-  if (!enrichedAssets.length) {
+  if (!safeArray(model.uploadAssets).length) {
     library.appendChild(renderMediaLibraryEmptyState());
   } else {
-    library.appendChild(renderMediaLibrarySummary(summary));
-    library.appendChild(renderMediaLibraryControls(enrichedAssets));
-    library.appendChild(renderMediaLibraryGrid(enrichedAssets));
+    library.appendChild(renderMediaLibrarySummary(summarizeMediaLibrary(model.uploadAssets)));
+    library.appendChild(renderMediaLibraryControls(model.uploadAssets));
+    library.appendChild(renderMediaLibraryGrid(model.uploadAssets));
   }
 
+  panel.appendChild(library);
+  panel.appendChild(renderMediaLibrarySafetyPanel());
+  return panel;
+}
+
+function renderMediaVirtualInventoryNotice(model = {}) {
+  const virtualCount = safeArray(model.virtualAssets).length;
+  const notice = createElement('div', { className: 'cms-admin-media-virtual-inventory-notice' });
+  notice.appendChild(renderBadge(virtualCount ? `${formatCount(virtualCount)} tham chiếu ảo` : 'Không có tham chiếu ảo', virtualCount ? 'warning' : 'default'));
+  const text = virtualCount
+    ? 'Ngoài upload log, hệ thống đã surface read-only các media đang được CMS JSON/bản nháp tham chiếu nhưng có thể chưa có record trong cms_media_uploads. Mở tab Đang dùng để xem owner.'
+    : 'Chưa phát hiện media reference ngoài upload log trong dữ liệu đã tải.';
+  notice.appendChild(createElement('p', { text }));
+  return notice;
+}
+
+function renderMediaLibrarySafetyPanel() {
   const safety = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel cms-admin-media-safety-panel' });
   safety.appendChild(renderPanelTitle('Giới hạn an toàn của phase này', ADMIN_COPY.media.readOnlyBadge));
   const safetyList = createElement('ul', { className: 'cms-admin-media-safety-list' });
@@ -2488,11 +2544,90 @@ function renderMediaTab(state) {
   safety.appendChild(safetyList);
   safety.appendChild(renderMediaOperatorHandoffNotes());
 
-  const technical = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel cms-admin-technical-subtle-panel' });
-  technical.appendChild(renderPanelTitle(ADMIN_COPY.media.technicalTitle));
+  const technical = createElement('details', { className: 'cms-admin-media-technical-details' });
+  technical.appendChild(createElement('summary', { text: ADMIN_COPY.media.technicalTitle }));
   technical.appendChild(renderTechnicalKeyValueList(ADMIN_COPY.media.technicalRows));
+  safety.appendChild(technical);
+  return safety;
+}
 
-  appendChildren(panel, [library, renderOperatorStepPanel(ADMIN_COPY.media.operatorSteps, { status: 'Chỉ xem' }), safety, technical]);
+function renderMediaUsageWorkspace(model = {}) {
+  const panel = createElement('section', { className: 'cms-admin-media-workspace-tab cms-admin-media-usage-workspace' });
+  const header = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel cms-admin-media-usage-header' });
+  header.appendChild(renderPanelTitle('Media đang dùng', `${formatCount(model.virtualReferences?.length || 0)} tham chiếu`));
+  header.appendChild(renderCompactNotice('Ma trận này gom media reference từ upload log, CMS JSON, bản nháp và dữ liệu đã tải. Đây là bề mặt read-only, không upload/xóa/công khai.'));
+  header.appendChild(renderMediaLibrarySummary(model.summary));
+  panel.appendChild(header);
+
+  const groups = groupMediaUsageReferences(model);
+  if (!groups.length) {
+    const empty = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel' });
+    empty.appendChild(renderEmptyState('Chưa tìm thấy media reference trong dữ liệu đã tải. Không đồng nghĩa media an toàn để xóa.'));
+    panel.appendChild(empty);
+    return panel;
+  }
+
+  const groupWrap = createElement('div', { className: 'cms-admin-media-usage-groups' });
+  groups.forEach((group) => groupWrap.appendChild(renderMediaUsageOwnerGroup(group)));
+  panel.appendChild(groupWrap);
+  return panel;
+}
+
+function renderMediaDetailsWorkspace(model = {}) {
+  const panel = createElement('section', { className: 'cms-admin-media-workspace-tab cms-admin-media-details-workspace' });
+  const selected = model.selectedAsset;
+  const detail = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel cms-admin-media-selected-detail-panel' });
+  detail.appendChild(renderPanelTitle('Chi tiết media', selected ? (selected.fileName || selected.storagePath || selected.publicUrl || selected.id) : 'Chọn media để xem'));
+  if (!selected) {
+    detail.appendChild(renderEmptyState('Chọn một media ở Thư viện hoặc Đang dùng để xem chi tiết.'));
+    panel.appendChild(detail);
+    return panel;
+  }
+
+  const layout = createElement('div', { className: 'cms-admin-media-detail-layout' });
+  layout.appendChild(renderMediaPreview(selected));
+  const body = createElement('div', { className: 'cms-admin-media-detail-body' });
+  const badges = createElement('div', { className: 'cms-admin-media-card-badges' });
+  badges.appendChild(renderBadge(getMediaKindLabel(selected.mediaKind), selected.mediaKind === 'video' ? 'warning' : 'default'));
+  badges.appendChild(renderBadge(selected.sourceLabel || getMediaSourceLabel(selected), selected.hasUploadLogRecord ? 'success' : 'warning'));
+  badges.appendChild(renderBadge(selected.usage?.label || ADMIN_COPY.media.usageLabels.insufficient, selected.usage?.variant || 'default'));
+  body.appendChild(badges);
+
+  const details = createElement('dl', { className: 'cms-admin-media-detail-list cms-admin-media-detail-list-wide' });
+  [
+    ['Tên/path', selected.fileName || selected.storagePath || '—'],
+    ['Nguồn', selected.sourceLabel || getMediaSourceLabel(selected)],
+    ['Loại', getMediaKindLabel(selected.mediaKind)],
+    ['URL/path', selected.publicUrl || selected.publicUrlRaw || selected.storagePath || '—'],
+    ['Owner', selected.ownerLabel || getMediaTargetLabel(selected)],
+    ['Record upload', selected.hasUploadLogRecord ? 'Có trong cms_media_uploads' : 'Không có record upload log / chỉ là reference read-only'],
+  ].forEach(([label, value]) => appendMediaDetail(details, label, value));
+  body.appendChild(details);
+
+  const actions = createElement('div', { className: 'cms-admin-media-actions' });
+  if (selected.hasSafePublicUrl) {
+    const copyButton = createElement('button', { className: 'cms-admin-button cms-admin-button-ghost', text: ADMIN_COPY.media.actions.copyUrl, type: 'button' });
+    copyButton.addEventListener('click', () => copyMediaUrl(copyButton, selected.publicUrl));
+    actions.appendChild(copyButton);
+  }
+  body.appendChild(actions);
+  body.appendChild(renderMediaUsageReferences(selected));
+
+  const technical = createElement('details', { className: 'cms-admin-media-technical-details' });
+  technical.appendChild(createElement('summary', { text: 'Metadata kỹ thuật' }));
+  technical.appendChild(renderTechnicalKeyValueList([
+    ['ID', selected.id || '—'],
+    ['Storage bucket', selected.storageBucket || '—'],
+    ['Storage path', selected.storagePath || '—'],
+    ['Target type', selected.targetType || '—'],
+    ['Field', selected.fieldName || '—'],
+    ['Source key', selected.sourceKey || '—'],
+  ]));
+  body.appendChild(technical);
+
+  appendChildren(layout, [body]);
+  detail.appendChild(layout);
+  panel.appendChild(detail);
   return panel;
 }
 
@@ -2524,6 +2659,290 @@ function normalizeMediaLibraryAsset(asset = {}) {
     status: firstAvailableValue(asset, ['status']) || '',
     createdAt: firstAvailableValue(asset, ['created_at', 'createdAt']),
   };
+}
+
+const MEDIA_VIRTUAL_FIELD_TOKENS = Object.freeze([
+  'imageurl', 'image_url', 'videourl', 'video_url', 'posterurl', 'poster_url', 'thumbnailurl', 'thumbnail_url',
+  'logourl', 'logo_url', 'mediaurl', 'media_url', 'media_json', 'src', 'url', 'poster', 'thumbnail', 'image', 'video', 'logo', 'asset', 'artworkimage'
+]);
+
+function collectVirtualMediaInventoryReferences(sources = []) {
+  const references = [];
+  safeArray(sources).forEach((source) => {
+    scanVirtualMediaReferenceValue(source.value, source, references, source.area || 'CMS', 0);
+  });
+  return dedupeVirtualMediaReferences(references);
+}
+
+function scanVirtualMediaReferenceValue(value, source, references, path = '', depth = 0) {
+  if (depth > 8 || value === null || value === undefined) return;
+  if (typeof value === 'function') return;
+  if (typeof Element !== 'undefined' && value instanceof Element) return;
+
+  if (typeof value === 'string') {
+    if (!isLikelyMediaReference(path, value)) return;
+    const safeValue = normalizeSafeMediaUrl(value) || String(value || '').trim();
+    if (!safeValue) return;
+    const target = getMediaReferenceNavigationTarget({
+      sourceType: source.sourceType || 'cms',
+      sourceKey: source.key || '',
+      area: source.area || 'CMS',
+      field: path,
+      label: buildMediaReferenceLabel(source, path),
+      matchType: 'strong',
+    });
+    references.push(enrichMediaReferenceNavigationTarget({
+      sourceType: source.sourceType || 'cms',
+      sourceKey: source.key || '',
+      area: source.area || 'CMS',
+      field: path,
+      label: buildMediaReferenceLabel(source, path),
+      matchType: 'strong',
+      mediaValue: safeValue,
+      rawMediaValue: String(value || '').trim(),
+      mediaKind: normalizeMediaKind('', path, inferMimeTypeFromPath(value)),
+      ownerLabel: target?.label || source.area || 'CMS',
+    }));
+    return;
+  }
+
+  if (Array.isArray(value)) {
+    value.slice(0, 200).forEach((entry, index) => {
+      scanVirtualMediaReferenceValue(entry, source, references, `${path}[${index}]`, depth + 1);
+    });
+    return;
+  }
+
+  if (typeof value === 'object') {
+    Object.entries(value).slice(0, 250).forEach(([key, entry]) => {
+      scanVirtualMediaReferenceValue(entry, source, references, path ? `${path}.${key}` : key, depth + 1);
+    });
+  }
+}
+
+function isLikelyMediaReference(path = '', value = '') {
+  const raw = String(value || '').trim();
+  if (!raw || raw.length > 2048) return false;
+  const lowerPath = String(path || '').toLowerCase().replace(/[^a-z0-9_.\[\]-]/g, '');
+  const lowerValue = raw.toLowerCase();
+  const pathLooksMedia = MEDIA_VIRTUAL_FIELD_TOKENS.some((token) => lowerPath.includes(token));
+  const valueLooksMedia = /\.(png|jpe?g|webp|gif|svg|mp4|webm|mov|m4v|avif)(\?|#|$)/i.test(raw)
+    || lowerValue.includes('/assets/')
+    || lowerValue.includes('/storage/v1/object/public/')
+    || lowerValue.includes('cms-media')
+    || lowerValue.includes('r2.dev')
+    || lowerValue.includes('cloudflare');
+  if (!pathLooksMedia && !valueLooksMedia) return false;
+  return normalizeMediaReferenceCandidates(raw).length > 0 || Boolean(normalizeSafeMediaUrl(raw));
+}
+
+function inferMimeTypeFromPath(value = '') {
+  const raw = String(value || '').toLowerCase().split('?')[0];
+  if (/\.(mp4|webm|mov|m4v)$/.test(raw)) return 'video/mp4';
+  if (/\.(png|jpe?g|webp|gif|svg|avif)$/.test(raw)) return 'image/jpeg';
+  return '';
+}
+
+function dedupeVirtualMediaReferences(references = []) {
+  const seen = new Set();
+  const out = [];
+  safeArray(references).forEach((reference) => {
+    const key = [reference.mediaValue, reference.sourceType, reference.sourceKey, reference.area, reference.field, reference.label].join('|');
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(reference);
+  });
+  return out;
+}
+
+function buildVirtualMediaAssets(references = [], uploadAssets = []) {
+  const uploadIdentity = new Set();
+  safeArray(uploadAssets).forEach((asset) => {
+    buildMediaAssetIdentity(asset).strongValues.forEach((value) => uploadIdentity.add(value));
+  });
+  const grouped = new Map();
+  safeArray(references).forEach((reference) => {
+    const key = getVirtualMediaIdentityKey(reference.mediaValue || reference.rawMediaValue);
+    if (!key) return;
+    const candidates = normalizeMediaReferenceCandidates(reference.mediaValue || reference.rawMediaValue);
+    const hasUploadRecord = candidates.some((candidate) => uploadIdentity.has(candidate));
+    if (hasUploadRecord) return;
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key).push(reference);
+  });
+
+  return Array.from(grouped.entries()).map(([key, refs], index) => {
+    const first = refs[0] || {};
+    const rawValue = first.mediaValue || first.rawMediaValue || key;
+    const publicUrl = normalizeSafeMediaUrl(rawValue);
+    const storagePath = publicUrl ? '' : rawValue;
+    return {
+      id: `virtual-media-${index}-${hashMediaValue(key)}`,
+      publicUrlRaw: rawValue,
+      publicUrl,
+      hasSafePublicUrl: Boolean(publicUrl),
+      publicUrlSafetyMessage: publicUrl ? '' : ADMIN_COPY.media.unsafeUrl,
+      storageBucket: inferMediaSourceBucket(rawValue),
+      storagePath,
+      fileName: getMediaFileName(storagePath, publicUrl || rawValue),
+      mediaKind: first.mediaKind || normalizeMediaKind('', first.field || '', inferMimeTypeFromPath(rawValue)),
+      mimeType: inferMimeTypeFromPath(rawValue),
+      sizeBytes: 0,
+      targetType: inferMediaTargetTypeFromReferences(refs),
+      roomKey: inferRoomKeyFromReferences(refs),
+      sectionKey: inferSectionKeyFromReferences(refs),
+      itemId: '',
+      artworkCode: inferArtworkCodeFromReferences(refs),
+      fieldName: first.field || '',
+      status: 'reference-only',
+      createdAt: '',
+      sourceKind: 'virtual-reference',
+      sourceLabel: getVirtualMediaSourceLabel(first, rawValue),
+      sourceKey: first.sourceKey || '',
+      ownerLabel: getMediaOwnerGroupLabel(first),
+      hasUploadLogRecord: false,
+      usage: {
+        key: first.sourceType === 'public' ? 'public' : first.sourceType === 'draft' ? 'draft' : 'cms',
+        label: first.sourceType === 'public' ? ADMIN_COPY.media.usageLabels.public : first.sourceType === 'draft' ? ADMIN_COPY.media.usageLabels.draft : ADMIN_COPY.media.usageLabels.cms,
+        variant: first.sourceType === 'public' ? 'success' : first.sourceType === 'draft' ? 'warning' : 'default',
+        references: refs,
+      },
+    };
+  });
+}
+
+function getVirtualMediaIdentityKey(value = '') {
+  const candidates = normalizeMediaReferenceCandidates(value);
+  return candidates[0] || String(value || '').trim();
+}
+
+function hashMediaValue(value = '') {
+  let hash = 0;
+  const raw = String(value || '');
+  for (let i = 0; i < raw.length; i += 1) hash = ((hash << 5) - hash + raw.charCodeAt(i)) | 0;
+  return Math.abs(hash).toString(36);
+}
+
+function inferMediaSourceBucket(value = '') {
+  const raw = String(value || '').toLowerCase();
+  if (raw.includes('/storage/v1/object/public/')) return 'Supabase Storage';
+  if (raw.includes('/assets/') || raw.startsWith('assets/') || raw.startsWith('./assets/')) return 'Local asset';
+  if (raw.startsWith('http')) return 'External/R2';
+  return 'CMS JSON';
+}
+
+function getVirtualMediaSourceLabel(reference = {}, value = '') {
+  const source = formatMediaReferenceSource(reference.sourceType);
+  const bucket = inferMediaSourceBucket(value);
+  return `${source} / ${bucket} / Không có record upload log`;
+}
+
+function inferMediaTargetTypeFromReferences(refs = []) {
+  const haystack = refs.map((ref) => [ref.label, ref.area, ref.field, ref.sourceKey].join(' ')).join(' ').toLowerCase();
+  if (includesAny(haystack, ['featuredartworks', 'index.featured', 'tác phẩm tiêu biểu'])) return 'index_featured';
+  if (includesAny(haystack, ['site-settings', 'sitesettings', 'logo'])) return 'site_settings';
+  if (includesAny(haystack, ['home', 'trang chủ', 'indexsections', 'index-section'])) return 'home_section';
+  if (includesAny(haystack, ['gate', 'cổng vào'])) return 'gate_content';
+  if (includesAny(haystack, ['artwork', 'rooms', 'phòng'])) return 'room_artwork';
+  return 'unknown';
+}
+
+function inferRoomKeyFromReferences(refs = []) {
+  const haystack = refs.map((ref) => [ref.label, ref.area, ref.field, ref.sourceKey].join(' ')).join(' ').toLowerCase();
+  if (includesAny(haystack, ['outdoor', 'ngoài trời'])) return 'outdoor';
+  if (includesAny(haystack, ['indoor', 'trong nhà'])) return 'indoor';
+  return '';
+}
+
+function inferSectionKeyFromReferences(refs = []) {
+  const haystack = refs.map((ref) => [ref.label, ref.area, ref.field, ref.sourceKey].join(' ')).join(' ').toLowerCase();
+  if (includesAny(haystack, ['hero', 'khu vực đầu trang'])) return 'hero';
+  if (includesAny(haystack, ['guide', 'hướng dẫn'])) return 'guide';
+  if (includesAny(haystack, ['experience', 'trải nghiệm'])) return 'experience';
+  if (includesAny(haystack, ['featured', 'tác phẩm tiêu biểu'])) return 'featured';
+  return '';
+}
+
+function inferArtworkCodeFromReferences(refs = []) {
+  const haystack = refs.map((ref) => [ref.label, ref.area, ref.field].join(' ')).join(' ');
+  const match = haystack.match(/ART[_-]?\d+/i);
+  return match ? match[0].toUpperCase() : '';
+}
+
+function getMediaSourceLabel(asset = {}) {
+  if (asset.sourceLabel) return asset.sourceLabel;
+  if (asset.hasUploadLogRecord) return 'Upload log / cms_media_uploads';
+  return 'Reference read-only';
+}
+
+function groupMediaUsageReferences(model = {}) {
+  const entries = [];
+  safeArray(model.allAssets).forEach((asset) => {
+    const refs = safeArray(asset.usage?.references);
+    if (!refs.length && asset.hasUploadLogRecord) {
+      entries.push({ asset, reference: null, groupLabel: 'Chưa thấy tham chiếu' });
+      return;
+    }
+    refs.forEach((reference) => {
+      entries.push({ asset, reference, groupLabel: getMediaOwnerGroupLabel(reference) });
+    });
+  });
+  const map = new Map();
+  entries.forEach((entry) => {
+    const key = entry.groupLabel || 'Khác / không phân loại';
+    if (!map.has(key)) map.set(key, []);
+    map.get(key).push(entry);
+  });
+  return Array.from(map.entries()).map(([label, entriesForGroup]) => ({ label, entries: entriesForGroup }))
+    .sort((a, b) => a.label.localeCompare(b.label, 'vi'));
+}
+
+function getMediaOwnerGroupLabel(reference = {}) {
+  const haystack = [reference.label, reference.area, reference.field, reference.sourceKey].join(' | ').toLowerCase();
+  if (includesAny(haystack, ['featuredartworks', 'index.featured', 'index_featured', 'tác phẩm tiêu biểu'])) return 'Nội dung phòng 3D — Tác phẩm tiêu biểu';
+  if (includesAny(haystack, ['site-settings', 'sitesettings', 'thông tin website', 'logo website'])) return 'Thông tin website';
+  if (includesAny(haystack, ['gate', 'cổng vào triển lãm'])) return 'Cổng vào triển lãm';
+  if (includesAny(haystack, ['outdoor', 'ngoài trời'])) return 'Nội dung phòng 3D — Phòng ngoài trời';
+  if (includesAny(haystack, ['indoor', 'trong nhà'])) return 'Nội dung phòng 3D — Phòng trong nhà';
+  if (includesAny(haystack, ['artwork', 'rooms', 'static cms', 'nội dung phòng 3d'])) return 'Nội dung phòng 3D';
+  if (includesAny(haystack, ['home', 'trang chủ', 'hero', 'guide', 'experience', 'index-section'])) return 'Trang chủ';
+  if (reference.sourceType === 'public') return 'Website đang công khai / CMS public JSON';
+  if (reference.sourceType === 'draft') return 'Bản nháp CMS';
+  return reference.area || 'Khác / không phân loại';
+}
+
+function renderMediaUsageOwnerGroup(group = {}) {
+  const section = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel cms-admin-media-usage-owner-group' });
+  section.appendChild(renderPanelTitle(group.label || 'Khác / không phân loại', `${formatCount(group.entries?.length || 0)} reference`));
+  const list = createElement('div', { className: 'cms-admin-media-usage-reference-list' });
+  safeArray(group.entries).slice(0, 80).forEach((entry) => list.appendChild(renderMediaUsageReferenceCard(entry.asset, entry.reference)));
+  section.appendChild(list);
+  return section;
+}
+
+function renderMediaUsageReferenceCard(asset = {}, reference = null) {
+  const card = createElement('article', { className: 'cms-admin-media-usage-reference-card' });
+  const header = createElement('div', { className: 'cms-admin-media-usage-reference-card-header' });
+  header.appendChild(createElement('h4', { text: asset.fileName || asset.storagePath || asset.publicUrl || 'Media reference' }));
+  header.appendChild(renderBadge(asset.hasUploadLogRecord ? 'Có upload log' : 'Reference-only', asset.hasUploadLogRecord ? 'success' : 'warning'));
+  appendChildren(card, [header]);
+  const details = createElement('dl', { className: 'cms-admin-media-reference-details' });
+  [
+    ['Nguồn', reference ? formatMediaReferenceSource(reference.sourceType) : getMediaSourceLabel(asset)],
+    ['Field/path', reference?.field || asset.fieldName || '—'],
+    ['Loại', getMediaKindLabel(asset.mediaKind)],
+    ['URL/path', asset.publicUrl || asset.publicUrlRaw || asset.storagePath || '—'],
+    ['Owner target', getResolvedMediaReferenceTarget(reference || {})?.label || asset.ownerLabel || getMediaTargetLabel(asset)],
+  ].forEach(([label, value]) => appendMediaDetail(details, label, value));
+  card.appendChild(details);
+  const actions = createElement('div', { className: 'cms-admin-media-actions' });
+  const detailButton = createElement('button', { className: 'cms-admin-button cms-admin-button-ghost', text: 'Xem chi tiết media', type: 'button' });
+  detailButton.addEventListener('click', () => selectMediaWorkspaceAsset(asset.id));
+  actions.appendChild(detailButton);
+  const nav = reference ? renderMediaReferenceNavigationButton(reference) : null;
+  if (nav) actions.appendChild(nav);
+  card.appendChild(actions);
+  return card;
 }
 
 function normalizeSafeMediaUrl(value) {
@@ -3031,6 +3450,8 @@ function enrichMediaReferenceNavigationTarget(reference = {}) {
     targetId: target.id,
     targetFieldName: target.fieldName,
     targetLabel: target.label,
+    targetWorkspaceKey: target.workspaceKey || '',
+    targetWorkspaceTab: target.workspaceTab || '',
   };
 }
 
@@ -3061,18 +3482,29 @@ function getMediaReferenceNavigationTarget(reference = {}) {
     };
   }
 
-  if (includesAny(haystack, ['trang chủ', 'index-section', 'indexsections', 'home', 'hero', 'featured', 'khu vực đầu trang', 'tác phẩm tiêu biểu'])) {
+  if (includesAny(haystack, ['index.featuredartworks', 'featuredartworks', 'index_featured', 'target_type=index_featured', 'tác phẩm tiêu biểu'])) {
+    return {
+      tab: 'staticDraft',
+      type: 'static-draft',
+      id: 'static-draft',
+      fieldName: '',
+      label: 'Nội dung phòng 3D → Tác phẩm tiêu biểu',
+      workspaceKey: 'staticDraft',
+      workspaceTab: 'featured',
+    };
+  }
+
+  if (includesAny(haystack, ['trang chủ', 'index-section', 'indexsections', 'home', 'hero', 'khu vực đầu trang'])) {
     const isGuide = includesAny(haystack, ['guide', 'hướng dẫn']);
     const isExperience = includesAny(haystack, ['experience', 'trải nghiệm']);
-    const isFeatured = !isGuide && !isExperience && includesAny(haystack, ['featured', 'tác phẩm tiêu biểu', 'featured_local']);
-    const isHero = !isGuide && !isExperience && !isFeatured && includesAny(haystack, ['hero', 'khu vực đầu trang', 'videourl', 'video_url', 'media_json', 'video']);
-    const type = isGuide ? 'home-guide' : isExperience ? 'home-experience' : isFeatured ? 'home' : 'home-hero';
-    const id = isGuide ? 'guide' : isExperience ? 'experience' : isFeatured ? 'home' : 'hero';
+    const isHero = !isGuide && !isExperience && includesAny(haystack, ['hero', 'khu vực đầu trang', 'videourl', 'video_url', 'media_json', 'video']);
+    const type = isGuide ? 'home-guide' : isExperience ? 'home-experience' : 'home-hero';
+    const id = isGuide ? 'guide' : isExperience ? 'experience' : 'hero';
     return {
       tab: 'home',
       type,
       id,
-      fieldName: isHero && includesAny(field, ['video', 'media_json']) ? 'videoUrl' : isFeatured ? '' : 'eyebrow',
+      fieldName: isHero && includesAny(field, ['video', 'media_json']) ? 'videoUrl' : 'eyebrow',
       label: 'Trang chủ',
     };
   }
@@ -3304,6 +3736,13 @@ function renderMediaLibraryCard(asset = {}) {
   } else {
     actions.appendChild(createElement('span', { className: 'cms-admin-help-text cms-admin-media-url-warning', text: asset.publicUrlRaw ? ADMIN_COPY.media.unsafeUrl : 'Media này chưa có đường dẫn public.' }));
   }
+  const detailButton = createElement('button', {
+    className: 'cms-admin-button cms-admin-button-secondary',
+    text: 'Xem chi tiết media',
+    type: 'button',
+  });
+  detailButton.addEventListener('click', () => selectMediaWorkspaceAsset(asset.id));
+  actions.appendChild(detailButton);
 
   appendChildren(body, [titleRow, badges, details, statusNote, usageReferences, path, actions]);
   card.appendChild(body);
@@ -3413,6 +3852,8 @@ function getResolvedMediaReferenceTarget(reference = {}) {
       id: reference.targetId || '',
       fieldName: reference.targetFieldName || '',
       label: reference.targetLabel || '',
+      workspaceKey: reference.targetWorkspaceKey || '',
+      workspaceTab: reference.targetWorkspaceTab || '',
     };
   }
   return getMediaReferenceNavigationTarget(reference);
@@ -3425,6 +3866,9 @@ function handleNavigateToMediaReference(reference = {}) {
   if (currentState.activeTab !== target.tab) {
     if (!requestLeaveEditSession('media-reference-navigation')) return;
     setActiveTab(target.tab);
+  }
+  if (target.workspaceKey && target.workspaceTab) {
+    setWorkspaceTabState(target.workspaceKey, target.workspaceTab);
   }
   queueMediaReferenceFocus(target);
   renderAdminShell();
@@ -3574,6 +4018,12 @@ function formatBytes(value = 0) {
     unitIndex += 1;
   }
   return `${amount >= 10 || unitIndex === 0 ? amount.toFixed(0) : amount.toFixed(1)} ${units[unitIndex]}`;
+}
+
+function selectMediaWorkspaceAsset(assetId) {
+  mediaWorkspaceState.selectedAssetId = String(assetId || '');
+  setWorkspaceTabState('media', 'details');
+  renderAdminShell();
 }
 
 async function copyMediaUrl(button, url) {
