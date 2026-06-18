@@ -813,12 +813,20 @@ function renderUtilityDrawers(draftState = {}, appState = {}, currentItem = null
 function renderFeaturedWorkspaceShell(draftState = {}, appState = {}, handlers = {}, copy = {}) {
   const featured = getFeaturedOperatorSection(draftState.draftJson);
   const validation = validateFeaturedOperatorSection(featured, STATIC_CMS_DRAFT_CONFIG);
-  const shell = createElement('section', { className: 'cms-admin-static-workspace cms-admin-featured-workspace cms-admin-featured-workspace-restored' });
+  const selectedIndex = getSelectedFeaturedIndex(draftState, featured);
+  const selectedItem = selectedIndex >= 0 ? featured.items[selectedIndex] : null;
+  const shell = createElement('section', { className: 'cms-admin-static-workspace cms-admin-featured-workspace cms-admin-featured-workspace-restored cms-admin-featured-workspace-repaired' });
   shell.appendChild(renderFeaturedOperatorIntro(featured, validation));
-  const layout = createElement('div', { className: 'cms-admin-featured-workspace-layout' });
+
+  const layout = createElement('div', { className: 'cms-admin-featured-workspace-layout cms-admin-featured-workspace-layout-repaired' });
   layout.appendChild(renderFeaturedWorkspaceNavigator(draftState, featured, validation, handlers));
-  layout.appendChild(renderFeaturedWorkspaceEditor(draftState, featured, validation, handlers));
-  layout.appendChild(renderFeaturedWorkspaceInspector(featured, validation));
+
+  const detail = createElement('div', { className: 'cms-admin-featured-detail-stack' });
+  detail.appendChild(renderFeaturedSelectedItemPreview(selectedItem, selectedIndex, validation));
+  detail.appendChild(renderFeaturedWorkspaceEditor(draftState, featured, validation, handlers));
+  detail.appendChild(renderFeaturedSecondaryDetails(featured, validation));
+  layout.appendChild(detail);
+
   shell.appendChild(layout);
   return shell;
 }
@@ -902,6 +910,80 @@ function renderFeaturedWorkspaceEditor(draftState = {}, featured = {}, validatio
   pane.appendChild(renderFeaturedItemEditor(draftState, selectedItem, selectedIndex, featured.items.length, validation, handlers));
   pane.appendChild(renderFeaturedEditActionBlock(draftState, handlers));
   return pane;
+}
+
+function renderFeaturedSelectedItemPreview(item = null, selectedIndex = -1, validation = {}) {
+  const panel = createElement('section', { className: 'cms-admin-panel cms-admin-featured-selected-preview' });
+  panel.appendChild(renderStaticPanelTitle('Xem trước mục đang chọn', item ? `Mục ${selectedIndex + 1}` : 'Chưa chọn'));
+  if (!item) {
+    panel.appendChild(renderEmptyState('Chọn một tác phẩm tiêu biểu trong danh sách để xem trước chi tiết.'));
+    return panel;
+  }
+
+  const errors = validation.itemErrors?.[selectedIndex] || {};
+  const body = createElement('div', { className: 'cms-admin-featured-selected-preview-body' });
+  body.appendChild(renderFeaturedPreviewMedia(item));
+
+  const copy = createElement('div', { className: 'cms-admin-featured-selected-preview-copy' });
+  const titleRow = createElement('div', { className: 'cms-admin-featured-selected-preview-title-row' });
+  titleRow.appendChild(createElement('h3', { text: item.title || item.id || 'Chưa có tiêu đề' }));
+  titleRow.appendChild(renderBadge(item.isVisible === false ? 'Đang ẩn' : 'Đang hiển thị', item.isVisible === false ? 'warning' : 'success'));
+  appendChildren(copy, [titleRow]);
+
+  if (item.description) {
+    copy.appendChild(createElement('p', { className: 'cms-admin-featured-selected-preview-description', text: item.description }));
+  } else {
+    copy.appendChild(createElement('p', { className: 'cms-admin-help-text', text: 'Chưa có mô tả ngắn cho mục này.' }));
+  }
+
+  const meta = createElement('div', { className: 'cms-admin-featured-selected-meta' });
+  meta.appendChild(renderStatusChip('Phòng', item.room === 'outdoor' ? 'Ngoài trời' : item.room === 'indoor' ? 'Trong nhà' : 'Chưa liên kết'));
+  meta.appendChild(renderStatusChip('Mã tác phẩm', item.artworkId || item.id || '—'));
+  meta.appendChild(renderStatusChip('Thứ tự', Number.isFinite(Number(item.sortOrder)) ? String(item.sortOrder) : String(selectedIndex + 1)));
+  meta.appendChild(renderStatusChip('Ảnh', String(item.imageUrl || '').trim() ? 'Có ảnh' : 'Thiếu ảnh', String(item.imageUrl || '').trim() ? 'success' : 'warning'));
+  copy.appendChild(meta);
+
+  if (Object.keys(errors).length) {
+    const warnings = createElement('ul', { className: 'cms-admin-static-message-list cms-admin-featured-selected-warnings' });
+    Object.values(errors).slice(0, 6).forEach((message) => warnings.appendChild(createElement('li', { text: message })));
+    copy.appendChild(warnings);
+  }
+
+  body.appendChild(copy);
+  panel.appendChild(body);
+  return panel;
+}
+
+function renderFeaturedPreviewMedia(item = {}) {
+  const media = createElement('div', { className: 'cms-admin-featured-selected-preview-media' });
+  const imageUrl = String(item.imageUrl || '').trim();
+  if (imageUrl && validateStaticCmsMediaUrl(imageUrl, STATIC_CMS_DRAFT_CONFIG).valid) {
+    const image = createElement('img', {
+      attrs: { src: imageUrl, alt: item.alt || item.title || '', loading: 'lazy' },
+    });
+    image.addEventListener('error', () => {
+      image.hidden = true;
+      media.classList.add('has-error');
+      media.appendChild(createElement('span', { text: 'Không tải được ảnh' }));
+    }, { once: true });
+    media.appendChild(image);
+    return media;
+  }
+  media.classList.add('has-error');
+  media.appendChild(createElement('span', { text: 'Thiếu ảnh hợp lệ' }));
+  return media;
+}
+
+function renderFeaturedSecondaryDetails(featured = {}, validation = {}) {
+  const wrap = createElement('div', { className: 'cms-admin-featured-secondary-stack' });
+  wrap.appendChild(renderFeaturedValidationSummary(validation));
+
+  const previewDetails = createElement('details', { className: 'cms-admin-static-technical-details cms-admin-featured-home-preview-details' });
+  previewDetails.appendChild(createElement('summary', { text: 'Xem trước toàn bộ khu Tác phẩm tiêu biểu trên Trang chủ' }));
+  previewDetails.appendChild(renderFeaturedPreview(featured, validation));
+  wrap.appendChild(previewDetails);
+  wrap.appendChild(renderFeaturedTechnicalDetails(featured));
+  return wrap;
 }
 
 function renderFeaturedWorkspaceInspector(featured = {}, validation = {}) {
