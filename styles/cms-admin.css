@@ -6949,3 +6949,138 @@ body.cms-admin-page * {
     grid-template-columns: 1fr;
   }
 }
+
+/* v6.14.049.020 - HOTFIX: Featured workspace single-column recovery */
+.cms-admin-static-workspace-featured .cms-admin-static-command-bar {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.cms-admin-static-workspace-featured .cms-admin-static-command-status {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
+}
+
+.cms-admin-static-workspace-featured .cms-admin-static-command-actions {
+  justify-content: flex-start;
+}
+
+.cms-admin-featured-workspace-restored,
+.cms-admin-featured-workspace-repaired {
+  align-items: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  grid-template-columns: 1fr !important;
+  max-width: 100%;
+  min-width: 0;
+  width: 100%;
+}
+
+.cms-admin-featured-workspace-restored > *,
+.cms-admin-featured-workspace-repaired > * {
+  max-width: 100%;
+  min-width: 0;
+  width: 100%;
+}
+
+.cms-admin-featured-workspace-repaired .cms-admin-featured-workspace-layout,
+.cms-admin-featured-workspace-layout,
+.cms-admin-featured-workspace-layout-repaired {
+  align-items: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  grid-template-columns: 1fr !important;
+  max-width: 100%;
+  min-width: 0;
+  width: 100%;
+}
+
+.cms-admin-featured-detail-stack,
+.cms-admin-featured-secondary-stack,
+.cms-admin-featured-navigator,
+.cms-admin-featured-selected-preview,
+.cms-admin-featured-editor-pane {
+  max-width: 100%;
+  min-width: 0;
+  width: 100%;
+}
+
+.cms-admin-featured-workspace-repaired .cms-admin-featured-navigator,
+.cms-admin-featured-navigator {
+  position: static;
+}
+
+.cms-admin-featured-workspace-repaired .cms-admin-featured-nav-list,
+.cms-admin-featured-nav-list {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  max-height: none;
+  overflow: visible;
+  padding-right: 0;
+}
+
+.cms-admin-featured-workspace-repaired .cms-admin-featured-nav-item,
+.cms-admin-featured-nav-item {
+  min-width: 0;
+  width: 100%;
+}
+
+.cms-admin-featured-selected-preview-body {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(min(100%, 220px), 280px) minmax(0, 1fr);
+  max-width: 100%;
+  min-width: 0;
+  width: 100%;
+}
+
+.cms-admin-featured-selected-preview-copy,
+.cms-admin-featured-selected-preview-title-row,
+.cms-admin-featured-selected-preview-description,
+.cms-admin-featured-editor-pane,
+.cms-admin-featured-editor-pane .cms-admin-static-field-section,
+.cms-admin-featured-editor-pane .cms-admin-featured-field,
+.cms-admin-featured-editor-pane input,
+.cms-admin-featured-editor-pane textarea {
+  max-width: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.cms-admin-featured-selected-meta {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr));
+  max-width: 100%;
+}
+
+.cms-admin-featured-home-preview-details,
+.cms-admin-featured-workspace-restored .cms-admin-featured-technical {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+@media (max-width: 1180px) {
+  .cms-admin-featured-selected-preview-body {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .cms-admin-static-workspace-featured .cms-admin-static-command-bar,
+  .cms-admin-featured-operator-intro,
+  .cms-admin-featured-workspace-restored,
+  .cms-admin-featured-workspace-repaired,
+  .cms-admin-featured-workspace-layout,
+  .cms-admin-featured-workspace-layout-repaired {
+    gap: 12px;
+  }
+
+  .cms-admin-featured-nav-list,
+  .cms-admin-featured-selected-meta {
+    grid-template-columns: 1fr;
+  }
+}
