@@ -6674,3 +6674,83 @@ body.cms-admin-page * {
     width: 100%;
   }
 }
+
+/* v6.14.049.018 - Restore featured content surface in Static CMS Draft */
+.cms-admin-static-workspace-featured {
+  gap: 14px;
+}
+
+.cms-admin-featured-command-bar .cms-admin-static-command-subtitle {
+  max-width: 780px;
+}
+
+.cms-admin-featured-workspace-restored {
+  display: grid;
+  gap: 14px;
+}
+
+.cms-admin-featured-operator-intro {
+  display: grid;
+  gap: 12px;
+}
+
+.cms-admin-featured-summary-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.cms-admin-featured-workspace-layout {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(240px, 0.72fr) minmax(0, 1.42fr) minmax(280px, 0.9fr);
+  align-items: start;
+}
+
+.cms-admin-featured-action-block {
+  margin-top: 14px;
+}
+
+.cms-admin-featured-action-row {
+  justify-content: flex-start;
+}
+
+.cms-admin-featured-workspace-restored .cms-admin-featured-technical {
+  border: 1px solid var(--cms-admin-border-soft);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.025);
+  padding: 12px 14px;
+}
+
+.cms-admin-featured-workspace-restored .cms-admin-featured-technical > summary {
+  color: var(--cms-admin-text);
+  cursor: pointer;
+  font-weight: 850;
+}
+
+.cms-admin-featured-workspace-restored .cms-admin-code-block,
+.cms-admin-featured-workspace-restored .cms-admin-featured-field input,
+.cms-admin-featured-workspace-restored .cms-admin-featured-field textarea {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.cms-admin-static-room-item-card .cms-admin-badge {
+  justify-self: start;
+}
+
+@media (max-width: 1180px) {
+  .cms-admin-featured-summary-grid,
+  .cms-admin-featured-workspace-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .cms-admin-featured-action-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .cms-admin-featured-action-row .cms-admin-button {
+    width: 100%;
+  }
+}

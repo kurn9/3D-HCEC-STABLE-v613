@@ -830,6 +830,7 @@ function renderActiveTab(state) {
     case 'staticDraft':
       return renderWorkspaceShell('staticDraft', null, state, {
         renderContent: ({ activeKey }) => renderStaticCmsDraftTab(state, {
+          activeWorkspaceKey: activeKey,
           activeRoomKey: activeKey,
           onRerender: renderAdminShell,
           onOpenHistory: () => switchAdminTab('history'),
@@ -868,6 +869,7 @@ const WORKSPACE_TAB_DEFINITIONS = Object.freeze({
   staticDraft: [
     { key: 'indoor', label: 'Phòng trong nhà', summary: 'Nội dung và item thuộc phòng trưng bày trong nhà.' },
     { key: 'outdoor', label: 'Phòng ngoài trời', summary: 'Nội dung và item thuộc phòng trưng bày ngoài trời.' },
+    { key: 'featured', label: 'Tác phẩm tiêu biểu', summary: 'Nội dung nổi bật trên Trang chủ/Intro lấy từ index.featuredArtworks.' },
   ],
   media: [
     { key: 'library', label: 'Thư viện', summary: 'Xem và lọc ảnh/video đã có.' },
@@ -1180,6 +1182,7 @@ function getWorkspaceSecondaryNotes(workspaceKey, tabKey, state = {}) {
     staticDraft: {
       indoor: ['Tab này chỉ hiển thị item thuộc phòng trong nhà.', 'Chọn item cần sửa trong danh sách indoor; lưu bản nháp chưa làm đổi website.'],
       outdoor: ['Tab này chỉ hiển thị item thuộc phòng ngoài trời.', 'Chọn item cần sửa trong danh sách outdoor; lưu bản nháp chưa làm đổi website.'],
+      featured: ['Tab này chỉ hiển thị dữ liệu index.featuredArtworks.', 'Đây là nội dung nổi bật trên Trang chủ/Intro, không phải danh sách item canonical của phòng.'],
     },
     media: {
       usage: ['Dữ liệu tham chiếu cho biết media đang xuất hiện ở đâu trong CMS.', 'Trạng thái này không tự kết luận vòng đời media nếu thiếu dữ liệu.'],
@@ -1297,6 +1300,12 @@ function getWorkspaceRailGuidance(workspaceKey, tabKey, pageCopy = {}, stepConfi
         status: 'Room outdoor',
         summary: 'Chỉ xem danh sách item và nội dung thuộc phòng ngoài trời. Chọn item cần sửa, kiểm tra chữ/media trong đúng ngữ cảnh phòng này.',
         steps: ['Kiểm tra danh sách item outdoor.', 'Chọn item cần sửa.', 'Sửa bản nháp nếu chữ hoặc media chưa đúng.', 'Lưu bản nháp chưa làm đổi website.'],
+      },
+      featured: {
+        title: 'Bạn đang xem Tác phẩm tiêu biểu',
+        status: 'index.featuredArtworks',
+        summary: 'Đây là nội dung nổi bật trên Trang chủ/Intro. Dữ liệu có thể tham chiếu tác phẩm/phòng nhưng owner là index.featuredArtworks, không phải rooms.indoor/outdoor.artworks.',
+        steps: ['Kiểm tra tiêu đề và mô tả khu vực tiêu biểu.', 'Kiểm tra từng mục tiêu biểu, ảnh, room và artworkId nếu có.', 'Sửa bản nháp khi item tiêu biểu thiếu chữ hoặc ảnh.', 'Lưu bản nháp chưa làm đổi website.'],
       },
     },
   };
