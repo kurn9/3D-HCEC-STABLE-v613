@@ -4653,58 +4653,142 @@ function renderHomeHeroEditActions(state, section) {
   return actions;
 }
 
-function renderHomeHeroEditPanel(state, section, editState) {
-  const copy = ADMIN_COPY.contentViews.home.edit;
-  const panel = createElement('section', { className: 'cms-admin-home-hero-edit-panel cms-admin-edit-panel-highlight', dataset: { cmsEditPanel: 'home-hero', cmsEditId: section.id || section.section_key || 'hero' } });
-  panel.appendChild(renderDataCardTitle(copy.title, copy.enabledScope));
-  panel.appendChild(renderCompactNotice(copy.safeNote));
-  panel.appendChild(renderCompactNotice(copy.jsonSafeNote));
+function getHomeEditSectionUiMeta(sectionKey = 'hero') {
+  const key = String(sectionKey || 'hero');
+  const map = {
+    hero: {
+      badge: 'Bản nháp CMS',
+      title: 'Đang chỉnh sửa Khu vực đầu trang',
+      lead: 'Sửa phần người xem thấy đầu tiên. Website public chỉ thay đổi sau khi lưu bản nháp và chạy workflow công khai riêng.',
+      mainTitle: 'Nội dung chính',
+      mainNote: 'Ưu tiên tiêu đề, nhãn nhỏ và mô tả. Đây là phần quan trọng nhất của Trang chủ.',
+      role: 'Ấn tượng đầu tiên',
+    },
+    experience: {
+      badge: 'Nội dung chữ',
+      title: 'Đang chỉnh sửa Khu vực trải nghiệm',
+      lead: 'Sửa phần giới thiệu trải nghiệm và các card hiện có. Mã phòng, route và CTA kỹ thuật vẫn được khóa.',
+      mainTitle: 'Nội dung trải nghiệm',
+      mainNote: 'Giữ nội dung ngắn, rõ, giúp người xem hiểu hành trình hoặc điểm nhấn trước khi vào phòng trưng bày.',
+      role: 'Bổ trợ hành trình',
+    },
+    guide: {
+      badge: 'Hướng dẫn',
+      title: 'Đang chỉnh sửa Hướng dẫn tham quan',
+      lead: 'Sửa phần hướng dẫn và các bước hiện có. Không chỉnh route, thứ tự kỹ thuật hoặc dữ liệu điều hướng trong bước này.',
+      mainTitle: 'Nội dung hướng dẫn',
+      mainNote: 'Tập trung vào câu hướng dẫn và các bước để người xem biết bắt đầu, di chuyển và khám phá nội dung.',
+      role: 'Chỉ dẫn tham quan',
+    },
+  };
+  return map[key] || map.hero;
+}
 
+function renderHomeEditModeHeader(sectionKey, section, copy = {}) {
+  const meta = getHomeEditSectionUiMeta(sectionKey);
+  const header = createElement('div', { className: `cms-admin-home-edit-mode-header is-${sectionKey || 'hero'}` });
+  const text = createElement('div', { className: 'cms-admin-home-edit-mode-header-text' });
+  text.appendChild(createElement('span', { className: 'cms-admin-home-edit-kicker', text: meta.badge }));
+  text.appendChild(createElement('h3', { text: meta.title }));
+  text.appendChild(createElement('p', { text: meta.lead }));
+  const facts = createElement('div', { className: 'cms-admin-home-edit-mode-facts' });
+  facts.appendChild(renderHomeSectionFactPill('Trạng thái', getVisibleLabel(section?.is_visible), section?.is_visible === false ? 'warning' : 'success'));
+  facts.appendChild(renderHomeSectionFactPill('Cập nhật', formatDateTime(section?.updated_at)));
+  facts.appendChild(renderHomeSectionFactPill('Vai trò', meta.role));
+  appendChildren(header, [text, facts]);
+  return header;
+}
+
+function renderHomeEditSectionGroup(title, description = '', className = '') {
+  const group = createElement('section', { className: `cms-admin-home-form-section cms-admin-home-edit-section-group${className ? ` ${className}` : ''}` });
+  const head = createElement('div', { className: 'cms-admin-home-edit-group-header' });
+  head.appendChild(createElement('h4', { className: 'cms-admin-data-group-title', text: title }));
+  if (description) head.appendChild(createElement('p', { className: 'cms-admin-compact-copy', text: description }));
+  group.appendChild(head);
+  return group;
+}
+
+function renderHomeEditDirtyNotice(editState = {}, copy = {}) {
+  return createElement('p', {
+    className: `cms-admin-dirty-notice${editState.dirty ? '' : ' cms-admin-hidden'}`,
+    text: copy.dirty || 'Có thay đổi chưa lưu.',
+    attrs: { role: 'status' },
+  });
+}
+
+function appendHomeEditActions(form, editState = {}, copy = {}, handlers = {}) {
+  const actionPanel = createElement('section', { className: 'cms-admin-home-form-action-panel' });
+  actionPanel.appendChild(renderHomeEditDirtyNotice(editState, copy));
+  actionPanel.appendChild(renderEditActionBlock(editState, copy, handlers));
+  form.appendChild(actionPanel);
+}
+
+function appendHomeEditStateMessages(panel, copy = {}, editState = {}) {
   if (editState.saveError) {
-    panel.appendChild(renderNoticeBox(`${copy.error} ${normalizeErrorMessage(editState.saveError)}`, 'error'));
+    panel.appendChild(renderNoticeBox(`${copy.error || 'Không thể lưu, vui lòng kiểm tra lại thông tin.'} ${normalizeErrorMessage(editState.saveError)}`, 'error'));
   }
   if (editState.saveSuccess) {
     panel.appendChild(renderNoticeBox(editState.saveSuccess, 'success'));
   }
+}
 
-  const form = createElement('form', { className: 'cms-admin-edit-form cms-admin-home-hero-edit-form', attrs: { novalidate: 'true' } });
+function renderHomeEditDetails(summaryText, bodyNode, className = '') {
+  const details = createElement('details', { className: `cms-admin-home-edit-details${className ? ` ${className}` : ''}` });
+  details.appendChild(createElement('summary', { text: summaryText }));
+  if (bodyNode) details.appendChild(bodyNode);
+  return details;
+}
+
+function renderHomeTechnicalDetails(rows = [], copy = {}, options = {}) {
+  const grid = createElement('div', { className: 'cms-admin-readonly-field-grid cms-admin-home-technical-strip' });
+  rows.forEach(([label, value, note]) => grid.appendChild(renderReadonlyField(label, value, note || copy.technicalReadonlyNote || 'Thông tin kỹ thuật chỉ xem, không chỉnh trong bước này.')));
+  return renderHomeEditDetails(options.summary || copy.groups?.technical || 'Thông tin kỹ thuật để đối chiếu', grid, 'cms-admin-home-edit-technical-details');
+}
+
+function renderHomeItemReadonlyDetails(rows = [], copy = {}, summary = 'Thông tin kỹ thuật của mục') {
+  if (!rows.length) return null;
+  const grid = createElement('div', { className: 'cms-admin-readonly-field-grid cms-admin-home-item-technical-grid' });
+  rows.forEach(([label, value]) => grid.appendChild(renderReadonlyField(label, value, copy.technicalReadonlyNote || copy.routeReadonlyNote || 'Thông tin kỹ thuật chỉ xem, không chỉnh trong bước này.')));
+  return renderHomeEditDetails(summary, grid, 'cms-admin-home-item-technical-details');
+}
+
+function renderHomeHeroEditPanel(state, section, editState) {
+  const copy = ADMIN_COPY.contentViews.home.edit;
+  const meta = getHomeEditSectionUiMeta('hero');
+  const panel = createElement('section', { className: 'cms-admin-home-hero-edit-panel cms-admin-home-contextual-edit-panel cms-admin-edit-panel-highlight', dataset: { cmsEditPanel: 'home-hero', cmsEditId: section.id || section.section_key || 'hero' } });
+  panel.appendChild(renderHomeEditModeHeader('hero', section, copy));
+  appendHomeEditStateMessages(panel, copy, editState);
+
+  const form = createElement('form', { className: 'cms-admin-edit-form cms-admin-home-hero-edit-form cms-admin-home-contextual-edit-form', attrs: { novalidate: 'true' } });
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
     await handleSaveHomeHeroDraft();
   });
 
-  const mainGroup = createElement('section', { className: 'cms-admin-home-form-section' });
-  mainGroup.appendChild(createElement('h4', { className: 'cms-admin-data-group-title', text: copy.groups.main }));
-  const mainFields = createElement('div', { className: 'cms-admin-edit-field-grid' });
+  const mainGroup = renderHomeEditSectionGroup(meta.mainTitle, meta.mainNote, 'is-primary-fields');
+  const mainFields = createElement('div', { className: 'cms-admin-edit-field-grid cms-admin-home-main-field-grid' });
   mainFields.appendChild(renderHomeHeroEditableTextField('eyebrow', copy.fields.eyebrow, editState, { placeholder: copy.placeholders.eyebrow }));
   mainFields.appendChild(renderHomeHeroEditableTextField('title', copy.fields.title, editState, { required: true, placeholder: copy.placeholders.title }));
   if (sectionHasFieldOrData(section, 'subtitle')) {
     mainFields.appendChild(renderHomeHeroEditableTextField('subtitle', copy.fields.subtitle, editState, { placeholder: copy.placeholders.subtitle }));
   }
-  mainFields.appendChild(renderHomeHeroEditableTextField('lead', copy.fields.lead, editState, { multiline: true, placeholder: copy.placeholders.lead }));
+  mainFields.appendChild(renderHomeHeroEditableTextField('lead', copy.fields.lead, editState, { multiline: true, rows: '3', placeholder: copy.placeholders.lead }));
   if (sectionHasFieldOrData(section, 'body')) {
-    mainFields.appendChild(renderHomeHeroEditableTextField('body', copy.fields.body, editState, { multiline: true, rows: '4', placeholder: copy.placeholders.body }));
+    mainFields.appendChild(renderHomeHeroEditableTextField('body', copy.fields.body, editState, { multiline: true, rows: '3', placeholder: copy.placeholders.body }));
   }
   mainGroup.appendChild(mainFields);
   form.appendChild(mainGroup);
 
-  form.appendChild(renderHomeHeroMediaEditGroup(section, editState, copy));
-  form.appendChild(renderHomeHeroItemsEditGroup(section, editState, copy));
-  const ctaGroup = renderHomeHeroCtaEditGroup(section, editState, copy);
-  if (ctaGroup) form.appendChild(ctaGroup);
-  form.appendChild(renderHomeHeroTechnicalReadonlyBlock(section, copy));
-
-  const dirtyNotice = createElement('p', {
-    className: `cms-admin-dirty-notice${editState.dirty ? '' : ' cms-admin-hidden'}`,
-    text: copy.dirty,
-    attrs: { role: 'status' },
-  });
-  form.appendChild(dirtyNotice);
-
-  form.appendChild(renderEditActionBlock(editState, copy, {
+  appendHomeEditActions(form, editState, copy, {
     onCancel: handleCancelHomeHeroEdit,
     onReset: () => handleResetActiveDraft('home'),
-  }));
+  });
+
+  form.appendChild(renderHomeHeroMediaEditGroup(section, editState, copy));
+  const ctaGroup = renderHomeHeroCtaEditGroup(section, editState, copy);
+  if (ctaGroup) form.appendChild(ctaGroup);
+  form.appendChild(renderHomeHeroItemsEditGroup(section, editState, copy));
+  form.appendChild(renderHomeHeroTechnicalReadonlyBlock(section, copy));
 
   form.addEventListener('input', () => updateHomeHeroFormControls(form));
   form.addEventListener('change', () => updateHomeHeroFormControls(form));
@@ -4736,11 +4820,9 @@ function renderHomeHeroEditableTextField(fieldName, label, editState, options = 
 }
 
 function renderHomeHeroMediaEditGroup(section, editState, copy) {
-  const group = createElement('section', { className: 'cms-admin-home-form-section cms-admin-home-media-edit-group' });
-  group.appendChild(createElement('h4', { className: 'cms-admin-data-group-title', text: copy.groups.media }));
-  group.appendChild(renderCompactNotice('Có thể chỉnh chú thích và chọn media đã upload cho các field media hiện có của Trang chủ. Website public chưa thay đổi cho đến khi bạn lưu và công khai.'));
+  const group = renderHomeEditSectionGroup(copy.groups.media, 'Chỉnh chú thích và chọn media đã upload cho các field media hiện có. Website public chưa thay đổi cho đến khi lưu bản nháp và công khai.', 'cms-admin-home-media-edit-group');
 
-  const fields = createElement('div', { className: 'cms-admin-edit-field-grid' });
+  const fields = createElement('div', { className: 'cms-admin-edit-field-grid cms-admin-home-compact-field-grid' });
   fields.appendChild(renderHomeHeroMediaTextField('caption', copy.fields.mediaCaption, editState, { placeholder: copy.placeholders.mediaCaption }));
   group.appendChild(fields);
 
@@ -4761,6 +4843,8 @@ function renderHomeHeroMediaEditGroup(section, editState, copy) {
       const readonlyGrid = createElement('div', { className: 'cms-admin-readonly-field-grid cms-admin-home-media-readonly-grid' });
       readonlyRows.forEach(([label, value]) => readonlyGrid.appendChild(renderReadonlyField(label, value, copy.mediaReadonlyNote)));
       group.appendChild(readonlyGrid);
+    } else {
+      group.appendChild(createElement('p', { className: 'cms-admin-compact-copy', text: 'Chưa có field media rõ ràng trong dữ liệu gốc.' }));
     }
   }
   return group;
@@ -4784,18 +4868,17 @@ function renderHomeHeroMediaTextField(fieldName, label, editState, options = {})
 }
 
 function renderHomeHeroItemsEditGroup(section, editState, copy) {
-  const group = createElement('section', { className: 'cms-admin-home-form-section cms-admin-home-items-edit-group' });
-  group.appendChild(createElement('h4', { className: 'cms-admin-data-group-title', text: copy.groups.items }));
-  group.appendChild(renderCompactNotice(copy.itemsReadonlyNote));
-
   const originalItems = normalizeJsonValue(section?.items_json);
+  const count = Array.isArray(originalItems) ? originalItems.length : 0;
+  const group = renderHomeEditSectionGroup(copy.groups.items, copy.itemsReadonlyNote, 'cms-admin-home-items-edit-group cms-admin-home-hero-items-edit-group');
+
   if (!Array.isArray(originalItems)) {
     group.appendChild(renderCompactNotice(copy.unsupportedItems));
-    return group;
+    return renderHomeEditDetails('Nội dung con', group, 'cms-admin-home-edit-items-details');
   }
   if (!originalItems.length) {
     group.appendChild(renderCompactNotice(copy.emptyItems));
-    return group;
+    return renderHomeEditDetails('Nội dung con', group, 'cms-admin-home-edit-items-details');
   }
 
   const list = createElement('div', { className: 'cms-admin-home-item-edit-list' });
@@ -4803,7 +4886,7 @@ function renderHomeHeroItemsEditGroup(section, editState, copy) {
     list.appendChild(renderHomeHeroItemEditCard(item, index, copy, editState));
   });
   group.appendChild(list);
-  return group;
+  return renderHomeEditDetails(`${count} mục nội dung con`, group, 'cms-admin-home-edit-items-details');
 }
 
 function renderHomeHeroItemEditCard(item, index, copy, editState) {
@@ -4882,12 +4965,13 @@ function renderHomeHeroCtaTextField(fieldName, label, editState, options = {}) {
 }
 
 function renderHomeHeroTechnicalReadonlyBlock(section, copy) {
-  const block = createElement('section', { className: 'cms-admin-readonly-field-grid cms-admin-home-technical-strip' });
-  block.appendChild(renderReadonlyField(copy.fields.sectionKey, section.section_key, copy.technicalReadonlyNote));
-  block.appendChild(renderReadonlyField(copy.fields.sortOrder, section.sort_order, copy.technicalReadonlyNote));
-  block.appendChild(renderReadonlyField(copy.fields.visible, getVisibleLabel(section.is_visible), copy.technicalReadonlyNote));
-  block.appendChild(renderReadonlyField(copy.fields.updatedAt, formatDateTime(section.updated_at), copy.technicalReadonlyNote));
-  return block;
+  const rows = [
+    [copy.fields.sectionKey, section.section_key, copy.technicalReadonlyNote],
+    [copy.fields.sortOrder, section.sort_order, copy.technicalReadonlyNote],
+    [copy.fields.visible, getVisibleLabel(section.is_visible), copy.technicalReadonlyNote],
+    [copy.fields.updatedAt, formatDateTime(section.updated_at), copy.technicalReadonlyNote],
+  ];
+  return renderHomeTechnicalDetails(rows, copy, { summary: 'Thông tin kỹ thuật để đối chiếu' });
 }
 
 function getMediaReadonlyRows(media = {}, copy) {
@@ -5315,55 +5399,38 @@ function renderHomeGuideEditActions(state, section) {
 
 function renderHomeGuideEditPanel(state, section, editState = {}) {
   const copy = ADMIN_COPY.contentViews.home.guideEdit || {};
-  const panel = createElement('section', { className: 'cms-admin-home-hero-edit-panel cms-admin-home-guide-edit-panel cms-admin-edit-panel-highlight', dataset: { cmsEditPanel: 'home-guide', cmsEditId: section.id || section.section_key || 'guide' } });
-  panel.appendChild(renderDataCardTitle(copy.title || 'Chỉnh sửa Hướng dẫn tham quan', copy.enabledScope || 'Chỉ bật chỉnh sửa Hướng dẫn tham quan'));
-  panel.appendChild(renderCompactNotice(copy.safeNote || 'Chức năng này chỉ lưu bản nháp CMS, không công khai lên website.'));
-  panel.appendChild(renderCompactNotice(copy.publicNote || 'Website public chưa thay đổi cho đến khi bạn lưu bản nháp và công khai nội dung.'));
-  panel.appendChild(renderCompactNotice(copy.jsonSafeNote || 'Bạn chỉ sửa chữ hiển thị của Hướng dẫn tham quan. Dữ liệu kỹ thuật được khóa ở bước này.'));
-  if (copy.readOnlyScope) panel.appendChild(renderCompactNotice(copy.readOnlyScope));
+  const meta = getHomeEditSectionUiMeta('guide');
+  const panel = createElement('section', { className: 'cms-admin-home-hero-edit-panel cms-admin-home-guide-edit-panel cms-admin-home-contextual-edit-panel cms-admin-edit-panel-highlight', dataset: { cmsEditPanel: 'home-guide', cmsEditId: section.id || section.section_key || 'guide' } });
+  panel.appendChild(renderHomeEditModeHeader('guide', section, copy));
+  appendHomeEditStateMessages(panel, copy, editState);
 
-  if (editState.saveError) {
-    panel.appendChild(renderNoticeBox(`${copy.error || 'Không thể lưu, vui lòng kiểm tra lại thông tin.'} ${normalizeErrorMessage(editState.saveError)}`, 'error'));
-  }
-  if (editState.saveSuccess) {
-    panel.appendChild(renderNoticeBox(editState.saveSuccess, 'success'));
-  }
-
-  const form = createElement('form', { className: 'cms-admin-edit-form cms-admin-home-guide-edit-form', attrs: { novalidate: 'true' } });
+  const form = createElement('form', { className: 'cms-admin-edit-form cms-admin-home-guide-edit-form cms-admin-home-contextual-edit-form', attrs: { novalidate: 'true' } });
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
     await handleSaveHomeGuideDraft();
   });
 
-  const mainGroup = createElement('section', { className: 'cms-admin-home-form-section' });
-  mainGroup.appendChild(createElement('h4', { className: 'cms-admin-data-group-title', text: copy.groups?.main || 'Nội dung chính' }));
-  const mainFields = createElement('div', { className: 'cms-admin-edit-field-grid' });
+  const mainGroup = renderHomeEditSectionGroup(meta.mainTitle, meta.mainNote, 'is-primary-fields');
+  const mainFields = createElement('div', { className: 'cms-admin-edit-field-grid cms-admin-home-main-field-grid' });
   mainFields.appendChild(renderHomeGuideEditableTextField('eyebrow', copy.fields?.eyebrow || 'Nhãn nhỏ', editState, { placeholder: copy.placeholders?.eyebrow || '' }));
   mainFields.appendChild(renderHomeGuideEditableTextField('title', copy.fields?.title || 'Tiêu đề', editState, { required: true, placeholder: copy.placeholders?.title || '' }));
   if (sectionHasFieldOrData(section, 'subtitle')) {
     mainFields.appendChild(renderHomeGuideEditableTextField('subtitle', copy.fields?.subtitle || 'Tiêu đề phụ', editState, { placeholder: copy.placeholders?.subtitle || '' }));
   }
-  mainFields.appendChild(renderHomeGuideEditableTextField('lead', copy.fields?.lead || 'Mô tả ngắn', editState, { multiline: true, placeholder: copy.placeholders?.lead || '' }));
+  mainFields.appendChild(renderHomeGuideEditableTextField('lead', copy.fields?.lead || 'Mô tả ngắn', editState, { multiline: true, rows: '3', placeholder: copy.placeholders?.lead || '' }));
   if (sectionHasFieldOrData(section, 'body')) {
-    mainFields.appendChild(renderHomeGuideEditableTextField('body', copy.fields?.body || 'Nội dung mô tả', editState, { multiline: true, rows: '4', placeholder: copy.placeholders?.body || '' }));
+    mainFields.appendChild(renderHomeGuideEditableTextField('body', copy.fields?.body || 'Nội dung mô tả', editState, { multiline: true, rows: '3', placeholder: copy.placeholders?.body || '' }));
   }
   mainGroup.appendChild(mainFields);
   form.appendChild(mainGroup);
 
-  form.appendChild(renderHomeGuideItemsEditGroup(section, editState, copy));
-  form.appendChild(renderHomeGuideTechnicalReadonlyBlock(section, copy));
-
-  const dirtyNotice = createElement('p', {
-    className: `cms-admin-dirty-notice${editState.dirty ? '' : ' cms-admin-hidden'}`,
-    text: copy.dirty || 'Có thay đổi chưa lưu.',
-    attrs: { role: 'status' },
-  });
-  form.appendChild(dirtyNotice);
-
-  form.appendChild(renderEditActionBlock(editState, copy, {
+  appendHomeEditActions(form, editState, copy, {
     onCancel: handleCancelHomeGuideEdit,
     onReset: () => handleResetActiveDraft('home'),
-  }));
+  });
+
+  form.appendChild(renderHomeGuideItemsEditGroup(section, editState, copy));
+  form.appendChild(renderHomeGuideTechnicalReadonlyBlock(section, copy));
 
   form.addEventListener('input', () => updateHomeGuideFormControls(form));
   form.addEventListener('change', () => updateHomeGuideFormControls(form));
@@ -5395,10 +5462,7 @@ function renderHomeGuideEditableTextField(fieldName, label, editState, options =
 }
 
 function renderHomeGuideItemsEditGroup(section, editState, copy) {
-  const group = createElement('section', { className: 'cms-admin-home-form-section cms-admin-home-items-edit-group cms-admin-home-guide-items-edit-group' });
-  group.appendChild(createElement('h4', { className: 'cms-admin-data-group-title', text: copy.groups?.items || 'Danh sách bước hướng dẫn' }));
-  group.appendChild(renderCompactNotice(copy.itemsReadonlyNote || 'Không thể thêm, xóa hoặc sắp xếp lại bước hướng dẫn ở bước này.'));
-  if (copy.itemContractNote) group.appendChild(renderCompactNotice(copy.itemContractNote));
+  const group = renderHomeEditSectionGroup(copy.groups?.items || 'Các bước hướng dẫn', 'Chỉ sửa tên và mô tả của các bước đang có. Thứ tự, route/link và metadata vẫn chỉ xem.', 'cms-admin-home-items-edit-group cms-admin-home-guide-items-edit-group');
 
   const originalItems = normalizeJsonValue(section?.items_json);
   if (!Array.isArray(originalItems)) {
@@ -5410,7 +5474,7 @@ function renderHomeGuideItemsEditGroup(section, editState, copy) {
     return group;
   }
 
-  const list = createElement('div', { className: 'cms-admin-home-item-edit-list' });
+  const list = createElement('div', { className: 'cms-admin-home-item-edit-list cms-admin-home-guide-step-list' });
   safeArray(editState.draftValues?.items).forEach((item, index) => {
     list.appendChild(renderHomeGuideItemEditCard(item, originalItems[index], index, copy, editState));
   });
@@ -5421,7 +5485,7 @@ function renderHomeGuideItemsEditGroup(section, editState, copy) {
 function renderHomeGuideItemEditCard(item, originalItem, index, copy, editState) {
   const card = createElement('section', { className: 'cms-admin-data-card cms-admin-home-item-edit-card cms-admin-home-guide-item-edit-card' });
   card.appendChild(renderDataCardTitle(`${copy.fields?.step || 'Bước'} ${index + 1}`));
-  const fields = createElement('div', { className: 'cms-admin-edit-field-grid' });
+  const fields = createElement('div', { className: 'cms-admin-edit-field-grid cms-admin-home-guide-step-field-grid' });
   if (!item || (item.kind !== 'string' && item.kind !== 'object')) {
     card.appendChild(renderCompactNotice(copy.unsupportedItems || 'Cấu trúc bước hướng dẫn chưa hỗ trợ chỉnh sửa ở bước này.'));
     return card;
@@ -5435,11 +5499,8 @@ function renderHomeGuideItemEditCard(item, originalItem, index, copy, editState)
   card.appendChild(fields);
 
   const readonlyRows = getHomeGuideReadonlyMetaRows(originalItem, copy);
-  if (readonlyRows.length) {
-    const readonlyGrid = createElement('div', { className: 'cms-admin-readonly-field-grid cms-admin-home-guide-item-readonly-grid' });
-    readonlyRows.forEach(([label, value]) => readonlyGrid.appendChild(renderReadonlyField(label, value, copy.technicalReadonlyNote || 'Thông tin kỹ thuật chỉ xem, không chỉnh trong bước này.')));
-    card.appendChild(readonlyGrid);
-  }
+  const details = renderHomeItemReadonlyDetails(readonlyRows, copy, 'Thông tin kỹ thuật của bước');
+  if (details) card.appendChild(details);
   return card;
 }
 
@@ -5469,16 +5530,14 @@ function renderHomeGuideItemTextField(index, fieldName, label, item, editState, 
 
 function renderHomeGuideTechnicalReadonlyBlock(section, copy) {
   const originalItems = normalizeJsonValue(section?.items_json);
-  const block = createElement('section', {
-    className: 'cms-admin-readonly-field-grid cms-admin-home-technical-strip cms-admin-home-guide-technical-strip',
-    attrs: { 'aria-label': copy.technicalAria || 'Thông tin kỹ thuật chỉ xem của Hướng dẫn tham quan' },
-  });
-  block.appendChild(renderReadonlyField(copy.fields?.sectionKey || 'Mã section', section?.section_key, copy.technicalReadonlyNote || 'Thông tin kỹ thuật chỉ xem, không chỉnh trong bước này.'));
-  block.appendChild(renderReadonlyField(copy.fields?.sortOrder || 'Thứ tự hiển thị', section?.sort_order, copy.technicalReadonlyNote || 'Thông tin kỹ thuật chỉ xem, không chỉnh trong bước này.'));
-  block.appendChild(renderReadonlyField(copy.fields?.visible || 'Trạng thái hiển thị', getVisibleLabel(section?.is_visible), copy.technicalReadonlyNote || 'Thông tin kỹ thuật chỉ xem, không chỉnh trong bước này.'));
-  block.appendChild(renderReadonlyField(copy.fields?.updatedAt || 'Cập nhật gần nhất', formatDateTime(section?.updated_at), copy.technicalReadonlyNote || 'Thông tin kỹ thuật chỉ xem, không chỉnh trong bước này.'));
-  block.appendChild(renderReadonlyField(copy.fields?.itemCount || 'Số lượng bước', Array.isArray(originalItems) ? originalItems.length : 0, copy.itemsReadonlyNote || 'Số lượng và thứ tự bước hướng dẫn chưa chỉnh ở bước này.'));
-  return block;
+  const rows = [
+    [copy.fields?.sectionKey || 'Mã section', section?.section_key, copy.technicalReadonlyNote],
+    [copy.fields?.sortOrder || 'Thứ tự hiển thị', section?.sort_order, copy.technicalReadonlyNote],
+    [copy.fields?.visible || 'Trạng thái hiển thị', getVisibleLabel(section?.is_visible), copy.technicalReadonlyNote],
+    [copy.fields?.updatedAt || 'Cập nhật gần nhất', formatDateTime(section?.updated_at), copy.technicalReadonlyNote],
+    [copy.fields?.itemCount || 'Số lượng bước', Array.isArray(originalItems) ? originalItems.length : 0, copy.itemsReadonlyNote],
+  ];
+  return renderHomeTechnicalDetails(rows, copy, { summary: copy.groups?.technical || 'Thông tin kỹ thuật để đối chiếu' });
 }
 
 function getHomeGuideReadonlyMetaRows(originalItem, copy) {
@@ -5606,51 +5665,38 @@ function renderHomeExperienceEditActions(state, section) {
 
 function renderHomeExperienceEditPanel(state, section, editState = {}) {
   const copy = ADMIN_COPY.contentViews.home.experienceEdit;
-  const panel = createElement('section', { className: 'cms-admin-home-hero-edit-panel cms-admin-home-experience-edit-panel cms-admin-edit-panel-highlight', dataset: { cmsEditPanel: 'home-experience', cmsEditId: section.id || section.section_key || 'experience' } });
-  panel.appendChild(renderDataCardTitle(copy?.title || 'Chỉnh sửa Khu vực trải nghiệm', copy?.enabledScope || 'Chỉ bật chỉnh sửa Khu vực trải nghiệm'));
-  panel.appendChild(renderCompactNotice(copy?.safeNote || 'Chức năng này chỉ lưu bản nháp CMS, không công khai lên website.'));
-  panel.appendChild(renderCompactNotice(copy?.publicNote || 'Website public chưa thay đổi cho đến khi bạn lưu bản nháp và công khai nội dung.'));
-  panel.appendChild(renderCompactNotice(copy?.jsonSafeNote || 'Bạn chỉ sửa chữ hiển thị. Mã phòng, đường dẫn tham quan và nhãn nút vào phòng được khóa ở bước này.'));
+  const meta = getHomeEditSectionUiMeta('experience');
+  const panel = createElement('section', { className: 'cms-admin-home-hero-edit-panel cms-admin-home-experience-edit-panel cms-admin-home-contextual-edit-panel cms-admin-edit-panel-highlight', dataset: { cmsEditPanel: 'home-experience', cmsEditId: section.id || section.section_key || 'experience' } });
+  panel.appendChild(renderHomeEditModeHeader('experience', section, copy));
+  appendHomeEditStateMessages(panel, copy, editState);
 
-  if (editState.saveError) {
-    panel.appendChild(renderNoticeBox(`${copy?.error || 'Không thể lưu, vui lòng kiểm tra lại thông tin.'} ${normalizeErrorMessage(editState.saveError)}`, 'error'));
-  }
-
-  const form = createElement('form', { className: 'cms-admin-edit-form cms-admin-home-hero-edit-form cms-admin-home-experience-edit-form', attrs: { novalidate: 'true' } });
+  const form = createElement('form', { className: 'cms-admin-edit-form cms-admin-home-hero-edit-form cms-admin-home-experience-edit-form cms-admin-home-contextual-edit-form', attrs: { novalidate: 'true' } });
   form.addEventListener('submit', async (event) => {
     event.preventDefault();
     await handleSaveHomeExperienceDraft();
   });
 
-  const mainGroup = createElement('section', { className: 'cms-admin-home-form-section' });
-  mainGroup.appendChild(createElement('h4', { className: 'cms-admin-data-group-title', text: copy?.groups?.main || 'Nội dung chính' }));
-  const mainFields = createElement('div', { className: 'cms-admin-edit-field-grid' });
+  const mainGroup = renderHomeEditSectionGroup(meta.mainTitle, meta.mainNote, 'is-primary-fields');
+  const mainFields = createElement('div', { className: 'cms-admin-edit-field-grid cms-admin-home-main-field-grid' });
   mainFields.appendChild(renderHomeExperienceEditableTextField('eyebrow', copy?.fields?.eyebrow || 'Nhãn nhỏ', editState, { placeholder: copy?.placeholders?.eyebrow || '' }));
   mainFields.appendChild(renderHomeExperienceEditableTextField('title', copy?.fields?.title || 'Tiêu đề', editState, { required: true, placeholder: copy?.placeholders?.title || '' }));
   if (sectionHasFieldOrData(section, 'subtitle')) {
     mainFields.appendChild(renderHomeExperienceEditableTextField('subtitle', copy?.fields?.subtitle || 'Tiêu đề phụ', editState, { placeholder: copy?.placeholders?.subtitle || '' }));
   }
-  mainFields.appendChild(renderHomeExperienceEditableTextField('lead', copy?.fields?.lead || 'Mô tả ngắn', editState, { multiline: true, placeholder: copy?.placeholders?.lead || '' }));
+  mainFields.appendChild(renderHomeExperienceEditableTextField('lead', copy?.fields?.lead || 'Mô tả ngắn', editState, { multiline: true, rows: '3', placeholder: copy?.placeholders?.lead || '' }));
   if (sectionHasFieldOrData(section, 'body')) {
-    mainFields.appendChild(renderHomeExperienceEditableTextField('body', copy?.fields?.body || 'Nội dung mô tả', editState, { multiline: true, rows: '4', placeholder: copy?.placeholders?.body || '' }));
+    mainFields.appendChild(renderHomeExperienceEditableTextField('body', copy?.fields?.body || 'Nội dung mô tả', editState, { multiline: true, rows: '3', placeholder: copy?.placeholders?.body || '' }));
   }
   mainGroup.appendChild(mainFields);
   form.appendChild(mainGroup);
 
-  form.appendChild(renderHomeExperienceItemsEditGroup(section, editState, copy || {}));
-  form.appendChild(renderHomeExperienceTechnicalReadonlyBlock(section, copy || {}));
-
-  const dirtyNotice = createElement('p', {
-    className: `cms-admin-dirty-notice${editState.dirty ? '' : ' cms-admin-hidden'}`,
-    text: copy?.dirty || 'Có thay đổi chưa lưu.',
-    attrs: { role: 'status' },
-  });
-  form.appendChild(dirtyNotice);
-
-  form.appendChild(renderEditActionBlock(editState, copy, {
+  appendHomeEditActions(form, editState, copy, {
     onCancel: handleCancelHomeExperienceEdit,
     onReset: () => handleResetActiveDraft('home'),
-  }));
+  });
+
+  form.appendChild(renderHomeExperienceItemsEditGroup(section, editState, copy || {}));
+  form.appendChild(renderHomeExperienceTechnicalReadonlyBlock(section, copy || {}));
 
   form.addEventListener('input', () => updateHomeExperienceFormControls(form));
   form.addEventListener('change', () => updateHomeExperienceFormControls(form));
@@ -5682,20 +5728,17 @@ function renderHomeExperienceEditableTextField(fieldName, label, editState, opti
 }
 
 function renderHomeExperienceItemsEditGroup(section, editState, copy) {
-  const group = createElement('section', { className: 'cms-admin-home-form-section cms-admin-home-items-edit-group cms-admin-home-experience-items-edit-group' });
-  group.appendChild(createElement('h4', { className: 'cms-admin-data-group-title', text: copy.groups?.items || 'Danh sách card trải nghiệm' }));
-  group.appendChild(renderCompactNotice(copy.itemsReadonlyNote || 'Không thể thêm, xóa hoặc sắp xếp lại card trải nghiệm ở bước này.'));
-  group.appendChild(renderCompactNotice(copy.routeReadonlyNote || 'Mã phòng, nhãn nút vào phòng và đường dẫn tham quan chỉ xem ở bước này.'));
-  if (copy.protectedContractNote) group.appendChild(renderCompactNotice(copy.protectedContractNote));
-
   const originalItems = normalizeJsonValue(section?.items_json);
+  const count = Array.isArray(originalItems) ? originalItems.length : 0;
+  const group = renderHomeEditSectionGroup(copy.groups?.items || 'Card trải nghiệm hiện có', 'Chỉ sửa chữ hiển thị của card. Mã phòng, nhãn nút, route và thứ tự vẫn chỉ xem.', 'cms-admin-home-items-edit-group cms-admin-home-experience-items-edit-group');
+
   if (!Array.isArray(originalItems)) {
     group.appendChild(renderCompactNotice(copy.unsupportedItems || 'Cấu trúc card trải nghiệm chưa hỗ trợ chỉnh sửa ở bước này.'));
-    return group;
+    return renderHomeEditDetails('Nội dung con', group, 'cms-admin-home-edit-items-details');
   }
   if (!originalItems.length) {
     group.appendChild(renderCompactNotice(copy.emptyItems || 'Danh sách card trải nghiệm đang trống.'));
-    return group;
+    return renderHomeEditDetails('Nội dung con', group, 'cms-admin-home-edit-items-details');
   }
 
   const list = createElement('div', { className: 'cms-admin-home-item-edit-list' });
@@ -5703,7 +5746,7 @@ function renderHomeExperienceItemsEditGroup(section, editState, copy) {
     list.appendChild(renderHomeExperienceItemEditCard(item, originalItems[index], index, copy, editState));
   });
   group.appendChild(list);
-  return group;
+  return renderHomeEditDetails(`${count} card trải nghiệm`, group, 'cms-admin-home-edit-items-details');
 }
 
 function renderHomeExperienceItemEditCard(item, originalItem, index, copy, editState) {
@@ -5723,11 +5766,8 @@ function renderHomeExperienceItemEditCard(item, originalItem, index, copy, editS
   card.appendChild(fields);
 
   const readonlyRows = getHomeExperienceReadonlyMetaRows(originalItem, copy);
-  if (readonlyRows.length) {
-    const readonlyGrid = createElement('div', { className: 'cms-admin-readonly-field-grid cms-admin-home-experience-item-readonly-grid' });
-    readonlyRows.forEach(([label, value]) => readonlyGrid.appendChild(renderReadonlyField(label, value, copy.routeReadonlyNote || 'Mã phòng và đường dẫn tham quan chỉ xem ở bước này.')));
-    card.appendChild(readonlyGrid);
-  }
+  const details = renderHomeItemReadonlyDetails(readonlyRows, copy, 'Thông tin kỹ thuật của card');
+  if (details) card.appendChild(details);
   return card;
 }
 
@@ -5757,16 +5797,14 @@ function renderHomeExperienceItemTextField(index, fieldName, label, item, editSt
 
 function renderHomeExperienceTechnicalReadonlyBlock(section, copy) {
   const originalItems = normalizeJsonValue(section?.items_json);
-  const block = createElement('section', {
-    className: 'cms-admin-readonly-field-grid cms-admin-home-technical-strip cms-admin-home-experience-technical-strip',
-    attrs: { 'aria-label': copy.technicalAria || 'Thông tin kỹ thuật chỉ xem của Khu vực trải nghiệm' },
-  });
-  block.appendChild(renderReadonlyField(copy.fields?.sectionKey || 'Mã section', section?.section_key, copy.technicalReadonlyNote || 'Thông tin kỹ thuật chỉ xem, không chỉnh trong bước này.'));
-  block.appendChild(renderReadonlyField(copy.fields?.sortOrder || 'Thứ tự hiển thị', section?.sort_order, copy.technicalReadonlyNote || 'Thông tin kỹ thuật chỉ xem, không chỉnh trong bước này.'));
-  block.appendChild(renderReadonlyField(copy.fields?.visible || 'Trạng thái hiển thị', getVisibleLabel(section?.is_visible), copy.technicalReadonlyNote || 'Thông tin kỹ thuật chỉ xem, không chỉnh trong bước này.'));
-  block.appendChild(renderReadonlyField(copy.fields?.updatedAt || 'Cập nhật gần nhất', formatDateTime(section?.updated_at), copy.technicalReadonlyNote || 'Thông tin kỹ thuật chỉ xem, không chỉnh trong bước này.'));
-  block.appendChild(renderReadonlyField(copy.fields?.itemCount || 'Số lượng card', Array.isArray(originalItems) ? originalItems.length : 0, copy.itemsReadonlyNote || 'Số lượng và thứ tự card trải nghiệm chưa chỉnh ở bước này.'));
-  return block;
+  const rows = [
+    [copy.fields?.sectionKey || 'Mã section', section?.section_key, copy.technicalReadonlyNote],
+    [copy.fields?.sortOrder || 'Thứ tự hiển thị', section?.sort_order, copy.technicalReadonlyNote],
+    [copy.fields?.visible || 'Trạng thái hiển thị', getVisibleLabel(section?.is_visible), copy.technicalReadonlyNote],
+    [copy.fields?.updatedAt || 'Cập nhật gần nhất', formatDateTime(section?.updated_at), copy.technicalReadonlyNote],
+    [copy.fields?.itemCount || 'Số lượng card', Array.isArray(originalItems) ? originalItems.length : 0, copy.itemsReadonlyNote],
+  ];
+  return renderHomeTechnicalDetails(rows, copy, { summary: copy.groups?.technical || 'Thông tin kỹ thuật để đối chiếu' });
 }
 
 function getHomeExperienceReadonlyMetaRows(originalItem, copy) {

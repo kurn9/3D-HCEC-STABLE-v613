@@ -6198,3 +6198,186 @@ body.cms-admin-page * {
     padding: 12px;
   }
 }
+
+/* v6.14.049.013 — Home section edit-mode form simplification */
+.cms-admin-home-contextual-edit-panel {
+  gap: 14px;
+}
+
+.cms-admin-home-contextual-edit-form {
+  display: grid;
+  gap: 14px;
+}
+
+.cms-admin-home-edit-mode-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.42fr);
+  gap: 16px;
+  align-items: start;
+  border: 1px solid rgba(214, 178, 94, 0.18);
+  border-radius: var(--cms-admin-radius-lg);
+  padding: 16px;
+  background: rgba(214, 178, 94, 0.045);
+}
+
+.cms-admin-home-edit-mode-header-text,
+.cms-admin-home-edit-mode-facts,
+.cms-admin-home-edit-group-header {
+  display: grid;
+  gap: 8px;
+}
+
+.cms-admin-home-edit-mode-header h3 {
+  margin: 0;
+  font-size: clamp(1.12rem, 1.7vw, 1.42rem);
+  line-height: 1.08;
+}
+
+.cms-admin-home-edit-mode-header p,
+.cms-admin-home-edit-group-header p {
+  margin: 0;
+}
+
+.cms-admin-home-edit-kicker {
+  width: max-content;
+  border: 1px solid rgba(94, 227, 161, 0.26);
+  border-radius: 999px;
+  padding: 4px 9px;
+  background: rgba(20, 83, 45, 0.22);
+  color: #b8f7d5;
+  font-size: 0.78rem;
+  font-weight: 780;
+}
+
+.cms-admin-home-edit-mode-facts {
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+}
+
+.cms-admin-home-edit-section-group {
+  gap: 12px;
+  padding: 14px;
+}
+
+.cms-admin-home-edit-section-group.is-primary-fields {
+  border-color: rgba(214, 178, 94, 0.18);
+  background: rgba(7, 16, 24, 0.56);
+}
+
+.cms-admin-home-main-field-grid {
+  grid-template-columns: minmax(220px, 0.78fr) minmax(260px, 1.22fr);
+}
+
+
+.cms-admin-home-compact-field-grid {
+  grid-template-columns: minmax(240px, 0.62fr) minmax(260px, 1fr);
+}
+
+.cms-admin-home-form-action-panel {
+  display: grid;
+  gap: 8px;
+  border: 1px solid rgba(94, 227, 161, 0.16);
+  border-radius: var(--cms-admin-radius-md);
+  padding: 10px 12px;
+  background: rgba(20, 83, 45, 0.085);
+}
+
+.cms-admin-home-form-action-panel .cms-admin-edit-action-block,
+.cms-admin-home-form-action-panel .cms-admin-edit-action-row {
+  margin: 0;
+}
+
+.cms-admin-home-contextual-edit-form .cms-admin-edit-textarea {
+  min-height: 82px;
+}
+
+.cms-admin-home-contextual-edit-form .cms-admin-home-main-field-grid .cms-admin-edit-textarea {
+  min-height: 96px;
+}
+
+.cms-admin-home-edit-details {
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: var(--cms-admin-radius-md);
+  background: rgba(4, 10, 17, 0.24);
+}
+
+.cms-admin-home-edit-details > summary {
+  cursor: pointer;
+  padding: 11px 12px;
+  color: var(--cms-admin-text);
+  font-weight: 780;
+  outline: none;
+}
+
+.cms-admin-home-edit-details > summary:focus-visible {
+  box-shadow: 0 0 0 3px rgba(214, 178, 94, 0.22);
+  border-radius: var(--cms-admin-radius-sm);
+}
+
+.cms-admin-home-edit-details[open] {
+  background: rgba(7, 16, 24, 0.42);
+}
+
+.cms-admin-home-edit-details[open] > :not(summary) {
+  margin: 0 12px 12px;
+}
+
+.cms-admin-home-edit-items-details > .cms-admin-home-form-section,
+.cms-admin-home-edit-technical-details > .cms-admin-home-technical-strip {
+  border-color: rgba(148, 163, 184, 0.12);
+  background: rgba(7, 16, 24, 0.44);
+}
+
+.cms-admin-home-item-technical-details {
+  margin-top: 8px;
+}
+
+.cms-admin-home-item-technical-details > summary {
+  padding: 8px 10px;
+  color: var(--cms-admin-muted);
+  font-size: 0.84rem;
+}
+
+.cms-admin-home-item-technical-grid {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.cms-admin-home-guide-step-list .cms-admin-home-item-edit-card,
+.cms-admin-home-experience-item-edit-card,
+.cms-admin-home-hero-items-edit-group .cms-admin-home-item-edit-card {
+  border-color: rgba(148, 163, 184, 0.12);
+  box-shadow: none;
+}
+
+.cms-admin-home-media-library-field {
+  padding: 12px;
+}
+
+.cms-admin-home-media-library-current {
+  min-width: 0;
+}
+
+.cms-admin-home-media-library-current .cms-admin-site-logo-current-value,
+.cms-admin-home-media-library-current .cms-admin-readonly-value {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 1180px) {
+  .cms-admin-home-edit-mode-header,
+  .cms-admin-home-main-field-grid,
+  .cms-admin-home-compact-field-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .cms-admin-home-edit-mode-header,
+  .cms-admin-home-edit-section-group,
+  .cms-admin-home-form-action-panel {
+    padding: 12px;
+  }
+
+  .cms-admin-home-form-action-panel .cms-admin-edit-action-row {
+    display: grid;
+  }
+}
