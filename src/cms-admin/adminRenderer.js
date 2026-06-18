@@ -1106,20 +1106,109 @@ function getWorkspaceSecondaryNotes(workspaceKey, tabKey, state = {}) {
   return notesByKey[workspaceKey]?.[tabKey] || shared;
 }
 
+function getWorkspaceRailGuidance(workspaceKey, tabKey, pageCopy = {}, stepConfig = {}) {
+  const defaults = {
+    title: pageCopy.title || 'Màn CMS',
+    status: getWorkspaceRailStatus(workspaceKey),
+    summary: pageCopy.subtitle || 'Xem nội dung chính, kiểm tra trạng thái rồi thao tác theo quyền hiện có.',
+    checklistTitle: 'Bước an toàn tiếp theo',
+    steps: safeArray(stepConfig.steps).slice(0, 4),
+    note: stepConfig.note || 'Chuyển tab nội bộ chỉ đổi vùng xem, không tự ghi dữ liệu.',
+  };
+
+  const guidance = {
+    dashboard: {
+      overview: {
+        title: 'Bạn đang xem tổng quan',
+        status: 'Trạng thái website',
+        summary: 'Dùng tab này để biết website đang dùng bản nào, dữ liệu CMS có đọc được không và nội dung chính có ổn không.',
+        steps: ['Đọc trạng thái website trước.', 'Kiểm tra số liệu nội dung chính.', 'Nếu có cảnh báo, chuyển sang Việc cần làm.'],
+      },
+      tasks: {
+        title: 'Bạn đang xử lý việc cần làm',
+        status: 'Checklist',
+        summary: 'Tab này gom cảnh báo, việc cần chú ý và lối đi nhanh để operator không phải đọc toàn bộ dữ liệu kỹ thuật.',
+        steps: ['Xử lý cảnh báo nội dung trước.', 'Mở đúng màn cần chỉnh.', 'Chỉ công khai sau khi đã lưu và kiểm tra an toàn.'],
+      },
+      reference: {
+        title: 'Bạn đang xem dữ liệu đối chiếu',
+        status: 'Tham chiếu',
+        summary: 'Dữ liệu này giúp đối chiếu CMS, không thay thế nội dung public đang chạy nếu nguồn public mới hơn.',
+        steps: ['Đối chiếu thông tin website.', 'Kiểm tra bản ghi tham chiếu.', 'Không dùng tab này để quyết định công khai.'],
+      },
+    },
+    home: {
+      content: {
+        title: 'Bạn đang xem nội dung Trang chủ',
+        status: 'Người xem sẽ thấy gì',
+        summary: 'Kiểm tra từng khu vực người xem nhìn thấy ở trang đầu: đầu trang, trải nghiệm, hướng dẫn và liên hệ.',
+        steps: ['Đọc nội dung hiển thị.', 'Xem phần còn thiếu.', 'Chuyển sang Chỉnh sửa nếu cần sửa chữ hoặc ảnh.'],
+      },
+      edit: {
+        title: 'Bạn đang chuẩn bị chỉnh sửa Trang chủ',
+        status: 'Bản nháp',
+        summary: 'Chỉ chọn phần được phép chỉnh, lưu bản nháp rồi công khai sau. Website chưa đổi khi chỉ lưu CMS.',
+        steps: ['Chọn đúng khu vực cần sửa.', 'Lưu bản nháp.', 'Kiểm tra lại trước khi công khai.'],
+      },
+      media: {
+        title: 'Bạn đang kiểm tra media/liên kết',
+        status: 'Ảnh, video, CTA',
+        summary: 'Ưu tiên xem nhãn, ảnh/video và nút kêu gọi hành động; URL kỹ thuật chỉ dùng để đối chiếu.',
+        steps: ['Kiểm tra media đang dùng.', 'Kiểm tra nút/CTA.', 'Bổ sung phần thiếu ở tab Chỉnh sửa nếu được phép.'],
+      },
+      details: {
+        title: 'Bạn đang xem chi tiết Trang chủ',
+        status: 'Đối chiếu',
+        summary: 'Tab này dành cho trạng thái, thiếu dữ liệu và nguồn kỹ thuật; không phải vùng thao tác chính.',
+        steps: ['Xem phần nào thiếu dữ liệu.', 'Đối chiếu nguồn kỹ thuật nếu cần.', 'Quay lại Nội dung/Chỉnh sửa để xử lý.'],
+      },
+    },
+    gate: {
+      content: {
+        title: 'Bạn đang xem màn vào triển lãm',
+        status: 'Người xem sẽ thấy gì',
+        summary: 'Kiểm tra tiêu đề, mô tả và nút trên màn chọn không gian trước khi người xem vào tham quan.',
+        steps: ['Đọc nội dung chính.', 'Kiểm tra nút vào phòng.', 'Chuyển sang Không gian để xem trong nhà/ngoài trời.'],
+      },
+      spaces: {
+        title: 'Bạn đang kiểm tra hai không gian',
+        status: 'Trong nhà / ngoài trời',
+        summary: 'So sánh tên, mô tả và nút tham quan của hai lựa chọn không gian.',
+        steps: ['Kiểm tra không gian trong nhà.', 'Kiểm tra không gian ngoài trời.', 'Chỉnh sửa nếu chữ hiển thị chưa đúng.'],
+      },
+      edit: {
+        title: 'Bạn đang chuẩn bị chỉnh sửa Cổng vào',
+        status: 'Bản nháp',
+        summary: 'Chỉ sửa chữ hiển thị, mô tả và nút. Mã phòng, route và query kỹ thuật vẫn được khóa.',
+        steps: ['Sửa chữ hiển thị được phép.', 'Lưu bản nháp.', 'Công khai sau khi kiểm tra an toàn.'],
+      },
+      details: {
+        title: 'Bạn đang xem chi tiết Cổng vào',
+        status: 'Đối chiếu',
+        summary: 'Tab này chỉ để xem trạng thái, mã nội dung và nguồn kỹ thuật khi cần kiểm tra sâu.',
+        steps: ['Đọc trạng thái sử dụng.', 'Đối chiếu mã nội dung nếu cần.', 'Không sửa route/query ở đây.'],
+      },
+    },
+  };
+
+  return { ...defaults, ...(guidance[workspaceKey]?.[tabKey] || {}) };
+}
+
 function renderWorkspaceRail({ workspaceKey, pageCopy = {}, stepConfig = {}, status = '', activeTab = {} } = {}) {
+  const activeKey = activeTab?.key || '';
+  const tabGuidance = getWorkspaceRailGuidance(workspaceKey, activeKey, pageCopy, stepConfig);
   const rail = createElement('aside', { className: 'cms-admin-workspace-rail', attrs: { 'aria-label': `Hướng dẫn vận hành ${pageCopy.title || ''}` } });
   const card = createElement('section', { className: 'cms-admin-rail-card cms-admin-rail-status' });
-  card.appendChild(renderPanelTitle(pageCopy.title || 'Màn CMS', status));
-  if (pageCopy.subtitle) card.appendChild(createElement('p', { className: 'cms-admin-help-text', text: pageCopy.subtitle }));
-  if (activeTab?.label) card.appendChild(renderCompactNotice(`Đang xem: ${activeTab.label}.`));
+  card.appendChild(renderPanelTitle(tabGuidance.title || pageCopy.title || 'Màn CMS', tabGuidance.status || status));
+  if (tabGuidance.summary) card.appendChild(createElement('p', { className: 'cms-admin-help-text', text: tabGuidance.summary }));
+  if (activeTab?.label) card.appendChild(renderCompactNotice(`Tab hiện tại: ${activeTab.label}.`));
   rail.appendChild(card);
 
   const checklist = createElement('section', { className: 'cms-admin-rail-card cms-admin-rail-checklist' });
-  checklist.appendChild(renderPanelTitle(stepConfig.title || 'Các bước vận hành', 'Checklist'));
-  if (stepConfig.subtitle) checklist.appendChild(createElement('p', { className: 'cms-admin-help-text', text: stepConfig.subtitle }));
-  const steps = safeArray(stepConfig.steps);
+  checklist.appendChild(renderPanelTitle(tabGuidance.checklistTitle || stepConfig.title || 'Bước an toàn tiếp theo', 'Gợi ý'));
+  const steps = safeArray(tabGuidance.steps).length ? safeArray(tabGuidance.steps) : safeArray(stepConfig.steps).slice(0, 4);
   const list = createElement('ol', { className: 'cms-admin-rail-step-list' });
-  steps.slice(0, 5).forEach((step, index) => {
+  steps.slice(0, 4).forEach((step, index) => {
     const item = createElement('li');
     item.appendChild(createElement('span', { className: 'cms-admin-rail-step-number', text: String(index + 1) }));
     item.appendChild(createElement('span', { text: typeof step === 'string' ? step : step?.label || `Bước ${index + 1}` }));
@@ -1127,7 +1216,7 @@ function renderWorkspaceRail({ workspaceKey, pageCopy = {}, stepConfig = {}, sta
   });
   if (!steps.length) list.appendChild(createElement('li', { text: 'Xem nội dung chính, kiểm tra trạng thái rồi thao tác theo quyền hiện có.' }));
   checklist.appendChild(list);
-  if (stepConfig.note) checklist.appendChild(createElement('p', { className: 'cms-admin-operator-step-note', text: stepConfig.note }));
+  if (tabGuidance.note) checklist.appendChild(createElement('p', { className: 'cms-admin-operator-step-note', text: tabGuidance.note }));
   rail.appendChild(checklist);
 
   const safety = createElement('section', { className: 'cms-admin-rail-card cms-admin-rail-safety' });
@@ -1152,6 +1241,118 @@ function renderWorkspaceSlotWrap(workspaceKey, activeKey) {
   });
 }
 
+function renderOperatorIntroPanel({ title, summary, status = '', items = [] } = {}) {
+  const panel = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel cms-admin-operator-intro-panel' });
+  panel.appendChild(renderPanelTitle(title || 'Việc cần xem', status));
+  if (summary) panel.appendChild(createElement('p', { className: 'cms-admin-operator-summary', text: summary }));
+  const normalizedItems = safeArray(items).filter((item) => !isBlank(item));
+  if (normalizedItems.length) {
+    const list = createElement('ul', { className: 'cms-admin-operator-bullet-list' });
+    normalizedItems.forEach((item) => list.appendChild(createElement('li', { text: item })));
+    panel.appendChild(list);
+  }
+  return panel;
+}
+
+function renderTechnicalSourceNote(label, value) {
+  const note = createElement('div', { className: 'cms-admin-technical-source-note' });
+  note.appendChild(createElement('span', { text: label || 'Nguồn kỹ thuật' }));
+  note.appendChild(createElement('strong', { text: value || 'Không rõ' }));
+  return note;
+}
+
+function renderOperatorSectionSummary(section, copy = ADMIN_COPY.contentViews.home) {
+  const rows = filterVisibleRows([
+    ['Người xem thấy tiêu đề', section?.title],
+    ['Nội dung mô tả', section?.subtitle || section?.lead || section?.body],
+    ['Trạng thái hiển thị', getVisibleLabel(section?.is_visible)],
+  ]);
+  return rows.length ? renderKeyValueList(rows) : renderEmptyState('Phần này chưa có nội dung hiển thị rõ ràng.');
+}
+
+function renderHomeOperatorSectionCard(section, copy, state, editState = {}) {
+  const key = section?.section_key || 'section';
+  const card = createElement('article', {
+    className: 'cms-admin-data-card cms-admin-operator-section-card',
+    dataset: {
+      cmsReferenceTarget: key === 'hero' ? 'home-hero' : key === 'guide' ? 'home-guide' : key === 'experience' ? 'home-experience' : key === 'contact' ? 'home-contact' : 'home-section',
+      cmsReferenceId: key,
+    },
+  });
+  card.appendChild(renderDataCardTitle(copy.sectionLabels?.[key] || key, getVisibleLabel(section?.is_visible)));
+  card.appendChild(createElement('p', {
+    className: 'cms-admin-operator-summary',
+    text: getHomeSectionOperatorHint(key),
+  }));
+  card.appendChild(renderDataGroup('Người xem sẽ thấy', renderOperatorSectionSummary(section, copy)));
+
+  const missingFields = getMissingIndexSectionFields(section, copy);
+  if (missingFields.length) {
+    card.appendChild(renderMissingFieldsNotice('Cần bổ sung', missingFields));
+  }
+
+  const ctaNode = renderCtaSummary(section?.cta_json, copy);
+  const mediaNode = renderMediaSummary(section?.media_json, copy);
+  if (ctaNode || mediaNode) {
+    const meta = createElement('div', { className: 'cms-admin-operator-secondary-stack' });
+    if (ctaNode) meta.appendChild(renderDataGroup('Nút hoặc liên kết đang dùng', ctaNode));
+    if (mediaNode) meta.appendChild(renderDataGroup('Ảnh/video liên quan', mediaNode));
+    card.appendChild(meta);
+  }
+
+  if (key === 'hero' && !editState.isEditing) card.appendChild(renderHomeHeroEditActions(state, section));
+  if (key === 'guide' && !editState.isEditing) card.appendChild(renderHomeGuideEditActions(state, section));
+  if (key === 'experience' && !editState.isEditing) card.appendChild(renderHomeExperienceEditActions(state, section));
+  if (key === 'contact') card.appendChild(renderHomeContactSourceOfTruthBlock(state, section, copy));
+  return card;
+}
+
+function getHomeSectionOperatorHint(sectionKey) {
+  const hints = {
+    hero: 'Khu vực đầu trang là phần người xem nhìn thấy đầu tiên.',
+    experience: 'Khu vực trải nghiệm giới thiệu hướng tham quan và cảm giác triển lãm.',
+    guide: 'Hướng dẫn tham quan giúp người xem hiểu cách bắt đầu.',
+    contact: 'Thông tin liên hệ giúp người xem biết đơn vị quản lý và cách liên hệ.',
+  };
+  return hints[sectionKey] || 'Phần nội dung này đang được đọc từ bản nháp CMS.';
+}
+
+function renderGateOperatorMainCard(gate, copy = ADMIN_COPY.contentViews.gate) {
+  const card = createElement('section', {
+    className: 'cms-admin-data-card cms-admin-gate-main-card cms-admin-operator-section-card',
+    dataset: { cmsReferenceTarget: 'gate', cmsReferenceId: 'gate' },
+  });
+  card.appendChild(renderDataCardTitle('Màn vào triển lãm người xem nhìn thấy gì', gate.is_active ? ADMIN_COPY.maps.status.active : ADMIN_COPY.maps.status.inactive));
+  card.appendChild(createElement('p', {
+    className: 'cms-admin-operator-summary',
+    text: 'Đây là màn chọn không gian trước khi người xem vào phòng trưng bày.',
+  }));
+  card.appendChild(renderDataGroup('Nội dung hiển thị', renderKeyValueList(filterVisibleRows([
+    ['Nhãn nhỏ', gate.eyebrow],
+    ['Tiêu đề cổng vào', gate.title],
+    ['Mô tả hướng dẫn', gate.description],
+    ['Nhãn quay lại Trang chủ', gate.back_label],
+  ]))));
+  return card;
+}
+
+function renderGateOperatorRoomCard(roomKey, roomData, copy = ADMIN_COPY.contentViews.gate) {
+  const room = normalizePlainObject(roomData);
+  const card = createElement('article', { className: 'cms-admin-data-card cms-admin-gate-room-card cms-admin-operator-section-card' });
+  card.appendChild(renderDataCardTitle(getRoomLabel(roomKey), roomKey === 'indoor' ? 'Trong nhà' : roomKey === 'outdoor' ? 'Ngoài trời' : 'Không gian'));
+  const roomCtaLabel = getGateRoomCtaLabel(room);
+  card.appendChild(renderDataGroup('Người xem sẽ thấy', renderKeyValueList(filterVisibleRows([
+    ['Tên hiển thị', firstText(room, ['label', 'title', 'name'])],
+    ['Mô tả ngắn', firstText(room, ['description', 'lead', 'subtitle'])],
+    ['Nút bắt đầu tham quan', roomCtaLabel],
+  ]))));
+  if (isBlank(roomCtaLabel)) {
+    card.appendChild(renderCompactNotice('Nút bắt đầu tham quan chưa được khai báo rõ.'));
+  }
+  card.appendChild(renderTechnicalSourceNote('Mã kỹ thuật', roomKey));
+  return card;
+}
+
 function renderDashboardWorkspaceContent(state, activeKey = 'overview') {
   const data = state.data;
   const rooms = safeArray(data.rooms);
@@ -1171,8 +1372,14 @@ function renderDashboardWorkspaceContent(state, activeKey = 'overview') {
   }
 
   if (activeKey === 'tasks') {
+    wrap.appendChild(renderOperatorIntroPanel({
+      title: 'Việc cần làm ngay',
+      status: 'Operator workflow',
+      summary: 'Tab này gom các bước thao tác, cảnh báo và đường đi nhanh. Dùng tab này khi cần biết nên xử lý gì tiếp theo.',
+      items: ['Xử lý cảnh báo nội dung trước.', 'Mở đúng màn cần chỉnh thay vì đọc dữ liệu kỹ thuật.', 'Website chỉ đổi sau khi lưu và công khai có xác nhận.'],
+    }));
     const taskGrid = createElement('div', { className: 'cms-admin-dashboard-task-grid cms-admin-workspace-slot-grid' });
-    taskGrid.appendChild(renderOperatorStepPanel(ADMIN_COPY.dashboard.nextSteps, { status: 'Việc cần làm', variant: 'success' }));
+    taskGrid.appendChild(renderOperatorStepPanel(ADMIN_COPY.dashboard.nextSteps, { status: 'Thứ tự thao tác', variant: 'success' }));
     taskGrid.appendChild(renderTaskPanel({
       warningItems: usingCanonicalSummary ? [] : getWarningItems(artworks),
       warningMessages: usingCanonicalSummary ? safeArray(dashboardSummary.warnings) : [],
@@ -1188,6 +1395,12 @@ function renderDashboardWorkspaceContent(state, activeKey = 'overview') {
   }
 
   if (activeKey === 'reference') {
+    wrap.appendChild(renderOperatorIntroPanel({
+      title: 'Dữ liệu dùng để đối chiếu',
+      status: 'Không phải nút công khai',
+      summary: 'Tab này giúp kiểm tra thông tin website và bản ghi tham chiếu. Dữ liệu tham chiếu không tự quyết định nội dung website đang chạy nếu public content mới hơn.',
+      items: ['Đọc thông tin website nếu cần đối chiếu.', 'Kiểm tra bản ghi tham chiếu khi cần lịch sử hoặc cache.', 'Không thao tác publish/rollback từ tab này.'],
+    }));
     const referenceGrid = createElement('div', { className: 'cms-admin-two-col cms-admin-dashboard-reference-grid cms-admin-workspace-slot-grid' });
     referenceGrid.appendChild(renderSiteSettingsPanel(data.siteSettings));
     referenceGrid.appendChild(renderLatestBundlePanel(published));
@@ -1196,6 +1409,16 @@ function renderDashboardWorkspaceContent(state, activeKey = 'overview') {
     return wrap;
   }
 
+  wrap.appendChild(renderOperatorIntroPanel({
+    title: 'Tình trạng website hiện tại',
+    status: usingCanonicalSummary ? 'Đọc từ nội dung website đang dùng' : 'Có nguồn dự phòng',
+    summary: 'Xem nhanh website đang dùng bản nào, dữ liệu CMS có ổn không và số lượng nội dung chính. Nếu có cảnh báo, chuyển sang tab Việc cần làm.',
+    items: [
+      'Trạng thái website và nguồn đọc nằm ở thẻ đầu tiên.',
+      'Số liệu nội dung được gom để không phải đọc từng bảng kỹ thuật.',
+      'Bản ghi tham chiếu chỉ để đối chiếu, không thay thế public content.',
+    ],
+  }));
   const top = createElement('div', { className: 'cms-admin-dashboard-top-grid cms-admin-dashboard-overview-grid' });
   top.appendChild(renderWebsiteStatusPanel({ published, errors, siteSettings: data.siteSettings, dashboardSummary, canonicalError: data.canonicalError }));
   top.appendChild(renderMetricsPanel({
@@ -1222,9 +1445,9 @@ function renderHomeWorkspaceContent(state, activeKey = 'content') {
 
   if (!sections.length) {
     const emptyPanel = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel' });
-    emptyPanel.appendChild(renderPanelTitle(copy.sourceTitle, 'Chưa có dữ liệu'));
-    emptyPanel.appendChild(renderSourceStrip('Nguồn dữ liệu', 'Chưa đọc được dữ liệu Trang chủ'));
+    emptyPanel.appendChild(renderPanelTitle('Chưa đọc được Trang chủ', 'Thiếu dữ liệu'));
     emptyPanel.appendChild(renderEmptyState(`${copy.emptyTitle}. ${copy.emptyBody}`));
+    emptyPanel.appendChild(renderTechnicalSourceNote('Nguồn kỹ thuật', 'CMS index_sections'));
     wrap.appendChild(emptyPanel);
     return wrap;
   }
@@ -1245,15 +1468,19 @@ function renderHomeWorkspaceContent(state, activeKey = 'content') {
   }
 
   const panel = createElement('section', {
-    className: 'cms-admin-panel cms-admin-view-panel',
+    className: 'cms-admin-panel cms-admin-view-panel cms-admin-operator-content-panel',
     dataset: { cmsReferenceTarget: 'home', cmsReferenceId: 'home' },
   });
-  panel.appendChild(renderPanelTitle(copy.sourceTitle, `${formatCount(sections.length)} phần nội dung`));
-  panel.appendChild(renderSourceStrip('Nguồn dữ liệu', 'CMS index_sections, bản nháp quản trị'));
+  panel.appendChild(renderPanelTitle('Các phần Trang chủ người xem sẽ thấy', `${formatCount(sections.length)} phần nội dung`));
+  panel.appendChild(createElement('p', {
+    className: 'cms-admin-operator-summary',
+    text: 'Đọc theo từng khu vực của Trang chủ. Mỗi thẻ cho biết người xem thấy gì, phần nào còn thiếu và nơi có thể chỉnh sửa.',
+  }));
   panel.appendChild(renderPublicLink(copy.publicLink, './index.html'));
-  const grid = createElement('div', { className: 'cms-admin-content-card-grid' });
-  sections.forEach((section) => grid.appendChild(renderIndexSectionCard(section, copy, state, editState)));
+  const grid = createElement('div', { className: 'cms-admin-content-card-grid cms-admin-operator-section-grid' });
+  sections.forEach((section) => grid.appendChild(renderHomeOperatorSectionCard(section, copy, state, editState)));
   panel.appendChild(grid);
+  panel.appendChild(renderTechnicalSourceNote('Nguồn kỹ thuật', 'CMS index_sections, bản nháp quản trị'));
   panel.appendChild(renderLockedNotice(copy.safety));
   wrap.appendChild(panel);
   return wrap;
@@ -1261,8 +1488,8 @@ function renderHomeWorkspaceContent(state, activeKey = 'content') {
 
 function renderHomeEditWorkspacePanel(state, sections = [], editState = {}, copy = ADMIN_COPY.contentViews.home) {
   const panel = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel cms-admin-workspace-edit-panel' });
-  panel.appendChild(renderPanelTitle(copy.edit?.title || 'Chỉnh sửa Trang chủ', editState.isEditing ? 'Đang sửa' : 'Entry points thật'));
-  panel.appendChild(renderCompactNotice(copy.edit?.safeNote || 'Lưu bản nháp chưa làm đổi website.'));
+  panel.appendChild(renderPanelTitle('Chọn phần Trang chủ cần sửa', editState.isEditing ? 'Đang sửa bản nháp' : 'Chỉnh sửa an toàn'));
+  panel.appendChild(createElement('p', { className: 'cms-admin-operator-summary', text: 'Chỉ các phần đã được mở quyền mới có nút chỉnh sửa. Lưu bản nháp chưa làm đổi website cho đến khi bạn công khai bản đã lưu.' }));
 
   const focusedEditPanel = renderHomeFocusedEditPanel(state, sections, editState);
   if (focusedEditPanel) {
@@ -1276,6 +1503,7 @@ function renderHomeEditWorkspacePanel(state, sections = [], editState = {}, copy
     if (!['hero', 'guide', 'experience'].includes(sectionKey)) return;
     const card = createElement('article', { className: 'cms-admin-data-card cms-admin-workspace-action-card' });
     card.appendChild(renderDataCardTitle(copy.sectionLabels?.[sectionKey] || sectionKey, getVisibleLabel(section?.is_visible)));
+    card.appendChild(createElement('p', { className: 'cms-admin-operator-summary', text: getHomeSectionOperatorHint(sectionKey) }));
     const rows = filterVisibleRows([
       [copy.fields.title, section?.title],
       [copy.fields.updatedAt, formatDateTime(section?.updated_at)],
@@ -1297,8 +1525,8 @@ function renderHomeEditWorkspacePanel(state, sections = [], editState = {}, copy
 
 function renderHomeMediaWorkspacePanel(sections = [], copy = ADMIN_COPY.contentViews.home) {
   const panel = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel cms-admin-workspace-media-panel' });
-  panel.appendChild(renderPanelTitle('Media / liên kết Trang chủ', `${formatCount(sections.length)} phần kiểm tra`));
-  panel.appendChild(renderSourceStrip('Nguồn dữ liệu', 'Các trường media, CTA và liên kết trong CMS index_sections'));
+  panel.appendChild(renderPanelTitle('Ảnh, video và nút liên kết trên Trang chủ', `${formatCount(sections.length)} phần kiểm tra`));
+  panel.appendChild(createElement('p', { className: 'cms-admin-operator-summary', text: 'Kiểm tra media và nút CTA theo từng khu vực. URL dài chỉ để đối chiếu, ưu tiên nhãn và phần đang thiếu.' }));
   const grid = createElement('div', { className: 'cms-admin-content-card-grid cms-admin-workspace-media-grid' });
 
   sections.forEach((section) => {
@@ -1319,8 +1547,9 @@ function renderHomeMediaWorkspacePanel(sections = [], copy = ADMIN_COPY.contentV
 
 function renderHomeDetailsWorkspacePanel(state, sections = [], copy = ADMIN_COPY.contentViews.home) {
   const panel = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel cms-admin-workspace-details-panel' });
-  panel.appendChild(renderPanelTitle('Chi tiết Trang chủ', 'Nguồn / trạng thái / thiếu dữ liệu'));
-  panel.appendChild(renderSourceStrip('Nguồn dữ liệu', 'CMS index_sections, bản nháp quản trị'));
+  panel.appendChild(renderPanelTitle('Thông tin đối chiếu Trang chủ', 'Chi tiết phụ'));
+  panel.appendChild(createElement('p', { className: 'cms-admin-operator-summary', text: 'Dùng tab này khi cần xem trạng thái, trường còn thiếu hoặc nguồn kỹ thuật. Không cần đọc tab này để chỉnh nội dung thông thường.' }));
+  panel.appendChild(renderTechnicalSourceNote('Nguồn kỹ thuật', 'CMS index_sections, bản nháp quản trị'));
   const grid = createElement('div', { className: 'cms-admin-content-card-grid cms-admin-workspace-details-grid' });
 
   sections.forEach((section) => {
@@ -1359,9 +1588,9 @@ function renderGateWorkspaceContent(state, activeKey = 'content') {
 
   if (!gate) {
     const emptyPanel = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel' });
-    emptyPanel.appendChild(renderPanelTitle(copy.sourceTitle, 'Chưa có dữ liệu'));
-    emptyPanel.appendChild(renderSourceStrip('Nguồn dữ liệu', 'Chưa đọc được dữ liệu Cổng vào'));
+    emptyPanel.appendChild(renderPanelTitle('Chưa đọc được Cổng vào triển lãm', 'Thiếu dữ liệu'));
     emptyPanel.appendChild(renderEmptyState(`${copy.emptyTitle}. ${copy.emptyBody}`));
+    emptyPanel.appendChild(renderTechnicalSourceNote('Nguồn kỹ thuật', 'CMS gate_content'));
     emptyPanel.appendChild(renderLockedNotice(copy.safety));
     wrap.appendChild(emptyPanel);
     return wrap;
@@ -1383,25 +1612,17 @@ function renderGateWorkspaceContent(state, activeKey = 'content') {
   }
 
   const panel = createElement('section', {
-    className: 'cms-admin-panel cms-admin-view-panel',
+    className: 'cms-admin-panel cms-admin-view-panel cms-admin-operator-content-panel',
     dataset: { cmsReferenceTarget: 'gate', cmsReferenceId: 'gate' },
   });
-  panel.appendChild(renderPanelTitle(copy.sourceTitle, gate ? 'Đã đọc dữ liệu' : 'Chưa có dữ liệu'));
-  panel.appendChild(renderSourceStrip('Nguồn dữ liệu', 'CMS gate_content, bản nháp quản trị'));
+  panel.appendChild(renderPanelTitle('Nội dung màn vào triển lãm', gate.is_active ? 'Đang bật' : 'Đang tắt'));
+  panel.appendChild(createElement('p', {
+    className: 'cms-admin-operator-summary',
+    text: 'Đây là phần người xem đọc trước khi chọn vào không gian trong nhà hoặc ngoài trời.',
+  }));
   panel.appendChild(renderPublicLink(copy.publicLink, './gallery.html'));
-  const main = createElement('section', {
-    className: 'cms-admin-data-card cms-admin-gate-main-card',
-    dataset: { cmsReferenceTarget: 'gate', cmsReferenceId: 'gate' },
-  });
-  main.appendChild(renderDataCardTitle(copy.mainInfo, gate.is_active ? ADMIN_COPY.maps.status.active : ADMIN_COPY.maps.status.inactive));
-  main.appendChild(renderKeyValueList([
-    [copy.fields.eyebrow, gate.eyebrow],
-    [copy.fields.title, gate.title],
-    [copy.fields.description, gate.description],
-    [copy.fields.backLabel, gate.back_label],
-    [copy.fields.active, getActiveLabel(Boolean(gate.is_active))],
-  ]));
-  panel.appendChild(main);
+  panel.appendChild(renderGateOperatorMainCard(gate, copy));
+  panel.appendChild(renderTechnicalSourceNote('Nguồn kỹ thuật', 'CMS gate_content, bản nháp quản trị'));
   panel.appendChild(renderLockedNotice(copy.safety));
   wrap.appendChild(panel);
   return wrap;
@@ -1409,13 +1630,14 @@ function renderGateWorkspaceContent(state, activeKey = 'content') {
 
 function renderGateSpacesWorkspacePanel(gate, copy = ADMIN_COPY.contentViews.gate) {
   const panel = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel cms-admin-workspace-spaces-panel' });
-  panel.appendChild(renderPanelTitle(copy.roomsInfo, 'Trong nhà / ngoài trời'));
-  panel.appendChild(renderSourceStrip('Nguồn dữ liệu', 'rooms_json trong CMS gate_content'));
-  const roomGrid = createElement('div', { className: 'cms-admin-gate-room-grid' });
+  panel.appendChild(renderPanelTitle('Hai không gian người xem có thể chọn', 'Trong nhà / ngoài trời'));
+  panel.appendChild(createElement('p', { className: 'cms-admin-operator-summary', text: 'So sánh tên, mô tả và nút bắt đầu tham quan của từng không gian. Mã kỹ thuật chỉ dùng để đối chiếu.' }));
+  const roomGrid = createElement('div', { className: 'cms-admin-gate-room-grid cms-admin-operator-section-grid' });
   const roomEntries = getGateRoomEntries(gate.rooms_json);
   if (roomEntries.length) {
-    roomEntries.forEach(([roomKey, roomData]) => roomGrid.appendChild(renderGateRoomCard(roomKey, roomData, copy)));
+    roomEntries.forEach(([roomKey, roomData]) => roomGrid.appendChild(renderGateOperatorRoomCard(roomKey, roomData, copy)));
     panel.appendChild(roomGrid);
+    panel.appendChild(renderTechnicalSourceNote('Nguồn kỹ thuật', 'rooms_json trong CMS gate_content'));
   } else {
     panel.appendChild(renderEmptyState('Chưa đọc được dữ liệu lựa chọn không gian trong rooms_json.'));
   }
@@ -1424,7 +1646,8 @@ function renderGateSpacesWorkspacePanel(gate, copy = ADMIN_COPY.contentViews.gat
 
 function renderGateEditWorkspacePanel(state, gate, editState = {}, copy = ADMIN_COPY.contentViews.gate) {
   const panel = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel cms-admin-workspace-edit-panel' });
-  panel.appendChild(renderPanelTitle(copy.edit?.title || 'Chỉnh sửa Cổng vào', editState.isEditing ? 'Đang sửa' : 'Entry point thật'));
+  panel.appendChild(renderPanelTitle('Chỉnh sửa chữ hiển thị Cổng vào', editState.isEditing ? 'Đang sửa bản nháp' : 'Chỉnh sửa an toàn'));
+  panel.appendChild(createElement('p', { className: 'cms-admin-operator-summary', text: 'Bạn chỉ sửa chữ người xem nhìn thấy: tiêu đề, mô tả và nút. Mã phòng, đường dẫn và query kỹ thuật vẫn khóa để tránh lệch luồng vào phòng.' }));
   if (editState.isEditing) {
     panel.appendChild(renderGateEditPanel(state, gate, editState));
     return panel;
@@ -1456,8 +1679,9 @@ function renderGateEditWorkspacePanel(state, gate, editState = {}, copy = ADMIN_
 
 function renderGateDetailsWorkspacePanel(gate, copy = ADMIN_COPY.contentViews.gate) {
   const panel = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel cms-admin-workspace-details-panel' });
-  panel.appendChild(renderPanelTitle('Chi tiết Cổng vào', 'Nguồn / trạng thái / kỹ thuật'));
-  panel.appendChild(renderSourceStrip('Nguồn dữ liệu', 'CMS gate_content, bản nháp quản trị'));
+  panel.appendChild(renderPanelTitle('Thông tin đối chiếu Cổng vào', 'Chi tiết phụ'));
+  panel.appendChild(createElement('p', { className: 'cms-admin-operator-summary', text: 'Tab này chỉ để kiểm tra trạng thái và mã kỹ thuật khi cần đối chiếu. Không cần đọc tab này để chỉnh chữ hiển thị.' }));
+  panel.appendChild(renderTechnicalSourceNote('Nguồn kỹ thuật', 'CMS gate_content, bản nháp quản trị'));
   panel.appendChild(renderPublicLink(copy.publicLink, './gallery.html'));
   panel.appendChild(renderDataGroup(copy.presentation?.statusInfo || 'Trạng thái', renderKeyValueList([
     [copy.fields.active, getActiveLabel(Boolean(gate.is_active))],
