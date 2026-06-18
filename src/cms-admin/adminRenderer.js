@@ -807,11 +807,17 @@ function renderActiveTab(state) {
 
   switch (state.activeTab) {
     case 'dashboard':
-      return renderWorkspaceShell('dashboard', renderDashboard(state), state);
+      return renderWorkspaceShell('dashboard', null, state, {
+        renderContent: ({ activeKey }) => renderDashboardWorkspaceContent(state, activeKey),
+      });
     case 'home':
-      return renderWorkspaceShell('home', renderHomeTab(state), state);
+      return renderWorkspaceShell('home', null, state, {
+        renderContent: ({ activeKey }) => renderHomeWorkspaceContent(state, activeKey),
+      });
     case 'gate':
-      return renderWorkspaceShell('gate', renderGateTab(state), state);
+      return renderWorkspaceShell('gate', null, state, {
+        renderContent: ({ activeKey }) => renderGateWorkspaceContent(state, activeKey),
+      });
     case 'media':
       return renderWorkspaceShell('media', renderMediaTab(state), state);
     case 'staticDraft':
@@ -941,7 +947,7 @@ function getWorkspaceRailStatus(workspaceKey) {
   return statuses[workspaceKey] || 'Hướng dẫn';
 }
 
-function renderWorkspaceShell(workspaceKey, sourceNode, state = {}) {
+function renderWorkspaceShell(workspaceKey, sourceNode, state = {}, options = {}) {
   const tabs = getWorkspaceTabs(workspaceKey);
   const activeKey = getWorkspaceActiveTab(workspaceKey, tabs);
   const activeTab = tabs.find((tab) => tab.key === activeKey) || tabs[0];
@@ -964,7 +970,13 @@ function renderWorkspaceShell(workspaceKey, sourceNode, state = {}) {
     },
   });
 
-  if (activeKey === tabs[0]?.key) {
+  const customContent = typeof options.renderContent === 'function'
+    ? options.renderContent({ workspaceKey, activeKey, activeTab, state })
+    : null;
+
+  if (customContent) {
+    panel.appendChild(customContent);
+  } else if (activeKey === tabs[0]?.key) {
     panel.appendChild(prepareWorkspaceSourceContent(sourceNode, workspaceKey));
   } else {
     panel.appendChild(renderWorkspaceSecondaryPanel(workspaceKey, activeTab, state));
@@ -1130,6 +1142,330 @@ function renderWorkspaceRail({ workspaceKey, pageCopy = {}, stepConfig = {}, sta
   safety.appendChild(safetyList);
   rail.appendChild(safety);
   return rail;
+}
+
+
+function renderWorkspaceSlotWrap(workspaceKey, activeKey) {
+  return createElement('section', {
+    className: `cms-admin-grid cms-admin-workspace-real-content cms-admin-workspace-real-${workspaceKey} cms-admin-workspace-real-${workspaceKey}-${activeKey}`,
+    dataset: { cmsWorkspaceSlot: activeKey },
+  });
+}
+
+function renderDashboardWorkspaceContent(state, activeKey = 'overview') {
+  const data = state.data;
+  const rooms = safeArray(data.rooms);
+  const artworks = safeArray(data.artworks);
+  const artworkStats = data.artworkStats || {};
+  const bundles = safeArray(data.publishedBundles);
+  const mediaAssets = safeArray(data.mediaAssets);
+  const errors = data.errors || {};
+  const published = getCurrentPublishedBundle(bundles);
+  const canonicalSummary = data.canonicalSummary?.valid ? data.canonicalSummary : null;
+  const dashboardSummary = canonicalSummary || buildDbFallbackDashboardSummary(data, { sourceLabel: ADMIN_COPY.dashboard.status.fallbackSource });
+  const usingCanonicalSummary = Boolean(canonicalSummary);
+  const wrap = renderWorkspaceSlotWrap('dashboard', activeKey);
+
+  if (Object.keys(errors).length > 0) {
+    wrap.appendChild(renderSystemErrors(errors));
+  }
+
+  if (activeKey === 'tasks') {
+    const taskGrid = createElement('div', { className: 'cms-admin-dashboard-task-grid cms-admin-workspace-slot-grid' });
+    taskGrid.appendChild(renderOperatorStepPanel(ADMIN_COPY.dashboard.nextSteps, { status: 'Việc cần làm', variant: 'success' }));
+    taskGrid.appendChild(renderTaskPanel({
+      warningItems: usingCanonicalSummary ? [] : getWarningItems(artworks),
+      warningMessages: usingCanonicalSummary ? safeArray(dashboardSummary.warnings) : [],
+      warningCount: dashboardSummary.warningCount || 0,
+      mediaCount: usingCanonicalSummary ? dashboardSummary.mediaPresentCount : mediaAssets.length,
+      warningHint: usingCanonicalSummary
+        ? ADMIN_COPY.dashboard.tasks.canonicalWarningHint
+        : ADMIN_COPY.dashboard.tasks.fallbackWarningHint,
+    }));
+    taskGrid.appendChild(renderQuickActionsPanel());
+    wrap.appendChild(taskGrid);
+    return wrap;
+  }
+
+  if (activeKey === 'reference') {
+    const referenceGrid = createElement('div', { className: 'cms-admin-two-col cms-admin-dashboard-reference-grid cms-admin-workspace-slot-grid' });
+    referenceGrid.appendChild(renderSiteSettingsPanel(data.siteSettings));
+    referenceGrid.appendChild(renderLatestBundlePanel(published));
+    wrap.appendChild(referenceGrid);
+    wrap.appendChild(renderReadOnlyNoticePanel());
+    return wrap;
+  }
+
+  const top = createElement('div', { className: 'cms-admin-dashboard-top-grid cms-admin-dashboard-overview-grid' });
+  top.appendChild(renderWebsiteStatusPanel({ published, errors, siteSettings: data.siteSettings, dashboardSummary, canonicalError: data.canonicalError }));
+  top.appendChild(renderMetricsPanel({
+    rooms: usingCanonicalSummary ? dashboardSummary.roomCount : rooms.length,
+    artworks: usingCanonicalSummary ? dashboardSummary.totalRoomItems : (artworkStats.total ?? artworks.length),
+    indoor: usingCanonicalSummary ? dashboardSummary.indoorCount : (artworkStats.indoor ?? 0),
+    outdoor: usingCanonicalSummary ? dashboardSummary.outdoorCount : (artworkStats.outdoor ?? 0),
+    media: usingCanonicalSummary ? dashboardSummary.mediaPresentCount : mediaAssets.length,
+    featured: usingCanonicalSummary ? dashboardSummary.featuredVisibleCount : undefined,
+  }));
+  wrap.appendChild(top);
+  return wrap;
+}
+
+function renderHomeWorkspaceContent(state, activeKey = 'content') {
+  const copy = ADMIN_COPY.contentViews.home;
+  const sections = safeArray(state.data.indexSections);
+  const editState = state.homeEdit || {};
+  const wrap = renderWorkspaceSlotWrap('home', activeKey);
+
+  if (editState.saveSuccess && !editState.isEditing) {
+    wrap.appendChild(renderNoticeBox(editState.saveSuccess, 'success'));
+  }
+
+  if (!sections.length) {
+    const emptyPanel = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel' });
+    emptyPanel.appendChild(renderPanelTitle(copy.sourceTitle, 'Chưa có dữ liệu'));
+    emptyPanel.appendChild(renderSourceStrip('Nguồn dữ liệu', 'Chưa đọc được dữ liệu Trang chủ'));
+    emptyPanel.appendChild(renderEmptyState(`${copy.emptyTitle}. ${copy.emptyBody}`));
+    wrap.appendChild(emptyPanel);
+    return wrap;
+  }
+
+  if (activeKey === 'edit') {
+    wrap.appendChild(renderHomeEditWorkspacePanel(state, sections, editState, copy));
+    return wrap;
+  }
+
+  if (activeKey === 'media') {
+    wrap.appendChild(renderHomeMediaWorkspacePanel(sections, copy));
+    return wrap;
+  }
+
+  if (activeKey === 'details') {
+    wrap.appendChild(renderHomeDetailsWorkspacePanel(state, sections, copy));
+    return wrap;
+  }
+
+  const panel = createElement('section', {
+    className: 'cms-admin-panel cms-admin-view-panel',
+    dataset: { cmsReferenceTarget: 'home', cmsReferenceId: 'home' },
+  });
+  panel.appendChild(renderPanelTitle(copy.sourceTitle, `${formatCount(sections.length)} phần nội dung`));
+  panel.appendChild(renderSourceStrip('Nguồn dữ liệu', 'CMS index_sections, bản nháp quản trị'));
+  panel.appendChild(renderPublicLink(copy.publicLink, './index.html'));
+  const grid = createElement('div', { className: 'cms-admin-content-card-grid' });
+  sections.forEach((section) => grid.appendChild(renderIndexSectionCard(section, copy, state, editState)));
+  panel.appendChild(grid);
+  panel.appendChild(renderLockedNotice(copy.safety));
+  wrap.appendChild(panel);
+  return wrap;
+}
+
+function renderHomeEditWorkspacePanel(state, sections = [], editState = {}, copy = ADMIN_COPY.contentViews.home) {
+  const panel = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel cms-admin-workspace-edit-panel' });
+  panel.appendChild(renderPanelTitle(copy.edit?.title || 'Chỉnh sửa Trang chủ', editState.isEditing ? 'Đang sửa' : 'Entry points thật'));
+  panel.appendChild(renderCompactNotice(copy.edit?.safeNote || 'Lưu bản nháp chưa làm đổi website.'));
+
+  const focusedEditPanel = renderHomeFocusedEditPanel(state, sections, editState);
+  if (focusedEditPanel) {
+    panel.appendChild(focusedEditPanel);
+    return panel;
+  }
+
+  const actions = createElement('div', { className: 'cms-admin-workspace-action-grid' });
+  sections.forEach((section) => {
+    const sectionKey = section?.section_key || 'section';
+    if (!['hero', 'guide', 'experience'].includes(sectionKey)) return;
+    const card = createElement('article', { className: 'cms-admin-data-card cms-admin-workspace-action-card' });
+    card.appendChild(renderDataCardTitle(copy.sectionLabels?.[sectionKey] || sectionKey, getVisibleLabel(section?.is_visible)));
+    const rows = filterVisibleRows([
+      [copy.fields.title, section?.title],
+      [copy.fields.updatedAt, formatDateTime(section?.updated_at)],
+    ]);
+    if (rows.length) card.appendChild(renderKeyValueList(rows));
+    if (sectionKey === 'hero') card.appendChild(renderHomeHeroEditActions(state, section));
+    if (sectionKey === 'guide') card.appendChild(renderHomeGuideEditActions(state, section));
+    if (sectionKey === 'experience') card.appendChild(renderHomeExperienceEditActions(state, section));
+    actions.appendChild(card);
+  });
+
+  if (!actions.childNodes.length) {
+    panel.appendChild(renderEmptyState('Chưa có phần Trang chủ nào có entry chỉnh sửa an toàn trong phạm vi hiện tại.'));
+  } else {
+    panel.appendChild(actions);
+  }
+  return panel;
+}
+
+function renderHomeMediaWorkspacePanel(sections = [], copy = ADMIN_COPY.contentViews.home) {
+  const panel = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel cms-admin-workspace-media-panel' });
+  panel.appendChild(renderPanelTitle('Media / liên kết Trang chủ', `${formatCount(sections.length)} phần kiểm tra`));
+  panel.appendChild(renderSourceStrip('Nguồn dữ liệu', 'Các trường media, CTA và liên kết trong CMS index_sections'));
+  const grid = createElement('div', { className: 'cms-admin-content-card-grid cms-admin-workspace-media-grid' });
+
+  sections.forEach((section) => {
+    const sectionKey = section?.section_key || 'section';
+    const card = createElement('article', { className: 'cms-admin-data-card cms-admin-workspace-media-card' });
+    card.appendChild(renderDataCardTitle(copy.sectionLabels?.[sectionKey] || sectionKey, getVisibleLabel(section?.is_visible)));
+    const mediaNode = renderMediaSummary(section?.media_json, copy);
+    const ctaNode = renderCtaSummary(section?.cta_json, copy);
+    if (mediaNode) card.appendChild(renderDataGroup(copy.presentation?.media || 'Media', mediaNode));
+    if (ctaNode) card.appendChild(renderDataGroup(copy.presentation?.cta || 'Nút/CTA', ctaNode));
+    if (!mediaNode && !ctaNode) card.appendChild(renderCompactNotice('Phần này không có trường media/CTA rõ ràng trong dữ liệu hiện tại.'));
+    grid.appendChild(card);
+  });
+
+  panel.appendChild(grid);
+  return panel;
+}
+
+function renderHomeDetailsWorkspacePanel(state, sections = [], copy = ADMIN_COPY.contentViews.home) {
+  const panel = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel cms-admin-workspace-details-panel' });
+  panel.appendChild(renderPanelTitle('Chi tiết Trang chủ', 'Nguồn / trạng thái / thiếu dữ liệu'));
+  panel.appendChild(renderSourceStrip('Nguồn dữ liệu', 'CMS index_sections, bản nháp quản trị'));
+  const grid = createElement('div', { className: 'cms-admin-content-card-grid cms-admin-workspace-details-grid' });
+
+  sections.forEach((section) => {
+    const sectionKey = section?.section_key || 'section';
+    const card = createElement('article', { className: 'cms-admin-data-card cms-admin-workspace-details-card' });
+    card.appendChild(renderDataCardTitle(copy.sectionLabels?.[sectionKey] || sectionKey, getVisibleLabel(section?.is_visible)));
+    const missingFields = getMissingIndexSectionFields(section, copy);
+    if (missingFields.length) {
+      card.appendChild(renderMissingFieldsNotice(copy.presentation?.missingFields || 'Trường còn thiếu', missingFields));
+    } else {
+      card.appendChild(renderCompactNotice('Không phát hiện trường nội dung bắt buộc bị thiếu trong phần này.'));
+    }
+    if (sectionKey === 'contact') card.appendChild(renderHomeContactSourceOfTruthBlock(state, section, copy));
+    card.appendChild(renderDataGroup(copy.presentation?.statusInfo || 'Trạng thái', renderKeyValueList([
+      [copy.fields.status, getVisibleLabel(section?.is_visible)],
+      [copy.fields.updatedAt, formatDateTime(section?.updated_at)],
+      ['Mã section', sectionKey],
+    ])));
+    grid.appendChild(card);
+  });
+
+  panel.appendChild(grid);
+  panel.appendChild(renderLockedNotice(copy.safety));
+  return panel;
+}
+
+function renderGateWorkspaceContent(state, activeKey = 'content') {
+  const copy = ADMIN_COPY.contentViews.gate;
+  const gate = state.data.gateContent;
+  const editState = state.gateEdit || {};
+  const wrap = renderWorkspaceSlotWrap('gate', activeKey);
+
+  if (editState.saveSuccess && !editState.isEditing) {
+    wrap.appendChild(renderNoticeBox(editState.saveSuccess, 'success'));
+  }
+
+  if (!gate) {
+    const emptyPanel = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel' });
+    emptyPanel.appendChild(renderPanelTitle(copy.sourceTitle, 'Chưa có dữ liệu'));
+    emptyPanel.appendChild(renderSourceStrip('Nguồn dữ liệu', 'Chưa đọc được dữ liệu Cổng vào'));
+    emptyPanel.appendChild(renderEmptyState(`${copy.emptyTitle}. ${copy.emptyBody}`));
+    emptyPanel.appendChild(renderLockedNotice(copy.safety));
+    wrap.appendChild(emptyPanel);
+    return wrap;
+  }
+
+  if (activeKey === 'spaces') {
+    wrap.appendChild(renderGateSpacesWorkspacePanel(gate, copy));
+    return wrap;
+  }
+
+  if (activeKey === 'edit') {
+    wrap.appendChild(renderGateEditWorkspacePanel(state, gate, editState, copy));
+    return wrap;
+  }
+
+  if (activeKey === 'details') {
+    wrap.appendChild(renderGateDetailsWorkspacePanel(gate, copy));
+    return wrap;
+  }
+
+  const panel = createElement('section', {
+    className: 'cms-admin-panel cms-admin-view-panel',
+    dataset: { cmsReferenceTarget: 'gate', cmsReferenceId: 'gate' },
+  });
+  panel.appendChild(renderPanelTitle(copy.sourceTitle, gate ? 'Đã đọc dữ liệu' : 'Chưa có dữ liệu'));
+  panel.appendChild(renderSourceStrip('Nguồn dữ liệu', 'CMS gate_content, bản nháp quản trị'));
+  panel.appendChild(renderPublicLink(copy.publicLink, './gallery.html'));
+  const main = createElement('section', {
+    className: 'cms-admin-data-card cms-admin-gate-main-card',
+    dataset: { cmsReferenceTarget: 'gate', cmsReferenceId: 'gate' },
+  });
+  main.appendChild(renderDataCardTitle(copy.mainInfo, gate.is_active ? ADMIN_COPY.maps.status.active : ADMIN_COPY.maps.status.inactive));
+  main.appendChild(renderKeyValueList([
+    [copy.fields.eyebrow, gate.eyebrow],
+    [copy.fields.title, gate.title],
+    [copy.fields.description, gate.description],
+    [copy.fields.backLabel, gate.back_label],
+    [copy.fields.active, getActiveLabel(Boolean(gate.is_active))],
+  ]));
+  panel.appendChild(main);
+  panel.appendChild(renderLockedNotice(copy.safety));
+  wrap.appendChild(panel);
+  return wrap;
+}
+
+function renderGateSpacesWorkspacePanel(gate, copy = ADMIN_COPY.contentViews.gate) {
+  const panel = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel cms-admin-workspace-spaces-panel' });
+  panel.appendChild(renderPanelTitle(copy.roomsInfo, 'Trong nhà / ngoài trời'));
+  panel.appendChild(renderSourceStrip('Nguồn dữ liệu', 'rooms_json trong CMS gate_content'));
+  const roomGrid = createElement('div', { className: 'cms-admin-gate-room-grid' });
+  const roomEntries = getGateRoomEntries(gate.rooms_json);
+  if (roomEntries.length) {
+    roomEntries.forEach(([roomKey, roomData]) => roomGrid.appendChild(renderGateRoomCard(roomKey, roomData, copy)));
+    panel.appendChild(roomGrid);
+  } else {
+    panel.appendChild(renderEmptyState('Chưa đọc được dữ liệu lựa chọn không gian trong rooms_json.'));
+  }
+  return panel;
+}
+
+function renderGateEditWorkspacePanel(state, gate, editState = {}, copy = ADMIN_COPY.contentViews.gate) {
+  const panel = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel cms-admin-workspace-edit-panel' });
+  panel.appendChild(renderPanelTitle(copy.edit?.title || 'Chỉnh sửa Cổng vào', editState.isEditing ? 'Đang sửa' : 'Entry point thật'));
+  if (editState.isEditing) {
+    panel.appendChild(renderGateEditPanel(state, gate, editState));
+    return panel;
+  }
+
+  const actions = createElement('div', { className: 'cms-admin-settings-edit-actions cms-admin-gate-edit-actions' });
+  if (canEditGateContent(state)) {
+    const editButton = createElement('button', {
+      className: 'cms-admin-button cms-admin-button-primary',
+      text: copy.edit.button,
+      type: 'button',
+    });
+    editButton.addEventListener('click', () => {
+      const guard = requestStartEditSession({ type: 'gate', id: 'gate' });
+      if (!guard.allowed) return;
+      if (!guard.same) startGateEdit(gate);
+      queueEditPanelFocus('gate', gate.id || 'gate', 'eyebrow');
+      renderAdminShell();
+    });
+    actions.appendChild(editButton);
+    actions.appendChild(createElement('span', { className: 'cms-admin-inline-note', text: copy.edit.safeNote }));
+  } else {
+    actions.appendChild(createElement('span', { className: 'cms-admin-inline-note', text: copy.edit.noPermission }));
+  }
+  panel.appendChild(renderCompactNotice(copy.edit?.safeNote || 'Lưu bản nháp chưa làm đổi website.'));
+  panel.appendChild(actions);
+  return panel;
+}
+
+function renderGateDetailsWorkspacePanel(gate, copy = ADMIN_COPY.contentViews.gate) {
+  const panel = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel cms-admin-workspace-details-panel' });
+  panel.appendChild(renderPanelTitle('Chi tiết Cổng vào', 'Nguồn / trạng thái / kỹ thuật'));
+  panel.appendChild(renderSourceStrip('Nguồn dữ liệu', 'CMS gate_content, bản nháp quản trị'));
+  panel.appendChild(renderPublicLink(copy.publicLink, './gallery.html'));
+  panel.appendChild(renderDataGroup(copy.presentation?.statusInfo || 'Trạng thái', renderKeyValueList([
+    [copy.fields.active, getActiveLabel(Boolean(gate.is_active))],
+    [copy.fields.updatedAt, formatDateTime(gate.updated_at)],
+    ['Mã nội dung', gate.id],
+  ])));
+  panel.appendChild(renderLockedNotice(copy.safety));
+  return panel;
 }
 
 function renderDashboard(state) {

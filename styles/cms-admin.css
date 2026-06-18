@@ -5389,3 +5389,51 @@ body.cms-admin-page * {
     padding: 11px;
   }
 }
+
+/* v6.14.049.006 — Real content slots for first tabbed workspaces */
+.cms-admin-workspace-real-content {
+  min-width: 0;
+}
+
+.cms-admin-workspace-slot-grid,
+.cms-admin-workspace-action-grid,
+.cms-admin-workspace-media-grid,
+.cms-admin-workspace-details-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.cms-admin-workspace-action-grid {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.cms-admin-workspace-action-card,
+.cms-admin-workspace-media-card,
+.cms-admin-workspace-details-card {
+  min-width: 0;
+}
+
+.cms-admin-workspace-real-dashboard-tasks .cms-admin-dashboard-task-grid {
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.cms-admin-workspace-real-dashboard-reference .cms-admin-dashboard-reference-grid {
+  align-items: stretch;
+}
+
+.cms-admin-workspace-details-panel .cms-admin-source-of-truth-panel {
+  margin-top: 12px;
+}
+
+.cms-admin-workspace-media-card .cms-admin-kv-value,
+.cms-admin-workspace-details-card .cms-admin-kv-value,
+.cms-admin-workspace-spaces-panel .cms-admin-kv-value {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+@media (max-width: 899px) {
+  .cms-admin-workspace-action-grid {
+    grid-template-columns: 1fr;
+  }
+}
