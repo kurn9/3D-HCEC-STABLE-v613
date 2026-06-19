@@ -854,7 +854,7 @@ function renderActiveTab(state) {
     case 'history':
       return renderWorkspaceShell('history', renderRollbackHistoryTab(state, { onRerender: renderAdminShell }), state, { hideTabs: true, hideRail: true });
     case 'cleanup':
-      return renderWorkspaceShell('cleanup', renderCmsStorageCleanupTab(state, { onRerender: renderAdminShell }), state);
+      return renderWorkspaceShell('cleanup', renderCmsStorageCleanupTab(state, { onRerender: renderAdminShell }), state, { hideTabs: true, hideRail: true });
     case 'settings':
       return renderWorkspaceShell('settings', renderSettingsTab(state), state);
     default:
@@ -898,9 +898,7 @@ const WORKSPACE_TAB_DEFINITIONS = Object.freeze({
     { key: 'workspace', label: 'Luồng khôi phục', summary: 'Chọn phiên bản, preview, dry-run, nhập lý do và khôi phục có kiểm soát trong cùng workspace.' },
   ],
   cleanup: [
-    { key: 'scan', label: 'Quét', summary: 'Quét tệp để biết trạng thái hiện tại.' },
-    { key: 'results', label: 'Kết quả', summary: 'Xem danh sách tệp và kết luận an toàn.' },
-    { key: 'confirm', label: 'Dọn có xác nhận', summary: 'Chỉ dọn khi đã hiểu rõ và xác nhận.' },
+    { key: 'workspace', label: 'Luồng dọn tệp', summary: 'Quét, kiểm tra candidate, xem chi tiết và chỉ dọn khi checklist an toàn đạt.' },
   ],
   settings: [
     { key: 'info', label: 'Thông tin', summary: 'Xem thông tin đơn vị và liên hệ.' },
