@@ -7534,43 +7534,61 @@ body.cms-admin-page * {
   cursor: wait;
 }
 
-/* v6.14.050.010 — Media Library professional master / inspector / action workspace */
+/* v6.14.050.011 — Media Library layout overflow + inspector density hotfix */
 .cms-admin-media-pro-workspace {
   display: grid;
-  grid-template-columns: minmax(250px, 0.85fr) minmax(360px, 1.35fr) minmax(260px, 0.85fr);
+  grid-template-columns: 1fr;
   gap: 16px;
   align-items: start;
-  min-width: 0;
   width: 100%;
   max-width: 100%;
+  min-width: 0;
   margin-top: 16px;
+  box-sizing: border-box;
 }
 
 .cms-admin-media-master-card,
 .cms-admin-media-inspector-card,
 .cms-admin-media-action-card {
+  width: 100%;
+  max-width: 100%;
   min-width: 0;
   align-self: start;
+  box-sizing: border-box;
+  overflow-wrap: anywhere;
 }
 
-.cms-admin-media-master-subtitle {
+.cms-admin-media-master-card *,
+.cms-admin-media-inspector-card *,
+.cms-admin-media-action-card * {
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.cms-admin-media-master-subtitle,
+.cms-admin-media-inspector-context {
   margin: 0 0 12px;
+  color: var(--cms-admin-muted);
+  font-size: 0.84rem;
   line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
 .cms-admin-media-master-list {
   display: grid;
   gap: 10px;
-  max-height: min(780px, calc(100vh - 260px));
+  width: 100%;
+  max-width: 100%;
   overflow: auto;
   padding-right: 4px;
 }
 
 .cms-admin-media-master-item {
   width: 100%;
+  max-width: 100%;
   display: grid;
-  grid-template-columns: 96px minmax(0, 1fr);
-  gap: 12px;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: 11px;
   align-items: stretch;
   text-align: left;
   color: inherit;
@@ -7591,34 +7609,40 @@ body.cms-admin-page * {
 
 .cms-admin-media-master-thumb,
 .cms-admin-media-master-thumb .cms-admin-media-preview {
-  min-width: 0;
-  min-height: 80px;
-  height: 86px;
+  width: 88px;
+  max-width: 88px;
+  min-height: 78px;
+  height: 82px;
   border-radius: var(--cms-admin-radius-md);
   overflow: clip;
 }
 
 .cms-admin-media-master-thumb .cms-admin-media-preview img,
 .cms-admin-media-master-thumb .cms-admin-media-preview video {
-  height: 86px;
+  width: 100%;
+  height: 82px;
+  object-fit: cover;
 }
 
 .cms-admin-media-master-copy {
   display: grid;
-  gap: 8px;
-  min-width: 0;
+  gap: 7px;
   align-content: start;
+  min-width: 0;
 }
 
 .cms-admin-media-master-copy strong {
+  display: block;
   color: var(--cms-admin-text);
-  font-size: 0.9rem;
+  font-size: 0.88rem;
   line-height: 1.32;
   overflow-wrap: anywhere;
 }
 
 .cms-admin-media-master-badges {
-  gap: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
 }
 
 .cms-admin-media-master-meta {
@@ -7642,22 +7666,23 @@ body.cms-admin-page * {
 
 .cms-admin-media-inspector-overview {
   display: grid;
-  grid-template-columns: minmax(220px, 0.55fr) minmax(0, 1fr);
-  gap: 16px;
-  align-items: start;
-  min-width: 0;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  width: 100%;
+  max-width: 100%;
 }
 
-.cms-admin-media-inspector-overview > .cms-admin-media-preview {
-  border: 1px solid rgba(148, 163, 184, 0.14);
-  border-radius: var(--cms-admin-radius-lg);
-  overflow: clip;
-  min-height: 220px;
+.cms-admin-media-inspector-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
-.cms-admin-media-inspector-overview > .cms-admin-media-preview img,
-.cms-admin-media-inspector-overview > .cms-admin-media-preview video {
-  height: 280px;
+.cms-admin-media-inspector-facts {
+  width: 100%;
+  max-width: 100%;
+  grid-template-columns: minmax(116px, 0.34fr) minmax(0, 1fr);
+  gap: 8px 12px;
 }
 
 .cms-admin-media-inspector-body,
@@ -7665,13 +7690,15 @@ body.cms-admin-page * {
   display: grid;
   gap: 12px;
   min-width: 0;
+  width: 100%;
+  max-width: 100%;
 }
 
 .cms-admin-media-inspector-title {
   margin: 0;
   color: var(--cms-admin-text);
-  font-size: 1.08rem;
-  line-height: 1.28;
+  font-size: 1rem;
+  line-height: 1.32;
   overflow-wrap: anywhere;
 }
 
@@ -7679,6 +7706,8 @@ body.cms-admin-page * {
   display: grid;
   gap: 8px;
   min-width: 0;
+  width: 100%;
+  max-width: 100%;
 }
 
 .cms-admin-media-path-block strong {
@@ -7686,20 +7715,62 @@ body.cms-admin-page * {
   font-size: 0.84rem;
 }
 
+.cms-admin-media-path,
+.cms-admin-media-technical-details,
+.cms-admin-media-delete-prepare-result,
+.cms-admin-media-delete-reference-list,
+.cms-admin-media-delete-reference-list li,
+.cms-admin-technical-kv-list,
+.cms-admin-kv-list,
+.cms-admin-kv-row,
+.cms-admin-kv-value {
+  max-width: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .cms-admin-media-action-card {
   display: grid;
   gap: 12px;
 }
 
+.cms-admin-media-action-card .cms-admin-panel-title,
+.cms-admin-media-inspector-card .cms-admin-panel-title,
+.cms-admin-media-master-card .cms-admin-panel-title {
+  min-width: 0;
+}
+
 .cms-admin-media-action-buttons {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
   gap: 10px;
-  align-items: center;
+  align-items: stretch;
+}
+
+.cms-admin-media-action-buttons .cms-admin-button {
+  justify-content: center;
+  white-space: normal;
 }
 
 .cms-admin-media-action-card .cms-admin-media-delete-guard-detail {
   margin-top: 0;
+}
+
+.cms-admin-media-action-card .cms-admin-media-delete-prepare-action {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+}
+
+.cms-admin-media-action-card .cms-admin-media-delete-prepare-action .cms-admin-help-text {
+  min-width: 0;
+  width: auto;
+}
+
+.cms-admin-media-delete-prepare-result .cms-admin-kv-list,
+.cms-admin-media-delete-prepare-result .cms-admin-technical-kv-list {
+  grid-template-columns: minmax(120px, 0.32fr) minmax(0, 1fr);
 }
 
 .cms-admin-media-locked-delete-section {
@@ -7710,6 +7781,8 @@ body.cms-admin-page * {
   background: rgba(127, 29, 29, 0.1);
   padding: 12px;
   min-width: 0;
+  width: 100%;
+  max-width: 100%;
 }
 
 .cms-admin-media-locked-delete-section h3,
@@ -7732,24 +7805,46 @@ body.cms-admin-page * {
 .cms-admin-media-locked-delete-section .cms-admin-button[disabled] {
   cursor: not-allowed;
   opacity: 0.64;
+  white-space: normal;
 }
 
-@media (max-width: 1480px) {
+@media (min-width: 1180px) {
   .cms-admin-media-pro-workspace {
-    grid-template-columns: minmax(240px, 0.88fr) minmax(0, 1.2fr);
+    grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
   }
 
+  .cms-admin-media-master-card {
+    grid-row: 1 / span 2;
+  }
+
+  .cms-admin-media-master-list {
+    max-height: min(780px, calc(100vh - 300px));
+  }
+
+  .cms-admin-media-inspector-card,
   .cms-admin-media-action-card {
-    grid-column: 1 / -1;
+    grid-column: 2;
   }
 }
 
-@media (max-width: 1120px) {
-  .cms-admin-media-pro-workspace,
-  .cms-admin-media-inspector-overview {
-    grid-template-columns: 1fr;
+@media (min-width: 1760px) {
+  .cms-admin-media-pro-workspace {
+    grid-template-columns: minmax(280px, 0.85fr) minmax(420px, 1.25fr) minmax(300px, 0.95fr);
   }
 
+  .cms-admin-media-master-card,
+  .cms-admin-media-inspector-card,
+  .cms-admin-media-action-card {
+    grid-column: auto;
+    grid-row: auto;
+  }
+
+  .cms-admin-media-master-list {
+    max-height: min(780px, calc(100vh - 280px));
+  }
+}
+
+@media (max-width: 1179px) {
   .cms-admin-media-master-list {
     max-height: none;
   }
@@ -7757,19 +7852,28 @@ body.cms-admin-page * {
 
 @media (max-width: 760px) {
   .cms-admin-media-master-item {
-    grid-template-columns: 82px minmax(0, 1fr);
+    grid-template-columns: 76px minmax(0, 1fr);
   }
 
   .cms-admin-media-master-thumb,
-  .cms-admin-media-master-thumb .cms-admin-media-preview,
-  .cms-admin-media-master-thumb .cms-admin-media-preview img,
-  .cms-admin-media-master-thumb .cms-admin-media-preview video {
-    height: 74px;
-    min-height: 74px;
+  .cms-admin-media-master-thumb .cms-admin-media-preview {
+    width: 76px;
+    max-width: 76px;
+    height: 72px;
+    min-height: 72px;
   }
 
+  .cms-admin-media-master-thumb .cms-admin-media-preview img,
+  .cms-admin-media-master-thumb .cms-admin-media-preview video {
+    height: 72px;
+  }
+
+  .cms-admin-media-action-card .cms-admin-media-delete-prepare-action,
   .cms-admin-media-action-buttons,
-  .cms-admin-media-inspector-tabs {
-    display: grid;
+  .cms-admin-media-inspector-tabs,
+  .cms-admin-media-inspector-facts,
+  .cms-admin-media-delete-prepare-result .cms-admin-kv-list,
+  .cms-admin-media-delete-prepare-result .cms-admin-technical-kv-list {
+    grid-template-columns: 1fr;
   }
 }

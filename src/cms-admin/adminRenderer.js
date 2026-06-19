@@ -2721,11 +2721,16 @@ function renderMediaMasterListItem(asset = {}) {
 
 function renderMediaInspectorCard(asset = null) {
   const card = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel cms-admin-media-inspector-card' });
-  card.appendChild(renderPanelTitle('Thông tin media', asset?.fileName || asset?.storagePath || 'Chọn media'));
+  card.appendChild(renderPanelTitle('Thông tin media', asset ? 'Đang xem media đã chọn' : 'Chọn media'));
   if (!asset) {
     card.appendChild(renderEmptyState('Chọn một media ở danh sách để xem thông tin.'));
     return card;
   }
+  const context = createElement('p', {
+    className: 'cms-admin-help-text cms-admin-media-inspector-context',
+    text: asset.fileName || asset.storagePath || asset.publicUrl || 'Media đang chọn',
+  });
+  card.appendChild(context);
   card.appendChild(renderMediaInspectorInternalTabs(asset));
   const activeTab = mediaWorkspaceState.inspectorTab === 'technical' ? 'technical' : 'overview';
   if (activeTab === 'technical') {
@@ -2761,16 +2766,13 @@ function setMediaInspectorTab(tabKey = 'overview') {
 }
 
 function renderMediaInspectorOverview(asset = {}) {
-  const layout = createElement('div', { className: 'cms-admin-media-inspector-overview' });
-  layout.appendChild(renderMediaPreview(asset));
-  const body = createElement('div', { className: 'cms-admin-media-inspector-body' });
-  const badges = createElement('div', { className: 'cms-admin-media-card-badges' });
+  const layout = createElement('div', { className: 'cms-admin-media-inspector-overview cms-admin-media-inspector-overview-compact' });
+  const badges = createElement('div', { className: 'cms-admin-media-card-badges cms-admin-media-inspector-badges' });
   badges.appendChild(renderBadge(getMediaKindLabel(asset.mediaKind), asset.mediaKind === 'video' ? 'warning' : 'default'));
   badges.appendChild(renderBadge(asset.hasUploadLogRecord ? 'Upload log' : 'Reference-only', asset.hasUploadLogRecord ? 'success' : 'warning'));
   badges.appendChild(renderBadge(asset.usage?.label || ADMIN_COPY.media.usageLabels.insufficient, asset.usage?.variant || 'default'));
-  body.appendChild(badges);
-  body.appendChild(createElement('h3', { className: 'cms-admin-media-inspector-title', text: asset.fileName || asset.storagePath || 'media' }));
-  const details = createElement('dl', { className: 'cms-admin-media-detail-list cms-admin-media-detail-list-wide' });
+  layout.appendChild(badges);
+  const details = createElement('dl', { className: 'cms-admin-media-detail-list cms-admin-media-detail-list-wide cms-admin-media-inspector-facts' });
   [
     ['Loại media', getMediaKindLabel(asset.mediaKind)],
     ['Ngày upload', formatDateTime(asset.createdAt)],
@@ -2780,13 +2782,13 @@ function renderMediaInspectorOverview(asset = {}) {
     ['Trường media', formatMediaFieldName(asset.fieldName)],
     ['Trạng thái usage', asset.usage?.label || ADMIN_COPY.media.usageLabels.insufficient],
     ['Owner target', asset.ownerLabel || getMediaTargetLabel(asset)],
+    ['Nguồn record', asset.hasUploadLogRecord ? 'Media upload log' : 'Reference-only / CMS reference'],
   ].forEach(([label, value]) => appendMediaDetail(details, label, value));
-  body.appendChild(details);
+  layout.appendChild(details);
   const note = safeArray(asset.usage?.references).length
     ? `${formatCount(asset.usage.references.length)} tham chiếu đã tìm thấy trong dữ liệu CMS đã kiểm tra.`
     : 'Chưa thấy tham chiếu trong dữ liệu đã kiểm tra. Không đồng nghĩa media an toàn để xóa.';
-  body.appendChild(renderCompactNotice(note));
-  layout.appendChild(body);
+  layout.appendChild(renderCompactNotice(note));
   return layout;
 }
 
@@ -2815,7 +2817,7 @@ function renderMediaInspectorTechnical(asset = {}) {
 
 function renderMediaActionSafetyCard(asset = null) {
   const card = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel cms-admin-media-action-card' });
-  card.appendChild(renderPanelTitle('Thao tác & an toàn', asset?.fileName || 'Chọn media'));
+  card.appendChild(renderPanelTitle('Thao tác & an toàn', asset ? 'Media đang chọn' : 'Chọn media'));
   if (!asset) {
     card.appendChild(renderEmptyState('Chọn media để sao chép đường dẫn, điều hướng hoặc kiểm tra điều kiện xóa.'));
     return card;
