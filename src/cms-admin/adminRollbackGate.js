@@ -61,7 +61,7 @@ function renderHistoryIntro(state = {}, historyState = {}, handlers = {}) {
   heading.appendChild(createElement('h2', { className: 'cms-admin-panel-title', text: 'Lịch sử phiên bản' }));
   heading.appendChild(createElement('p', {
     className: 'cms-admin-help-text',
-    text: 'Workspace này dùng để xem phiên bản, preview nội dung, dry-run rollback và chỉ khôi phục khi operator xác nhận rõ. Xem/chuyển tab không tự đổi website.',
+    text: 'Workspace này gom một luồng liền mạch: chọn phiên bản, preview đọc-only, chạy dry-run rollback, nhập lý do và khôi phục khi đã xác nhận rõ. Xem/chọn/chuyển vùng không tự đổi website.',
   }));
   top.appendChild(heading);
   top.appendChild(renderBadge(isRollbackAdmin(state) ? 'Rollback có kiểm soát' : 'Chỉ xem', isRollbackAdmin(state) ? 'warning' : 'default'));
@@ -108,6 +108,7 @@ function renderHistoryIntro(state = {}, historyState = {}, handlers = {}) {
     text: ' Preview chỉ đọc. Rollback thật sẽ đổi website public và chỉ mở sau khi chọn đúng bản, xem trước, dry-run server đạt, nhập lý do và xác nhận hai bước.',
   }));
   panel.appendChild(safety);
+  panel.appendChild(renderVersionHistoryAnchorChips());
 
   const actions = createElement('div', { className: 'cms-admin-actions cms-admin-version-history-hero-actions' });
   const refreshButton = createElement('button', {
@@ -128,9 +129,30 @@ function renderHistoryIntro(state = {}, historyState = {}, handlers = {}) {
   return panel;
 }
 
+
+function renderVersionHistoryAnchorChips() {
+  const nav = createElement('nav', {
+    className: 'cms-admin-version-history-anchors',
+    attrs: { 'aria-label': 'Đi tới vùng trong workspace Lịch sử phiên bản' },
+  });
+  [
+    ['#cms-version-history-list', 'Danh sách'],
+    ['#cms-version-history-preview', 'Preview'],
+    ['#cms-version-history-rollback', 'Khôi phục'],
+    ['#cms-version-history-audit', 'Audit'],
+  ].forEach(([href, label]) => {
+    nav.appendChild(createElement('a', {
+      className: 'cms-admin-version-history-anchor-chip',
+      text: label,
+      attrs: { href },
+    }));
+  });
+  return nav;
+}
+
 function renderHistoryAuditPanel(historyState = {}) {
   const historyView = buildHistoryViewModels(historyState.items);
-  const panel = createElement('section', { className: 'cms-admin-panel cms-admin-rollback-audit-panel cms-admin-version-audit-panel' });
+  const panel = createElement('section', { className: 'cms-admin-panel cms-admin-rollback-audit-panel cms-admin-version-audit-panel', attrs: { id: 'cms-version-history-audit' } });
   const title = createElement('div', { className: 'cms-admin-panel-title-row' });
   const heading = createElement('div', { className: 'cms-admin-cell-stack' });
   heading.appendChild(createElement('h3', { className: 'cms-admin-panel-title', text: 'Activity / Audit' }));
@@ -196,11 +218,11 @@ function renderRollbackRiskIntro() {
 }
 
 function renderHistoryListPanel(state = {}, historyState = {}, handlers = {}) {
-  const panel = createElement('section', { className: 'cms-admin-panel cms-admin-rollback-list-panel cms-admin-version-list-panel' });
+  const panel = createElement('section', { className: 'cms-admin-panel cms-admin-rollback-list-panel cms-admin-version-list-panel', attrs: { id: 'cms-version-history-list' } });
   const historyView = buildHistoryViewModels(historyState.items);
   const title = createElement('div', { className: 'cms-admin-panel-title-row' });
   const heading = createElement('div', { className: 'cms-admin-cell-stack' });
-  heading.appendChild(createElement('h3', { className: 'cms-admin-panel-title', text: 'Card 1 — Danh sách phiên bản' }));
+  heading.appendChild(createElement('h3', { className: 'cms-admin-panel-title', text: 'Danh sách phiên bản' }));
   heading.appendChild(createElement('p', {
     className: 'cms-admin-help-text',
     text: 'Chọn đúng phiên bản nguồn để xem trước. Bảng hoạt động kiểm tra/lỗi được tách xuống khu audit, không trộn với bản có thể khôi phục.',
@@ -443,14 +465,14 @@ function renderNonSelectableActivityCard(activity = {}) {
 }
 
 function renderVersionPreviewPanel(state = {}, historyState = {}, handlers = {}) {
-  const panel = createElement('section', { className: 'cms-admin-panel cms-admin-rollback-preview-panel cms-admin-version-preview-panel' });
+  const panel = createElement('section', { className: 'cms-admin-panel cms-admin-rollback-preview-panel cms-admin-version-preview-panel', attrs: { id: 'cms-version-history-preview' } });
   const selectedPath = String(historyState.selectedSourcePath || '').trim();
   const preview = historyState.previewResult?.sourcePath === selectedPath ? historyState.previewResult : null;
   const selectedPoint = findRestorePointByPath(historyState.items, selectedPath);
 
   const title = createElement('div', { className: 'cms-admin-panel-title-row' });
   const heading = createElement('div', { className: 'cms-admin-cell-stack' });
-  heading.appendChild(createElement('h3', { className: 'cms-admin-panel-title', text: 'Card 2 — Preview / Nội dung phiên bản' }));
+  heading.appendChild(createElement('h3', { className: 'cms-admin-panel-title', text: 'Preview phiên bản đã chọn' }));
   heading.appendChild(createElement('p', {
     className: 'cms-admin-help-text',
     text: 'Preview chỉ đọc nội dung của bản đã chọn. Không ghi Storage, không rollback, không thay đổi website.',
@@ -460,7 +482,7 @@ function renderVersionPreviewPanel(state = {}, historyState = {}, handlers = {})
   panel.appendChild(title);
 
   if (!selectedPath) {
-    panel.appendChild(renderEmptyState('Chọn một phiên bản ở Card 1 để xem preview đọc-only.'));
+    panel.appendChild(renderEmptyState('Chọn một phiên bản trong danh sách để xem preview đọc-only.'));
     return panel;
   }
 
@@ -547,10 +569,10 @@ function renderPreviewSummary(preview = {}) {
 }
 
 function renderRollbackPanel(state = {}, historyState = {}, handlers = {}) {
-  const panel = createElement('section', { className: 'cms-admin-panel cms-admin-rollback-action-panel cms-admin-version-rollback-panel' });
+  const panel = createElement('section', { className: 'cms-admin-panel cms-admin-rollback-action-panel cms-admin-version-rollback-panel', attrs: { id: 'cms-version-history-rollback' } });
   const title = createElement('div', { className: 'cms-admin-panel-title-row' });
   const heading = createElement('div', { className: 'cms-admin-cell-stack' });
-  heading.appendChild(createElement('h3', { className: 'cms-admin-panel-title', text: 'Card 3 — Khôi phục an toàn' }));
+  heading.appendChild(createElement('h3', { className: 'cms-admin-panel-title', text: 'Khôi phục có kiểm soát' }));
   heading.appendChild(createElement('p', {
     className: 'cms-admin-help-text',
     text: 'Dry-run kiểm tra điều kiện trên server. Rollback thật sẽ đổi website public và vẫn cần lý do vận hành cùng hai lần xác nhận.',
@@ -575,7 +597,7 @@ function renderRollbackPanel(state = {}, historyState = {}, handlers = {}) {
   }));
 
   if (!selectedPath) {
-    panel.appendChild(renderEmptyState('Chọn một bản ở Card 1 trước khi kiểm tra khôi phục.'));
+    panel.appendChild(renderEmptyState('Chọn một phiên bản trong danh sách trước khi kiểm tra khôi phục.'));
   } else {
     panel.appendChild(createElement('div', {
       className: 'cms-admin-rollback-selected-source cms-admin-version-selected-source',

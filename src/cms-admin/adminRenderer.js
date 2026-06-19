@@ -852,7 +852,7 @@ function renderActiveTab(state) {
         renderContent: ({ activeKey }) => renderPublishWorkspaceContent(state, activeKey),
       });
     case 'history':
-      return renderWorkspaceShell('history', renderRollbackHistoryTab(state, { onRerender: renderAdminShell }), state);
+      return renderWorkspaceShell('history', renderRollbackHistoryTab(state, { onRerender: renderAdminShell }), state, { hideTabs: true });
     case 'cleanup':
       return renderWorkspaceShell('cleanup', renderCmsStorageCleanupTab(state, { onRerender: renderAdminShell }), state);
     case 'settings':
@@ -895,10 +895,7 @@ const WORKSPACE_TAB_DEFINITIONS = Object.freeze({
     { key: 'history', label: 'Lịch sử liên quan', summary: 'Chuyển sang lịch sử nếu cần kiểm tra hoặc khôi phục.' },
   ],
   history: [
-    { key: 'list', label: 'Danh sách', summary: 'Xem các phiên bản đã lưu hoặc đã công khai.' },
-    { key: 'preview', label: 'Xem trước', summary: 'Xem trước bản đã chọn, không thay đổi website.' },
-    { key: 'restore', label: 'Khôi phục', summary: 'Kiểm tra các bước khôi phục có xác nhận.' },
-    { key: 'activity', label: 'Hoạt động', summary: 'Xem ghi chú và thông tin kỹ thuật liên quan.' },
+    { key: 'workspace', label: 'Luồng khôi phục', summary: 'Chọn phiên bản, preview, dry-run, nhập lý do và khôi phục có kiểm soát trong cùng workspace.' },
   ],
   cleanup: [
     { key: 'scan', label: 'Quét', summary: 'Quét tệp để biết trạng thái hiện tại.' },
@@ -1008,15 +1005,24 @@ function renderWorkspaceShell(workspaceKey, sourceNode, state = {}, options = {}
   });
   const layout = createElement('div', { className: 'cms-admin-workspace-layout' });
   const main = createElement('div', { className: 'cms-admin-workspace-main' });
-  main.appendChild(renderWorkspaceTabs(workspaceKey, tabs, activeKey));
+  if (!options.hideTabs) {
+    main.appendChild(renderWorkspaceTabs(workspaceKey, tabs, activeKey));
+  }
 
+  const panelAttrs = options.hideTabs
+    ? {
+        role: 'region',
+        id: `cms-admin-workspace-panel-${workspaceKey}-${activeKey}`,
+        'aria-label': pageCopy.title || activeTab?.label || 'Workspace',
+      }
+    : {
+        role: 'tabpanel',
+        id: `cms-admin-workspace-panel-${workspaceKey}-${activeKey}`,
+        'aria-labelledby': `cms-admin-workspace-tab-${workspaceKey}-${activeKey}`,
+      };
   const panel = createElement('section', {
     className: 'cms-admin-workspace-panel',
-    attrs: {
-      role: 'tabpanel',
-      id: `cms-admin-workspace-panel-${workspaceKey}-${activeKey}`,
-      'aria-labelledby': `cms-admin-workspace-tab-${workspaceKey}-${activeKey}`,
-    },
+    attrs: panelAttrs,
   });
 
   const customContent = typeof options.renderContent === 'function'
@@ -1206,9 +1212,7 @@ function getWorkspaceSecondaryNotes(workspaceKey, tabKey, state = {}) {
       history: ['Mở Lịch sử phiên bản nếu cần kiểm tra bản đã công khai hoặc khôi phục.', 'Màn này không tự gọi publish/rollback.'],
     },
     history: {
-      preview: [ADMIN_COPY.rollbackHistoryOperator?.previewNote || 'Xem trước chỉ đọc dữ liệu.', 'Chọn bản trong danh sách trước khi xem trước.'],
-      restore: [ADMIN_COPY.rollbackHistoryOperator?.dryRunNote || 'Kiểm tra khôi phục chưa thay đổi website.', ADMIN_COPY.rollbackHistoryOperator?.realRollbackNote || 'Khôi phục thật cần xác nhận rõ.'],
-      activity: ['Phiên bản, bản sao lưu và log không bị xóa trong phase này.', 'Thông tin kỹ thuật nên chỉ mở khi cần đối chiếu.'],
+      workspace: ['Chọn phiên bản, preview, kiểm tra khôi phục và nhập lý do trong một workspace liền mạch.', 'Không có rollback khi chỉ mở màn hoặc chuyển vùng xem.'],
     },
     cleanup: {
       results: ['Bảng kết quả có thể cuộn ngang bên trong bảng nếu dữ liệu dài.', 'Chỉ đọc kết quả scan/check; không tự xóa tệp.'],
@@ -1318,6 +1322,15 @@ function getWorkspaceRailGuidance(workspaceKey, tabKey, pageCopy = {}, stepConfi
         status: 'index.featuredArtworks',
         summary: 'Đây là nội dung nổi bật trên Trang chủ/Intro. Dữ liệu có thể tham chiếu tác phẩm/phòng nhưng owner là index.featuredArtworks, không phải rooms.indoor/outdoor.artworks.',
         steps: ['Kiểm tra tiêu đề và mô tả khu vực tiêu biểu.', 'Kiểm tra từng mục tiêu biểu, ảnh, room và artworkId nếu có.', 'Sửa bản nháp khi item tiêu biểu thiếu chữ hoặc ảnh.', 'Lưu bản nháp chưa làm đổi website.'],
+      },
+    },
+
+    history: {
+      workspace: {
+        title: 'Bạn đang xem Lịch sử phiên bản',
+        status: 'Rollback có kiểm soát',
+        summary: 'Workspace này gom danh sách, preview, dry-run rollback, lý do xác nhận và audit trong cùng màn. Chọn phiên bản không tự thay đổi website.',
+        steps: ['Chọn đúng phiên bản cần xem.', 'Xem preview đọc-only.', 'Chạy dry-run rollback trên server.', 'Chỉ khôi phục khi đã nhập lý do và xác nhận rõ.'],
       },
     },
   };
