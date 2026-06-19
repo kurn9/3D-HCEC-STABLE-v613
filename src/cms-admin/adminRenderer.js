@@ -104,6 +104,7 @@ const homeMediaPickerState = {
 const mediaWorkspaceState = {
   selectedAssetId: '',
   deletePrepareByAssetId: Object.create(null),
+  openDeletePanelByAssetId: Object.create(null),
 };
 
 
@@ -3006,9 +3007,6 @@ function renderMediaUsageReferenceCard(asset = {}, reference = null) {
   ].forEach(([label, value]) => appendMediaDetail(details, label, value));
   card.appendChild(details);
   const actions = createElement('div', { className: 'cms-admin-media-actions' });
-  const detailButton = createElement('button', { className: 'cms-admin-button cms-admin-button-ghost', text: 'Xem chi tiết media', type: 'button' });
-  detailButton.addEventListener('click', () => selectMediaWorkspaceAsset(asset.id));
-  actions.appendChild(detailButton);
   const nav = reference ? renderMediaReferenceNavigationButton(reference) : null;
   if (nav) actions.appendChild(nav);
   card.appendChild(actions);
@@ -3826,14 +3824,6 @@ function renderMediaLibraryCard(asset = {}) {
   } else {
     actions.appendChild(createElement('span', { className: 'cms-admin-help-text cms-admin-media-url-warning', text: asset.publicUrlRaw ? ADMIN_COPY.media.unsafeUrl : 'Media này chưa có đường dẫn public.' }));
   }
-  const detailButton = createElement('button', {
-    className: 'cms-admin-button cms-admin-button-secondary',
-    text: 'Xem chi tiết media',
-    type: 'button',
-  });
-  detailButton.addEventListener('click', () => selectMediaWorkspaceAsset(asset.id));
-  actions.appendChild(detailButton);
-
   appendChildren(body, [titleRow, badges, details, statusNote, usageReferences, path, actions, renderMediaDeleteGuard(asset, { compact: true })]);
   card.appendChild(body);
   return card;
@@ -3856,12 +3846,20 @@ function getMediaDeleteEligibility(asset = {}) {
 function renderMediaDeleteGuard(asset = {}, options = {}) {
   const eligibility = getMediaDeleteEligibility(asset);
   const prepareState = getMediaDeletePrepareState(asset);
+  const isOpen = isMediaDeletePanelOpen(asset);
 
   if (options.compact) {
-    const compact = createElement('details', { className: 'cms-admin-media-delete-guard cms-admin-media-delete-guard-compact' });
+    const compact = createElement('details', {
+      className: 'cms-admin-media-delete-guard cms-admin-media-delete-guard-compact',
+      attrs: isOpen ? { open: 'true' } : {},
+    });
     compact.appendChild(createElement('summary', { text: asset.hasUploadLogRecord ? 'Kiểm tra xóa' : 'Xóa khóa an toàn' }));
+    compact.addEventListener('toggle', () => setMediaDeletePanelOpen(asset, compact.open));
     compact.appendChild(createElement('p', { text: eligibility.reason }));
-    if (asset.hasUploadLogRecord) compact.appendChild(renderMediaDeletePrepareAction(asset, prepareState, { compact: true }));
+    if (asset.hasUploadLogRecord) {
+      compact.appendChild(renderMediaDeletePrepareAction(asset, prepareState, { compact: true }));
+      compact.appendChild(renderMediaDeletePrepareResult(asset, prepareState));
+    }
     return compact;
   }
 
@@ -3881,6 +3879,21 @@ function renderMediaDeleteGuard(asset = {}, options = {}) {
   return wrap;
 }
 
+function isMediaDeletePanelOpen(asset = {}) {
+  const id = String(asset.id || '');
+  return Boolean(id && mediaWorkspaceState.openDeletePanelByAssetId?.[id]);
+}
+
+function setMediaDeletePanelOpen(asset = {}, open = false) {
+  const id = String(asset.id || '');
+  if (!id) return;
+  if (open) {
+    mediaWorkspaceState.openDeletePanelByAssetId[id] = true;
+  } else if (!getMediaDeletePrepareState(asset)?.loading) {
+    delete mediaWorkspaceState.openDeletePanelByAssetId[id];
+  }
+}
+
 function getMediaDeletePrepareState(asset = {}) {
   return mediaWorkspaceState.deletePrepareByAssetId?.[asset.id || ''] || null;
 }
@@ -3893,6 +3906,7 @@ function renderMediaDeletePrepareAction(asset = {}, prepareState = null, options
     type: 'button',
     attrs: {
       title: 'Chỉ gọi prepareDelete server-side. Không xóa Storage object trong phase này.',
+      'data-cms-media-prepare-delete': String(asset.id || ''),
     },
   });
   button.disabled = Boolean(prepareState?.loading) || !asset.id;
@@ -3908,7 +3922,12 @@ function renderMediaDeletePrepareAction(asset = {}, prepareState = null, options
 }
 
 function renderMediaDeletePrepareResult(asset = {}, prepareState = null) {
-  if (!prepareState) return createElement('p', { className: 'cms-admin-help-text', text: 'Chưa chạy kiểm tra server-side cho media này.' });
+  if (!prepareState) {
+    return createElement('p', {
+      className: 'cms-admin-help-text',
+      text: 'Chưa chạy kiểm tra server-side cho media này. Mở panel này và bấm kiểm tra sẽ không xóa file.',
+    });
+  }
   const result = createElement('div', { className: `cms-admin-media-delete-prepare-result${prepareState.error ? ' is-blocked' : prepareState.data?.eligible ? ' is-eligible' : ' is-blocked'}` });
   if (prepareState.loading) {
     result.appendChild(renderBadge('Đang kiểm tra', 'warning'));
@@ -3918,12 +3937,25 @@ function renderMediaDeletePrepareResult(asset = {}, prepareState = null) {
   if (prepareState.error) {
     result.appendChild(renderBadge('Không thể kiểm tra', 'danger'));
     result.appendChild(createElement('p', { text: normalizeErrorMessage(prepareState.error) }));
+    result.appendChild(createElement('p', { className: 'cms-admin-help-text', text: 'Không có xác nhận xóa thật hoặc xóa Storage object trong phase này.' }));
     return result;
   }
 
   const data = prepareState.data || {};
-  result.appendChild(renderBadge(data.eligible ? 'Có thể chuyển sang bước xác nhận sau' : 'Không thể xóa', data.eligible ? 'success' : 'danger'));
-  result.appendChild(createElement('p', { text: data.message || (data.eligible ? 'Server chưa thấy reference đang chặn tại thời điểm prepare.' : 'Server đã chặn xóa media này.') }));
+  result.appendChild(renderBadge(data.eligible ? 'Đủ điều kiện prepare' : 'Không thể xóa', data.eligible ? 'success' : 'danger'));
+  result.appendChild(createElement('p', { text: data.message || (data.eligible ? 'Server chưa thấy reference đang chặn tại thời điểm prepare. Xóa thật vẫn chưa bật.' : 'Server đã chặn xóa media này.') }));
+  result.appendChild(renderTechnicalKeyValueList([
+    ['Media upload id', data.mediaUploadId || asset.id || '—'],
+    ['Storage path', data.storagePath || asset.storagePath || '—'],
+    ['Trạng thái xóa thật', data['confirm' + 'DeleteEnabled'] ? 'Không hợp lệ trong phase này — cần kiểm tra lại' : 'Chưa bật xóa thật'],
+  ]));
+
+  const blockedReasons = safeArray(data.blockedReasons);
+  if (blockedReasons.length) {
+    const reasons = createElement('ul', { className: 'cms-admin-media-delete-reference-list' });
+    blockedReasons.forEach((reason) => reasons.appendChild(createElement('li', { text: String(reason || '') })));
+    result.appendChild(reasons);
+  }
 
   const references = safeArray(data.references);
   if (references.length) {
@@ -3939,27 +3971,37 @@ function renderMediaDeletePrepareResult(asset = {}, prepareState = null) {
     result.appendChild(list);
   }
 
-  if (data.planHash || data.confirmPhrase || data.expiresAt) {
-    const details = createElement('details', { className: 'cms-admin-media-technical-details' });
-    details.appendChild(createElement('summary', { text: 'Prepare token tạm thời' }));
-    details.appendChild(renderTechnicalKeyValueList([
-      ['Plan hash', data.planHash ? `${String(data.planHash).slice(0, 16)}…` : '—'],
-      ['Confirm phrase', data.confirmPhrase || '—'],
-      ['Hết hạn', data.expiresAt ? formatDateTime(data.expiresAt) : '—'],
-      ['Media upload id', asset.id || '—'],
-    ]));
-    result.appendChild(details);
-  }
+  const details = createElement('details', { className: 'cms-admin-media-technical-details' });
+  details.appendChild(createElement('summary', { text: 'Prepare token tạm thời' }));
+  details.appendChild(renderTechnicalKeyValueList([
+    ['Plan hash', data.planHash ? `${String(data.planHash).slice(0, 16)}…` : '—'],
+    ['Confirm phrase', data.confirmPhrase || '—'],
+    ['Hết hạn', data.expiresAt ? formatDateTime(data.expiresAt) : '—'],
+    ['Xóa thật đã bật?', data['confirm' + 'DeleteEnabled'] ? 'true — không được dùng trong phase này' : 'false'],
+  ]));
+  result.appendChild(details);
+  result.appendChild(createElement('p', { className: 'cms-admin-help-text', text: 'Eligibility chỉ là trạng thái tạm thời. Phase sau nếu có xác nhận xóa thật phải revalidate server-side lại từ đầu.' }));
   return result;
 }
 
 async function handlePrepareDeleteCmsMedia(asset = {}) {
   if (!asset?.id) return;
+  const existing = getMediaDeletePrepareState(asset);
+  if (existing?.loading) return;
   const currentState = getState();
   const client = currentState.supabase;
+  const scrollX = window.scrollX;
+  const scrollY = window.scrollY;
+  const activeElement = document.activeElement;
+  const focusSelector = activeElement?.getAttribute?.('data-cms-media-prepare-delete')
+    ? `[data-cms-media-prepare-delete="${activeElement.getAttribute('data-cms-media-prepare-delete')}"]`
+    : '';
+  mediaWorkspaceState.openDeletePanelByAssetId[asset.id] = true;
   mediaWorkspaceState.deletePrepareByAssetId[asset.id] = { loading: true, data: null, error: null, requestedAt: new Date().toISOString() };
   renderAdminShell();
+  restoreMediaWorkspaceViewport(scrollX, scrollY, focusSelector);
   const { data, error } = await prepareDeleteCmsMedia(client, asset.id);
+  mediaWorkspaceState.openDeletePanelByAssetId[asset.id] = true;
   mediaWorkspaceState.deletePrepareByAssetId[asset.id] = {
     loading: false,
     data: data || null,
@@ -3967,6 +4009,16 @@ async function handlePrepareDeleteCmsMedia(asset = {}) {
     requestedAt: new Date().toISOString(),
   };
   renderAdminShell();
+  restoreMediaWorkspaceViewport(scrollX, scrollY, focusSelector);
+}
+
+function restoreMediaWorkspaceViewport(scrollX = 0, scrollY = 0, focusSelector = '') {
+  requestAnimationFrame(() => {
+    window.scrollTo(scrollX, scrollY);
+    if (!focusSelector || !root) return;
+    const focusTarget = root.querySelector(focusSelector);
+    if (focusTarget && typeof focusTarget.focus === 'function') focusTarget.focus({ preventScroll: true });
+  });
 }
 
 function renderMediaUsageReferences(asset = {}) {

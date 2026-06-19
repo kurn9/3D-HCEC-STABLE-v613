@@ -7502,3 +7502,34 @@ body.cms-admin-page * {
   width: 100%;
   justify-content: center;
 }
+
+/* v6.14.050.009 — Media Library prepare-delete UX stability */
+.cms-admin-media-delete-guard-compact[open] {
+  border-color: rgba(234, 179, 8, 0.42);
+  background: rgba(113, 63, 18, 0.12);
+}
+
+.cms-admin-media-delete-guard-compact[open] > summary {
+  margin-bottom: 0.5rem;
+}
+
+.cms-admin-media-delete-guard-compact .cms-admin-media-delete-prepare-result {
+  margin-top: 0.65rem;
+}
+
+.cms-admin-media-delete-guard-compact .cms-admin-media-delete-reference-list {
+  max-height: 220px;
+  overflow: auto;
+}
+
+.cms-admin-media-actions {
+  align-items: center;
+}
+
+.cms-admin-media-actions:empty {
+  display: none;
+}
+
+.cms-admin-media-delete-prepare-action .cms-admin-button[disabled] {
+  cursor: wait;
+}
