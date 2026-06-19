@@ -229,7 +229,8 @@ function renderHistoryListPanel(state = {}, historyState = {}, handlers = {}) {
     panel.appendChild(renderEmptyState('Chưa có phiên bản hoặc bản sao hợp lệ để khôi phục. Hãy đối chiếu cms_publish_logs hoặc quay lại màn công khai.'));
   } else {
     const list = createElement('div', { className: 'cms-admin-rollback-table cms-admin-version-list' });
-    historyView.restorePoints.forEach((point) => list.appendChild(renderRestorePointCard(point, state, historyState, handlers)));
+    prioritizeRestorePoints(historyView.restorePoints, historyState.selectedSourcePath)
+      .forEach((point) => list.appendChild(renderRestorePointCard(point, state, historyState, handlers)));
     panel.appendChild(list);
   }
 
@@ -338,6 +339,54 @@ function addRestorePoint(map, point) {
   }
 }
 
+function prioritizeRestorePoints(points = [], selectedSourcePath = '') {
+  const selectedPath = String(selectedSourcePath || '').trim();
+  return [...safeArray(points)].sort((a, b) => {
+    if (selectedPath) {
+      if (a.sourcePath === selectedPath && b.sourcePath !== selectedPath) return -1;
+      if (b.sourcePath === selectedPath && a.sourcePath !== selectedPath) return 1;
+    }
+    if ((b.kindPriority || 0) !== (a.kindPriority || 0)) return (b.kindPriority || 0) - (a.kindPriority || 0);
+    return (b.timestamp || 0) - (a.timestamp || 0);
+  });
+}
+
+function getRestorePointDisplayTitle(point = {}, selected = false) {
+  if (selected) return 'Bản đang chọn';
+  const status = String(point.status || '').toLowerCase();
+  if (point.kind === 'restored' || status === 'rolled_back') return 'Bản đã khôi phục';
+  if (point.kind === 'published' || status === 'published') return 'Bản đã công khai';
+  if (point.kind === 'backup') return `Backup ${formatDateTime(point.createdAt)}`;
+  return 'Phiên bản có thể khôi phục';
+}
+
+function getRestorePointVersionLine(point = {}) {
+  const version = String(point.version || point.title || '').trim();
+  if (version) return version;
+  return point.sourceFile || getPathFileName(point.sourcePath) || 'Không rõ mã phiên bản';
+}
+
+function getRestorePointStatusLabel(point = {}) {
+  const status = String(point.status || '').toLowerCase();
+  if (point.kind === 'backup') return 'Backup/reference';
+  if (point.kind === 'restored' || status === 'rolled_back') return 'Đã khôi phục';
+  if (point.kind === 'published' || status === 'published') return 'Đã công khai';
+  return STATUS_LABELS[status] || point.label || 'Có thể khôi phục';
+}
+
+function getRestorePointSourceShortLabel(point = {}) {
+  if (point.kind === 'backup') return 'Backup';
+  if (point.kind === 'restored') return 'Restore source';
+  return 'Version';
+}
+
+function getRestorePointStatusVariant(point = {}) {
+  if (point.kind === 'backup') return 'warning';
+  if (point.kind === 'restored') return 'success';
+  if (String(point.status || '').toLowerCase() === 'published') return 'success';
+  return 'default';
+}
+
 function createActivityViewModel(log = {}, index = 0, note = '') {
   const status = String(log.status || '').trim().toLowerCase();
   return {
@@ -357,63 +406,58 @@ function createActivityViewModel(log = {}, index = 0, note = '') {
 function renderRestorePointCard(point, state = {}, historyState = {}, handlers = {}) {
   const selected = historyState.selectedSourcePath === point.sourcePath;
   const card = createElement('article', {
-    className: `cms-admin-rollback-log-card cms-admin-restore-point-card cms-admin-version-card${selected ? ' is-selected' : ''}`,
+    className: `cms-admin-rollback-log-card cms-admin-restore-point-card cms-admin-version-card cms-admin-version-card-${point.kind || 'published'}${selected ? ' is-selected' : ''}`,
     attrs: { 'aria-selected': selected ? 'true' : 'false' },
   });
-  const head = createElement('div', { className: 'cms-admin-rollback-log-head cms-admin-version-card-head' });
-  const title = createElement('div', { className: 'cms-admin-cell-stack' });
-  title.appendChild(createElement('strong', { text: point.version || point.title || 'Phiên bản nội dung' }));
-  title.appendChild(createElement('span', {
-    className: 'cms-admin-cell-sub cms-admin-version-card-path',
-    text: point.sourceFile || getPathFileName(point.sourcePath),
+
+  const statusRow = createElement('div', { className: 'cms-admin-version-card-status-row' });
+  const statusCluster = createElement('div', { className: 'cms-admin-version-card-badges' });
+  if (selected) statusCluster.appendChild(renderBadge('Đang chọn', 'success'));
+  statusCluster.appendChild(renderBadge(getRestorePointStatusLabel(point), getRestorePointStatusVariant(point)));
+  statusCluster.appendChild(renderBadge(getRestorePointSourceShortLabel(point), point.kind === 'backup' ? 'warning' : 'default'));
+  const time = createElement('span', { className: 'cms-admin-version-card-time', text: formatDateTime(point.createdAt) });
+  appendChildren(statusRow, [statusCluster, time]);
+  card.appendChild(statusRow);
+
+  const identity = createElement('div', { className: 'cms-admin-version-card-identity' });
+  identity.appendChild(createElement('strong', { text: getRestorePointDisplayTitle(point, selected) }));
+  identity.appendChild(createElement('span', {
+    className: 'cms-admin-cell-sub cms-admin-version-card-version',
+    text: getRestorePointVersionLine(point),
   }));
-  const badges = createElement('div', { className: 'cms-admin-version-card-badges' });
-  badges.appendChild(renderBadge(point.kind === 'backup' ? 'Backup/reference' : point.label, point.kind === 'backup' ? 'warning' : 'success'));
-  if (selected) badges.appendChild(renderBadge('Đang chọn', 'success'));
-  appendChildren(head, [title, badges]);
-  card.appendChild(head);
+  card.appendChild(identity);
 
   const summary = createElement('div', { className: 'cms-admin-restore-point-summary cms-admin-version-card-facts' });
-  summary.appendChild(renderMeta('Thời điểm', formatDateTime(point.createdAt)));
-  summary.appendChild(renderMeta('Nguồn', point.kind === 'backup' ? 'Storage backup path' : 'Storage version path'));
-  summary.appendChild(renderMeta('Trạng thái log', STATUS_LABELS[String(point.status || '').toLowerCase()] || point.status || '—'));
-  summary.appendChild(renderMeta('Audit canonical', 'cms_publish_logs'));
+  summary.appendChild(renderMeta('Nguồn', point.kind === 'backup' ? 'Storage backup' : 'Storage version'));
+  summary.appendChild(renderMeta('Audit', 'cms_publish_logs'));
+  if (point.operationType) summary.appendChild(renderMeta('Thao tác', point.operationType));
   card.appendChild(summary);
 
   if (selected) {
     card.appendChild(createElement('div', {
       className: 'cms-admin-alert cms-admin-alert-success cms-admin-restore-point-selected',
-      text: 'Đã chọn phiên bản này. Bước tiếp theo: xem preview đọc-only rồi chạy kiểm tra khôi phục.',
+      text: 'Đang dùng bản này cho preview và checklist khôi phục.',
     }));
   }
 
   const actions = createElement('div', { className: 'cms-admin-actions cms-admin-rollback-log-actions' });
-  const previewButton = createElement('button', {
-    className: 'cms-admin-button cms-admin-button-secondary',
-    type: 'button',
-    text: historyState.isPreviewing && historyState.previewRequestPath === point.sourcePath ? 'Đang xem...' : 'Chọn & xem trước',
-    title: `${ROLLBACK_COPY.actions?.preview || 'Xem trước bản public đã chọn'} ${point.sourceFile}`,
-    ariaLabel: `${ROLLBACK_COPY.actions?.preview || 'Xem trước bản public đã chọn'} ${point.sourceFile}`,
-  });
-  previewButton.disabled = !isRollbackAdmin(state) || historyState.isPreviewing || historyState.isRollingBack;
-  previewButton.addEventListener('click', () => handleSelectRestorePoint(point, handlers, { preview: true }));
-
   const selectButton = createElement('button', {
-    className: 'cms-admin-button cms-admin-button-ghost',
+    className: `cms-admin-button ${selected ? 'cms-admin-button-secondary' : 'cms-admin-button-primary'}`,
     type: 'button',
-    text: selected ? 'Đang chọn' : 'Chọn bản',
-    title: `${ROLLBACK_COPY.actions?.select || 'Chọn bản này làm nguồn rollback'} ${point.sourceFile}`,
-    ariaLabel: `${ROLLBACK_COPY.actions?.select || 'Chọn bản này làm nguồn rollback'} ${point.sourceFile}`,
+    text: selected ? 'Đang chọn' : 'Chọn phiên bản',
+    title: `${ROLLBACK_COPY.actions?.select || 'Chọn bản này làm nguồn rollback'} ${point.version || point.title || point.sourceFile}`,
+    ariaLabel: `${ROLLBACK_COPY.actions?.select || 'Chọn bản này làm nguồn rollback'} ${point.version || point.title || point.sourceFile}`,
   });
   selectButton.disabled = !isRollbackAdmin(state) || historyState.isRollingBack || selected;
   selectButton.addEventListener('click', () => handleSelectRestorePoint(point, handlers));
-  appendChildren(actions, [previewButton, selectButton]);
+  actions.appendChild(selectButton);
   card.appendChild(actions);
 
-  const technical = createElement('details', { className: 'cms-admin-rollback-technical-details' });
+  const technical = createElement('details', { className: 'cms-admin-rollback-technical-details cms-admin-version-card-technical' });
   technical.appendChild(createElement('summary', { text: 'Đường dẫn và metadata kỹ thuật' }));
   const grid = createElement('div', { className: 'cms-admin-rollback-meta-grid cms-admin-rollback-technical-grid' });
   [
+    ['Tên file', point.sourceFile || getPathFileName(point.sourcePath)],
     ['Đường dẫn phiên bản', point.sourcePath],
     ['Trạng thái gốc', point.status],
     ['Loại thao tác', point.operationType],

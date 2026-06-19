@@ -9090,3 +9090,248 @@ body.cms-admin-page * {
 .cms-admin-version-history-workspace > .cms-admin-version-history-flow-grid {
   grid-column: 1 / -1;
 }
+
+/* v6.14.052.005 — Version History visual excellence and list readability repair */
+.cms-admin-version-history-workspace {
+  gap: 20px;
+}
+
+.cms-admin-version-history-hero {
+  padding-block: 18px;
+}
+
+.cms-admin-version-history-flow-grid {
+  gap: 18px;
+}
+
+.cms-admin-version-list-panel,
+.cms-admin-version-preview-panel,
+.cms-admin-version-rollback-panel {
+  overflow: visible;
+}
+
+.cms-admin-version-list {
+  display: grid;
+  gap: 12px;
+  max-height: none;
+  overflow: visible;
+  padding-right: 0;
+}
+
+.cms-admin-version-card {
+  position: relative;
+  display: grid;
+  gap: 11px;
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.046), rgba(255, 255, 255, 0.018)),
+    rgba(6, 14, 20, 0.74);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
+  min-width: 0;
+  transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
+}
+
+.cms-admin-version-card::before {
+  content: '';
+  position: absolute;
+  inset-block: 14px;
+  inset-inline-start: 0;
+  width: 3px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.32);
+}
+
+.cms-admin-version-card:hover {
+  border-color: rgba(239, 197, 92, 0.28);
+  background:
+    linear-gradient(145deg, rgba(239, 197, 92, 0.07), rgba(255, 255, 255, 0.018)),
+    rgba(6, 14, 20, 0.78);
+}
+
+.cms-admin-version-card.is-selected {
+  border-color: rgba(239, 197, 92, 0.72);
+  background:
+    linear-gradient(145deg, rgba(239, 197, 92, 0.13), rgba(34, 197, 94, 0.035)),
+    rgba(9, 17, 22, 0.86);
+  box-shadow: 0 0 0 1px rgba(239, 197, 92, 0.12), 0 16px 36px rgba(0, 0, 0, 0.28);
+}
+
+.cms-admin-version-card.is-selected::before {
+  width: 4px;
+  background: linear-gradient(180deg, #f3ca5f, rgba(34, 197, 94, 0.88));
+}
+
+.cms-admin-version-card-status-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.cms-admin-version-card-time {
+  flex: 0 0 auto;
+  color: rgba(222, 235, 241, 0.68);
+  font-size: 0.74rem;
+  font-weight: 800;
+  line-height: 1.35;
+  text-align: right;
+}
+
+.cms-admin-version-card-badges {
+  justify-content: flex-start;
+  align-items: center;
+  gap: 6px;
+}
+
+.cms-admin-version-card-identity {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.cms-admin-version-card-identity > strong {
+  color: #fff7dc;
+  font-size: clamp(0.98rem, 1vw, 1.12rem);
+  font-weight: 950;
+  letter-spacing: -0.015em;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.cms-admin-version-card-version {
+  color: rgba(222, 235, 241, 0.8);
+  font-size: 0.78rem;
+  font-weight: 800;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.cms-admin-version-card-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  min-width: 0;
+}
+
+.cms-admin-version-card-facts .cms-admin-rollback-meta-item {
+  padding: 8px 9px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.032);
+}
+
+.cms-admin-version-card-facts .cms-admin-rollback-meta-item > span {
+  font-size: 0.68rem;
+  letter-spacing: 0.015em;
+}
+
+.cms-admin-version-card-facts .cms-admin-rollback-meta-item > strong {
+  font-size: 0.76rem;
+  overflow-wrap: anywhere;
+}
+
+.cms-admin-version-card .cms-admin-restore-point-selected {
+  margin: 0;
+  padding: 9px 10px;
+  border-radius: 13px;
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.cms-admin-version-card .cms-admin-rollback-log-actions {
+  margin-top: 0;
+}
+
+.cms-admin-version-card .cms-admin-rollback-log-actions .cms-admin-button {
+  min-height: 38px;
+  width: auto;
+  min-width: 145px;
+}
+
+.cms-admin-version-card.is-selected .cms-admin-rollback-log-actions .cms-admin-button {
+  opacity: 0.88;
+}
+
+.cms-admin-version-card-technical {
+  margin-top: 0;
+  border-radius: 13px;
+  background: rgba(0, 0, 0, 0.13);
+}
+
+.cms-admin-version-card-technical > summary {
+  font-size: 0.76rem;
+}
+
+.cms-admin-version-card-technical .cms-admin-rollback-meta-grid {
+  grid-template-columns: 1fr;
+}
+
+.cms-admin-version-card-technical .cms-admin-rollback-meta-item > strong {
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.cms-admin-version-preview-panel,
+.cms-admin-version-rollback-panel {
+  align-self: start;
+}
+
+.cms-admin-version-preview-panel .cms-admin-panel-title-row,
+.cms-admin-version-rollback-panel .cms-admin-panel-title-row {
+  gap: 12px;
+}
+
+.cms-admin-version-preview-panel .cms-admin-help-text,
+.cms-admin-version-rollback-panel .cms-admin-help-text {
+  max-width: 68ch;
+}
+
+.cms-admin-version-audit-panel {
+  margin-top: 2px;
+}
+
+.cms-admin-version-history-workspace .cms-admin-empty,
+.cms-admin-version-history-workspace .cms-admin-empty-state {
+  border-radius: 16px;
+}
+
+@media (min-width: 1180px) and (max-width: 1539px) {
+  .cms-admin-version-history-flow-grid {
+    grid-template-columns: minmax(300px, 0.9fr) minmax(0, 1.1fr);
+  }
+}
+
+@media (min-width: 1540px) {
+  .cms-admin-version-history-flow-grid {
+    grid-template-columns: minmax(320px, 0.84fr) minmax(360px, 1fr) minmax(360px, 0.96fr);
+  }
+}
+
+@media (max-width: 1180px) {
+  .cms-admin-version-list {
+    max-height: none;
+    overflow: visible;
+  }
+}
+
+@media (max-width: 760px) {
+  .cms-admin-version-card-status-row {
+    flex-direction: column;
+  }
+
+  .cms-admin-version-card-time {
+    text-align: left;
+  }
+
+  .cms-admin-version-card-facts {
+    grid-template-columns: 1fr;
+  }
+
+  .cms-admin-version-card .cms-admin-rollback-log-actions .cms-admin-button {
+    width: 100%;
+  }
+}
