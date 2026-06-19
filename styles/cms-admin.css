@@ -7215,3 +7215,117 @@ body.cms-admin-page * {
     grid-template-columns: 1fr;
   }
 }
+
+/* v6.14.050.004 — Media Library upload/delete guard + count clarity */
+.cms-admin-media-count-clarity-notice,
+.cms-admin-media-capability-panel,
+.cms-admin-media-delete-guard {
+  min-width: 0;
+}
+
+.cms-admin-media-count-clarity-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  border: 1px solid rgba(96, 165, 250, 0.18);
+  border-radius: var(--cms-admin-radius-md);
+  background: rgba(30, 64, 175, 0.1);
+  color: var(--cms-admin-muted);
+  line-height: 1.5;
+  margin-bottom: 14px;
+  padding: 11px 12px;
+}
+
+.cms-admin-media-count-clarity-notice p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.cms-admin-media-capability-panel {
+  display: grid;
+  gap: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.13);
+  border-radius: var(--cms-admin-radius-lg);
+  background: rgba(15, 23, 42, 0.14);
+  margin-bottom: 14px;
+  padding: 14px;
+}
+
+.cms-admin-media-capability-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+  gap: 12px;
+}
+
+.cms-admin-media-capability-card {
+  display: grid;
+  gap: 10px;
+  border: 1px solid rgba(226, 232, 240, 0.09);
+  border-radius: var(--cms-admin-radius-md);
+  background: rgba(2, 6, 12, 0.2);
+  padding: 12px;
+  min-width: 0;
+}
+
+.cms-admin-media-capability-card h3 {
+  margin: 0;
+  color: var(--cms-admin-text);
+  font-size: 0.95rem;
+  line-height: 1.35;
+}
+
+.cms-admin-media-capability-card p,
+.cms-admin-media-delete-guard p {
+  margin: 0;
+  color: var(--cms-admin-muted);
+  font-size: 0.82rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.cms-admin-media-capability-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.cms-admin-media-upload-disabled-input {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.cms-admin-media-delete-policy-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--cms-admin-muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.cms-admin-media-delete-guard {
+  display: grid;
+  gap: 7px;
+  border: 1px solid rgba(248, 113, 113, 0.16);
+  border-radius: var(--cms-admin-radius-sm);
+  background: rgba(127, 29, 29, 0.08);
+  padding: 9px;
+}
+
+.cms-admin-media-delete-disabled-button[disabled] {
+  cursor: not-allowed;
+  opacity: 0.68;
+}
+
+@media (max-width: 760px) {
+  .cms-admin-media-count-clarity-notice,
+  .cms-admin-media-capability-actions {
+    display: grid;
+  }
+
+  .cms-admin-media-upload-disabled-input {
+    width: 100%;
+  }
+}
