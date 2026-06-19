@@ -7433,3 +7433,72 @@ body.cms-admin-page * {
     width: 100%;
   }
 }
+
+/* v6.14.050.008 — Media Library single-media delete prepare-only UI */
+.cms-admin-media-delete-prepare-action {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem;
+  margin-top: 0.75rem;
+}
+
+.cms-admin-media-delete-prepare-action .cms-admin-help-text {
+  flex: 1 1 220px;
+  min-width: min(100%, 220px);
+  margin: 0;
+}
+
+.cms-admin-media-delete-prepare-result {
+  display: grid;
+  gap: 0.65rem;
+  margin-top: 0.85rem;
+  padding: 0.85rem;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 16px;
+  background: rgba(15, 23, 42, 0.36);
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.cms-admin-media-delete-prepare-result.is-eligible {
+  border-color: rgba(34, 197, 94, 0.32);
+  background: rgba(20, 83, 45, 0.14);
+}
+
+.cms-admin-media-delete-prepare-result.is-blocked {
+  border-color: rgba(248, 113, 113, 0.34);
+  background: rgba(127, 29, 29, 0.14);
+}
+
+.cms-admin-media-delete-reference-list {
+  display: grid;
+  gap: 0.55rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cms-admin-media-delete-reference-list li {
+  display: grid;
+  gap: 0.22rem;
+  padding: 0.55rem 0.65rem;
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 12px;
+  background: rgba(2, 6, 23, 0.28);
+}
+
+.cms-admin-media-delete-reference-list span,
+.cms-admin-media-delete-reference-list small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.cms-admin-media-delete-guard-compact .cms-admin-media-delete-prepare-action {
+  align-items: stretch;
+}
+
+.cms-admin-media-delete-guard-compact .cms-admin-media-delete-prepare-action .cms-admin-button {
+  width: 100%;
+  justify-content: center;
+}

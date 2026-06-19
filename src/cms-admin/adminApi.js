@@ -1,4 +1,4 @@
-import { ADMIN_TABLES, ADMIN_UI, CMS_MEDIA_UPLOAD_CONFIG, CMS_PUBLISH_GATE_CONFIG, CMS_ROLLBACK_GATE_CONFIG, CMS_STORAGE_CLEANUP_CONFIG, STATIC_CMS_DRAFT_CONFIG } from './adminConfig.js';
+import { ADMIN_TABLES, ADMIN_UI, CMS_MEDIA_DELETE_CONFIG, CMS_MEDIA_UPLOAD_CONFIG, CMS_PUBLISH_GATE_CONFIG, CMS_ROLLBACK_GATE_CONFIG, CMS_STORAGE_CLEANUP_CONFIG, STATIC_CMS_DRAFT_CONFIG } from './adminConfig.js';
 import { safeArray } from './adminUtils.js';
 import { buildCanonicalDashboardSummary } from './adminDashboardSummary.js';
 
@@ -628,6 +628,46 @@ export async function uploadCmsMedia(client, payload = {}) {
   }
 }
 
+
+
+// v6.14.050.008 — server-side single-media delete prepare gate.
+// This calls delete-cms-media with the authenticated user's JWT.
+// It only checks delete eligibility; it never deletes Storage objects from the browser.
+export async function prepareDeleteCmsMedia(client, mediaUploadId) {
+  if (!client) {
+    return { data: null, error: new Error('Supabase client chưa sẵn sàng.') };
+  }
+
+  const id = normalizeUuidLike(mediaUploadId);
+  if (!id) {
+    return { data: null, error: new Error('Thiếu mediaUploadId UUID hợp lệ để kiểm tra điều kiện xóa.') };
+  }
+
+  const { data: sessionData, error: sessionError } = await client.auth.getSession();
+  if (sessionError) return { data: null, error: sessionError };
+  const token = sessionData?.session?.access_token;
+  if (!token) {
+    return { data: null, error: new Error('Cần đăng nhập để kiểm tra điều kiện xóa media.') };
+  }
+
+  try {
+    const response = await fetch(CMS_MEDIA_DELETE_CONFIG.endpoint, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ action: 'prepareDelete', mediaUploadId: id }),
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok || body?.ok === false) {
+      return { data: body || null, error: new Error(body?.message || body?.error || `Kiểm tra điều kiện xóa thất bại HTTP ${response.status}.`) };
+    }
+    return { data: body, error: null };
+  } catch (error) {
+    return { data: null, error };
+  }
+}
 
 // V6.11.21-B6-F_K_O_I_M_APPLY — server-side static CMS publish gate.
 // This function calls the Supabase Edge Function with the authenticated user's JWT.

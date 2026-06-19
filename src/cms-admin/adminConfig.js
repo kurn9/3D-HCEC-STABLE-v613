@@ -134,6 +134,17 @@ export const CMS_MEDIA_UPLOAD_CONFIG = Object.freeze({
   }),
 });
 
+export const CMS_MEDIA_DELETE_CONFIG = Object.freeze({
+  enabled: true,
+  edgeFunctionName: 'delete-cms-media',
+  endpoint: `${SUPABASE_CONFIG.url}/functions/v1/delete-cms-media`,
+  bucket: 'cms-media',
+  prepareOnly: true,
+  confirmDeleteEnabled: false,
+  allowedTargetTypes: Object.freeze(['room_artwork', 'index_featured']),
+});
+
+
 
 export const CMS_PUBLISH_GATE_CONFIG = Object.freeze({
   enabled: true,
