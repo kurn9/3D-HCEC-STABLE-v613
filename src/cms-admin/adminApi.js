@@ -906,6 +906,10 @@ export async function safeDeleteSelectedCmsStorageCleanup(client, options = {}) 
   return runCmsStorageCleanupAction(client, 'safeDeleteSelected', options);
 }
 
+export async function safeDeleteSelectedPublicVersionCleanup(client, options = {}) {
+  return runCmsStorageCleanupAction(client, 'safeDeleteSelectedPublicVersion', options);
+}
+
 async function runCmsStorageCleanupAction(client, action, options = {}) {
   if (!client) {
     return { data: null, error: new Error('Supabase client chưa sẵn sàng.') };
@@ -943,11 +947,11 @@ async function runCmsStorageCleanupAction(client, action, options = {}) {
 }
 
 function buildCmsStorageCleanupPayload(action, options = {}) {
-  if (!['scan', 'dryRun', 'safeDelete', 'safeDeleteSelected'].includes(action)) return null;
+  if (!['scan', 'dryRun', 'safeDelete', 'safeDeleteSelected', 'safeDeleteSelectedPublicVersion'].includes(action)) return null;
   const retentionDays = normalizeCleanupInteger(options.retentionDays, CMS_STORAGE_CLEANUP_CONFIG.defaultRetentionDays || 30, CMS_STORAGE_CLEANUP_CONFIG.minRetentionDays || 7, 3650);
-  const keepLastVersions = normalizeCleanupInteger(options.keepLastVersions, CMS_STORAGE_CLEANUP_CONFIG.defaultKeepLastVersions || 20, CMS_STORAGE_CLEANUP_CONFIG.minKeepLastVersions || 5, 500);
+  const keepLastVersions = normalizeCleanupInteger(options.keepLastVersions, CMS_STORAGE_CLEANUP_CONFIG.defaultKeepLastVersions || 10, CMS_STORAGE_CLEANUP_CONFIG.minKeepLastVersions || 1, 500);
 
-  if (action === 'safeDeleteSelected') {
+  if (action === 'safeDeleteSelected' || action === 'safeDeleteSelectedPublicVersion') {
     const runId = String(options.runId || '').trim();
     const planHash = String(options.planHash || '').trim();
     const selectedItemKey = String(options.selectedItemKey || '').trim();
@@ -957,7 +961,7 @@ function buildCmsStorageCleanupPayload(action, options = {}) {
       runId,
       planHash,
       selectedItemKey,
-      scope: 'media',
+      scope: action === 'safeDeleteSelectedPublicVersion' ? 'versions' : 'media',
       retentionDays,
       keepLastVersions,
     };

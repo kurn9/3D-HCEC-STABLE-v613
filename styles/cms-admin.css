@@ -9935,3 +9935,40 @@ body.cms-admin-page * {
     width: 100%;
   }
 }
+
+/* v6.14.054.001 — public version/backup cleanup focus */
+.cms-admin-cleanup-scope-static {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid rgba(214, 178, 94, 0.24);
+  border-radius: 12px;
+  background: rgba(214, 178, 94, 0.08);
+  color: var(--cms-admin-text);
+  font-weight: 750;
+  overflow-wrap: anywhere;
+}
+
+.cms-admin-cleanup-view .cms-admin-cleanup-controls-simple {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.4fr) minmax(120px, 0.55fr) minmax(140px, 0.65fr) auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.cms-admin-cleanup-view .cms-admin-cleanup-candidate-card.is-blocked {
+  border-color: rgba(214, 178, 94, 0.22);
+}
+
+@media (max-width: 1100px) {
+  .cms-admin-cleanup-view .cms-admin-cleanup-controls-simple {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .cms-admin-cleanup-view .cms-admin-cleanup-controls-simple {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
