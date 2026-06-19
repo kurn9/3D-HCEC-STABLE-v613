@@ -50,15 +50,21 @@ export function renderCmsStorageCleanupTab(state = getState(), options = {}) {
   return panel;
 }
 
+function getCleanupRetentionDays(stateOrCleanup = {}) {
+  const cleanup = stateOrCleanup.storageCleanup || stateOrCleanup || {};
+  return cleanup.retentionDays || CMS_STORAGE_CLEANUP_CONFIG.defaultRetentionDays || 1;
+}
+
 function renderCleanupTitle(copy = {}) {
   const header = createElement('div', { className: 'cms-admin-cleanup-header' });
   const left = createElement('div');
   left.appendChild(createElement('h3', { className: 'cms-admin-section-title', text: copy.title || 'Quét & dọn tệp' }));
   left.appendChild(createElement('p', { className: 'cms-admin-compact-copy', text: copy.intro || 'Chỉ quét và kiểm tra. Không xóa dữ liệu.' }));
   const badges = createElement('div', { className: 'cms-admin-cleanup-badges' });
-  badges.appendChild(renderBadge(copy.status || 'Quét và kiểm tra trước', 'warning'));
-  badges.appendChild(renderBadge('Dọn dẹp tự do đang tắt', 'success'));
-  badges.appendChild(renderBadge('Không dọn nội dung website', 'success'));
+  badges.appendChild(renderBadge(copy.status || 'Dọn thật đang mở theo guard', 'warning'));
+  badges.appendChild(renderBadge('Retention mặc định 1 ngày', 'info'));
+  badges.appendChild(renderBadge('Raw delete/purge đang tắt', 'success'));
+  badges.appendChild(renderBadge('Không dọn nội dung website đang dùng', 'success'));
   appendChildren(header, [left, badges]);
   return header;
 }
@@ -67,7 +73,8 @@ function renderCleanupNotice(copy = {}) {
   const wrap = createElement('div', { className: 'cms-admin-alert cms-admin-alert-info' });
   wrap.appendChild(createElement('strong', { text: 'An toàn dữ liệu' }));
   wrap.appendChild(createElement('p', { text: copy.deleteDisabled || 'Dọn dẹp tự do đang bị tắt ở cả giao diện và server.' }));
-  wrap.appendChild(createElement('p', { text: 'Màn này không tự xóa tệp khi chỉ mở, quét hoặc kiểm tra.' }));
+  wrap.appendChild(createElement('p', { text: 'Retention cleanup hiện tại: 1 ngày. Scan/dry-run có thể ghi log kiểm tra nhưng không xóa object.' }));
+  wrap.appendChild(createElement('p', { text: 'Màn này không tự xóa tệp khi chỉ mở, chọn candidate, quét hoặc kiểm tra.' }));
   return wrap;
 }
 
@@ -86,10 +93,10 @@ function renderCleanupControls(state, options = {}) {
   const retentionInput = createElement('input', {
     className: 'cms-admin-input cms-admin-cleanup-number',
     type: 'number',
-    value: cleanup.retentionDays || CMS_STORAGE_CLEANUP_CONFIG.defaultRetentionDays || 30,
-    attrs: { min: String(CMS_STORAGE_CLEANUP_CONFIG.minRetentionDays || 7), step: '1' },
+    value: getCleanupRetentionDays(cleanup),
+    attrs: { min: String(CMS_STORAGE_CLEANUP_CONFIG.minRetentionDays || 1), step: '1' },
   });
-  retentionInput.addEventListener('change', () => setCmsStorageCleanupState({ retentionDays: normalizeControlNumber(retentionInput.value, 30, 7, 3650) }));
+  retentionInput.addEventListener('change', () => setCmsStorageCleanupState({ retentionDays: normalizeControlNumber(retentionInput.value, 1, CMS_STORAGE_CLEANUP_CONFIG.minRetentionDays || 1, 3650) }));
 
   const keepInput = createElement('input', {
     className: 'cms-admin-input cms-admin-cleanup-number',
@@ -183,9 +190,15 @@ function renderCleanupOperatorWorkspace(state, result = {}, options = {}) {
   const workspace = createElement('section', { className: 'cms-admin-cleanup-workflow-grid' });
   workspace.appendChild(renderCleanupCandidateList(items, selectedItem, options));
   workspace.appendChild(renderCleanupCandidateDetail(selectedItem, result));
-  workspace.appendChild(renderCleanupChecklistAndActions(state, result, selectedItem, safeDeleteCandidates, options));
-  workspace.appendChild(renderCleanupActivityPanel(result, items, safeDeleteCandidates));
+  workspace.appendChild(renderCleanupRightActionRail(state, result, selectedItem, safeDeleteCandidates, items, options));
   return workspace;
+}
+
+function renderCleanupRightActionRail(state, result = {}, selectedItem, safeDeleteCandidates = [], items = [], options = {}) {
+  const rail = createElement('aside', { className: 'cms-admin-cleanup-right-rail', attrs: { 'aria-label': 'Checklist và thao tác dọn tệp an toàn' } });
+  rail.appendChild(renderCleanupChecklistAndActions(state, result, selectedItem, safeDeleteCandidates, options));
+  rail.appendChild(renderCleanupActivityPanel(result, items, safeDeleteCandidates));
+  return rail;
 }
 
 function getCleanupDisplayItems(result = {}) {
@@ -329,10 +342,11 @@ function renderCleanupChecklistAndActions(state, result = {}, selectedItem, safe
   const header = createElement('div', { className: 'cms-admin-cleanup-panel-header' });
   const titleWrap = createElement('div');
   titleWrap.appendChild(createElement('h4', { className: 'cms-admin-subsection-title', text: 'Checklist an toàn & thao tác' }));
-  titleWrap.appendChild(createElement('p', { className: 'cms-admin-help-text', text: 'Checklist này chỉ đọc state hiện tại. Dọn thật vẫn khóa nếu feature hoặc guard chưa đủ điều kiện.' }));
+  titleWrap.appendChild(createElement('p', { className: 'cms-admin-help-text', text: 'Dọn thật đang mở nhưng chỉ chạy khi checklist đạt, có dry-run plan và confirm phrase đúng.' }));
   header.appendChild(titleWrap);
-  header.appendChild(renderBadge(ADMIN_FEATURE_FLAGS.allowCmsStorageCleanupSafeDelete ? 'Safe-delete có kiểm soát' : 'Safe-delete đang khóa', ADMIN_FEATURE_FLAGS.allowCmsStorageCleanupSafeDelete ? 'warning' : 'danger'));
+  header.appendChild(renderBadge(ADMIN_FEATURE_FLAGS.allowCmsStorageCleanupSafeDelete ? 'Safe-delete đang mở theo guard' : 'Safe-delete đang khóa', ADMIN_FEATURE_FLAGS.allowCmsStorageCleanupSafeDelete ? 'success' : 'danger'));
   section.appendChild(header);
+  section.appendChild(renderCleanupRetentionStatus(state, result));
 
   const responseLooksLimited = hasLimitedCleanupItems(result);
   const summary = result.summary || {};
@@ -343,7 +357,7 @@ function renderCleanupChecklistAndActions(state, result = {}, selectedItem, safe
   const checklist = [
     ['Tài khoản admin đang hoạt động', canUseCleanupScan(state), 'Chỉ admin active mới được dùng cleanup gate.'],
     ['Cleanup scan feature enabled', Boolean(ADMIN_FEATURE_FLAGS.allowCmsStorageCleanupScan), 'Scan/dry-run phải được bật trong cấu hình frontend.'],
-    ['Safe delete feature enabled', Boolean(ADMIN_FEATURE_FLAGS.allowCmsStorageCleanupSafeDelete), 'Dọn thật chỉ mở khi feature flag safe-delete được bật.'],
+    ['Safe delete feature enabled', Boolean(ADMIN_FEATURE_FLAGS.allowCmsStorageCleanupSafeDelete), 'Guarded safe-delete đang mở nhưng vẫn cần dry-run/runId/planHash/candidate/confirm.'],
     ['Đã chạy dry-run', result.action === 'dryRun', 'Scan chỉ đọc tổng quan; dry-run mới tạo plan cleanup.'],
     ['Có runId', Boolean(result.runId), 'Server phải trả runId để đối chiếu plan.'],
     ['Có planHash', Boolean(result.planHash), 'Server phải trả planHash để revalidate trước khi dọn.'],
@@ -376,6 +390,17 @@ function renderCleanupChecklistAndActions(state, result = {}, selectedItem, safe
   return section;
 }
 
+
+function renderCleanupRetentionStatus(state = getState(), result = {}) {
+  const cleanup = state.storageCleanup || {};
+  const retentionDays = result.retentionDays || getCleanupRetentionDays(cleanup);
+  const box = createElement('div', { className: 'cms-admin-cleanup-retention-status' });
+  box.appendChild(createElement('span', { text: 'Retention hiện tại' }));
+  box.appendChild(createElement('strong', { text: `${formatCount(retentionDays)} ngày` }));
+  box.appendChild(createElement('p', { text: 'Scan/dry-run có thể ghi log kiểm tra nhưng không xóa object. Dọn thật chỉ theo dry-run plan đã được server revalidate.' }));
+  return box;
+}
+
 function renderCleanupChecklistItem(label, pass, detail) {
   const item = createElement('div', { className: `cms-admin-cleanup-checklist-item ${pass ? 'is-pass' : 'is-blocked'}` });
   item.appendChild(createElement('span', { className: 'cms-admin-cleanup-check-icon', text: pass ? '✓' : '•', attrs: { 'aria-hidden': 'true' } }));
@@ -390,7 +415,7 @@ function renderCleanupPlanAction(state, result = {}, selectedItem, safeDeleteCan
   const cleanup = state.storageCleanup || {};
   const actionBox = createElement('section', { className: 'cms-admin-cleanup-plan-action' });
   actionBox.appendChild(createElement('h5', { text: 'Thao tác dọn dẹp có kiểm soát' }));
-  actionBox.appendChild(createElement('p', { text: 'Safe-delete hiện có xử lý plan dry-run trên server, không phải xóa từng candidate riêng lẻ từ trình duyệt. Server vẫn revalidate runId/planHash/reference graph trước khi xóa.' }));
+  actionBox.appendChild(createElement('p', { text: 'Safe-delete xử lý dry-run plan trên server, không xóa theo path do trình duyệt tự gửi. Server revalidate runId, planHash, reference graph và confirm phrase trước khi xóa.' }));
 
   if (!ADMIN_FEATURE_FLAGS.allowCmsStorageCleanupSafeDelete) {
     actionBox.appendChild(renderBadge('Dọn thật đang khóa bởi feature flag', 'danger'));
@@ -403,7 +428,8 @@ function renderCleanupPlanAction(state, result = {}, selectedItem, safeDeleteCan
     return actionBox;
   }
 
-  const canAttempt = Boolean(selectedItem && isA2SafeDeleteCandidate(selectedItem) && !responseLooksLimited && safeDeleteCandidates.length && phraseMatches);
+  const graphReady = !(result.graphIncomplete || (result.summary || {}).graphIncomplete);
+  const canAttempt = Boolean(result.action === 'dryRun' && result.runId && result.planHash && selectedItem && isA2SafeDeleteCandidate(selectedItem) && getCleanupReferenceCount(selectedItem) === 0 && graphReady && !responseLooksLimited && safeDeleteCandidates.length && phraseMatches);
   const confirmInput = createElement('input', {
     className: 'cms-admin-input cms-admin-safe-delete-confirm',
     type: 'text',
@@ -426,7 +452,7 @@ function renderCleanupPlanAction(state, result = {}, selectedItem, safeDeleteCan
   deleteButton.addEventListener('click', () => handleSafeDeleteAction(result, options));
 
   const controls = createElement('div', { className: 'cms-admin-safe-delete-controls' });
-  controls.appendChild(createElement('p', { text: `${copy.safeDeleteConfirmHelp || 'Nhập đúng cụm xác nhận để bật nút dọn dẹp.'} Cụm xác nhận: ${expectedPhrase}` }));
+  controls.appendChild(createElement('p', { text: `${copy.safeDeleteConfirmHelp || 'Nhập đúng cụm xác nhận để bật nút dọn dẹp theo guard.'} Cụm xác nhận: ${expectedPhrase}` }));
   controls.appendChild(confirmInput);
   controls.appendChild(deleteButton);
   actionBox.appendChild(controls);
@@ -644,7 +670,7 @@ function renderSafeDeletePanel(state, result = {}, options = {}) {
     ['Mã kế hoạch kiểm tra', result.planHash],
     ['Tệp có thể dọn', formatCount(candidateItems.length)],
     ['Dung lượng có thể giảm', formatCount(summary.estimatedBytesRecoverable || 0)],
-    ['Số ngày giữ lại', formatCount(result.retentionDays || cleanup.retentionDays || 30)],
+    ['Số ngày giữ lại', formatCount(result.retentionDays || getCleanupRetentionDays(cleanup))],
     ['Số phiên bản giữ lại', formatCount(result.keepLastVersions || cleanup.keepLastVersions || 20)],
   ];
   metaRows.forEach(([label, value]) => {
@@ -806,7 +832,7 @@ async function handleSafeDeleteAction(result = {}, options = {}) {
     planHash: result.planHash,
     confirmPhrase: cleanup.safeDeleteConfirmPhrase,
     scope: 'media',
-    retentionDays: result.retentionDays || cleanup.retentionDays || 30,
+    retentionDays: result.retentionDays || getCleanupRetentionDays(cleanup),
     keepLastVersions: result.keepLastVersions || cleanup.keepLastVersions || 20,
   });
 
@@ -835,7 +861,7 @@ async function handleCleanupAction(action, options = {}) {
 
   const payload = {
     scope: cleanup.scope || 'all',
-    retentionDays: cleanup.retentionDays || 30,
+    retentionDays: getCleanupRetentionDays(cleanup),
     keepLastVersions: cleanup.keepLastVersions || 20,
     includeVersions: true,
     includeDrafts: true,

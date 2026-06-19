@@ -9682,3 +9682,98 @@ body.cms-admin-page * {
     width: 100%;
   }
 }
+
+/* v6.14.053.003 — Cleanup right action rail + guarded safe-delete enablement */
+.cms-admin-cleanup-workflow-grid {
+  grid-template-columns: minmax(260px, 0.88fr) minmax(300px, 1.1fr) minmax(300px, 0.92fr);
+  align-items: start;
+}
+
+.cms-admin-cleanup-right-rail {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  display: grid;
+  gap: 14px;
+  align-self: start;
+  position: sticky;
+  top: 16px;
+}
+
+.cms-admin-cleanup-right-rail .cms-admin-cleanup-action-panel,
+.cms-admin-cleanup-right-rail .cms-admin-cleanup-activity-panel {
+  grid-column: auto;
+}
+
+.cms-admin-cleanup-activity-panel {
+  grid-column: auto;
+}
+
+.cms-admin-cleanup-retention-status {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  display: grid;
+  gap: 5px;
+  padding: 12px 13px;
+  border-radius: 15px;
+  border: 1px solid rgba(214, 178, 94, 0.38);
+  background: linear-gradient(135deg, rgba(214, 178, 94, 0.14), rgba(15, 23, 42, 0.24));
+}
+
+.cms-admin-cleanup-retention-status span {
+  color: var(--cms-admin-muted);
+  font-size: 0.78rem;
+}
+
+.cms-admin-cleanup-retention-status strong {
+  font-size: 1rem;
+  overflow-wrap: anywhere;
+}
+
+.cms-admin-cleanup-retention-status p {
+  margin: 0;
+  color: var(--cms-admin-muted);
+  line-height: 1.45;
+}
+
+.cms-admin-cleanup-right-rail .cms-admin-cleanup-checklist {
+  gap: 8px;
+}
+
+.cms-admin-cleanup-right-rail .cms-admin-cleanup-checklist-item {
+  padding: 10px 11px;
+}
+
+.cms-admin-cleanup-right-rail .cms-admin-cleanup-checklist-item strong,
+.cms-admin-cleanup-right-rail .cms-admin-cleanup-checklist-item p,
+.cms-admin-cleanup-right-rail .cms-admin-cleanup-plan-action,
+.cms-admin-cleanup-right-rail .cms-admin-cleanup-block-reasons,
+.cms-admin-cleanup-right-rail .cms-admin-cleanup-technical-details,
+.cms-admin-cleanup-right-rail .cms-admin-cleanup-metadata-pre,
+.cms-admin-cleanup-right-rail .cms-admin-safe-delete-controls {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.cms-admin-cleanup-right-rail .cms-admin-safe-delete-controls {
+  display: grid;
+  gap: 10px;
+}
+
+.cms-admin-cleanup-right-rail .cms-admin-safe-delete-confirm,
+.cms-admin-cleanup-right-rail .cms-admin-button-danger {
+  width: 100%;
+}
+
+@media (max-width: 1100px) {
+  .cms-admin-cleanup-workflow-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .cms-admin-cleanup-right-rail {
+    position: static;
+    top: auto;
+  }
+}

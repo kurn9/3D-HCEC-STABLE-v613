@@ -69,9 +69,9 @@ export const ADMIN_FEATURE_FLAGS = Object.freeze({
   // V6.12-A1_APPLY — storage cleanup scan/dry-run foundation.
   // Scan/dry-run only; delete/purge remain disabled both UI-side and server-side.
   allowCmsStorageCleanupScan: true,
-  // V6.12-A2_APPLY — guarded server-side safe delete for cms-media/unreferenced only.
-  // Default false: operator must explicitly enable for staging after reviewing dry-run evidence.
-  allowCmsStorageCleanupSafeDelete: false,
+  // V6.14.053.003 — enable guarded safe-delete only after dry-run/runId/planHash/confirm/revalidation.
+  // Raw delete/purge remain disabled.
+  allowCmsStorageCleanupSafeDelete: true,
   allowCmsStorageCleanupDelete: false,
   allowCmsStorageCleanupPurge: false,
 });
@@ -173,12 +173,12 @@ export const CMS_STORAGE_CLEANUP_CONFIG = Object.freeze({
   edgeFunctionName: 'cleanup-cms-storage',
   endpoint: `${SUPABASE_CONFIG.url}/functions/v1/cleanup-cms-storage`,
   defaultScope: 'all',
-  defaultRetentionDays: 30,
-  minRetentionDays: 7,
+  defaultRetentionDays: 1,
+  minRetentionDays: 1,
   defaultKeepLastVersions: 20,
   minKeepLastVersions: 5,
   adminOnly: true,
-  safeDeleteEnabled: false,
+  safeDeleteEnabled: true,
   deleteEnabled: false,
   purgeEnabled: false,
 });

@@ -1147,7 +1147,7 @@ export function resetCmsRollbackState() {
 export function createEmptyStorageCleanupState() {
   return {
     scope: 'all',
-    retentionDays: 30,
+    retentionDays: 1,
     keepLastVersions: 20,
     loading: false,
     action: '',
