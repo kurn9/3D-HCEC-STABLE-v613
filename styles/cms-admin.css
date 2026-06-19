@@ -7877,3 +7877,138 @@ body.cms-admin-page * {
     grid-template-columns: 1fr;
   }
 }
+
+/* v6.14.050.012 — Media Library inspector/action overflow professional hotfix */
+.cms-admin-media-pro-workspace,
+.cms-admin-media-pro-workspace > *,
+.cms-admin-media-master-card,
+.cms-admin-media-inspector-card,
+.cms-admin-media-action-card {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.cms-admin-media-master-copy strong,
+.cms-admin-media-inspector-context,
+.cms-admin-media-inspector-facts,
+.cms-admin-media-inspector-technical,
+.cms-admin-media-action-card,
+.cms-admin-media-delete-prepare-result,
+.cms-admin-media-delete-prepare-result *,
+.cms-admin-media-path,
+.cms-admin-media-path-block,
+.cms-admin-media-path-details,
+.cms-admin-media-technical-details,
+.cms-admin-media-technical-details *,
+.cms-admin-media-delete-reference-list,
+.cms-admin-media-delete-reference-list * {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.cms-admin-media-inspector-context {
+  padding: 8px 10px;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: var(--cms-admin-radius-md);
+  background: rgba(15, 23, 42, 0.24);
+  font-size: 0.8rem;
+}
+
+.cms-admin-media-inspector-overview-compact {
+  gap: 10px;
+}
+
+.cms-admin-media-inspector-facts {
+  display: grid;
+  gap: 7px;
+}
+
+.cms-admin-media-inspector-facts .cms-admin-kv-row,
+.cms-admin-media-delete-prepare-result .cms-admin-kv-row,
+.cms-admin-media-path-details .cms-admin-kv-row,
+.cms-admin-media-technical-details .cms-admin-kv-row {
+  grid-template-columns: minmax(108px, 0.3fr) minmax(0, 1fr);
+}
+
+.cms-admin-media-inspector-facts .cms-admin-kv-key,
+.cms-admin-media-delete-prepare-result .cms-admin-kv-key,
+.cms-admin-media-technical-details .cms-admin-kv-key {
+  line-height: 1.35;
+}
+
+.cms-admin-media-inspector-facts .cms-admin-kv-value,
+.cms-admin-media-delete-prepare-result .cms-admin-kv-value,
+.cms-admin-media-delete-prepare-result .cms-admin-cell-main,
+.cms-admin-media-technical-details .cms-admin-kv-value,
+.cms-admin-media-technical-details .cms-admin-cell-main {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+.cms-admin-media-path-details[open],
+.cms-admin-media-technical-details[open] {
+  display: grid;
+  gap: 10px;
+}
+
+.cms-admin-media-path-details .cms-admin-kv-value,
+.cms-admin-media-technical-details .cms-admin-kv-value,
+.cms-admin-media-delete-prepare-result .cms-admin-kv-value {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
+.cms-admin-media-delete-prepare-result {
+  display: grid;
+  gap: 10px;
+  width: 100%;
+  max-width: 100%;
+  padding: 12px;
+  border-radius: var(--cms-admin-radius-md);
+}
+
+.cms-admin-media-delete-prepare-result > p {
+  margin: 0;
+  max-width: 100%;
+  line-height: 1.5;
+}
+
+.cms-admin-media-delete-prepare-result .cms-admin-media-technical-details {
+  border-color: rgba(148, 163, 184, 0.16);
+  background: rgba(2, 6, 12, 0.18);
+}
+
+.cms-admin-media-delete-reason-list {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.cms-admin-media-action-card .cms-admin-media-delete-prepare-action {
+  grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
+  width: 100%;
+  max-width: 100%;
+}
+
+.cms-admin-media-action-card .cms-admin-button {
+  max-width: 100%;
+  white-space: normal;
+}
+
+@media (max-width: 1320px) {
+  .cms-admin-media-action-card .cms-admin-media-delete-prepare-action {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 860px) {
+  .cms-admin-media-inspector-facts .cms-admin-kv-row,
+  .cms-admin-media-delete-prepare-result .cms-admin-kv-row,
+  .cms-admin-media-path-details .cms-admin-kv-row,
+  .cms-admin-media-technical-details .cms-admin-kv-row {
+    grid-template-columns: 1fr;
+  }
+}

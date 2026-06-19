@@ -2726,11 +2726,10 @@ function renderMediaInspectorCard(asset = null) {
     card.appendChild(renderEmptyState('Chọn một media ở danh sách để xem thông tin.'));
     return card;
   }
-  const context = createElement('p', {
+  card.appendChild(createElement('p', {
     className: 'cms-admin-help-text cms-admin-media-inspector-context',
-    text: asset.fileName || asset.storagePath || asset.publicUrl || 'Media đang chọn',
-  });
-  card.appendChild(context);
+    text: 'Inspector gọn cho media đang chọn. Tên file, URL/path dài và metadata kỹ thuật nằm trong tab Tham chiếu & kỹ thuật.',
+  }));
   card.appendChild(renderMediaInspectorInternalTabs(asset));
   const activeTab = mediaWorkspaceState.inspectorTab === 'technical' ? 'technical' : 'overview';
   if (activeTab === 'technical') {
@@ -2795,9 +2794,12 @@ function renderMediaInspectorOverview(asset = {}) {
 function renderMediaInspectorTechnical(asset = {}) {
   const wrap = createElement('div', { className: 'cms-admin-media-inspector-technical' });
   wrap.appendChild(renderMediaUsageReferences(asset));
-  const path = createElement('div', { className: 'cms-admin-media-path-block' });
-  path.appendChild(createElement('strong', { text: 'URL/path' }));
-  path.appendChild(createElement('p', { className: 'cms-admin-media-path', text: asset.publicUrl || asset.publicUrlRaw || asset.storagePath || '—' }));
+  const path = createElement('details', { className: 'cms-admin-media-technical-details cms-admin-media-path-details', attrs: { open: 'true' } });
+  path.appendChild(createElement('summary', { text: 'Đường dẫn & tên file' }));
+  path.appendChild(renderTechnicalKeyValueList([
+    ['Tên file', asset.fileName || '—'],
+    ['URL/path', asset.publicUrl || asset.publicUrlRaw || asset.storagePath || '—'],
+  ]));
   wrap.appendChild(path);
   const technical = createElement('details', { className: 'cms-admin-media-technical-details' });
   technical.appendChild(createElement('summary', { text: 'Metadata kỹ thuật' }));
@@ -4155,7 +4157,7 @@ function renderMediaDeletePrepareResult(asset = {}, prepareState = null) {
   if (!prepareState) {
     return createElement('p', {
       className: 'cms-admin-help-text',
-      text: 'Chưa chạy kiểm tra server-side cho media này. Mở panel này và bấm kiểm tra sẽ không xóa file.',
+      text: 'Chưa chạy kiểm tra server-side cho media này. Bấm kiểm tra sẽ chỉ tạo prepare plan/blocked reason, không xóa file.',
     });
   }
   const result = createElement('div', { className: `cms-admin-media-delete-prepare-result${prepareState.error ? ' is-blocked' : prepareState.data?.eligible ? ' is-eligible' : ' is-blocked'}` });
@@ -4172,39 +4174,44 @@ function renderMediaDeletePrepareResult(asset = {}, prepareState = null) {
   }
 
   const data = prepareState.data || {};
-  result.appendChild(renderBadge(data.eligible ? 'Đủ điều kiện prepare' : 'Không thể xóa', data.eligible ? 'success' : 'danger'));
-  result.appendChild(createElement('p', { text: data.message || (data.eligible ? 'Server chưa thấy reference đang chặn tại thời điểm prepare. Xóa thật vẫn chưa bật.' : 'Server đã chặn xóa media này.') }));
-  result.appendChild(renderTechnicalKeyValueList([
-    ['Media upload id', data.mediaUploadId || asset.id || '—'],
-    ['Storage path', data.storagePath || asset.storagePath || '—'],
-    ['Trạng thái xóa thật', data['confirm' + 'DeleteEnabled'] ? 'Không hợp lệ trong phase này — cần kiểm tra lại' : 'Chưa bật xóa thật'],
-  ]));
+  const eligible = Boolean(data.eligible);
+  result.appendChild(renderBadge(eligible ? 'Đủ điều kiện prepare' : 'Không đủ điều kiện', eligible ? 'success' : 'danger'));
+  result.appendChild(createElement('p', {
+    text: eligible
+      ? 'Chưa xóa thật. Phase xác nhận xóa chưa bật và phase sau vẫn phải revalidate server-side trước khi mở nút xóa.'
+      : (data.message || 'Server đã chặn xóa media này.'),
+  }));
 
   const blockedReasons = safeArray(data.blockedReasons);
   if (blockedReasons.length) {
-    const reasons = createElement('ul', { className: 'cms-admin-media-delete-reference-list' });
-    blockedReasons.forEach((reason) => reasons.appendChild(createElement('li', { text: String(reason || '') })));
+    const reasons = createElement('ul', { className: 'cms-admin-media-delete-reference-list cms-admin-media-delete-reason-list' });
+    blockedReasons.slice(0, 4).forEach((reason) => reasons.appendChild(createElement('li', { text: String(reason || '') })));
+    if (blockedReasons.length > 4) reasons.appendChild(createElement('li', { text: `+${formatCount(blockedReasons.length - 4)} lý do khác trong chi tiết kỹ thuật` }));
     result.appendChild(reasons);
   }
 
   const references = safeArray(data.references);
-  if (references.length) {
+  if (references.length && !eligible) {
+    const referenceDetails = createElement('details', { className: 'cms-admin-media-technical-details' });
+    referenceDetails.appendChild(createElement('summary', { text: `Reference đang chặn (${formatCount(references.length)})` }));
     const list = createElement('ul', { className: 'cms-admin-media-delete-reference-list' });
-    references.slice(0, 8).forEach((reference) => {
+    references.forEach((reference) => {
       const target = getResolvedMediaReferenceTarget(reference) || reference.target || {};
       const item = createElement('li');
       item.appendChild(createElement('span', { text: reference.label || reference.ownerLabel || reference.area || 'Media reference' }));
       item.appendChild(createElement('small', { text: `${reference.source || reference.sourceType || 'server'} · ${reference.field || reference.path || 'field không rõ'} · ${target.label || reference.ownerTarget || ''}` }));
       list.appendChild(item);
     });
-    if (references.length > 8) list.appendChild(createElement('li', { text: `+${formatCount(references.length - 8)} reference khác` }));
-    result.appendChild(list);
+    referenceDetails.appendChild(list);
+    result.appendChild(referenceDetails);
   }
 
   const details = createElement('details', { className: 'cms-admin-media-technical-details' });
-  details.appendChild(createElement('summary', { text: 'Prepare token tạm thời' }));
+  details.appendChild(createElement('summary', { text: 'Prepare token, path và metadata kỹ thuật' }));
   details.appendChild(renderTechnicalKeyValueList([
-    ['Plan hash', data.planHash ? `${String(data.planHash).slice(0, 16)}…` : '—'],
+    ['Media upload id', data.mediaUploadId || asset.id || '—'],
+    ['Storage path', data.storagePath || asset.storagePath || '—'],
+    ['Plan hash', data.planHash || '—'],
     ['Confirm phrase', data.confirmPhrase || '—'],
     ['Hết hạn', data.expiresAt ? formatDateTime(data.expiresAt) : '—'],
     ['Xóa thật đã bật?', data['confirm' + 'DeleteEnabled'] ? 'true — không được dùng trong phase này' : 'false'],
