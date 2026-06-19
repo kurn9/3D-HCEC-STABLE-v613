@@ -8142,3 +8142,117 @@ body.cms-admin-page * {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* v6.14.050.015 — deleted media lifecycle UI: deleted records are audit-only, not active media. */
+.cms-admin-media-master-item.is-deleted-media,
+.cms-admin-media-master-item.is-broken-reference {
+  border-color: rgba(244, 63, 94, 0.36);
+  background: rgba(127, 29, 29, 0.12);
+}
+
+.cms-admin-media-preview.is-deleted-preview {
+  display: grid;
+  place-items: center;
+  min-height: 88px;
+  border: 1px dashed rgba(244, 63, 94, 0.4);
+  background: rgba(127, 29, 29, 0.14);
+  color: #fecdd3;
+  text-align: center;
+  font-weight: 800;
+  line-height: 1.35;
+  padding: 0.75rem;
+}
+
+.cms-admin-media-lifecycle-panel {
+  margin-top: 1rem;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  border: 1px solid rgba(244, 63, 94, 0.22);
+  border-radius: 18px;
+  background: rgba(15, 23, 42, 0.54);
+  overflow: hidden;
+}
+
+.cms-admin-media-lifecycle-panel > summary {
+  cursor: pointer;
+  padding: 0.9rem 1rem;
+  color: var(--cms-admin-text-strong, #f8fafc);
+  font-weight: 900;
+  list-style-position: inside;
+}
+
+.cms-admin-media-lifecycle-panel > *:not(summary) {
+  margin-left: 1rem;
+  margin-right: 1rem;
+}
+
+.cms-admin-media-lifecycle-panel > *:last-child {
+  margin-bottom: 1rem;
+}
+
+.cms-admin-media-lifecycle-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: 0.75rem;
+  min-width: 0;
+  max-width: 100%;
+  margin-top: 0.75rem;
+}
+
+.cms-admin-media-lifecycle-card {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 0.85rem;
+  border: 1px solid rgba(148, 163, 184, 0.13);
+  border-radius: 16px;
+  background: rgba(2, 6, 23, 0.3);
+  overflow: hidden;
+}
+
+.cms-admin-media-lifecycle-card-broken,
+.cms-admin-media-lifecycle-card-deleted {
+  border-color: rgba(244, 63, 94, 0.26);
+}
+
+.cms-admin-media-lifecycle-card-heading,
+.cms-admin-media-lifecycle-subtitle {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.cms-admin-media-lifecycle-card-heading strong {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+.cms-admin-media-lifecycle-subtitle {
+  margin-top: 1rem;
+}
+
+.cms-admin-media-lifecycle-subtitle p {
+  margin: 0;
+  color: var(--cms-admin-text-muted, #94a3b8);
+  overflow-wrap: anywhere;
+}
+
+.cms-admin-media-lifecycle-details,
+.cms-admin-media-lifecycle-details dd,
+.cms-admin-media-lifecycle-details .cms-admin-cell-main {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.cms-admin-media-card .cms-admin-badge,
+.cms-admin-media-master-item .cms-admin-badge,
+.cms-admin-media-lifecycle-card .cms-admin-badge {
+  max-width: 100%;
+}

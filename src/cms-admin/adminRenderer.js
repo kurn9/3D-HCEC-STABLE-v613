@@ -2470,16 +2470,24 @@ function buildMediaWorkspaceModel(state = {}) {
   const uploadAssets = safeArray(state.data?.cmsMediaUploads).map(normalizeMediaLibraryAsset);
   const mediaError = state.data?.errors?.cmsMediaUploads;
   const usageContext = buildMediaUsageContext(state);
-  const enrichedUploads = uploadAssets.map((asset) => ({
-    ...asset,
-    sourceKind: 'upload-log',
-    sourceLabel: 'Upload log / cms_media_uploads',
-    hasUploadLogRecord: true,
-    usage: getMediaUsage(asset, usageContext),
-  }));
+  const enrichedUploads = uploadAssets.map((asset) => {
+    const withSource = {
+      ...asset,
+      sourceKind: 'upload-log',
+      sourceLabel: 'Upload log / cms_media_uploads',
+      hasUploadLogRecord: true,
+    };
+    return {
+      ...withSource,
+      lifecycle: getMediaLifecycleState(withSource),
+      usage: getMediaUsage(withSource, usageContext),
+    };
+  });
+  const deletedUploadAssets = enrichedUploads.filter(isDeletedMediaAsset);
+  const activeUploadAssets = enrichedUploads.filter((asset) => !isDeletedMediaAsset(asset));
   const virtualReferences = collectVirtualMediaInventoryReferences(usageContext.sources);
-  const virtualAssets = buildVirtualMediaAssets(virtualReferences, enrichedUploads);
-  const allAssets = [...enrichedUploads, ...virtualAssets];
+  const virtualAssets = buildVirtualMediaAssets(virtualReferences, activeUploadAssets, deletedUploadAssets);
+  const allAssets = [...activeUploadAssets, ...virtualAssets];
   if (mediaWorkspaceState.selectedAssetId && !allAssets.some((asset) => asset.id === mediaWorkspaceState.selectedAssetId)) {
     mediaWorkspaceState.selectedAssetId = '';
   }
@@ -2490,11 +2498,17 @@ function buildMediaWorkspaceModel(state = {}) {
     ? (allAssets.find((asset) => asset.id === mediaWorkspaceState.selectedAssetId) || null)
     : null;
   const summary = summarizeMediaLibrary(allAssets);
+  summary.activeUploadLog = activeUploadAssets.length;
+  summary.deleted = deletedUploadAssets.length;
+  summary.uploadLogTotal = enrichedUploads.length;
+  summary.brokenReference = allAssets.filter(isBrokenDeletedMediaReference).length;
   return {
     state,
     mediaError,
     usageContext,
-    uploadAssets: enrichedUploads,
+    uploadAssets: activeUploadAssets,
+    activeUploadAssets,
+    deletedUploadAssets,
     virtualAssets,
     virtualReferences,
     allAssets,
@@ -2506,7 +2520,7 @@ function buildMediaWorkspaceModel(state = {}) {
 function renderMediaLibraryWorkspace(model = {}) {
   const panel = createElement('section', { className: 'cms-admin-media-workspace-tab cms-admin-media-library-workspace' });
   const library = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel cms-admin-media-library-panel' });
-  library.appendChild(renderPanelTitle('Thư viện ảnh & video', `${formatCount(model.uploadAssets?.length || 0)} upload log`));
+  library.appendChild(renderPanelTitle('Thư viện ảnh & video', `${formatCount(model.activeUploadAssets?.length || 0)} media active · ${formatCount(model.deletedUploadAssets?.length || 0)} đã xóa`));
   library.appendChild(renderMediaLibraryReadOnlyBanner());
   library.appendChild(renderMediaCountClarityNotice(model));
   library.appendChild(renderMediaCapabilityPolicyPanel(model));
@@ -2516,20 +2530,21 @@ function renderMediaLibraryWorkspace(model = {}) {
     library.appendChild(renderErrorBox(model.mediaError, 'Không đọc được danh sách media upload'));
   }
 
-  if (!safeArray(model.uploadAssets).length) {
+  if (!safeArray(model.activeUploadAssets).length) {
     library.appendChild(renderMediaLibraryEmptyState());
   } else {
-    library.appendChild(renderMediaLibrarySummary(summarizeMediaLibrary(model.uploadAssets)));
-    library.appendChild(renderMediaLibraryControls(model.uploadAssets));
+    library.appendChild(renderMediaLibrarySummary(model.summary));
+    library.appendChild(renderMediaLibraryControls(model.activeUploadAssets));
     library.appendChild(renderMediaProfessionalWorkspace(model, {
       mode: 'library',
-      assets: model.uploadAssets,
-      title: 'Danh sách media',
-      subtitle: 'Chọn một ảnh/video để xem inspector và thao tác an toàn ở hai card bên cạnh.',
-      emptyText: 'Không có media upload-log phù hợp với bộ lọc hiện tại.',
+      assets: model.activeUploadAssets,
+      title: 'Danh sách media active',
+      subtitle: 'Chọn một ảnh/video còn usable để xem inspector và thao tác an toàn ở hai card bên cạnh. Media đã xóa được chuyển xuống audit lifecycle, không còn là lựa chọn active.',
+      emptyText: 'Không có media active phù hợp với bộ lọc hiện tại.',
     }));
   }
 
+  library.appendChild(renderMediaDeletedLifecyclePanel(model));
   panel.appendChild(library);
   panel.appendChild(renderMediaLibrarySafetyPanel());
   return panel;
@@ -2550,21 +2565,21 @@ function renderMediaCountClarityNotice(model = {}) {
   const notice = createElement('div', { className: 'cms-admin-media-count-clarity-notice' });
   notice.appendChild(renderBadge('Inventory vận hành', 'info'));
   notice.appendChild(createElement('p', {
-    text: `Media upload log: ${formatCount(model.uploadAssets?.length || 0)} record. Media/path đang được nội dung tham chiếu: ${formatCount(model.virtualReferences?.length || 0)} field/path đã scan. Reference-only: ${formatCount(model.virtualAssets?.length || 0)} media/path có trong content nhưng chưa có upload-log record. Các số này không phải bucket crawler đầy đủ; một file có thể xuất hiện ở nhiều field/owner.`,
+    text: `Media active: ${formatCount(model.activeUploadAssets?.length || 0)} record usable. Upload log giữ truy vết: ${formatCount((model.activeUploadAssets?.length || 0) + (model.deletedUploadAssets?.length || 0))} record, trong đó ${formatCount(model.deletedUploadAssets?.length || 0)} đã xóa khỏi Storage. Media/path đang được nội dung tham chiếu: ${formatCount(model.virtualReferences?.length || 0)} field/path đã scan. Reference-only: ${formatCount(model.virtualAssets?.length || 0)} media/path; ${formatCount((model.virtualAssets || []).filter(isBrokenDeletedMediaReference).length)} tham chiếu hỏng tới path đã xóa. Đây không phải bucket crawler đầy đủ; một file có thể xuất hiện ở nhiều field/owner.`,
   }));
   return notice;
 }
 
 function renderMediaCapabilityPolicyPanel(model = {}) {
   const panel = createElement('section', { className: 'cms-admin-media-capability-policy-panel' });
-  panel.appendChild(renderPanelTitle('Upload và xóa media', 'Chưa bật tại Media Library'));
+  panel.appendChild(renderPanelTitle('Upload và xóa media', 'Xóa có kiểm soát / upload chưa bật'));
   panel.appendChild(createElement('p', {
-    text: 'Màn này chỉ xem, lọc, preview, sao chép đường dẫn và điều hướng tới nơi dùng media. Upload hiện thực hiện ở màn nội dung có owner/field cụ thể; xóa media cần backend single-media contract riêng nên không hiển thị như một hành động có thể bấm tại đây.',
+    text: 'Màn này xem, lọc, preview, sao chép đường dẫn, điều hướng tới nơi dùng media và chỉ cho phép xóa single-media khi server xác nhận zero-reference. Upload vẫn thực hiện ở màn nội dung có owner/field cụ thể. Xóa media xóa object khỏi Storage nhưng không xóa audit log.',
   }));
   const notes = createElement('div', { className: 'cms-admin-media-policy-note-grid' });
   [
     ['Upload chưa bật', 'Muốn thay ảnh/video cho nội dung nào, hãy mở đúng màn nội dung đó và dùng nút thay/chọn media trong ngữ cảnh owner/field.'],
-    ['Xóa đang khóa an toàn', 'Media đang được dùng, reference-only hoặc thiếu upload-log/path không thể xóa từ Media Library. Dọn file dùng workflow Quét & dọn tệp riêng.'],
+    ['Xóa có guard', 'Chỉ media active có upload-log/path hợp lệ, không còn reference public/draft/CMS và nhập đúng confirm phrase mới được xóa. Media đã xóa chỉ còn audit log, không còn usable.'],
   ].forEach(([title, body]) => {
     const item = createElement('article', { className: 'cms-admin-media-policy-note' });
     item.appendChild(createElement('strong', { text: title }));
@@ -2584,6 +2599,55 @@ function renderMediaDeletePolicyList() {
     'Không chạy cleanup/delete hàng loạt từ màn Ảnh & video.',
   ].forEach((item) => list.appendChild(createElement('li', { text: item })));
   return list;
+}
+
+function renderMediaDeletedLifecyclePanel(model = {}) {
+  const deletedAssets = safeArray(model.deletedUploadAssets);
+  const brokenRefs = safeArray(model.virtualAssets).filter(isBrokenDeletedMediaReference);
+  if (!deletedAssets.length && !brokenRefs.length) return createElement('div', { className: 'cms-admin-hidden' });
+
+  const panel = createElement('details', { className: 'cms-admin-media-lifecycle-panel' });
+  panel.appendChild(createElement('summary', { text: `Media đã xóa / tham chiếu hỏng (${formatCount(deletedAssets.length + brokenRefs.length)})` }));
+  panel.appendChild(renderCompactNotice('Các record này chỉ phục vụ audit/lifecycle. File đã xóa khỏi Storage không còn là media active; nếu nội dung còn trỏ tới path đã xóa, hãy cập nhật tại màn nội dung tương ứng.'));
+
+  if (deletedAssets.length) {
+    const deletedList = createElement('div', { className: 'cms-admin-media-lifecycle-list' });
+    deletedAssets.slice(0, 30).forEach((asset) => deletedList.appendChild(renderDeletedMediaLifecycleCard(asset, 'deleted')));
+    panel.appendChild(deletedList);
+    if (deletedAssets.length > 30) panel.appendChild(createElement('p', { className: 'cms-admin-help-text', text: `+${formatCount(deletedAssets.length - 30)} record đã xóa khác đang được giữ trong upload log.` }));
+  }
+
+  if (brokenRefs.length) {
+    const brokenTitle = createElement('div', { className: 'cms-admin-media-lifecycle-subtitle' });
+    brokenTitle.appendChild(renderBadge('Tham chiếu hỏng', 'danger'));
+    brokenTitle.appendChild(createElement('p', { text: 'Những path này vẫn xuất hiện trong content/reference scan nhưng trùng với media đã xóa khỏi Storage.' }));
+    panel.appendChild(brokenTitle);
+    const brokenList = createElement('div', { className: 'cms-admin-media-lifecycle-list' });
+    brokenRefs.slice(0, 30).forEach((asset) => brokenList.appendChild(renderDeletedMediaLifecycleCard(asset, 'broken')));
+    panel.appendChild(brokenList);
+    if (brokenRefs.length > 30) panel.appendChild(createElement('p', { className: 'cms-admin-help-text', text: `+${formatCount(brokenRefs.length - 30)} tham chiếu hỏng khác.` }));
+  }
+  return panel;
+}
+
+function renderDeletedMediaLifecycleCard(asset = {}, mode = 'deleted') {
+  const card = createElement('article', { className: `cms-admin-media-lifecycle-card cms-admin-media-lifecycle-card-${mode}` });
+  const heading = createElement('div', { className: 'cms-admin-media-lifecycle-card-heading' });
+  heading.appendChild(createElement('strong', { text: asset.fileName || asset.storagePath || asset.publicUrlRaw || 'Media đã xóa' }));
+  heading.appendChild(renderBadge(mode === 'broken' ? 'Tham chiếu hỏng' : 'Đã xóa khỏi Storage', 'danger'));
+  heading.appendChild(renderBadge('Audit log', 'default'));
+  card.appendChild(heading);
+  const details = createElement('dl', { className: 'cms-admin-media-detail-list cms-admin-media-lifecycle-details' });
+  [
+    ['Lifecycle', mode === 'broken' ? 'Path đã xóa nhưng còn reference trong content' : 'Record upload giữ để truy vết, file không còn usable'],
+    ['Status', asset.status || 'deleted'],
+    ['Owner target', asset.ownerLabel || getMediaTargetLabel(asset)],
+    ['Path', asset.storagePath || asset.publicUrlRaw || asset.publicUrl || '—'],
+    ['Tham chiếu', safeArray(asset.usage?.references).length ? `${formatCount(asset.usage.references.length)} reference cần kiểm tra` : 'Chưa thấy reference active trong dữ liệu đã tải'],
+  ].forEach(([label, value]) => appendMediaDetail(details, label, value));
+  card.appendChild(details);
+  if (safeArray(asset.usage?.references).length) card.appendChild(renderMediaUsageReferences(asset));
+  return card;
 }
 
 
@@ -2667,6 +2731,56 @@ function getSelectedMediaAsset(visibleAssets = [], allAssets = []) {
     || null;
 }
 
+function getMediaLifecycleState(asset = {}) {
+  const status = String(asset.status || '').trim().toLowerCase();
+  const confirmState = getMediaDeleteConfirmState(asset);
+  const deletedByLocalConfirm = Boolean(confirmState?.data?.deleted || confirmState?.data?.result === 'confirmed');
+  if (status === 'deleted' || deletedByLocalConfirm) {
+    return {
+      key: 'deleted',
+      label: 'Đã xóa khỏi Storage',
+      variant: 'danger',
+      note: 'Record upload được giữ để truy vết; file không còn là media active/usable.',
+    };
+  }
+  if (asset.isBrokenDeletedReference) {
+    return {
+      key: 'broken-reference',
+      label: 'Tham chiếu hỏng',
+      variant: 'danger',
+      note: 'Nội dung vẫn trỏ tới path đã xóa khỏi Storage; cần cập nhật ở màn nội dung tương ứng.',
+    };
+  }
+  return {
+    key: 'active',
+    label: 'Active media',
+    variant: 'success',
+    note: 'Media đang được xem như record active trong inventory vận hành.',
+  };
+}
+
+function isDeletedMediaAsset(asset = {}) {
+  return getMediaLifecycleState(asset).key === 'deleted';
+}
+
+function isBrokenDeletedMediaReference(asset = {}) {
+  return Boolean(asset?.isBrokenDeletedReference || getMediaLifecycleState(asset).key === 'broken-reference');
+}
+
+function getDeletedMediaIdentitySet(deletedAssets = []) {
+  const deletedIdentity = new Set();
+  safeArray(deletedAssets).forEach((asset) => {
+    buildMediaAssetIdentity(asset).strongValues.forEach((value) => deletedIdentity.add(value));
+  });
+  return deletedIdentity;
+}
+
+function renderMediaLifecycleBadge(asset = {}) {
+  const lifecycle = getMediaLifecycleState(asset);
+  if (lifecycle.key === 'active') return null;
+  return renderBadge(lifecycle.label, lifecycle.variant || 'default');
+}
+
 function renderMediaMasterListCard(assets = [], options = {}) {
   const card = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel cms-admin-media-master-card' });
   card.appendChild(renderPanelTitle(options.title || 'Danh sách media', `${formatCount(assets.length)} mục`));
@@ -2690,7 +2804,7 @@ function renderMediaMasterListCard(assets = [], options = {}) {
 function renderMediaMasterListItem(asset = {}) {
   const isSelected = String(asset.id || '') === String(mediaWorkspaceState.selectedAssetId || '');
   const item = createElement('button', {
-    className: `cms-admin-media-card cms-admin-media-master-item${isSelected ? ' is-selected' : ''}`,
+    className: `cms-admin-media-card cms-admin-media-master-item${isSelected ? ' is-selected' : ''}${isBrokenDeletedMediaReference(asset) ? ' is-broken-reference' : ''}${isDeletedMediaAsset(asset) ? ' is-deleted-media' : ''}`,
     type: 'button',
     attrs: {
       role: 'option',
@@ -2709,6 +2823,8 @@ function renderMediaMasterListItem(asset = {}) {
   copy.appendChild(createElement('strong', { text: asset.fileName || asset.storagePath || 'media' }));
   const badges = createElement('div', { className: 'cms-admin-media-card-badges cms-admin-media-master-badges' });
   badges.appendChild(renderBadge(getMediaKindLabel(asset.mediaKind), asset.mediaKind === 'video' ? 'warning' : 'default'));
+  const lifecycleBadge = renderMediaLifecycleBadge(asset);
+  if (lifecycleBadge) badges.appendChild(lifecycleBadge);
   badges.appendChild(renderBadge(asset.hasUploadLogRecord ? 'Upload log' : 'Reference-only', asset.hasUploadLogRecord ? 'success' : 'warning'));
   badges.appendChild(renderBadge(asset.usage?.label || ADMIN_COPY.media.usageLabels.insufficient, asset.usage?.variant || 'default'));
   copy.appendChild(badges);
@@ -2770,9 +2886,13 @@ function renderMediaInspectorOverview(asset = {}) {
   const layout = createElement('div', { className: 'cms-admin-media-inspector-overview cms-admin-media-inspector-overview-compact' });
   const badges = createElement('div', { className: 'cms-admin-media-card-badges cms-admin-media-inspector-badges' });
   badges.appendChild(renderBadge(getMediaKindLabel(asset.mediaKind), asset.mediaKind === 'video' ? 'warning' : 'default'));
+  const lifecycleBadge = renderMediaLifecycleBadge(asset);
+  if (lifecycleBadge) badges.appendChild(lifecycleBadge);
   badges.appendChild(renderBadge(asset.hasUploadLogRecord ? 'Upload log' : 'Reference-only', asset.hasUploadLogRecord ? 'success' : 'warning'));
   badges.appendChild(renderBadge(asset.usage?.label || ADMIN_COPY.media.usageLabels.insufficient, asset.usage?.variant || 'default'));
   layout.appendChild(badges);
+  const lifecycle = getMediaLifecycleState(asset);
+  if (lifecycle.key !== 'active') layout.appendChild(renderCompactNotice(lifecycle.note));
   const details = createElement('dl', { className: 'cms-admin-media-detail-list cms-admin-media-detail-list-wide cms-admin-media-inspector-facts' });
   [
     ['Loại media', getMediaKindLabel(asset.mediaKind)],
@@ -2784,6 +2904,7 @@ function renderMediaInspectorOverview(asset = {}) {
     ['Trạng thái usage', asset.usage?.label || ADMIN_COPY.media.usageLabels.insufficient],
     ['Owner target', asset.ownerLabel || getMediaTargetLabel(asset)],
     ['Nguồn record', asset.hasUploadLogRecord ? 'Media upload log' : 'Reference-only / CMS reference'],
+    ['Lifecycle', getMediaLifecycleState(asset).label],
   ].forEach(([label, value]) => appendMediaDetail(details, label, value));
   layout.appendChild(details);
   const note = safeArray(asset.usage?.references).length
@@ -2851,12 +2972,19 @@ function renderMediaActionSafetyCard(asset = null) {
 }
 
 function renderMediaLockedDeleteSection(asset = {}) {
-  const section = createElement('section', { className: 'cms-admin-media-locked-delete-section' });
-  section.appendChild(createElement('h3', { text: 'Xóa media' }));
-  section.appendChild(createElement('p', { text: 'Xóa thật chỉ mở trong kết quả prepare đủ điều kiện, sau khi nhập đúng confirm phrase. Server luôn revalidate zero-reference trước khi xóa.' }));
+  const lifecycle = getMediaLifecycleState(asset);
+  const section = createElement('section', { className: `cms-admin-media-locked-delete-section cms-admin-media-locked-delete-section-${lifecycle.key}` });
+  section.appendChild(createElement('h3', { text: lifecycle.key === 'deleted' ? 'Media đã xóa' : lifecycle.key === 'broken-reference' ? 'Tham chiếu hỏng' : 'Xóa media' }));
+  section.appendChild(createElement('p', {
+    text: lifecycle.key === 'deleted'
+      ? 'File đã xóa khỏi Storage; upload log/audit log được giữ để truy vết và không có nút xóa lại.'
+      : lifecycle.key === 'broken-reference'
+        ? 'Nội dung vẫn trỏ tới path đã xóa. Hãy cập nhật nội dung liên quan, không xóa thêm tại Media Library.'
+        : 'Xóa thật chỉ mở trong kết quả prepare đủ điều kiện, sau khi nhập đúng confirm phrase. Server luôn revalidate zero-reference trước khi xóa.',
+  }));
   const button = createElement('button', {
     className: 'cms-admin-button cms-admin-button-danger',
-    text: 'Xóa media — khóa đến khi đủ điều kiện',
+    text: lifecycle.key === 'active' ? 'Xóa media — khóa đến khi đủ điều kiện' : 'Không có thao tác xóa',
     type: 'button',
     attrs: { disabled: 'true', 'aria-disabled': 'true' },
   });
@@ -3060,11 +3188,12 @@ function dedupeVirtualMediaReferences(references = []) {
   return out;
 }
 
-function buildVirtualMediaAssets(references = [], uploadAssets = []) {
+function buildVirtualMediaAssets(references = [], uploadAssets = [], deletedUploadAssets = []) {
   const uploadIdentity = new Set();
   safeArray(uploadAssets).forEach((asset) => {
     buildMediaAssetIdentity(asset).strongValues.forEach((value) => uploadIdentity.add(value));
   });
+  const deletedIdentity = getDeletedMediaIdentitySet(deletedUploadAssets);
   const grouped = new Map();
   safeArray(references).forEach((reference) => {
     const key = getVirtualMediaIdentityKey(reference.mediaValue || reference.rawMediaValue);
@@ -3072,11 +3201,14 @@ function buildVirtualMediaAssets(references = [], uploadAssets = []) {
     const candidates = normalizeMediaReferenceCandidates(reference.mediaValue || reference.rawMediaValue);
     const hasUploadRecord = candidates.some((candidate) => uploadIdentity.has(candidate));
     if (hasUploadRecord) return;
-    if (!grouped.has(key)) grouped.set(key, []);
-    grouped.get(key).push(reference);
+    if (!grouped.has(key)) grouped.set(key, { refs: [], isBrokenDeletedReference: false });
+    const group = grouped.get(key);
+    group.refs.push(reference);
+    if (candidates.some((candidate) => deletedIdentity.has(candidate))) group.isBrokenDeletedReference = true;
   });
 
-  return Array.from(grouped.entries()).map(([key, refs], index) => {
+  return Array.from(grouped.entries()).map(([key, group], index) => {
+    const refs = safeArray(group.refs);
     const first = refs[0] || {};
     const rawValue = first.mediaValue || first.rawMediaValue || key;
     const publicUrl = normalizeSafeMediaUrl(rawValue);
@@ -3099,10 +3231,11 @@ function buildVirtualMediaAssets(references = [], uploadAssets = []) {
       itemId: '',
       artworkCode: inferArtworkCodeFromReferences(refs),
       fieldName: first.field || '',
-      status: 'reference-only',
+      status: group.isBrokenDeletedReference ? 'deleted-reference' : 'reference-only',
       createdAt: '',
-      sourceKind: 'virtual-reference',
-      sourceLabel: getVirtualMediaSourceLabel(first, rawValue),
+      sourceKind: group.isBrokenDeletedReference ? 'broken-deleted-reference' : 'virtual-reference',
+      sourceLabel: group.isBrokenDeletedReference ? 'CMS reference / deleted Storage path / Không còn usable' : getVirtualMediaSourceLabel(first, rawValue),
+      isBrokenDeletedReference: Boolean(group.isBrokenDeletedReference),
       sourceKey: first.sourceKey || '',
       ownerLabel: getMediaOwnerGroupLabel(first),
       hasUploadLogRecord: false,
@@ -3229,6 +3362,8 @@ function renderMediaUsageReferenceCard(asset = {}, reference = null) {
   const card = createElement('article', { className: 'cms-admin-media-usage-reference-card' });
   const header = createElement('div', { className: 'cms-admin-media-usage-reference-card-header' });
   header.appendChild(createElement('h4', { text: asset.fileName || asset.storagePath || asset.publicUrl || 'Media reference' }));
+  const lifecycleBadge = renderMediaLifecycleBadge(asset);
+  if (lifecycleBadge) header.appendChild(lifecycleBadge);
   header.appendChild(renderBadge(asset.hasUploadLogRecord ? 'Có upload log' : 'Reference-only', asset.hasUploadLogRecord ? 'success' : 'warning'));
   appendChildren(card, [header]);
   const details = createElement('dl', { className: 'cms-admin-media-reference-details' });
@@ -3919,11 +4054,12 @@ function renderMediaOperatorHandoffNotes() {
 function renderMediaLibrarySummary(summary = {}) {
   const grid = createElement('div', { className: 'cms-admin-media-summary-grid' });
   [
-    ['Tổng bề mặt hiển thị', summary.total],
-    ['Media upload log', summary.uploadLog],
+    ['Media active', summary.activeUploadLog ?? summary.uploadLog],
+    ['Upload log', summary.uploadLogTotal ?? summary.uploadLog],
+    ['Đã xóa', summary.deleted || 0],
     ['Tham chiếu CMS', summary.references],
     ['Reference-only', summary.referenceOnly],
-    ['Đang dùng trên website', summary.public],
+    ['Tham chiếu hỏng', summary.brokenReference || 0],
     ['Chưa thấy tham chiếu', summary.none],
   ].forEach(([label, value]) => {
     const card = createElement('div', { className: 'cms-admin-media-summary-card' });
@@ -4065,6 +4201,12 @@ function renderMediaLibraryCard(asset = {}) {
 
 function getMediaDeleteEligibility(asset = {}) {
   const references = safeArray(asset.usage?.references);
+  if (isDeletedMediaAsset(asset)) {
+    return { allowed: false, reason: 'Không thể xóa: media này đã bị xóa khỏi Storage; record upload chỉ còn dùng để audit lifecycle.' };
+  }
+  if (isBrokenDeletedMediaReference(asset)) {
+    return { allowed: false, reason: 'Không thể xóa tại đây: đây là tham chiếu hỏng tới path đã xóa, cần cập nhật nội dung liên quan thay vì xóa thêm media.' };
+  }
   if (!asset.hasUploadLogRecord) {
     return { allowed: false, reason: 'Không thể xóa: media này là reference-only/virtual, không có record upload log thật.' };
   }
@@ -4087,10 +4229,11 @@ function renderMediaDeleteGuard(asset = {}, options = {}) {
       className: 'cms-admin-media-delete-guard cms-admin-media-delete-guard-compact',
       attrs: isOpen ? { open: 'true' } : {},
     });
-    compact.appendChild(createElement('summary', { text: asset.hasUploadLogRecord ? 'Kiểm tra xóa' : 'Xóa khóa an toàn' }));
+    const disabledLifecycle = isDeletedMediaAsset(asset) || isBrokenDeletedMediaReference(asset);
+    compact.appendChild(createElement('summary', { text: disabledLifecycle ? 'Lifecycle / không xóa' : asset.hasUploadLogRecord ? 'Kiểm tra xóa' : 'Xóa khóa an toàn' }));
     compact.addEventListener('toggle', () => setMediaDeletePanelOpen(asset, compact.open));
     compact.appendChild(createElement('p', { text: eligibility.reason }));
-    if (asset.hasUploadLogRecord) {
+    if (asset.hasUploadLogRecord && !disabledLifecycle) {
       compact.appendChild(renderMediaDeletePrepareAction(asset, prepareState, { compact: true }));
       compact.appendChild(renderMediaDeletePrepareResult(asset, prepareState));
     }
@@ -4099,12 +4242,13 @@ function renderMediaDeleteGuard(asset = {}, options = {}) {
 
   const wrap = createElement('section', { className: 'cms-admin-media-delete-guard cms-admin-media-delete-guard-detail' });
   wrap.appendChild(renderPanelTitle('Kiểm tra điều kiện xóa', 'Prepare-only — chưa xóa media'));
+  const disabledLifecycle = isDeletedMediaAsset(asset) || isBrokenDeletedMediaReference(asset);
   wrap.appendChild(createElement('p', {
-    text: asset.hasUploadLogRecord
-      ? 'Bạn có thể yêu cầu server kiểm tra điều kiện xóa. Phase này chỉ tạo kế hoạch/blocked reason, không có nút xác nhận xóa thật.'
+    text: asset.hasUploadLogRecord && !disabledLifecycle
+      ? 'Bạn có thể yêu cầu server kiểm tra điều kiện xóa. Server sẽ revalidate trước mọi thao tác destructive.'
       : eligibility.reason,
   }));
-  if (asset.hasUploadLogRecord) wrap.appendChild(renderMediaDeletePrepareAction(asset, prepareState));
+  if (asset.hasUploadLogRecord && !disabledLifecycle) wrap.appendChild(renderMediaDeletePrepareAction(asset, prepareState));
   wrap.appendChild(renderMediaDeletePrepareResult(asset, prepareState));
   const policy = createElement('details', { className: 'cms-admin-media-technical-details' });
   policy.appendChild(createElement('summary', { text: 'Điều kiện an toàn bắt buộc' }));
@@ -4541,7 +4685,15 @@ function queueMediaReferenceFocus(target = {}) {
 }
 
 function renderMediaPreview(asset = {}) {
-  const preview = createElement('div', { className: 'cms-admin-media-preview' });
+  const preview = createElement('div', { className: `cms-admin-media-preview${isDeletedMediaAsset(asset) || isBrokenDeletedMediaReference(asset) ? ' is-deleted-preview' : ''}` });
+  if (isDeletedMediaAsset(asset)) {
+    preview.appendChild(createElement('span', { text: 'Đã xóa khỏi Storage' }));
+    return preview;
+  }
+  if (isBrokenDeletedMediaReference(asset)) {
+    preview.appendChild(createElement('span', { text: 'Tham chiếu hỏng / path đã xóa' }));
+    return preview;
+  }
   if (!asset.hasSafePublicUrl) {
     preview.appendChild(createElement('span', { text: asset.publicUrlRaw ? ADMIN_COPY.media.unsafeUrl : ADMIN_COPY.media.previewUnavailable }));
     return preview;
@@ -4604,6 +4756,7 @@ function buildMediaSearchText(asset = {}) {
     asset.artworkCode,
     asset.fieldName,
     asset.status,
+    getMediaLifecycleState(asset).label,
     asset.usage?.label,
     safeArray(asset.usage?.references).map((reference) => reference.label).join(' '),
   ].map((value) => String(value || '').toLowerCase()).join(' ');
