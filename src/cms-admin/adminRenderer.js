@@ -848,7 +848,9 @@ function renderActiveTab(state) {
         }),
       });
     case 'publish':
-      return renderWorkspaceShell('publish', renderPublishTab(state), state);
+      return renderWorkspaceShell('publish', null, state, {
+        renderContent: ({ activeKey }) => renderPublishWorkspaceContent(state, activeKey),
+      });
     case 'history':
       return renderWorkspaceShell('history', renderRollbackHistoryTab(state, { onRerender: renderAdminShell }), state);
     case 'cleanup':
@@ -4880,6 +4882,241 @@ async function copyMediaUrl(button, url) {
       button.disabled = false;
     }, 1400);
   }
+}
+
+
+function renderPublishWorkspaceContent(state, activeKey = 'status') {
+  switch (activeKey) {
+    case 'check':
+      return renderPublishCheckWorkspacePanel(state);
+    case 'publish':
+      return renderPublishActionWorkspacePanel(state);
+    case 'history':
+      return renderPublishHistoryWorkspacePanel(state);
+    case 'status':
+    default:
+      return renderPublishStatusWorkspacePanel(state);
+  }
+}
+
+function getPublishContext(state = {}) {
+  const data = state.data || {};
+  const draftState = state.staticCmsDraft || {};
+  const bundle = getCurrentPublishedBundle(data.publishedBundles);
+  const canonicalKnown = !data.canonicalError;
+  const validation = draftState.validation || null;
+  const dryRun = draftState.publishDryRunResult || null;
+  return { data, draftState, bundle, canonicalKnown, validation, dryRun };
+}
+
+function renderPublishStatusWorkspacePanel(state = {}) {
+  const { data, bundle, canonicalKnown } = getPublishContext(state);
+  const wrap = createElement('section', { className: 'cms-admin-publish-functional-view' });
+  wrap.appendChild(renderPublishCanonicalHeroPanel(state));
+
+  const grid = createElement('div', { className: 'cms-admin-publish-functional-grid' });
+  grid.appendChild(renderPublishCanonicalStatusPanel({ canonicalKnown, canonicalError: data.canonicalError }));
+  grid.appendChild(renderPublishDbReferencePanel(bundle));
+  grid.appendChild(renderPublishAuditCanonicalPanel());
+  wrap.appendChild(grid);
+
+  const details = createElement('details', { className: 'cms-admin-details cms-admin-publish-technical-details' });
+  details.appendChild(createElement('summary', { text: 'Nguồn dữ liệu và vai trò từng lớp' }));
+  details.appendChild(renderKeyValueList([
+    ['Public canonical', 'Storage latest / CMS public JSON — cms-public/published/cms_public_content.json'],
+    ['Version source', 'Storage versions — các object version dùng để đối chiếu/khôi phục theo workflow riêng'],
+    ['Operational audit', 'cms_publish_logs — lịch sử vận hành canonical cho publish/rollback'],
+    ['DB reference/cache', 'published_bundles — bản ghi tham chiếu/legacy cache, không phải nguồn website public đang chạy'],
+  ]));
+  wrap.appendChild(details);
+  return wrap;
+}
+
+function renderPublishCanonicalHeroPanel(state = {}) {
+  const { data, canonicalKnown } = getPublishContext(state);
+  const panel = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel cms-admin-publish-canonical-hero' });
+  panel.appendChild(renderPanelTitle('Storage latest / CMS public JSON', canonicalKnown ? 'Nguồn public canonical' : 'Cần kiểm tra'));
+  panel.appendChild(renderCompactNotice('Đây là bề mặt chính để hiểu website public đang đọc nội dung nào. Màn này chỉ xem trạng thái, không tự ghi dữ liệu.'));
+  const facts = createElement('div', { className: 'cms-admin-publish-fact-grid' });
+  facts.appendChild(renderInfoTile('Đường dẫn canonical', 'cms-public/published/cms_public_content.json', true));
+  facts.appendChild(renderInfoTile('Trạng thái đọc', canonicalKnown ? 'Chưa ghi nhận lỗi khi đọc public content' : normalizeErrorMessage(data.canonicalError), !canonicalKnown));
+  facts.appendChild(renderInfoTile('Nguồn vận hành', 'Storage latest + cms_publish_logs', false));
+  facts.appendChild(renderInfoTile('Không phải canonical', 'published_bundles chỉ để đối chiếu', false));
+  panel.appendChild(facts);
+  if (!canonicalKnown) panel.appendChild(renderCompactWarning(`Cần kiểm tra public canonical: ${normalizeErrorMessage(data.canonicalError)}`));
+  return panel;
+}
+
+function renderPublishCanonicalStatusPanel({ canonicalKnown, canonicalError }) {
+  const panel = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel cms-admin-publish-status-card' });
+  panel.appendChild(renderPanelTitle('Trạng thái public canonical', canonicalKnown ? 'PASS' : 'WARNING'));
+  panel.appendChild(renderKeyValueList([
+    ['Nguồn chính', 'Storage latest / CMS public JSON'],
+    ['Path', 'cms-public/published/cms_public_content.json'],
+    ['Kết luận', canonicalKnown ? 'Không thấy lỗi canonical trong dữ liệu đã tải' : normalizeErrorMessage(canonicalError)],
+  ]));
+  panel.appendChild(renderCompactNotice('Chỉ nguồn này cùng lịch sử vận hành mới được dùng để kết luận website public đang chạy nội dung nào.'));
+  return panel;
+}
+
+function renderPublishDbReferencePanel(bundle) {
+  const panel = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel cms-admin-publish-reference-card' });
+  panel.appendChild(renderPanelTitle('published_bundles', bundle ? 'Bản ghi tham chiếu / legacy cache' : 'Chưa có bản ghi'));
+  if (bundle) {
+    panel.appendChild(renderKeyValueList([
+      ['Mã phiên bản', bundle.version || '—'],
+      ['Trạng thái record', getStatusLabel(bundle.status)],
+      ['Thời điểm record', formatDateTime(bundle.published_at)],
+      ['Ghi chú', getFriendlyNote(bundle.note)],
+    ]));
+  } else {
+    panel.appendChild(renderEmptyState('Chưa đọc được published_bundles. Điều này không tự đồng nghĩa website chưa có public content.'));
+  }
+  panel.appendChild(renderCompactWarning('published_bundles không phải nguồn public canonical. Record này có thể lệch Storage latest và chỉ dùng để đối chiếu/legacy cache.'));
+  return panel;
+}
+
+function renderPublishAuditCanonicalPanel() {
+  const panel = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel cms-admin-publish-audit-card' });
+  panel.appendChild(renderPanelTitle('cms_publish_logs', 'Lịch sử/audit vận hành canonical'));
+  panel.appendChild(renderCompactNotice('Publish/rollback thành công, lỗi hoặc cảnh báo cần được đối chiếu với cms_publish_logs. Màn này không thêm API fetch log mới trong phase frontend-only.'));
+  panel.appendChild(renderRequirementList('Cách dùng an toàn', [
+    'Dùng log để biết ai đã công khai, lúc nào, kết quả gì.',
+    'Không dùng published_bundles thay cho audit log vận hành.',
+    'Nếu cần forensic hoặc rollback, chuyển sang Lịch sử phiên bản / workflow rollback riêng.',
+  ]));
+  return panel;
+}
+
+function renderPublishCheckWorkspacePanel(state = {}) {
+  const { bundle, canonicalKnown, validation, dryRun, draftState, data } = getPublishContext(state);
+  const panel = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel cms-admin-publish-check-panel' });
+  panel.appendChild(renderPanelTitle('Kiểm tra trước khi công khai', 'Read-only checklist'));
+  panel.appendChild(renderCompactNotice('Checklist này chỉ đọc state đã tải sẵn. Không chạy dry-run, không publish và không rollback.'));
+
+  const list = createElement('div', { className: 'cms-admin-publish-checklist' });
+  const rows = [
+    buildPublishCheckRow({
+      label: 'Public canonical',
+      status: canonicalKnown ? 'ready' : 'warning',
+      value: canonicalKnown ? 'Storage latest / CMS public JSON chưa ghi nhận lỗi' : normalizeErrorMessage(data.canonicalError),
+    }),
+    buildPublishCheckRow({
+      label: 'Bản nháp đã lưu',
+      status: draftState.currentDraftId ? 'ready' : 'blocked',
+      value: draftState.currentDraftId ? `Đã có bản nháp ${draftState.currentDraftId}` : 'Cần lưu bản nháp ở Nội dung phòng 3D trước khi công khai.',
+    }),
+    buildPublishCheckRow({
+      label: 'Dirty state',
+      status: draftState.dirty ? 'blocked' : 'ready',
+      value: draftState.dirty ? 'Đang có thay đổi chưa lưu.' : 'Không ghi nhận thay đổi chưa lưu trong state hiện tại.',
+    }),
+    buildPublishCheckRow({
+      label: 'Validation nội dung',
+      status: validation ? (validation.valid ? 'ready' : 'warning') : 'unknown',
+      value: validation ? (validation.valid ? 'Validation hiện tại đạt.' : 'Validation còn lỗi/cảnh báo cần xử lý.') : 'Chưa có validation runtime trong state hiện tại.',
+    }),
+    buildPublishCheckRow({
+      label: 'Dry-run publish',
+      status: dryRun?.ok === true && dryRun?.dryRun === true ? 'ready' : 'unknown',
+      value: dryRun?.ok === true && dryRun?.dryRun === true ? 'Dry-run gần nhất đạt và không thay đổi website.' : 'Chưa có bằng chứng dry-run đạt cho bản nháp hiện tại.',
+    }),
+    buildPublishCheckRow({
+      label: 'Bản ghi tham chiếu DB',
+      status: bundle?.version ? 'reference' : 'unknown',
+      value: bundle?.version ? `${bundle.version} chỉ dùng để đối chiếu/legacy cache.` : 'Chưa đọc được published_bundles.',
+    }),
+    buildPublishCheckRow({
+      label: 'Write từ màn này',
+      status: 'ready',
+      value: 'Không có publish/dry-run/rollback trực tiếp khi render hoặc chuyển tab.',
+    }),
+  ];
+  rows.forEach((row) => list.appendChild(renderPublishCheckItem(row)));
+  panel.appendChild(list);
+  panel.appendChild(renderRequirementList('Điều kiện bắt buộc trước publish thật', ADMIN_COPY.publish.requirements));
+  return panel;
+}
+
+function buildPublishCheckRow(row) {
+  return row;
+}
+
+function renderPublishCheckItem({ label, status, value }) {
+  const variants = {
+    ready: ['PASS', 'success'],
+    blocked: ['BLOCKED', 'danger'],
+    warning: ['WARNING', 'warning'],
+    unknown: ['UNKNOWN', 'default'],
+    reference: ['REFERENCE', 'default'],
+  };
+  const [text, variant] = variants[status] || variants.unknown;
+  const item = createElement('article', { className: `cms-admin-publish-check-item is-${status || 'unknown'}` });
+  const head = createElement('div', { className: 'cms-admin-publish-check-head' });
+  head.appendChild(createElement('strong', { text: label }));
+  head.appendChild(renderBadge(text, variant));
+  item.appendChild(head);
+  item.appendChild(createElement('p', { text: value || '—' }));
+  return item;
+}
+
+function renderPublishActionWorkspacePanel(state = {}) {
+  const panel = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel cms-admin-publish-action-panel' });
+  panel.appendChild(renderPanelTitle('Công khai website', 'Không gọi publish từ màn này'));
+  panel.appendChild(renderCompactWarning('Publish thật sẽ thay đổi website public. Màn này chỉ điều hướng an toàn tới gate công khai hiện có sau khi bản nháp đã lưu và dry-run đạt.'));
+  panel.appendChild(renderWorkflowSteps([
+    'Mở Nội dung phòng 3D.',
+    'Lưu bản nháp server-side nếu còn thay đổi.',
+    'Chạy kiểm tra an toàn/dry-run ở publish gate hiện có.',
+    'Chỉ công khai thật khi confirmVersion và cảnh báo đã được xác nhận rõ.',
+  ]));
+
+  const actions = createElement('div', { className: 'cms-admin-publish-cta-row' });
+  const openButton = createElement('button', {
+    className: 'cms-admin-button cms-admin-button-primary cms-admin-publish-navigation-cta',
+    text: 'Mở bước công khai trong Nội dung phòng 3D',
+    type: 'button',
+    attrs: { 'aria-label': 'Mở Nội dung phòng 3D để tiếp tục publish gate an toàn' },
+  });
+  openButton.addEventListener('click', openStaticDraftPublishGateFromPublishScreen);
+  actions.appendChild(openButton);
+  actions.appendChild(createElement('a', {
+    className: 'cms-admin-button cms-admin-button-ghost',
+    text: 'Mở website để xem',
+    href: './index.html',
+    attrs: { target: '_blank', rel: 'noopener' },
+  }));
+  panel.appendChild(actions);
+
+  const locked = createElement('div', { className: 'cms-admin-publish-locked-actions' });
+  locked.appendChild(renderDisabledActionRow(['Dry-run publish tại màn này', 'Công khai thật tại màn này'], 'Màn này không gọi Edge Function publish-cms-json. Hãy dùng publish gate trong Nội dung phòng 3D.'));
+  locked.appendChild(renderRequirementList('Vì sao khóa nút publish trực tiếp', ADMIN_COPY.publish.disabledReasons));
+  panel.appendChild(locked);
+  return panel;
+}
+
+function openStaticDraftPublishGateFromPublishScreen() {
+  setWorkspaceTabState('staticDraft', getWorkspaceActiveTab('staticDraft', getWorkspaceTabs('staticDraft')) || 'indoor');
+  switchAdminTab('staticDraft');
+}
+
+function renderPublishHistoryWorkspacePanel(state = {}) {
+  const bundles = safeArray(state.data?.publishedBundles);
+  const panel = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel cms-admin-publish-history-panel' });
+  panel.appendChild(renderPanelTitle('Lịch sử liên quan', 'Read-only'));
+  panel.appendChild(renderCompactNotice('cms_publish_logs là lịch sử/audit vận hành canonical. Phase frontend-only này không thêm API mới để fetch log trực tiếp trong màn publish.'));
+  panel.appendChild(renderRequirementList('Khi cần kiểm tra lịch sử publish/rollback', [
+    'Đối chiếu cms_publish_logs để xem kết quả vận hành thật.',
+    'Dùng Lịch sử phiên bản / workflow rollback riêng nếu cần xem hoặc khôi phục phiên bản.',
+    'published_bundles bên dưới chỉ là reference/cache để đối chiếu nhanh.',
+  ]));
+
+  const legacy = createElement('section', { className: 'cms-admin-publish-legacy-history' });
+  legacy.appendChild(renderPanelTitle('published_bundles', `${formatCount(bundles.length)} bản ghi tham chiếu`));
+  legacy.appendChild(renderCompactWarning('Bảng này không phải audit log canonical. Có thể lệch Storage latest hoặc cms_publish_logs.'));
+  legacy.appendChild(renderBundlesTable(bundles));
+  panel.appendChild(legacy);
+  return panel;
 }
 
 function renderPublishTab(state) {

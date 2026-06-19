@@ -8256,3 +8256,156 @@ body.cms-admin-page * {
 .cms-admin-media-lifecycle-card .cms-admin-badge {
   max-width: 100%;
 }
+
+/* v6.14.051.002 — publish screen functional tabs + canonicality hardening */
+.cms-admin-publish-functional-view,
+.cms-admin-publish-check-panel,
+.cms-admin-publish-action-panel,
+.cms-admin-publish-history-panel {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.cms-admin-publish-functional-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.cms-admin-publish-canonical-hero,
+.cms-admin-publish-status-card,
+.cms-admin-publish-reference-card,
+.cms-admin-publish-audit-card,
+.cms-admin-publish-check-panel,
+.cms-admin-publish-action-panel,
+.cms-admin-publish-history-panel,
+.cms-admin-publish-legacy-history {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.cms-admin-publish-fact-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.cms-admin-publish-checklist {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.cms-admin-publish-check-item {
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 14px;
+  padding: 11px 12px;
+  background: rgba(15, 23, 42, 0.24);
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.cms-admin-publish-check-item.is-ready {
+  border-color: rgba(52, 211, 153, 0.22);
+}
+
+.cms-admin-publish-check-item.is-blocked {
+  border-color: rgba(248, 113, 113, 0.32);
+  background: rgba(127, 29, 29, 0.12);
+}
+
+.cms-admin-publish-check-item.is-warning {
+  border-color: rgba(214, 178, 94, 0.34);
+}
+
+.cms-admin-publish-check-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 5px;
+  min-width: 0;
+}
+
+.cms-admin-publish-check-item p,
+.cms-admin-publish-functional-view p,
+.cms-admin-publish-action-panel p,
+.cms-admin-publish-history-panel p,
+.cms-admin-publish-functional-view .cms-admin-kv-value,
+.cms-admin-publish-check-panel .cms-admin-kv-value,
+.cms-admin-publish-action-panel .cms-admin-kv-value,
+.cms-admin-publish-history-panel .cms-admin-kv-value {
+  overflow-wrap: anywhere;
+}
+
+.cms-admin-publish-cta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin: 12px 0;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.cms-admin-publish-navigation-cta {
+  white-space: normal;
+  text-align: center;
+}
+
+.cms-admin-publish-locked-actions {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.cms-admin-publish-technical-details {
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 14px;
+  padding: 10px 12px;
+  background: rgba(15, 23, 42, 0.2);
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.cms-admin-publish-technical-details summary {
+  cursor: pointer;
+  color: var(--cms-admin-text);
+  font-weight: 800;
+}
+
+.cms-admin-publish-legacy-history {
+  margin-top: 10px;
+}
+
+.cms-admin-publish-history-panel .cms-admin-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+@media (max-width: 1180px) {
+  .cms-admin-publish-functional-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .cms-admin-publish-check-head,
+  .cms-admin-publish-cta-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
