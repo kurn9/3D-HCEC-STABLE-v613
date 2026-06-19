@@ -902,6 +902,10 @@ export async function safeDeleteCmsStorageCleanup(client, options = {}) {
   return runCmsStorageCleanupAction(client, 'safeDelete', options);
 }
 
+export async function safeDeleteSelectedCmsStorageCleanup(client, options = {}) {
+  return runCmsStorageCleanupAction(client, 'safeDeleteSelected', options);
+}
+
 async function runCmsStorageCleanupAction(client, action, options = {}) {
   if (!client) {
     return { data: null, error: new Error('Supabase client chưa sẵn sàng.') };
@@ -911,12 +915,12 @@ async function runCmsStorageCleanupAction(client, action, options = {}) {
   if (sessionError) return { data: null, error: sessionError };
   const token = sessionData?.session?.access_token;
   if (!token) {
-    return { data: null, error: new Error('Cần đăng nhập để quét/dry-run/safe-delete dọn dẹp lưu trữ.') };
+    return { data: null, error: new Error('Cần đăng nhập để quét, kiểm tra và xóa tệp có kiểm soát.') };
   }
 
   const payload = buildCmsStorageCleanupPayload(action, options);
   if (!payload) {
-    return { data: null, error: new Error('Action cleanup không hợp lệ trong V6.12-A2.') };
+    return { data: null, error: new Error('Thao tác quét/dọn tệp không hợp lệ.') };
   }
 
   try {
@@ -939,20 +943,38 @@ async function runCmsStorageCleanupAction(client, action, options = {}) {
 }
 
 function buildCmsStorageCleanupPayload(action, options = {}) {
-  if (!['scan', 'dryRun', 'safeDelete'].includes(action)) return null;
+  if (!['scan', 'dryRun', 'safeDelete', 'safeDeleteSelected'].includes(action)) return null;
   const retentionDays = normalizeCleanupInteger(options.retentionDays, CMS_STORAGE_CLEANUP_CONFIG.defaultRetentionDays || 30, CMS_STORAGE_CLEANUP_CONFIG.minRetentionDays || 7, 3650);
   const keepLastVersions = normalizeCleanupInteger(options.keepLastVersions, CMS_STORAGE_CLEANUP_CONFIG.defaultKeepLastVersions || 20, CMS_STORAGE_CLEANUP_CONFIG.minKeepLastVersions || 5, 500);
+
+  if (action === 'safeDeleteSelected') {
+    const runId = String(options.runId || '').trim();
+    const planHash = String(options.planHash || '').trim();
+    const selectedItemKey = String(options.selectedItemKey || '').trim();
+    if (!runId || !planHash || !selectedItemKey) return null;
+    return {
+      action,
+      runId,
+      planHash,
+      selectedItemKey,
+      scope: 'media',
+      retentionDays,
+      keepLastVersions,
+    };
+  }
 
   if (action === 'safeDelete') {
     const runId = String(options.runId || '').trim();
     const planHash = String(options.planHash || '').trim();
     const confirmPhrase = String(options.confirmPhrase || '').trim();
-    if (!runId || !planHash || !confirmPhrase) return null;
+    const selectedItemKey = String(options.selectedItemKey || '').trim();
+    if (!runId || !planHash || !confirmPhrase || !selectedItemKey) return null;
     return {
       action,
       runId,
       planHash,
       confirmPhrase,
+      selectedItemKey,
       scope: 'media',
       retentionDays,
       keepLastVersions,
