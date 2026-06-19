@@ -37,12 +37,13 @@ const RESTORE_KIND_PRIORITY = Object.freeze({
 
 export function renderRollbackHistoryTab(state, handlers = {}) {
   const historyState = state.publishHistory || {};
-  const panel = createElement('section', { className: 'cms-admin-grid cms-admin-rollback-history-view' });
+  const panel = createElement('section', { className: 'cms-admin-grid cms-admin-rollback-history-view cms-admin-version-history-workspace' });
 
   panel.appendChild(renderHistoryIntro(state, historyState, handlers));
   panel.appendChild(renderHistoryListPanel(state, historyState, handlers));
   panel.appendChild(renderVersionPreviewPanel(state, historyState, handlers));
   panel.appendChild(renderRollbackPanel(state, historyState, handlers));
+  panel.appendChild(renderHistoryAuditPanel(historyState));
 
   if (shouldAutoLoadHistory(state, historyState)) {
     queueLoadPublishHistory(handlers);
@@ -52,25 +53,67 @@ export function renderRollbackHistoryTab(state, handlers = {}) {
 }
 
 function renderHistoryIntro(state = {}, historyState = {}, handlers = {}) {
-  const panel = createElement('section', { className: 'cms-admin-panel cms-admin-rollback-hero-panel' });
-  const top = createElement('div', { className: 'cms-admin-panel-title-row' });
-  top.appendChild(createElement('h2', { className: 'cms-admin-panel-title', text: 'Khôi phục phiên bản nội dung' }));
-  top.appendChild(renderBadge(isRollbackAdmin(state) ? 'Quản trị viên' : 'Chỉ xem/không đủ quyền', isRollbackAdmin(state) ? 'success' : 'warning'));
-  panel.appendChild(top);
-  panel.appendChild(createElement('p', {
+  const historyView = buildHistoryViewModels(historyState.items);
+  const panel = createElement('section', { className: 'cms-admin-panel cms-admin-rollback-hero-panel cms-admin-version-history-hero' });
+  const top = createElement('div', { className: 'cms-admin-panel-title-row cms-admin-version-history-title-row' });
+  const heading = createElement('div', { className: 'cms-admin-cell-stack' });
+  heading.appendChild(createElement('p', { className: 'cms-admin-kicker', text: 'VẬN HÀNH / ROLLBACK' }));
+  heading.appendChild(createElement('h2', { className: 'cms-admin-panel-title', text: 'Lịch sử phiên bản' }));
+  heading.appendChild(createElement('p', {
     className: 'cms-admin-help-text',
-    text: 'Chọn một bản có thể khôi phục, xem trước, kiểm tra an toàn rồi mới khôi phục. Website chỉ thay đổi ở bước cuối sau hai lần xác nhận.',
+    text: 'Workspace này dùng để xem phiên bản, preview nội dung, dry-run rollback và chỉ khôi phục khi operator xác nhận rõ. Xem/chuyển tab không tự đổi website.',
   }));
-  panel.appendChild(renderRollbackRiskIntro());
-  panel.appendChild(createElement('div', {
-    className: 'cms-admin-alert cms-admin-alert-warning',
-    text: 'Hệ thống vẫn bắt buộc kiểm tra khôi phục, lý do, mã xác nhận và xác minh bản đang công khai. Phiên bản, bản sao lưu và log không bị xóa.',
+  top.appendChild(heading);
+  top.appendChild(renderBadge(isRollbackAdmin(state) ? 'Rollback có kiểm soát' : 'Chỉ xem', isRollbackAdmin(state) ? 'warning' : 'default'));
+  panel.appendChild(top);
+
+  const summary = createElement('div', { className: 'cms-admin-version-history-summary-grid' });
+  [
+    {
+      title: 'Lịch sử/audit canonical',
+      value: `${safeArray(historyState.items).length} log`,
+      detail: 'cms_publish_logs là nguồn đối chiếu publish/rollback thật.',
+      badge: 'cms_publish_logs',
+      variant: 'success',
+    },
+    {
+      title: 'Bản có thể khôi phục',
+      value: `${historyView.restorePoints.length} bản`,
+      detail: 'Nguồn restore là Storage version/backup path an toàn từ log.',
+      badge: 'Storage versions',
+      variant: 'warning',
+    },
+    {
+      title: 'Bản ghi tham chiếu DB',
+      value: 'reference',
+      detail: 'published_bundles nếu xuất hiện chỉ là legacy/cache, không phải audit canonical.',
+      badge: 'published_bundles',
+      variant: 'default',
+    },
+  ].forEach((item) => {
+    const card = createElement('article', { className: 'cms-admin-version-history-source-card' });
+    const cardHead = createElement('div', { className: 'cms-admin-panel-title-row' });
+    cardHead.appendChild(createElement('strong', { text: item.title }));
+    cardHead.appendChild(renderBadge(item.badge, item.variant));
+    card.appendChild(cardHead);
+    card.appendChild(createElement('div', { className: 'cms-admin-version-history-source-value', text: item.value }));
+    card.appendChild(createElement('p', { className: 'cms-admin-help-text', text: item.detail }));
+    summary.appendChild(card);
+  });
+  panel.appendChild(summary);
+
+  const safety = createElement('div', { className: 'cms-admin-alert cms-admin-alert-warning cms-admin-version-history-safety-note' });
+  safety.appendChild(createElement('strong', { text: 'Nguyên tắc an toàn' }));
+  safety.appendChild(createElement('span', {
+    text: ' Preview chỉ đọc. Rollback thật sẽ đổi website public và chỉ mở sau khi chọn đúng bản, xem trước, dry-run server đạt, nhập lý do và xác nhận hai bước.',
   }));
-  const actions = createElement('div', { className: 'cms-admin-actions' });
+  panel.appendChild(safety);
+
+  const actions = createElement('div', { className: 'cms-admin-actions cms-admin-version-history-hero-actions' });
   const refreshButton = createElement('button', {
     className: 'cms-admin-button cms-admin-button-secondary',
     type: 'button',
-    text: historyState.loading ? 'Đang tải...' : 'Làm mới danh sách',
+    text: historyState.loading ? 'Đang tải lịch sử...' : 'Làm mới lịch sử',
     title: ROLLBACK_COPY.actions?.refresh || 'Làm mới lịch sử phiên bản',
     ariaLabel: ROLLBACK_COPY.actions?.refresh || 'Làm mới lịch sử phiên bản',
   });
@@ -78,9 +121,56 @@ function renderHistoryIntro(state = {}, historyState = {}, handlers = {}) {
   refreshButton.addEventListener('click', () => handleLoadPublishHistory(handlers, { resetWorkflow: true }));
   actions.appendChild(refreshButton);
   panel.appendChild(actions);
+
   if (!isRollbackAdmin(state)) {
     panel.appendChild(createElement('div', { className: 'cms-admin-alert cms-admin-alert-warning', text: 'Chỉ quản trị viên đang hoạt động được xem lịch sử và thực hiện khôi phục.' }));
   }
+  return panel;
+}
+
+function renderHistoryAuditPanel(historyState = {}) {
+  const historyView = buildHistoryViewModels(historyState.items);
+  const panel = createElement('section', { className: 'cms-admin-panel cms-admin-rollback-audit-panel cms-admin-version-audit-panel' });
+  const title = createElement('div', { className: 'cms-admin-panel-title-row' });
+  const heading = createElement('div', { className: 'cms-admin-cell-stack' });
+  heading.appendChild(createElement('h3', { className: 'cms-admin-panel-title', text: 'Activity / Audit' }));
+  heading.appendChild(createElement('p', {
+    className: 'cms-admin-help-text',
+    text: 'cms_publish_logs là lịch sử vận hành canonical. published_bundles nếu còn xuất hiện chỉ dùng tham chiếu nhanh, không thay thế audit log.',
+  }));
+  title.appendChild(heading);
+  title.appendChild(renderBadge(`${safeArray(historyState.items).length} log`, 'default'));
+  panel.appendChild(title);
+
+  const summary = createElement('div', { className: 'cms-admin-version-history-summary-grid cms-admin-version-audit-summary' });
+  [
+    ['Bản restore', historyView.restorePoints.length, 'Storage version/backup path có thể chọn.'],
+    ['Hoạt động phụ', historyView.activities.length, 'Dry-run, lỗi hoặc thao tác không có nguồn restore.'],
+    ['Nguồn audit', 'cms_publish_logs', 'Đối chiếu publish/rollback thật tại đây.'],
+  ].forEach(([label, value, detail]) => {
+    const item = createElement('article', { className: 'cms-admin-version-history-source-card' });
+    item.appendChild(createElement('strong', { text: label }));
+    item.appendChild(createElement('div', { className: 'cms-admin-version-history-source-value', text: String(value) }));
+    item.appendChild(createElement('p', { className: 'cms-admin-help-text', text: detail }));
+    summary.appendChild(item);
+  });
+  panel.appendChild(summary);
+
+  if (!historyView.activities.length) {
+    panel.appendChild(renderEmptyState('Chưa có hoạt động dry-run/lỗi riêng để hiển thị.'));
+  } else {
+    const details = createElement('details', { className: 'cms-admin-rollback-activity-details' });
+    details.appendChild(createElement('summary', { text: `Hoạt động không thể chọn (${historyView.activities.length})` }));
+    const activityList = createElement('div', { className: 'cms-admin-rollback-activity-list' });
+    historyView.activities.forEach((activity) => activityList.appendChild(renderNonSelectableActivityCard(activity)));
+    details.appendChild(activityList);
+    panel.appendChild(details);
+  }
+
+  const legacy = createElement('div', { className: 'cms-admin-alert cms-admin-alert-warning cms-admin-version-legacy-note' });
+  legacy.appendChild(createElement('strong', { text: 'published_bundles: reference / legacy cache' }));
+  legacy.appendChild(createElement('span', { text: ' Không dùng bảng này làm audit canonical hoặc bằng chứng website đang chạy.' }));
+  panel.appendChild(legacy);
   return panel;
 }
 
@@ -106,16 +196,18 @@ function renderRollbackRiskIntro() {
 }
 
 function renderHistoryListPanel(state = {}, historyState = {}, handlers = {}) {
-  const panel = createElement('section', { className: 'cms-admin-panel cms-admin-rollback-list-panel' });
+  const panel = createElement('section', { className: 'cms-admin-panel cms-admin-rollback-list-panel cms-admin-version-list-panel' });
   const historyView = buildHistoryViewModels(historyState.items);
   const title = createElement('div', { className: 'cms-admin-panel-title-row' });
-  title.appendChild(createElement('h3', { className: 'cms-admin-panel-title', text: 'Bản có thể khôi phục' }));
-  title.appendChild(renderBadge(`${historyView.restorePoints.length} bản`, 'default'));
-  panel.appendChild(title);
-  panel.appendChild(createElement('p', {
+  const heading = createElement('div', { className: 'cms-admin-cell-stack' });
+  heading.appendChild(createElement('h3', { className: 'cms-admin-panel-title', text: 'Card 1 — Danh sách phiên bản' }));
+  heading.appendChild(createElement('p', {
     className: 'cms-admin-help-text',
-    text: 'Mỗi thẻ bên dưới đại diện cho đúng một tệp nguồn. Các lần chỉ kiểm tra hoặc thao tác lỗi không thể được chọn để khôi phục.',
+    text: 'Chọn đúng phiên bản nguồn để xem trước. Bảng hoạt động kiểm tra/lỗi được tách xuống khu audit, không trộn với bản có thể khôi phục.',
   }));
+  title.appendChild(heading);
+  title.appendChild(renderBadge(`${historyView.restorePoints.length} bản restore`, 'default'));
+  panel.appendChild(title);
 
   if (historyState.error) {
     panel.appendChild(renderErrorBox(historyState.error, 'Không tải được lịch sử'));
@@ -126,20 +218,11 @@ function renderHistoryListPanel(state = {}, historyState = {}, handlers = {}) {
   }
 
   if (!historyView.restorePoints.length) {
-    panel.appendChild(renderEmptyState('Chưa có phiên bản hoặc bản sao hợp lệ để khôi phục.'));
+    panel.appendChild(renderEmptyState('Chưa có phiên bản hoặc bản sao hợp lệ để khôi phục. Hãy đối chiếu cms_publish_logs hoặc quay lại màn công khai.'));
   } else {
-    const list = createElement('div', { className: 'cms-admin-rollback-table' });
+    const list = createElement('div', { className: 'cms-admin-rollback-table cms-admin-version-list' });
     historyView.restorePoints.forEach((point) => list.appendChild(renderRestorePointCard(point, state, historyState, handlers)));
     panel.appendChild(list);
-  }
-
-  if (historyView.activities.length) {
-    const details = createElement('details', { className: 'cms-admin-rollback-activity-details' });
-    details.appendChild(createElement('summary', { text: `Hoạt động không thể chọn (${historyView.activities.length})` }));
-    const activityList = createElement('div', { className: 'cms-admin-rollback-activity-list' });
-    historyView.activities.forEach((activity) => activityList.appendChild(renderNonSelectableActivityCard(activity)));
-    details.appendChild(activityList);
-    panel.appendChild(details);
   }
 
   return panel;
@@ -266,27 +349,33 @@ function createActivityViewModel(log = {}, index = 0, note = '') {
 function renderRestorePointCard(point, state = {}, historyState = {}, handlers = {}) {
   const selected = historyState.selectedSourcePath === point.sourcePath;
   const card = createElement('article', {
-    className: `cms-admin-rollback-log-card cms-admin-restore-point-card${selected ? ' is-selected' : ''}`,
+    className: `cms-admin-rollback-log-card cms-admin-restore-point-card cms-admin-version-card${selected ? ' is-selected' : ''}`,
+    attrs: { 'aria-selected': selected ? 'true' : 'false' },
   });
-  const head = createElement('div', { className: 'cms-admin-rollback-log-head' });
+  const head = createElement('div', { className: 'cms-admin-rollback-log-head cms-admin-version-card-head' });
   const title = createElement('div', { className: 'cms-admin-cell-stack' });
-  title.appendChild(createElement('strong', { text: point.title }));
+  title.appendChild(createElement('strong', { text: point.version || point.title || 'Phiên bản nội dung' }));
   title.appendChild(createElement('span', {
-    className: 'cms-admin-cell-sub',
-    text: `${point.label} • ${formatDateTime(point.createdAt)}`,
+    className: 'cms-admin-cell-sub cms-admin-version-card-path',
+    text: point.sourceFile || getPathFileName(point.sourcePath),
   }));
-  appendChildren(head, [title, renderBadge(point.label, point.kind === 'backup' ? 'warning' : 'success')]);
+  const badges = createElement('div', { className: 'cms-admin-version-card-badges' });
+  badges.appendChild(renderBadge(point.kind === 'backup' ? 'Backup/reference' : point.label, point.kind === 'backup' ? 'warning' : 'success'));
+  if (selected) badges.appendChild(renderBadge('Đang chọn', 'success'));
+  appendChildren(head, [title, badges]);
   card.appendChild(head);
 
-  const summary = createElement('div', { className: 'cms-admin-restore-point-summary' });
-  summary.appendChild(renderMeta('Tên tệp nguồn', point.sourceFile));
-  summary.appendChild(renderMeta('Phiên bản', point.version || 'Không ghi tên'));
+  const summary = createElement('div', { className: 'cms-admin-restore-point-summary cms-admin-version-card-facts' });
+  summary.appendChild(renderMeta('Thời điểm', formatDateTime(point.createdAt)));
+  summary.appendChild(renderMeta('Nguồn', point.kind === 'backup' ? 'Storage backup path' : 'Storage version path'));
+  summary.appendChild(renderMeta('Trạng thái log', STATUS_LABELS[String(point.status || '').toLowerCase()] || point.status || '—'));
+  summary.appendChild(renderMeta('Audit canonical', 'cms_publish_logs'));
   card.appendChild(summary);
 
   if (selected) {
     card.appendChild(createElement('div', {
       className: 'cms-admin-alert cms-admin-alert-success cms-admin-restore-point-selected',
-      text: 'Đã chọn bản này. Hãy xem trước rồi chuyển sang bước Kiểm tra khôi phục.',
+      text: 'Đã chọn phiên bản này. Bước tiếp theo: xem preview đọc-only rồi chạy kiểm tra khôi phục.',
     }));
   }
 
@@ -294,7 +383,7 @@ function renderRestorePointCard(point, state = {}, historyState = {}, handlers =
   const previewButton = createElement('button', {
     className: 'cms-admin-button cms-admin-button-secondary',
     type: 'button',
-    text: historyState.isPreviewing && historyState.previewRequestPath === point.sourcePath ? 'Đang xem...' : 'Xem trước',
+    text: historyState.isPreviewing && historyState.previewRequestPath === point.sourcePath ? 'Đang xem...' : 'Chọn & xem trước',
     title: `${ROLLBACK_COPY.actions?.preview || 'Xem trước bản public đã chọn'} ${point.sourceFile}`,
     ariaLabel: `${ROLLBACK_COPY.actions?.preview || 'Xem trước bản public đã chọn'} ${point.sourceFile}`,
   });
@@ -304,7 +393,7 @@ function renderRestorePointCard(point, state = {}, historyState = {}, handlers =
   const selectButton = createElement('button', {
     className: 'cms-admin-button cms-admin-button-ghost',
     type: 'button',
-    text: selected ? 'Đã chọn' : 'Chọn bản này',
+    text: selected ? 'Đang chọn' : 'Chọn bản',
     title: `${ROLLBACK_COPY.actions?.select || 'Chọn bản này làm nguồn rollback'} ${point.sourceFile}`,
     ariaLabel: `${ROLLBACK_COPY.actions?.select || 'Chọn bản này làm nguồn rollback'} ${point.sourceFile}`,
   });
@@ -314,8 +403,8 @@ function renderRestorePointCard(point, state = {}, historyState = {}, handlers =
   card.appendChild(actions);
 
   const technical = createElement('details', { className: 'cms-admin-rollback-technical-details' });
-  technical.appendChild(createElement('summary', { text: 'Chi tiết kỹ thuật' }));
-  const grid = createElement('div', { className: 'cms-admin-rollback-meta-grid' });
+  technical.appendChild(createElement('summary', { text: 'Đường dẫn và metadata kỹ thuật' }));
+  const grid = createElement('div', { className: 'cms-admin-rollback-meta-grid cms-admin-rollback-technical-grid' });
   [
     ['Đường dẫn phiên bản', point.sourcePath],
     ['Trạng thái gốc', point.status],
@@ -354,23 +443,29 @@ function renderNonSelectableActivityCard(activity = {}) {
 }
 
 function renderVersionPreviewPanel(state = {}, historyState = {}, handlers = {}) {
-  const panel = createElement('section', { className: 'cms-admin-panel cms-admin-rollback-preview-panel' });
+  const panel = createElement('section', { className: 'cms-admin-panel cms-admin-rollback-preview-panel cms-admin-version-preview-panel' });
   const selectedPath = String(historyState.selectedSourcePath || '').trim();
   const preview = historyState.previewResult?.sourcePath === selectedPath ? historyState.previewResult : null;
   const selectedPoint = findRestorePointByPath(historyState.items, selectedPath);
 
-  panel.appendChild(createElement('h3', { className: 'cms-admin-panel-title', text: 'Bước 2 — Xem trước bản sẽ khôi phục' }));
-  panel.appendChild(createElement('p', {
+  const title = createElement('div', { className: 'cms-admin-panel-title-row' });
+  const heading = createElement('div', { className: 'cms-admin-cell-stack' });
+  heading.appendChild(createElement('h3', { className: 'cms-admin-panel-title', text: 'Card 2 — Preview / Nội dung phiên bản' }));
+  heading.appendChild(createElement('p', {
     className: 'cms-admin-help-text',
-    text: ROLLBACK_COPY.previewNote || 'Preview chỉ đọc bản public đã chọn và không thay đổi website.',
+    text: 'Preview chỉ đọc nội dung của bản đã chọn. Không ghi Storage, không rollback, không thay đổi website.',
   }));
+  title.appendChild(heading);
+  title.appendChild(renderBadge('Preview read-only', 'default'));
+  panel.appendChild(title);
+
   if (!selectedPath) {
-    panel.appendChild(renderEmptyState('Hãy chọn một bản trong danh sách. Xem trước chỉ đọc dữ liệu và không thay đổi website.'));
+    panel.appendChild(renderEmptyState('Chọn một phiên bản ở Card 1 để xem preview đọc-only.'));
     return panel;
   }
 
   panel.appendChild(createElement('div', {
-    className: 'cms-admin-rollback-selected-source',
+    className: 'cms-admin-rollback-selected-source cms-admin-version-selected-source',
     text: selectedPoint ? `${selectedPoint.title} — ${selectedPoint.label}` : getPathFileName(selectedPath),
   }));
 
@@ -378,7 +473,7 @@ function renderVersionPreviewPanel(state = {}, historyState = {}, handlers = {})
   const previewButton = createElement('button', {
     className: 'cms-admin-button cms-admin-button-secondary',
     type: 'button',
-    text: historyState.isPreviewing ? 'Đang đọc bản đã chọn...' : (preview ? 'Xem lại bản đã chọn' : 'Xem trước bản đã chọn'),
+    text: historyState.isPreviewing ? 'Đang đọc bản đã chọn...' : (preview ? 'Làm mới preview' : 'Xem preview đọc-only'),
     title: ROLLBACK_COPY.actions?.preview || 'Xem trước bản public đã chọn. Chỉ đọc dữ liệu.',
     ariaLabel: ROLLBACK_COPY.actions?.preview || 'Xem trước bản public đã chọn. Chỉ đọc dữ liệu.',
   });
@@ -395,7 +490,7 @@ function renderVersionPreviewPanel(state = {}, historyState = {}, handlers = {})
     return panel;
   }
   if (!preview) {
-    panel.appendChild(renderEmptyState('Bản đã chọn chưa được xem trước hoặc kết quả xem trước cũ đã được xóa.'));
+    panel.appendChild(renderEmptyState('Chưa có preview cho bản này. Bấm “Xem preview đọc-only” trước khi rollback.'));
     return panel;
   }
 
@@ -452,16 +547,17 @@ function renderPreviewSummary(preview = {}) {
 }
 
 function renderRollbackPanel(state = {}, historyState = {}, handlers = {}) {
-  const panel = createElement('section', { className: 'cms-admin-panel cms-admin-rollback-action-panel' });
-  panel.appendChild(createElement('h3', { className: 'cms-admin-panel-title', text: 'Các bước kiểm tra và khôi phục' }));
-  panel.appendChild(createElement('p', {
+  const panel = createElement('section', { className: 'cms-admin-panel cms-admin-rollback-action-panel cms-admin-version-rollback-panel' });
+  const title = createElement('div', { className: 'cms-admin-panel-title-row' });
+  const heading = createElement('div', { className: 'cms-admin-cell-stack' });
+  heading.appendChild(createElement('h3', { className: 'cms-admin-panel-title', text: 'Card 3 — Khôi phục an toàn' }));
+  heading.appendChild(createElement('p', {
     className: 'cms-admin-help-text',
-    text: ROLLBACK_COPY.dryRunNote || 'Kiểm tra khôi phục chỉ kiểm tra điều kiện, chưa thay đổi website.',
+    text: 'Dry-run kiểm tra điều kiện trên server. Rollback thật sẽ đổi website public và vẫn cần lý do vận hành cùng hai lần xác nhận.',
   }));
-  panel.appendChild(createElement('p', {
-    className: 'cms-admin-help-text',
-    text: ROLLBACK_COPY.realRollbackNote || 'Khôi phục phiên bản sẽ thay đổi website nếu qua đủ điều kiện và xác nhận hai bước.',
-  }));
+  title.appendChild(heading);
+  title.appendChild(renderBadge('Guarded rollback', 'warning'));
+  panel.appendChild(title);
 
   const selectedPath = String(historyState.selectedSourcePath || '').trim();
   const selectedPoint = findRestorePointByPath(historyState.items, selectedPath);
@@ -479,19 +575,19 @@ function renderRollbackPanel(state = {}, historyState = {}, handlers = {}) {
   }));
 
   if (!selectedPath) {
-    panel.appendChild(renderEmptyState('Hãy chọn một bản cần khôi phục ở danh sách.'));
+    panel.appendChild(renderEmptyState('Chọn một bản ở Card 1 trước khi kiểm tra khôi phục.'));
   } else {
     panel.appendChild(createElement('div', {
-      className: 'cms-admin-rollback-selected-source',
+      className: 'cms-admin-rollback-selected-source cms-admin-version-selected-source',
       text: selectedPoint ? `${selectedPoint.title} — ${selectedPoint.label}` : getPathFileName(selectedPath),
     }));
   }
 
-  const dryRunActions = createElement('div', { className: 'cms-admin-actions cms-admin-rollback-actions' });
+  const dryRunActions = createElement('div', { className: 'cms-admin-actions cms-admin-rollback-actions cms-admin-version-primary-actions' });
   const dryRunButton = createElement('button', {
     className: 'cms-admin-button cms-admin-button-secondary',
     type: 'button',
-    text: historyState.isRollingBack ? 'Đang kiểm tra...' : 'Kiểm tra khôi phục',
+    text: historyState.isRollingBack ? 'Đang kiểm tra...' : 'Chạy dry-run rollback',
     title: getDryRunDisabledReason(state, historyState, selectedPath) || ROLLBACK_COPY.actions?.dryRun || 'Kiểm tra khôi phục cho bản đã chọn.',
     ariaLabel: getDryRunDisabledReason(state, historyState, selectedPath) || ROLLBACK_COPY.actions?.dryRun || 'Kiểm tra khôi phục cho bản đã chọn.',
   });
@@ -501,17 +597,17 @@ function renderRollbackPanel(state = {}, historyState = {}, handlers = {}) {
   panel.appendChild(dryRunActions);
 
   const reasonInput = createElement('textarea', {
-    className: 'cms-admin-input',
+    className: 'cms-admin-input cms-admin-rollback-reason-input',
     value: historyState.rollbackReason || '',
     title: ROLLBACK_COPY.actions?.reason || 'Lý do khôi phục',
     ariaLabel: ROLLBACK_COPY.actions?.reason || 'Lý do khôi phục',
-    attrs: { rows: '3', placeholder: 'Ví dụ: Khôi phục bản sạch sau khi hoàn tất kiểm tra UAT' },
+    attrs: { rows: '3', placeholder: 'Nhập lý do vận hành, ví dụ: Khôi phục bản sạch sau khi kiểm tra UAT.' },
   });
   reasonInput.disabled = !selectedPath || historyState.isRollingBack;
-  panel.appendChild(labeledControl('Lý do khôi phục', reasonInput));
+  panel.appendChild(labeledControl('Lý do khôi phục bắt buộc', reasonInput));
   panel.appendChild(createElement('p', {
     className: 'cms-admin-help-text cms-admin-rollback-reason-help',
-    text: ROLLBACK_COPY.reasonHelp || 'Nhập lý do vận hành cụ thể trước khi rollback thật.',
+    text: 'Lý do được ghi vào log vận hành. Không nhập lý do chung chung khi chuẩn bị rollback thật.',
   }));
 
   const conditionChecklist = renderConditionChecklist({ selected: Boolean(selectedPath), dryRunMatches, hasReason });
@@ -522,11 +618,11 @@ function renderRollbackPanel(state = {}, historyState = {}, handlers = {}) {
   });
   panel.appendChild(guidance);
 
-  const rollbackActions = createElement('div', { className: 'cms-admin-actions cms-admin-rollback-actions' });
+  const rollbackActions = createElement('div', { className: 'cms-admin-actions cms-admin-rollback-actions cms-admin-version-danger-actions' });
   const rollbackButton = createElement('button', {
     className: 'cms-admin-button cms-admin-button-danger',
     type: 'button',
-    text: historyState.isRollingBack ? 'Đang khôi phục...' : 'Khôi phục phiên bản',
+    text: historyState.isRollingBack ? 'Đang khôi phục...' : 'Khôi phục thật — đổi website public',
     title: getRollbackDisabledReason(state, historyState, selectedPath, dryRunMatches, hasReason) || ROLLBACK_COPY.actions?.rollback || 'Khôi phục thật bản đã chọn.',
     ariaLabel: getRollbackDisabledReason(state, historyState, selectedPath, dryRunMatches, hasReason) || ROLLBACK_COPY.actions?.rollback || 'Khôi phục thật bản đã chọn.',
   });
@@ -560,29 +656,27 @@ function renderRollbackPanel(state = {}, historyState = {}, handlers = {}) {
     panel.appendChild(renderErrorBox(historyState.rollbackError, 'Khôi phục chưa thành công'));
   }
   panel.appendChild(renderRollbackResult(historyState.rollbackResult || historyState.rollbackDryRunResult));
-  panel.appendChild(createElement('p', {
-    className: 'cms-admin-help-text',
-    text: 'Khôi phục thật vẫn sao lưu bản website đang dùng, ghi bản đã chọn, xác minh lại và tự phục hồi bản trước nếu xác minh thất bại.',
-  }));
-  panel.appendChild(createElement('p', {
-    className: 'cms-admin-help-text',
-    text: ROLLBACK_COPY.serverSourceWarning || 'Khôi phục đã có bước kiểm tra trên server và vẫn cần xác nhận rõ trước khi thay đổi website.',
+  panel.appendChild(createElement('div', {
+    className: 'cms-admin-alert cms-admin-alert-warning cms-admin-version-danger-note',
+    text: 'Rollback thật sẽ ghi lại bản public. Hệ thống vẫn sao lưu latest hiện tại, xác minh sau ghi và tự phục hồi bản trước nếu xác minh thất bại.',
   }));
   return panel;
 }
 
 function renderFlowSteps({ selectedPath = '', previewMatches = false, dryRunMatches = false, ready = false } = {}) {
-  const steps = createElement('ol', { className: 'cms-admin-rollback-flow-steps' });
+  const steps = createElement('ol', { className: 'cms-admin-rollback-flow-steps cms-admin-version-flow-steps' });
   [
-    ['1', 'Chọn bản cần khôi phục', Boolean(selectedPath)],
-    ['2', 'Xem trước bản đã chọn', previewMatches],
-    ['3', 'Kiểm tra khôi phục', dryRunMatches],
-    ['4', 'Nhập lý do', ready],
-    ['5', 'Khôi phục phiên bản', ready],
-  ].forEach(([number, label, complete]) => {
+    ['1', 'Chọn phiên bản', Boolean(selectedPath), 'Chọn đúng Storage version/backup path từ cms_publish_logs.'],
+    ['2', 'Preview đọc-only', previewMatches, 'Xem tóm tắt nội dung, không đổi website.'],
+    ['3', 'Dry-run rollback', dryRunMatches, 'Server kiểm tra điều kiện trước khi khôi phục.'],
+    ['4', 'Lý do & xác nhận', ready, 'Rollback thật cần lý do và confirm hai bước.'],
+  ].forEach(([number, label, complete, detail]) => {
     const item = createElement('li', { className: complete ? 'is-complete' : '' });
     item.appendChild(createElement('span', { className: 'cms-admin-rollback-step-number', text: complete ? '✓' : number }));
-    item.appendChild(createElement('span', { text: label }));
+    const content = createElement('span', { className: 'cms-admin-version-step-copy' });
+    content.appendChild(createElement('strong', { text: label }));
+    content.appendChild(createElement('small', { text: detail }));
+    item.appendChild(content);
     steps.appendChild(item);
   });
   return steps;
