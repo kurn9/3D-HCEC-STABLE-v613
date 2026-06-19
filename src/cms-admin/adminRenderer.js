@@ -6,7 +6,7 @@ import {
   signInWithEmailPassword,
   signOut,
 } from './adminAuth.js';
-import { fetchDashboardData, prepareDeleteCmsMedia, updateExperienceIndexSectionDraft, updateGateContentDraft, updateGuideIndexSectionDraft, updateIndexSectionDraft, updateSiteSettingsDraft } from './adminApi.js';
+import { confirmDeleteCmsMedia, fetchDashboardData, prepareDeleteCmsMedia, updateExperienceIndexSectionDraft, updateGateContentDraft, updateGuideIndexSectionDraft, updateIndexSectionDraft, updateSiteSettingsDraft } from './adminApi.js';
 import {
   appendChildren,
   byId,
@@ -105,6 +105,8 @@ const mediaWorkspaceState = {
   selectedAssetId: '',
   inspectorTab: 'overview',
   deletePrepareByAssetId: Object.create(null),
+  deleteConfirmByAssetId: Object.create(null),
+  deleteConfirmTextByAssetId: Object.create(null),
   openDeletePanelByAssetId: Object.create(null),
 };
 
@@ -2851,10 +2853,10 @@ function renderMediaActionSafetyCard(asset = null) {
 function renderMediaLockedDeleteSection(asset = {}) {
   const section = createElement('section', { className: 'cms-admin-media-locked-delete-section' });
   section.appendChild(createElement('h3', { text: 'Xóa media' }));
-  section.appendChild(createElement('p', { text: 'Xóa thật chưa bật ở phase này. Phase xác nhận xóa sau phải revalidate server-side zero-reference trước khi mở nút này.' }));
+  section.appendChild(createElement('p', { text: 'Xóa thật chỉ mở trong kết quả prepare đủ điều kiện, sau khi nhập đúng confirm phrase. Server luôn revalidate zero-reference trước khi xóa.' }));
   const button = createElement('button', {
     className: 'cms-admin-button cms-admin-button-danger',
-    text: 'Xóa media — đang khóa',
+    text: 'Xóa media — khóa đến khi đủ điều kiện',
     type: 'button',
     attrs: { disabled: 'true', 'aria-disabled': 'true' },
   });
@@ -4130,6 +4132,20 @@ function getMediaDeletePrepareState(asset = {}) {
   return mediaWorkspaceState.deletePrepareByAssetId?.[asset.id || ''] || null;
 }
 
+function getMediaDeleteConfirmState(asset = {}) {
+  return mediaWorkspaceState.deleteConfirmByAssetId?.[asset.id || ''] || null;
+}
+
+function getMediaDeleteConfirmText(asset = {}) {
+  return mediaWorkspaceState.deleteConfirmTextByAssetId?.[asset.id || ''] || '';
+}
+
+function setMediaDeleteConfirmText(asset = {}, value = '') {
+  const id = String(asset.id || '');
+  if (!id) return;
+  mediaWorkspaceState.deleteConfirmTextByAssetId[id] = String(value || '');
+}
+
 function renderMediaDeletePrepareAction(asset = {}, prepareState = null, options = {}) {
   const wrap = createElement('div', { className: 'cms-admin-media-delete-prepare-action' });
   const button = createElement('button', {
@@ -4154,31 +4170,59 @@ function renderMediaDeletePrepareAction(asset = {}, prepareState = null, options
 }
 
 function renderMediaDeletePrepareResult(asset = {}, prepareState = null) {
-  if (!prepareState) {
+  const confirmState = getMediaDeleteConfirmState(asset);
+  if (!prepareState && !confirmState) {
     return createElement('p', {
       className: 'cms-admin-help-text',
       text: 'Chưa chạy kiểm tra server-side cho media này. Bấm kiểm tra sẽ chỉ tạo prepare plan/blocked reason, không xóa file.',
     });
   }
-  const result = createElement('div', { className: `cms-admin-media-delete-prepare-result${prepareState.error ? ' is-blocked' : prepareState.data?.eligible ? ' is-eligible' : ' is-blocked'}` });
-  if (prepareState.loading) {
+  const result = createElement('div', { className: `cms-admin-media-delete-prepare-result${prepareState?.error || confirmState?.error ? ' is-blocked' : prepareState?.data?.eligible ? ' is-eligible' : ' is-blocked'}` });
+  if (prepareState?.loading) {
     result.appendChild(renderBadge('Đang kiểm tra', 'warning'));
     result.appendChild(createElement('p', { text: 'Đang gửi yêu cầu prepareDelete tới Edge Function. Không có thao tác xóa.' }));
     return result;
   }
-  if (prepareState.error) {
+  if (confirmState?.loading) {
+    result.appendChild(renderBadge('Đang xác nhận xóa', 'warning'));
+    result.appendChild(createElement('p', { text: 'Server đang revalidate zero-reference và confirm phrase trước khi xóa Storage object.' }));
+    return result;
+  }
+  if (confirmState?.data?.deleted) {
+    result.appendChild(renderBadge('Đã xóa media', 'success'));
+    result.appendChild(createElement('p', { text: confirmState.data.message || 'Storage object đã được xóa và metadata upload được cập nhật.' }));
+    if (safeArray(confirmState.data.warnings).length) {
+      const warnings = createElement('ul', { className: 'cms-admin-media-delete-reference-list cms-admin-media-delete-reason-list' });
+      safeArray(confirmState.data.warnings).forEach((warning) => warnings.appendChild(createElement('li', { text: String(warning || '') })));
+      result.appendChild(warnings);
+    }
+    return result;
+  }
+  if (confirmState?.data?.result === 'blocked') {
+    result.appendChild(renderBadge('Xóa bị server chặn', 'danger'));
+    result.appendChild(createElement('p', { text: confirmState.data.message || 'Server revalidation đã chặn xóa trước khi chạm Storage.' }));
+    result.appendChild(renderMediaDeleteBlockedDetails(confirmState.data));
+    return result;
+  }
+  if (confirmState?.error) {
+    result.appendChild(renderBadge('Xóa thất bại', 'danger'));
+    result.appendChild(createElement('p', { text: normalizeErrorMessage(confirmState.error) }));
+    if (confirmState.data) result.appendChild(renderMediaDeleteBlockedDetails(confirmState.data));
+    return result;
+  }
+  if (prepareState?.error) {
     result.appendChild(renderBadge('Không thể kiểm tra', 'danger'));
     result.appendChild(createElement('p', { text: normalizeErrorMessage(prepareState.error) }));
-    result.appendChild(createElement('p', { className: 'cms-admin-help-text', text: 'Không có xác nhận xóa thật hoặc xóa Storage object trong phase này.' }));
+    result.appendChild(createElement('p', { className: 'cms-admin-help-text', text: 'Không có xác nhận xóa thật hoặc xóa Storage object khi prepare thất bại.' }));
     return result;
   }
 
-  const data = prepareState.data || {};
+  const data = prepareState?.data || {};
   const eligible = Boolean(data.eligible);
   result.appendChild(renderBadge(eligible ? 'Đủ điều kiện prepare' : 'Không đủ điều kiện', eligible ? 'success' : 'danger'));
   result.appendChild(createElement('p', {
     text: eligible
-      ? 'Chưa xóa thật. Phase xác nhận xóa chưa bật và phase sau vẫn phải revalidate server-side trước khi mở nút xóa.'
+      ? 'Đủ điều kiện tạm thời. Server vẫn sẽ revalidate zero-reference, planHash và confirm phrase ngay trước khi xóa thật.'
       : (data.message || 'Server đã chặn xóa media này.'),
   }));
 
@@ -4206,6 +4250,12 @@ function renderMediaDeletePrepareResult(asset = {}, prepareState = null) {
     result.appendChild(referenceDetails);
   }
 
+  if (eligible && data['confirm' + 'DeleteEnabled']) {
+    result.appendChild(renderMediaConfirmDeleteForm(asset, data, confirmState));
+  } else if (eligible) {
+    result.appendChild(createElement('p', { className: 'cms-admin-help-text', text: 'Prepare đủ điều kiện nhưng confirmDelete chưa được bật bởi server response hiện tại.' }));
+  }
+
   const details = createElement('details', { className: 'cms-admin-media-technical-details' });
   details.appendChild(createElement('summary', { text: 'Prepare token, path và metadata kỹ thuật' }));
   details.appendChild(renderTechnicalKeyValueList([
@@ -4214,11 +4264,75 @@ function renderMediaDeletePrepareResult(asset = {}, prepareState = null) {
     ['Plan hash', data.planHash || '—'],
     ['Confirm phrase', data.confirmPhrase || '—'],
     ['Hết hạn', data.expiresAt ? formatDateTime(data.expiresAt) : '—'],
-    ['Xóa thật đã bật?', data['confirm' + 'DeleteEnabled'] ? 'true — không được dùng trong phase này' : 'false'],
+    ['Xóa thật đã bật?', data['confirm' + 'DeleteEnabled'] ? 'true — vẫn yêu cầu nhập confirm phrase' : 'false'],
   ]));
   result.appendChild(details);
-  result.appendChild(createElement('p', { className: 'cms-admin-help-text', text: 'Eligibility chỉ là trạng thái tạm thời. Phase sau nếu có xác nhận xóa thật phải revalidate server-side lại từ đầu.' }));
+  result.appendChild(createElement('p', { className: 'cms-admin-help-text', text: 'Eligibility chỉ là trạng thái tạm thời. ConfirmDelete luôn revalidate server-side lại từ đầu.' }));
   return result;
+}
+
+function renderMediaDeleteBlockedDetails(data = {}) {
+  const details = createElement('details', { className: 'cms-admin-media-technical-details' });
+  details.appendChild(createElement('summary', { text: 'Chi tiết server revalidation' }));
+  details.appendChild(renderTechnicalKeyValueList([
+    ['Kết quả', data.result || data.error || 'blocked'],
+    ['Media upload id', data.mediaUploadId || '—'],
+    ['Storage path', data.storagePath || '—'],
+    ['Graph incomplete', data.graphIncomplete ? 'true' : 'false'],
+  ]));
+  const references = safeArray(data.references);
+  if (references.length) {
+    const list = createElement('ul', { className: 'cms-admin-media-delete-reference-list' });
+    references.forEach((reference) => {
+      const item = createElement('li');
+      item.appendChild(createElement('span', { text: reference.label || reference.ownerTarget || 'Reference' }));
+      item.appendChild(createElement('small', { text: `${reference.source || 'server'} · ${reference.field || 'field không rõ'}` }));
+      list.appendChild(item);
+    });
+    details.appendChild(list);
+  }
+  return details;
+}
+
+function renderMediaConfirmDeleteForm(asset = {}, prepareData = {}, confirmState = null) {
+  const wrap = createElement('section', { className: 'cms-admin-media-confirm-delete-form', attrs: { role: 'group', 'aria-label': 'Xác nhận xóa media thật' } });
+  wrap.appendChild(renderBadge('Có thể mở bước xác nhận', 'warning'));
+  wrap.appendChild(createElement('p', { text: 'Xóa thật khỏi Storage không thể hoàn tác từ CMS. Nhập chính xác confirm phrase để bật nút xóa media thật.' }));
+  const phrase = String(prepareData.confirmPhrase || '');
+  const currentText = getMediaDeleteConfirmText(asset);
+  const phraseBox = createElement('code', { className: 'cms-admin-media-confirm-phrase', text: phrase || '—' });
+  wrap.appendChild(phraseBox);
+  const input = createElement('input', {
+    className: 'cms-admin-input cms-admin-media-confirm-input',
+    attrs: {
+      type: 'text',
+      value: currentText,
+      placeholder: 'Nhập confirm phrase để bật nút xóa thật',
+      autocomplete: 'off',
+      spellcheck: 'false',
+      'aria-label': 'Nhập confirm phrase để xác nhận xóa media thật',
+    },
+  });
+  const deleteButton = createElement('button', {
+    className: 'cms-admin-button cms-admin-button-danger',
+    text: confirmState?.loading ? 'Đang xóa...' : 'Xóa media thật khỏi Storage',
+    type: 'button',
+  });
+  const syncButton = () => {
+    deleteButton.disabled = Boolean(confirmState?.loading) || input.value.trim() !== phrase || !phrase;
+  };
+  syncButton();
+  input.addEventListener('input', () => {
+    setMediaDeleteConfirmText(asset, input.value);
+    syncButton();
+  });
+  deleteButton.addEventListener('click', () => handleConfirmDeleteCmsMedia(asset, prepareData));
+  const actions = createElement('div', { className: 'cms-admin-media-confirm-actions' });
+  actions.appendChild(input);
+  actions.appendChild(deleteButton);
+  wrap.appendChild(actions);
+  wrap.appendChild(createElement('p', { className: 'cms-admin-help-text', text: 'Server sẽ kiểm tra lại reference public/draft/CMS, planHash và confirm phrase trước khi xóa.' }));
+  return wrap;
 }
 
 async function handlePrepareDeleteCmsMedia(asset = {}) {
@@ -4247,6 +4361,40 @@ async function handlePrepareDeleteCmsMedia(asset = {}) {
   };
   renderAdminShell();
   restoreMediaWorkspaceViewport(scrollX, scrollY, focusSelector);
+}
+
+
+async function handleConfirmDeleteCmsMedia(asset = {}, prepareData = {}) {
+  if (!asset?.id || !prepareData?.planHash) return;
+  const existing = getMediaDeleteConfirmState(asset);
+  if (existing?.loading) return;
+  const currentState = getState();
+  const client = currentState.supabase;
+  const confirmPhrase = getMediaDeleteConfirmText(asset).trim();
+  const scrollX = window.scrollX;
+  const scrollY = window.scrollY;
+  mediaWorkspaceState.openDeletePanelByAssetId[asset.id] = true;
+  mediaWorkspaceState.deleteConfirmByAssetId[asset.id] = { loading: true, data: null, error: null, requestedAt: new Date().toISOString() };
+  renderAdminShell();
+  restoreMediaWorkspaceViewport(scrollX, scrollY, '');
+  const { data, error } = await confirmDeleteCmsMedia(client, {
+    mediaUploadId: asset.id,
+    planHash: prepareData.planHash,
+    confirmPhrase,
+  });
+  mediaWorkspaceState.openDeletePanelByAssetId[asset.id] = true;
+  mediaWorkspaceState.deleteConfirmByAssetId[asset.id] = {
+    loading: false,
+    data: data || null,
+    error: error || null,
+    requestedAt: new Date().toISOString(),
+  };
+  if (data?.deleted) {
+    mediaWorkspaceState.deleteConfirmTextByAssetId[asset.id] = '';
+    await loadDashboardData(client);
+  }
+  renderAdminShell();
+  restoreMediaWorkspaceViewport(scrollX, scrollY, '');
 }
 
 function restoreMediaWorkspaceViewport(scrollX = 0, scrollY = 0, focusSelector = '') {

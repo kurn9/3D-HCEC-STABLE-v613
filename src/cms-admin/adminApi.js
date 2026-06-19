@@ -630,9 +630,9 @@ export async function uploadCmsMedia(client, payload = {}) {
 
 
 
-// v6.14.050.008 — server-side single-media delete prepare gate.
-// This calls delete-cms-media with the authenticated user's JWT.
-// It only checks delete eligibility; it never deletes Storage objects from the browser.
+// v6.14.050.014 — server-side single-media delete gate.
+// These helpers call delete-cms-media with the authenticated user's JWT.
+// The browser never deletes Storage objects directly and never receives service-role credentials.
 export async function prepareDeleteCmsMedia(client, mediaUploadId) {
   if (!client) {
     return { data: null, error: new Error('Supabase client chưa sẵn sàng.') };
@@ -662,6 +662,53 @@ export async function prepareDeleteCmsMedia(client, mediaUploadId) {
     const body = await response.json().catch(() => ({}));
     if (!response.ok || body?.ok === false) {
       return { data: body || null, error: new Error(body?.message || body?.error || `Kiểm tra điều kiện xóa thất bại HTTP ${response.status}.`) };
+    }
+    return { data: body, error: null };
+  } catch (error) {
+    return { data: null, error };
+  }
+}
+
+
+export async function confirmDeleteCmsMedia(client, payload = {}) {
+  if (!client) {
+    return { data: null, error: new Error('Supabase client chưa sẵn sàng.') };
+  }
+
+  const id = normalizeUuidLike(payload.mediaUploadId);
+  const planHash = String(payload.planHash || '').trim();
+  const confirmPhrase = String(payload.confirmPhrase || payload.confirmText || '').trim();
+  if (!id) {
+    return { data: null, error: new Error('Thiếu mediaUploadId UUID hợp lệ để xác nhận xóa.') };
+  }
+  if (!planHash || !confirmPhrase) {
+    return { data: null, error: new Error('Thiếu planHash hoặc confirm phrase để xác nhận xóa.') };
+  }
+
+  const { data: sessionData, error: sessionError } = await client.auth.getSession();
+  if (sessionError) return { data: null, error: sessionError };
+  const token = sessionData?.session?.access_token;
+  if (!token) {
+    return { data: null, error: new Error('Cần đăng nhập để xác nhận xóa media.') };
+  }
+
+  try {
+    const response = await fetch(CMS_MEDIA_DELETE_CONFIG.endpoint, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        action: 'confirmDelete',
+        mediaUploadId: id,
+        planHash,
+        confirmPhrase,
+      }),
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok || body?.ok === false) {
+      return { data: body || null, error: new Error(body?.message || body?.error || `Xác nhận xóa media thất bại HTTP ${response.status}.`) };
     }
     return { data: body, error: null };
   } catch (error) {

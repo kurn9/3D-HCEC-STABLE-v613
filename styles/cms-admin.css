@@ -8088,3 +8088,57 @@ body.cms-admin-page * {
 .cms-admin-media-delete-prepare-result .cms-admin-media-technical-details .cms-admin-kv-value::-webkit-scrollbar {
   height: 6px;
 }
+
+/* v6.14.050.014 — real single-media delete confirm UI, guarded by server-side revalidation. */
+.cms-admin-media-confirm-delete-form {
+  display: grid;
+  gap: 0.7rem;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 0.85rem;
+  border: 1px solid rgba(244, 63, 94, 0.38);
+  border-radius: 16px;
+  background: rgba(127, 29, 29, 0.12);
+}
+
+.cms-admin-media-confirm-phrase {
+  display: block;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid rgba(245, 158, 11, 0.26);
+  border-radius: 12px;
+  background: rgba(2, 6, 23, 0.42);
+  color: var(--cms-admin-text-strong, #f8fafc);
+  font-size: 0.8rem;
+  line-height: 1.45;
+  overflow-x: auto;
+  white-space: pre;
+}
+
+.cms-admin-media-confirm-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.65rem;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.cms-admin-media-confirm-input {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.cms-admin-media-confirm-actions .cms-admin-button {
+  max-width: 100%;
+  white-space: normal;
+}
+
+@media (max-width: 760px) {
+  .cms-admin-media-confirm-actions {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
