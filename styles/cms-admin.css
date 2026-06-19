@@ -7533,3 +7533,243 @@ body.cms-admin-page * {
 .cms-admin-media-delete-prepare-action .cms-admin-button[disabled] {
   cursor: wait;
 }
+
+/* v6.14.050.010 — Media Library professional master / inspector / action workspace */
+.cms-admin-media-pro-workspace {
+  display: grid;
+  grid-template-columns: minmax(250px, 0.85fr) minmax(360px, 1.35fr) minmax(260px, 0.85fr);
+  gap: 16px;
+  align-items: start;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  margin-top: 16px;
+}
+
+.cms-admin-media-master-card,
+.cms-admin-media-inspector-card,
+.cms-admin-media-action-card {
+  min-width: 0;
+  align-self: start;
+}
+
+.cms-admin-media-master-subtitle {
+  margin: 0 0 12px;
+  line-height: 1.5;
+}
+
+.cms-admin-media-master-list {
+  display: grid;
+  gap: 10px;
+  max-height: min(780px, calc(100vh - 260px));
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.cms-admin-media-master-item {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 12px;
+  align-items: stretch;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+  padding: 10px;
+  transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
+}
+
+.cms-admin-media-master-item:hover,
+.cms-admin-media-master-item.is-selected {
+  border-color: rgba(214, 178, 94, 0.54);
+  background: rgba(214, 178, 94, 0.08);
+}
+
+.cms-admin-media-master-item.is-selected {
+  box-shadow: 0 0 0 1px rgba(214, 178, 94, 0.3), 0 14px 32px rgba(2, 6, 12, 0.22);
+}
+
+.cms-admin-media-master-thumb,
+.cms-admin-media-master-thumb .cms-admin-media-preview {
+  min-width: 0;
+  min-height: 80px;
+  height: 86px;
+  border-radius: var(--cms-admin-radius-md);
+  overflow: clip;
+}
+
+.cms-admin-media-master-thumb .cms-admin-media-preview img,
+.cms-admin-media-master-thumb .cms-admin-media-preview video {
+  height: 86px;
+}
+
+.cms-admin-media-master-copy {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  align-content: start;
+}
+
+.cms-admin-media-master-copy strong {
+  color: var(--cms-admin-text);
+  font-size: 0.9rem;
+  line-height: 1.32;
+  overflow-wrap: anywhere;
+}
+
+.cms-admin-media-master-badges {
+  gap: 6px;
+}
+
+.cms-admin-media-master-meta {
+  margin: 0;
+  color: var(--cms-admin-muted);
+  font-size: 0.76rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.cms-admin-media-inspector-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0 14px;
+}
+
+.cms-admin-media-inspector-tab {
+  min-width: auto;
+}
+
+.cms-admin-media-inspector-overview {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.55fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+  min-width: 0;
+}
+
+.cms-admin-media-inspector-overview > .cms-admin-media-preview {
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: var(--cms-admin-radius-lg);
+  overflow: clip;
+  min-height: 220px;
+}
+
+.cms-admin-media-inspector-overview > .cms-admin-media-preview img,
+.cms-admin-media-inspector-overview > .cms-admin-media-preview video {
+  height: 280px;
+}
+
+.cms-admin-media-inspector-body,
+.cms-admin-media-inspector-technical {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.cms-admin-media-inspector-title {
+  margin: 0;
+  color: var(--cms-admin-text);
+  font-size: 1.08rem;
+  line-height: 1.28;
+  overflow-wrap: anywhere;
+}
+
+.cms-admin-media-path-block {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.cms-admin-media-path-block strong {
+  color: var(--cms-admin-text);
+  font-size: 0.84rem;
+}
+
+.cms-admin-media-action-card {
+  display: grid;
+  gap: 12px;
+}
+
+.cms-admin-media-action-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.cms-admin-media-action-card .cms-admin-media-delete-guard-detail {
+  margin-top: 0;
+}
+
+.cms-admin-media-locked-delete-section {
+  display: grid;
+  gap: 10px;
+  border: 1px solid rgba(248, 113, 113, 0.2);
+  border-radius: var(--cms-admin-radius-md);
+  background: rgba(127, 29, 29, 0.1);
+  padding: 12px;
+  min-width: 0;
+}
+
+.cms-admin-media-locked-delete-section h3,
+.cms-admin-media-locked-delete-section p {
+  margin: 0;
+}
+
+.cms-admin-media-locked-delete-section h3 {
+  color: var(--cms-admin-text);
+  font-size: 0.94rem;
+}
+
+.cms-admin-media-locked-delete-section p {
+  color: var(--cms-admin-muted);
+  font-size: 0.82rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.cms-admin-media-locked-delete-section .cms-admin-button[disabled] {
+  cursor: not-allowed;
+  opacity: 0.64;
+}
+
+@media (max-width: 1480px) {
+  .cms-admin-media-pro-workspace {
+    grid-template-columns: minmax(240px, 0.88fr) minmax(0, 1.2fr);
+  }
+
+  .cms-admin-media-action-card {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 1120px) {
+  .cms-admin-media-pro-workspace,
+  .cms-admin-media-inspector-overview {
+    grid-template-columns: 1fr;
+  }
+
+  .cms-admin-media-master-list {
+    max-height: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .cms-admin-media-master-item {
+    grid-template-columns: 82px minmax(0, 1fr);
+  }
+
+  .cms-admin-media-master-thumb,
+  .cms-admin-media-master-thumb .cms-admin-media-preview,
+  .cms-admin-media-master-thumb .cms-admin-media-preview img,
+  .cms-admin-media-master-thumb .cms-admin-media-preview video {
+    height: 74px;
+    min-height: 74px;
+  }
+
+  .cms-admin-media-action-buttons,
+  .cms-admin-media-inspector-tabs {
+    display: grid;
+  }
+}

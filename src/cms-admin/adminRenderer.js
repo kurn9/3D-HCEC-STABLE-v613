@@ -103,6 +103,7 @@ const homeMediaPickerState = {
 
 const mediaWorkspaceState = {
   selectedAssetId: '',
+  inspectorTab: 'overview',
   deletePrepareByAssetId: Object.create(null),
   openDeletePanelByAssetId: Object.create(null),
 };
@@ -2480,6 +2481,9 @@ function buildMediaWorkspaceModel(state = {}) {
   if (mediaWorkspaceState.selectedAssetId && !allAssets.some((asset) => asset.id === mediaWorkspaceState.selectedAssetId)) {
     mediaWorkspaceState.selectedAssetId = '';
   }
+  if (!mediaWorkspaceState.selectedAssetId && allAssets.length) {
+    mediaWorkspaceState.selectedAssetId = allAssets[0].id || '';
+  }
   const selectedAsset = mediaWorkspaceState.selectedAssetId
     ? (allAssets.find((asset) => asset.id === mediaWorkspaceState.selectedAssetId) || null)
     : null;
@@ -2515,17 +2519,16 @@ function renderMediaLibraryWorkspace(model = {}) {
   } else {
     library.appendChild(renderMediaLibrarySummary(summarizeMediaLibrary(model.uploadAssets)));
     library.appendChild(renderMediaLibraryControls(model.uploadAssets));
-    library.appendChild(renderMediaLibraryGrid(model.uploadAssets));
+    library.appendChild(renderMediaProfessionalWorkspace(model, {
+      mode: 'library',
+      assets: model.uploadAssets,
+      title: 'Danh sách media',
+      subtitle: 'Chọn một ảnh/video để xem inspector và thao tác an toàn ở hai card bên cạnh.',
+      emptyText: 'Không có media upload-log phù hợp với bộ lọc hiện tại.',
+    }));
   }
 
   panel.appendChild(library);
-  if (model.selectedAsset) {
-    panel.appendChild(renderMediaSelectedDetailPanel(model.selectedAsset, {
-      title: 'Chi tiết media đang chọn',
-      subtitle: 'Thông tin này chỉ để xem, sao chép link hoặc điều hướng tới nơi dùng.',
-      onClose: () => clearMediaWorkspaceSelection(),
-    }));
-  }
   panel.appendChild(renderMediaLibrarySafetyPanel());
   return panel;
 }
@@ -2609,25 +2612,250 @@ function renderMediaUsageWorkspace(model = {}) {
   header.appendChild(renderMediaLibrarySummary(model.summary));
   panel.appendChild(header);
 
-  const groups = groupMediaUsageReferences(model);
-  if (!groups.length) {
+  const usageAssets = safeArray(model.allAssets).filter((asset) => safeArray(asset.usage?.references).length || !asset.hasUploadLogRecord);
+  if (!usageAssets.length) {
     const empty = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel' });
     empty.appendChild(renderEmptyState('Chưa tìm thấy media reference trong dữ liệu đã tải. Không đồng nghĩa media an toàn để xóa.'));
     panel.appendChild(empty);
     return panel;
   }
 
-  const groupWrap = createElement('div', { className: 'cms-admin-media-usage-groups' });
-  groups.forEach((group) => groupWrap.appendChild(renderMediaUsageOwnerGroup(group)));
-  panel.appendChild(groupWrap);
-  if (model.selectedAsset) {
-    panel.appendChild(renderMediaSelectedDetailPanel(model.selectedAsset, {
-      title: 'Chi tiết media đang chọn',
-      subtitle: 'Reference detail mở trong tab Đang dùng, không chuyển sang tab trống.',
-      onClose: () => clearMediaWorkspaceSelection(),
-    }));
-  }
+  panel.appendChild(renderMediaProfessionalWorkspace(model, {
+    mode: 'usage',
+    assets: usageAssets,
+    title: 'Danh sách media đang dùng',
+    subtitle: 'Chọn media/reference để xem owner, field/path và thao tác không ghi dữ liệu.',
+    emptyText: 'Không có media đang dùng phù hợp.',
+  }));
   return panel;
+}
+
+function renderMediaProfessionalWorkspace(model = {}, options = {}) {
+  const assets = safeArray(options.assets);
+  ensureMediaWorkspaceSelection(assets, model.allAssets);
+  const selected = getSelectedMediaAsset(assets, model.allAssets);
+  const workspace = createElement('section', {
+    className: `cms-admin-media-pro-workspace cms-admin-media-pro-workspace-${options.mode || 'library'}`,
+    attrs: { 'data-media-pro-workspace': options.mode || 'library' },
+  });
+  workspace.appendChild(renderMediaMasterListCard(assets, {
+    title: options.title || 'Danh sách media',
+    subtitle: options.subtitle || 'Chọn media để xem thông tin và thao tác an toàn.',
+    emptyText: options.emptyText || ADMIN_COPY.media.emptyFiltered,
+  }));
+  workspace.appendChild(renderMediaInspectorCard(selected));
+  workspace.appendChild(renderMediaActionSafetyCard(selected));
+  return workspace;
+}
+
+function ensureMediaWorkspaceSelection(visibleAssets = [], allAssets = []) {
+  const visible = safeArray(visibleAssets).filter((asset) => asset?.id);
+  const all = safeArray(allAssets).filter((asset) => asset?.id);
+  const currentId = String(mediaWorkspaceState.selectedAssetId || '');
+  if (currentId && visible.some((asset) => String(asset.id) === currentId)) return;
+  const fallback = visible[0] || all[0] || null;
+  mediaWorkspaceState.selectedAssetId = fallback?.id || '';
+}
+
+function getSelectedMediaAsset(visibleAssets = [], allAssets = []) {
+  const id = String(mediaWorkspaceState.selectedAssetId || '');
+  if (!id) return null;
+  return safeArray(visibleAssets).find((asset) => String(asset.id) === id)
+    || safeArray(allAssets).find((asset) => String(asset.id) === id)
+    || null;
+}
+
+function renderMediaMasterListCard(assets = [], options = {}) {
+  const card = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel cms-admin-media-master-card' });
+  card.appendChild(renderPanelTitle(options.title || 'Danh sách media', `${formatCount(assets.length)} mục`));
+  if (options.subtitle) card.appendChild(createElement('p', { className: 'cms-admin-help-text cms-admin-media-master-subtitle', text: options.subtitle }));
+  if (!assets.length) {
+    card.appendChild(renderEmptyState(options.emptyText || ADMIN_COPY.media.emptyFiltered));
+    return card;
+  }
+  const list = createElement('div', { className: 'cms-admin-media-master-list', attrs: { role: 'listbox', 'aria-label': 'Danh sách media để chọn' } });
+  safeArray(assets).forEach((asset) => list.appendChild(renderMediaMasterListItem(asset)));
+  const empty = createElement('div', {
+    className: 'cms-admin-media-filter-empty cms-admin-hidden',
+    text: options.emptyText || ADMIN_COPY.media.emptyFiltered,
+    attrs: { 'data-media-filter-empty': 'true', role: 'status', 'aria-live': 'polite' },
+  });
+  card.appendChild(list);
+  card.appendChild(empty);
+  return card;
+}
+
+function renderMediaMasterListItem(asset = {}) {
+  const isSelected = String(asset.id || '') === String(mediaWorkspaceState.selectedAssetId || '');
+  const item = createElement('button', {
+    className: `cms-admin-media-card cms-admin-media-master-item${isSelected ? ' is-selected' : ''}`,
+    type: 'button',
+    attrs: {
+      role: 'option',
+      'aria-selected': isSelected ? 'true' : 'false',
+      'data-media-kind': asset.mediaKind,
+      'data-media-usage': asset.usage?.key || 'insufficient',
+      'data-media-target': asset.targetType || 'unknown',
+      'data-media-search-text': buildMediaSearchText(asset),
+      'data-media-asset-id': String(asset.id || ''),
+    },
+  });
+  item.addEventListener('click', () => selectMediaWorkspaceAsset(asset.id));
+  const previewWrap = createElement('div', { className: 'cms-admin-media-master-thumb' });
+  previewWrap.appendChild(renderMediaPreview(asset));
+  const copy = createElement('div', { className: 'cms-admin-media-master-copy' });
+  copy.appendChild(createElement('strong', { text: asset.fileName || asset.storagePath || 'media' }));
+  const badges = createElement('div', { className: 'cms-admin-media-card-badges cms-admin-media-master-badges' });
+  badges.appendChild(renderBadge(getMediaKindLabel(asset.mediaKind), asset.mediaKind === 'video' ? 'warning' : 'default'));
+  badges.appendChild(renderBadge(asset.hasUploadLogRecord ? 'Upload log' : 'Reference-only', asset.hasUploadLogRecord ? 'success' : 'warning'));
+  badges.appendChild(renderBadge(asset.usage?.label || ADMIN_COPY.media.usageLabels.insufficient, asset.usage?.variant || 'default'));
+  copy.appendChild(badges);
+  const meta = createElement('p', {
+    className: 'cms-admin-media-master-meta',
+    text: `${getMediaTargetLabel(asset)} · ${asset.roomKey ? getRoomLabel(asset.roomKey) : 'Không rõ phòng'} · ${asset.itemId || asset.artworkCode || 'Không rõ item'}`,
+  });
+  copy.appendChild(meta);
+  appendChildren(item, [previewWrap, copy]);
+  return item;
+}
+
+function renderMediaInspectorCard(asset = null) {
+  const card = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel cms-admin-media-inspector-card' });
+  card.appendChild(renderPanelTitle('Thông tin media', asset?.fileName || asset?.storagePath || 'Chọn media'));
+  if (!asset) {
+    card.appendChild(renderEmptyState('Chọn một media ở danh sách để xem thông tin.'));
+    return card;
+  }
+  card.appendChild(renderMediaInspectorInternalTabs(asset));
+  const activeTab = mediaWorkspaceState.inspectorTab === 'technical' ? 'technical' : 'overview';
+  if (activeTab === 'technical') {
+    card.appendChild(renderMediaInspectorTechnical(asset));
+  } else {
+    card.appendChild(renderMediaInspectorOverview(asset));
+  }
+  return card;
+}
+
+function renderMediaInspectorInternalTabs(asset = {}) {
+  const tabs = createElement('div', { className: 'cms-admin-media-inspector-tabs', attrs: { role: 'tablist', 'aria-label': 'Thông tin media đang chọn' } });
+  [
+    ['overview', 'Tổng quan'],
+    ['technical', 'Tham chiếu & kỹ thuật'],
+  ].forEach(([key, label]) => {
+    const active = (mediaWorkspaceState.inspectorTab === 'technical' ? 'technical' : 'overview') === key;
+    const button = createElement('button', {
+      className: `cms-admin-workspace-tab-button cms-admin-media-inspector-tab${active ? ' is-active' : ''}`,
+      text: label,
+      type: 'button',
+      attrs: { role: 'tab', 'aria-selected': active ? 'true' : 'false' },
+    });
+    button.addEventListener('click', () => setMediaInspectorTab(key));
+    tabs.appendChild(button);
+  });
+  return tabs;
+}
+
+function setMediaInspectorTab(tabKey = 'overview') {
+  mediaWorkspaceState.inspectorTab = tabKey === 'technical' ? 'technical' : 'overview';
+  renderAdminShell();
+}
+
+function renderMediaInspectorOverview(asset = {}) {
+  const layout = createElement('div', { className: 'cms-admin-media-inspector-overview' });
+  layout.appendChild(renderMediaPreview(asset));
+  const body = createElement('div', { className: 'cms-admin-media-inspector-body' });
+  const badges = createElement('div', { className: 'cms-admin-media-card-badges' });
+  badges.appendChild(renderBadge(getMediaKindLabel(asset.mediaKind), asset.mediaKind === 'video' ? 'warning' : 'default'));
+  badges.appendChild(renderBadge(asset.hasUploadLogRecord ? 'Upload log' : 'Reference-only', asset.hasUploadLogRecord ? 'success' : 'warning'));
+  badges.appendChild(renderBadge(asset.usage?.label || ADMIN_COPY.media.usageLabels.insufficient, asset.usage?.variant || 'default'));
+  body.appendChild(badges);
+  body.appendChild(createElement('h3', { className: 'cms-admin-media-inspector-title', text: asset.fileName || asset.storagePath || 'media' }));
+  const details = createElement('dl', { className: 'cms-admin-media-detail-list cms-admin-media-detail-list-wide' });
+  [
+    ['Loại media', getMediaKindLabel(asset.mediaKind)],
+    ['Ngày upload', formatDateTime(asset.createdAt)],
+    ['Dung lượng', formatBytes(asset.sizeBytes)],
+    ['Phòng', asset.roomKey ? getRoomLabel(asset.roomKey) : '—'],
+    ['Item', asset.itemId || asset.artworkCode || '—'],
+    ['Trường media', formatMediaFieldName(asset.fieldName)],
+    ['Trạng thái usage', asset.usage?.label || ADMIN_COPY.media.usageLabels.insufficient],
+    ['Owner target', asset.ownerLabel || getMediaTargetLabel(asset)],
+  ].forEach(([label, value]) => appendMediaDetail(details, label, value));
+  body.appendChild(details);
+  const note = safeArray(asset.usage?.references).length
+    ? `${formatCount(asset.usage.references.length)} tham chiếu đã tìm thấy trong dữ liệu CMS đã kiểm tra.`
+    : 'Chưa thấy tham chiếu trong dữ liệu đã kiểm tra. Không đồng nghĩa media an toàn để xóa.';
+  body.appendChild(renderCompactNotice(note));
+  layout.appendChild(body);
+  return layout;
+}
+
+function renderMediaInspectorTechnical(asset = {}) {
+  const wrap = createElement('div', { className: 'cms-admin-media-inspector-technical' });
+  wrap.appendChild(renderMediaUsageReferences(asset));
+  const path = createElement('div', { className: 'cms-admin-media-path-block' });
+  path.appendChild(createElement('strong', { text: 'URL/path' }));
+  path.appendChild(createElement('p', { className: 'cms-admin-media-path', text: asset.publicUrl || asset.publicUrlRaw || asset.storagePath || '—' }));
+  wrap.appendChild(path);
+  const technical = createElement('details', { className: 'cms-admin-media-technical-details' });
+  technical.appendChild(createElement('summary', { text: 'Metadata kỹ thuật' }));
+  technical.appendChild(renderTechnicalKeyValueList([
+    ['ID', asset.id || '—'],
+    ['Storage bucket', asset.storageBucket || '—'],
+    ['Storage path', asset.storagePath || '—'],
+    ['Public URL', asset.publicUrl || asset.publicUrlRaw || '—'],
+    ['Target type', asset.targetType || '—'],
+    ['Field', asset.fieldName || '—'],
+    ['Source key', asset.sourceKey || '—'],
+    ['Record upload', asset.hasUploadLogRecord ? 'Có' : 'Không / reference-only'],
+  ]));
+  wrap.appendChild(technical);
+  return wrap;
+}
+
+function renderMediaActionSafetyCard(asset = null) {
+  const card = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel cms-admin-media-action-card' });
+  card.appendChild(renderPanelTitle('Thao tác & an toàn', asset?.fileName || 'Chọn media'));
+  if (!asset) {
+    card.appendChild(renderEmptyState('Chọn media để sao chép đường dẫn, điều hướng hoặc kiểm tra điều kiện xóa.'));
+    return card;
+  }
+  card.appendChild(createElement('p', { className: 'cms-admin-help-text', text: 'Mọi thao tác ở đây chỉ xem/copy/điều hướng hoặc gọi prepareDelete. Xóa thật chưa bật.' }));
+  const actions = createElement('div', { className: 'cms-admin-media-action-buttons' });
+  if (asset.hasSafePublicUrl) {
+    const copyButton = createElement('button', {
+      className: 'cms-admin-button cms-admin-button-ghost',
+      text: ADMIN_COPY.media.actions.copyUrl,
+      type: 'button',
+      attrs: { 'aria-label': buildCopyMediaUrlLabel(asset) },
+    });
+    copyButton.addEventListener('click', () => copyMediaUrl(copyButton, asset.publicUrl));
+    actions.appendChild(copyButton);
+  }
+  const firstReference = safeArray(asset.usage?.references)[0];
+  const navButton = firstReference ? renderMediaReferenceNavigationButton(firstReference) : null;
+  if (navButton) actions.appendChild(navButton);
+  if (!actions.childNodes.length) {
+    actions.appendChild(createElement('span', { className: 'cms-admin-help-text', text: 'Media này chưa có URL an toàn hoặc owner rõ để thao tác nhanh.' }));
+  }
+  card.appendChild(actions);
+  card.appendChild(renderMediaDeleteGuard(asset, { actionPanel: true }));
+  card.appendChild(renderMediaLockedDeleteSection(asset));
+  return card;
+}
+
+function renderMediaLockedDeleteSection(asset = {}) {
+  const section = createElement('section', { className: 'cms-admin-media-locked-delete-section' });
+  section.appendChild(createElement('h3', { text: 'Xóa media' }));
+  section.appendChild(createElement('p', { text: 'Xóa thật chưa bật ở phase này. Phase xác nhận xóa sau phải revalidate server-side zero-reference trước khi mở nút này.' }));
+  const button = createElement('button', {
+    className: 'cms-admin-button cms-admin-button-danger',
+    text: 'Xóa media — đang khóa',
+    type: 'button',
+    attrs: { disabled: 'true', 'aria-disabled': 'true' },
+  });
+  section.appendChild(button);
+  return section;
 }
 
 function renderMediaSelectedDetailPanel(selected = null, options = {}) {
@@ -4293,8 +4521,23 @@ function formatBytes(value = 0) {
 }
 
 function selectMediaWorkspaceAsset(assetId) {
-  mediaWorkspaceState.selectedAssetId = String(assetId || '');
+  const nextId = String(assetId || '');
+  if (!nextId) return;
+  const scrollX = window.scrollX;
+  const scrollY = window.scrollY;
+  mediaWorkspaceState.selectedAssetId = nextId;
   renderAdminShell();
+  restoreMediaWorkspaceViewport(scrollX, scrollY, buildMediaAssetFocusSelector(nextId));
+}
+
+
+function buildMediaAssetFocusSelector(assetId = '') {
+  const raw = String(assetId || '');
+  if (!raw) return '';
+  const escaped = typeof CSS !== 'undefined' && typeof CSS.escape === 'function'
+    ? CSS.escape(raw)
+    : raw.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  return `[data-media-asset-id="${escaped}"]`;
 }
 
 function clearMediaWorkspaceSelection() {
