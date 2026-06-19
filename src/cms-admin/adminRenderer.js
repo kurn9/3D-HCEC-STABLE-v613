@@ -852,7 +852,7 @@ function renderActiveTab(state) {
         renderContent: ({ activeKey }) => renderPublishWorkspaceContent(state, activeKey),
       });
     case 'history':
-      return renderWorkspaceShell('history', renderRollbackHistoryTab(state, { onRerender: renderAdminShell }), state, { hideTabs: true });
+      return renderWorkspaceShell('history', renderRollbackHistoryTab(state, { onRerender: renderAdminShell }), state, { hideTabs: true, hideRail: true });
     case 'cleanup':
       return renderWorkspaceShell('cleanup', renderCmsStorageCleanupTab(state, { onRerender: renderAdminShell }), state);
     case 'settings':
@@ -1039,7 +1039,9 @@ function renderWorkspaceShell(workspaceKey, sourceNode, state = {}, options = {}
 
   main.appendChild(panel);
   layout.appendChild(main);
-  layout.appendChild(renderWorkspaceRail({ workspaceKey, pageCopy, stepConfig, status: getWorkspaceRailStatus(workspaceKey), activeTab }));
+  if (!options.hideRail) {
+    layout.appendChild(renderWorkspaceRail({ workspaceKey, pageCopy, stepConfig, status: getWorkspaceRailStatus(workspaceKey), activeTab }));
+  }
   workspace.appendChild(layout);
   return workspace;
 }

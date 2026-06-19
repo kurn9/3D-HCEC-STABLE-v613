@@ -8929,38 +8929,6 @@ body.cms-admin-page * {
   max-width: 100%;
 }
 
-.cms-admin-version-history-anchors {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 14px;
-  min-width: 0;
-}
-
-.cms-admin-version-history-anchor-chip {
-  align-items: center;
-  border: 1px solid rgba(239, 197, 92, 0.28);
-  border-radius: 999px;
-  color: #f8e7b8;
-  display: inline-flex;
-  font-size: 0.78rem;
-  font-weight: 900;
-  letter-spacing: 0.01em;
-  line-height: 1;
-  min-height: 32px;
-  padding: 8px 12px;
-  text-decoration: none;
-  transition: background 0.16s ease, border-color 0.16s ease, transform 0.16s ease;
-}
-
-.cms-admin-version-history-anchor-chip:hover,
-.cms-admin-version-history-anchor-chip:focus-visible {
-  background: rgba(239, 197, 92, 0.13);
-  border-color: rgba(239, 197, 92, 0.56);
-  outline: none;
-}
-
 .cms-admin-version-list-panel,
 .cms-admin-version-preview-panel,
 .cms-admin-version-rollback-panel,
@@ -8973,9 +8941,152 @@ body.cms-admin-page * {
   border-style: dashed;
 }
 
-@media (max-width: 760px) {
-  .cms-admin-version-history-anchor-chip {
-    flex: 1 1 calc(50% - 8px);
-    justify-content: center;
+
+
+/* v6.14.052.004 — Version History restore action panel and checklist IA hotfix */
+.cms-admin-workspace-history .cms-admin-workspace-layout {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.cms-admin-workspace-history .cms-admin-workspace-main,
+.cms-admin-workspace-history .cms-admin-workspace-panel,
+.cms-admin-version-history-workspace,
+.cms-admin-version-history-flow-grid,
+.cms-admin-version-history-flow-grid > .cms-admin-panel {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.cms-admin-version-history-flow-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-areas:
+    "list"
+    "preview"
+    "rollback";
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+}
+
+.cms-admin-version-history-flow-grid > .cms-admin-panel {
+  overflow: clip;
+}
+
+.cms-admin-version-history-flow-grid .cms-admin-version-list-panel {
+  grid-area: list;
+  grid-column: auto;
+  grid-row: auto;
+}
+
+.cms-admin-version-history-flow-grid .cms-admin-version-preview-panel {
+  grid-area: preview;
+  grid-column: auto;
+  grid-row: auto;
+}
+
+.cms-admin-version-history-flow-grid .cms-admin-version-rollback-panel {
+  grid-area: rollback;
+  grid-column: auto;
+  grid-row: auto;
+}
+
+.cms-admin-selected-rollback-target {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid rgba(239, 197, 92, 0.16);
+  border-radius: 16px;
+  background: rgba(239, 197, 92, 0.06);
+}
+
+.cms-admin-selected-rollback-target > strong,
+.cms-admin-selected-rollback-target .cms-admin-help-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.cms-admin-selected-rollback-details {
+  margin-top: 2px;
+}
+
+.cms-admin-version-rollback-panel {
+  border-color: rgba(239, 197, 92, 0.18);
+}
+
+.cms-admin-version-rollback-panel .cms-admin-rollback-readiness-panel {
+  margin-top: 12px;
+}
+
+.cms-admin-version-rollback-panel .cms-admin-rollback-readiness-list {
+  gap: 8px;
+}
+
+.cms-admin-version-rollback-panel .cms-admin-rollback-readiness-list li {
+  min-width: 0;
+}
+
+.cms-admin-version-rollback-panel .cms-admin-rollback-readiness-text,
+.cms-admin-version-rollback-panel .cms-admin-rollback-readiness-text strong,
+.cms-admin-version-rollback-panel .cms-admin-rollback-readiness-text small,
+.cms-admin-version-preview-panel .cms-admin-rollback-preview-summary,
+.cms-admin-version-audit-panel .cms-admin-help-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.cms-admin-version-history-flow-grid .cms-admin-actions {
+  min-width: 0;
+}
+
+.cms-admin-version-history-flow-grid .cms-admin-button {
+  max-width: 100%;
+  white-space: normal;
+}
+
+.cms-admin-version-history-flow-grid .cms-admin-rollback-meta-grid,
+.cms-admin-version-history-flow-grid .cms-admin-rollback-meta-item,
+.cms-admin-version-history-flow-grid .cms-admin-rollback-meta-item > strong,
+.cms-admin-version-history-flow-grid .cms-admin-code-block,
+.cms-admin-version-history-flow-grid .cms-admin-rollback-json-details pre {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.cms-admin-version-history-flow-grid .cms-admin-rollback-json-details pre,
+.cms-admin-version-history-flow-grid .cms-admin-code-block {
+  overflow-x: auto;
+  overflow-y: auto;
+  white-space: pre;
+}
+
+@media (min-width: 1080px) {
+  .cms-admin-version-history-flow-grid {
+    grid-template-areas:
+      "list preview"
+      "list rollback";
+    grid-template-columns: minmax(280px, 0.82fr) minmax(0, 1.18fr);
   }
+}
+
+@media (min-width: 1540px) {
+  .cms-admin-version-history-flow-grid {
+    grid-template-areas: "list preview rollback";
+    grid-template-columns: minmax(300px, 0.82fr) minmax(340px, 1fr) minmax(340px, 0.95fr);
+  }
+}
+
+@media (max-width: 760px) {
+  .cms-admin-version-history-summary-grid,
+  .cms-admin-version-audit-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .cms-admin-version-history-flow-grid .cms-admin-button {
+    width: 100%;
+  }
+}
+
+.cms-admin-version-history-workspace > .cms-admin-version-history-flow-grid {
+  grid-column: 1 / -1;
 }
