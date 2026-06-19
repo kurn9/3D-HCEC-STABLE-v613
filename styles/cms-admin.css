@@ -8409,3 +8409,273 @@ body.cms-admin-page * {
     flex-direction: column;
   }
 }
+
+/* v6.14.051.003 — publish operator UI excellence + action clarity polish */
+.cms-admin-publish-status-dashboard,
+.cms-admin-publish-action-panel,
+.cms-admin-publish-check-panel,
+.cms-admin-publish-history-panel {
+  gap: 16px;
+}
+
+.cms-admin-publish-canonical-hero {
+  border-color: rgba(214, 178, 94, 0.24);
+  background: linear-gradient(135deg, rgba(214, 178, 94, 0.12), rgba(15, 23, 42, 0.2));
+}
+
+.cms-admin-publish-priority-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 0.86fr);
+  gap: 12px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.cms-admin-publish-priority-card,
+.cms-admin-publish-primary-cta-panel,
+.cms-admin-publish-history-canonical {
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 18px;
+  padding: 16px;
+  background: rgba(7, 17, 28, 0.56);
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.cms-admin-publish-priority-card.is-canonical {
+  border-color: rgba(52, 211, 153, 0.28);
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.12), rgba(8, 19, 31, 0.72));
+}
+
+.cms-admin-publish-priority-card.is-audit,
+.cms-admin-publish-history-canonical {
+  border-color: rgba(59, 130, 246, 0.24);
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(8, 19, 31, 0.72));
+}
+
+.cms-admin-publish-priority-card.is-reference {
+  opacity: 0.9;
+  border-style: dashed;
+  background: rgba(15, 23, 42, 0.32);
+}
+
+.cms-admin-publish-priority-head,
+.cms-admin-publish-check-head {
+  min-width: 0;
+}
+
+.cms-admin-publish-priority-head {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.cms-admin-publish-priority-title {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.cms-admin-publish-eyebrow {
+  color: var(--cms-admin-muted);
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.cms-admin-publish-priority-title h3,
+.cms-admin-publish-history-canonical h3 {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.cms-admin-publish-priority-copy,
+.cms-admin-publish-action-lead,
+.cms-admin-publish-safe-note,
+.cms-admin-publish-next-action {
+  color: var(--cms-admin-muted);
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.cms-admin-publish-next-action {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.42);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.cms-admin-publish-inline-cta {
+  margin-top: 10px;
+}
+
+.cms-admin-publish-checklist {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.cms-admin-publish-check-item {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+}
+
+.cms-admin-publish-check-item.is-blocked .cms-admin-publish-next-action {
+  border-color: rgba(248, 113, 113, 0.24);
+  color: var(--cms-admin-text);
+}
+
+.cms-admin-publish-launchpad-steps {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.cms-admin-publish-launchpad-steps li {
+  display: flex;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid rgba(214, 178, 94, 0.16);
+  border-radius: 16px;
+  background: rgba(15, 23, 42, 0.34);
+  box-sizing: border-box;
+}
+
+.cms-admin-publish-launchpad-number {
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(214, 178, 94, 0.18);
+  color: var(--cms-admin-accent);
+  font-weight: 900;
+}
+
+.cms-admin-publish-launchpad-body {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.cms-admin-publish-launchpad-body strong,
+.cms-admin-publish-launchpad-body small {
+  overflow-wrap: anywhere;
+}
+
+.cms-admin-publish-launchpad-body small {
+  color: var(--cms-admin-muted);
+  line-height: 1.45;
+}
+
+.cms-admin-publish-primary-cta-panel {
+  border-color: rgba(214, 178, 94, 0.32);
+  background: linear-gradient(135deg, rgba(214, 178, 94, 0.12), rgba(8, 19, 31, 0.7));
+}
+
+.cms-admin-publish-primary-cta-panel > strong {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--cms-admin-text);
+}
+
+.cms-admin-publish-cta-row {
+  margin: 8px 0;
+}
+
+.cms-admin-publish-navigation-cta.cms-admin-button-primary {
+  font-size: 0.96rem;
+  padding-inline: 20px;
+  min-height: 42px;
+  box-shadow: 0 12px 26px rgba(214, 178, 94, 0.18);
+}
+
+.cms-admin-publish-secondary-cta {
+  opacity: 0.86;
+}
+
+.cms-admin-publish-locked-actions {
+  opacity: 0.86;
+}
+
+.cms-admin-publish-history-canonical {
+  display: grid;
+  gap: 10px;
+}
+
+.cms-admin-publish-legacy-history {
+  opacity: 0.82;
+  border-style: dashed;
+  background: rgba(15, 23, 42, 0.24);
+}
+
+.cms-admin-publish-legacy-history .cms-admin-table-wrap {
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.1);
+  background: rgba(2, 6, 23, 0.16);
+}
+
+.cms-admin-publish-functional-view .cms-admin-kv-list,
+.cms-admin-publish-check-panel .cms-admin-kv-list,
+.cms-admin-publish-action-panel .cms-admin-kv-list,
+.cms-admin-publish-history-panel .cms-admin-kv-list {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.cms-admin-publish-functional-view .cms-admin-kv-row,
+.cms-admin-publish-check-panel .cms-admin-kv-row,
+.cms-admin-publish-action-panel .cms-admin-kv-row,
+.cms-admin-publish-history-panel .cms-admin-kv-row {
+  min-width: 0;
+}
+
+.cms-admin-publish-functional-view .cms-admin-kv-value,
+.cms-admin-publish-check-panel .cms-admin-kv-value,
+.cms-admin-publish-action-panel .cms-admin-kv-value,
+.cms-admin-publish-history-panel .cms-admin-kv-value,
+.cms-admin-publish-history-panel table,
+.cms-admin-publish-history-panel td,
+.cms-admin-publish-history-panel th {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 1320px) {
+  .cms-admin-publish-priority-grid,
+  .cms-admin-publish-checklist {
+    grid-template-columns: 1fr;
+  }
+
+  .cms-admin-publish-launchpad-steps {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 860px) {
+  .cms-admin-publish-launchpad-steps {
+    grid-template-columns: 1fr;
+  }
+
+  .cms-admin-publish-priority-head,
+  .cms-admin-publish-cta-row {
+    flex-direction: column;
+  }
+
+  .cms-admin-publish-navigation-cta.cms-admin-button-primary,
+  .cms-admin-publish-secondary-cta {
+    width: 100%;
+  }
+}
