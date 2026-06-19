@@ -7329,3 +7329,107 @@ body.cms-admin-page * {
     width: 100%;
   }
 }
+
+/* v6.14.050.006 — Media Library detail IA + disabled capability cleanup */
+.cms-admin-media-capability-policy-panel {
+  display: grid;
+  gap: 12px;
+  border: 1px solid rgba(96, 165, 250, 0.18);
+  border-radius: var(--cms-admin-radius-lg);
+  background: rgba(15, 23, 42, 0.14);
+  margin-bottom: 14px;
+  padding: 14px;
+  min-width: 0;
+}
+
+.cms-admin-media-capability-policy-panel > p {
+  margin: 0;
+  color: var(--cms-admin-muted);
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.cms-admin-media-policy-note-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: 10px;
+  min-width: 0;
+}
+
+.cms-admin-media-policy-note {
+  display: grid;
+  gap: 6px;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: var(--cms-admin-radius-md);
+  background: rgba(2, 6, 12, 0.18);
+  padding: 11px 12px;
+  min-width: 0;
+}
+
+.cms-admin-media-policy-note strong {
+  color: var(--cms-admin-text);
+  font-size: 0.88rem;
+}
+
+.cms-admin-media-policy-note p {
+  margin: 0;
+  color: var(--cms-admin-muted);
+  font-size: 0.82rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.cms-admin-media-selected-detail-panel {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.cms-admin-media-detail-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.cms-admin-media-detail-title-row > :first-child {
+  min-width: 0;
+}
+
+.cms-admin-media-detail-close-button {
+  flex: 0 0 auto;
+}
+
+.cms-admin-media-delete-guard-compact {
+  border: 1px solid rgba(234, 179, 8, 0.16);
+  background: rgba(113, 63, 18, 0.08);
+  padding: 8px 10px;
+}
+
+.cms-admin-media-delete-guard-compact summary {
+  color: var(--cms-admin-text);
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.cms-admin-media-delete-guard-detail {
+  border: 1px solid rgba(248, 113, 113, 0.16);
+  background: rgba(127, 29, 29, 0.08);
+  padding: 12px;
+}
+
+.cms-admin-media-delete-guard-detail .cms-admin-panel-title {
+  margin-bottom: 2px;
+}
+
+@media (max-width: 760px) {
+  .cms-admin-media-detail-title-row {
+    display: grid;
+  }
+
+  .cms-admin-media-detail-close-button {
+    width: 100%;
+  }
+}
