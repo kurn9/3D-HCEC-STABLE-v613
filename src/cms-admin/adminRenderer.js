@@ -5451,8 +5451,9 @@ function renderSiteSettingsReadOnlyGroups(siteSettings = {}) {
     [ADMIN_COPY.settings.websiteFields.fax, siteSettings.fax || '—'],
     [ADMIN_COPY.settings.websiteFields.email, siteSettings.email || '—'],
   ]));
-  groups.appendChild(renderSiteSettingsIdentityGroup(siteSettings));
+  groups.appendChild(renderSiteSettingsDisplayGroup(siteSettings));
   groups.appendChild(renderSiteSettingsTechnicalDetails(siteSettings));
+  groups.appendChild(renderSiteSettingsLogoTechnicalSection(null, siteSettings, { isEditing: false }));
   return groups;
 }
 
@@ -5463,25 +5464,10 @@ function renderSiteSettingsReadOnlyGroup(title, rows = []) {
   return group;
 }
 
-function renderSiteSettingsIdentityGroup(siteSettings = {}) {
-  const group = createElement('section', { className: 'cms-admin-settings-field-group cms-admin-settings-identity-group' });
-  group.appendChild(createElement('h3', { className: 'cms-admin-data-group-title', text: 'Hiển thị & nhận diện' }));
-  const current = createElement('div', { className: 'cms-admin-site-logo-current cms-admin-settings-logo-readonly' });
-  current.appendChild(renderSiteLogoPreview(siteSettings.logo_url));
-  const value = createElement('div', { className: 'cms-admin-site-logo-current-value' });
-  value.appendChild(createElement('strong', { text: 'Logo website' }));
-  const status = createElement('div', { className: 'cms-admin-site-logo-status-row' });
-  status.appendChild(renderBadge('Logo hiện tại trong CMS', 'info'));
-  status.appendChild(renderBadge('Chưa đổi website public', 'success'));
-  value.appendChild(status);
-  value.appendChild(createElement('span', { className: 'cms-admin-readonly-note', text: ADMIN_COPY.settings.logoDraftNote || 'Logo được quản lý trong bản ghi CMS; website public chỉ đổi sau khi công khai.' }));
-  value.appendChild(renderSiteLogoTechnicalDetails(siteSettings.logo_url, { modeLabel: 'Logo hiện tại trong CMS' }));
-  current.appendChild(value);
-  group.appendChild(current);
-  group.appendChild(renderKeyValueList([
+function renderSiteSettingsDisplayGroup(siteSettings = {}) {
+  return renderSiteSettingsReadOnlyGroup('Hiển thị', [
     [ADMIN_COPY.settings.websiteFields.language, getLanguageLabel(siteSettings.default_language)],
-  ]));
-  return group;
+  ]);
 }
 
 function renderSiteSettingsEditPanel(state, siteSettings, editState) {
@@ -5503,20 +5489,22 @@ function renderSiteSettingsEditPanel(state, siteSettings, editState) {
     renderEditableTextField('email', copy.fields.email, editState, { inputType: 'email', placeholder: copy.placeholders.email }),
   ]);
   const displayGroup = createElement('section', { className: 'cms-admin-settings-field-group cms-admin-settings-edit-group' });
-  displayGroup.appendChild(createElement('h3', { className: 'cms-admin-data-group-title', text: 'Hiển thị & nhận diện' }));
+  displayGroup.appendChild(createElement('h3', { className: 'cms-admin-data-group-title', text: 'Hiển thị' }));
   const displayFields = createElement('div', { className: 'cms-admin-edit-field-grid cms-admin-settings-edit-field-grid' });
   displayFields.appendChild(renderEditableLanguageField(editState));
   displayGroup.appendChild(displayFields);
-  displayGroup.appendChild(renderSiteSettingsLogoLibrarySection(state, siteSettings, editState));
+
+  const technicalSiteSettings = {
+    ...siteSettings,
+    logo_url: editState.draftValues?.logo_url ?? siteSettings.logo_url,
+    default_language: editState.draftValues?.default_language ?? siteSettings.default_language,
+  };
 
   form.appendChild(identityGroup);
   form.appendChild(contactGroup);
   form.appendChild(displayGroup);
-  form.appendChild(renderSiteSettingsTechnicalDetails({
-    ...siteSettings,
-    logo_url: editState.draftValues?.logo_url ?? siteSettings.logo_url,
-    default_language: editState.draftValues?.default_language ?? siteSettings.default_language,
-  }, true));
+  form.appendChild(renderSiteSettingsTechnicalDetails(technicalSiteSettings, true));
+  form.appendChild(renderSiteSettingsLogoTechnicalSection(state, siteSettings, editState));
 
   const dirtyNotice = createElement('p', {
     className: `cms-admin-dirty-notice${editState.dirty ? '' : ' cms-admin-hidden'}`,
@@ -5547,7 +5535,6 @@ function renderSiteSettingsTechnicalDetails(siteSettings = {}, editing = false) 
     ['Cập nhật lúc', siteSettings.updated_at ? formatDateTime(siteSettings.updated_at) : '—'],
     ['Cập nhật bởi', siteSettings.updated_by || '—'],
     ['Ngôn ngữ raw', siteSettings.default_language || '—'],
-    ['Logo URL raw', siteSettings.logo_url || '—'],
     ['Chế độ', editing ? 'Đang chỉnh bản nháp local' : 'Chỉ xem'],
   ]));
   return details;
@@ -5586,7 +5573,6 @@ function renderSiteSettingsValidationSummary(siteSettings, editState = {}) {
     ['Đơn vị quản lý', validation.errors.organization_name ? 'Cần nhập' : 'Đạt', validation.errors.organization_name],
     ['Email', validation.errors.email ? 'Sai định dạng' : (validation.values.email ? 'Đạt' : 'Chưa khai báo'), validation.errors.email || validation.warnings.email],
     ['Ngôn ngữ', validation.errors.default_language ? 'Không hợp lệ' : 'Đạt', validation.errors.default_language],
-    ['Logo', validation.errors.logo_url ? 'Cần kiểm tra đường dẫn' : (validation.values.logo_url ? 'Đạt' : 'Chưa chọn'), validation.errors.logo_url || validation.warnings.logo_url],
   ];
   const list = createElement('div', { className: 'cms-admin-settings-validation-list' });
   items.forEach(([label, status, detail]) => {
@@ -5597,6 +5583,13 @@ function renderSiteSettingsValidationSummary(siteSettings, editState = {}) {
     list.appendChild(item);
   });
   box.appendChild(list);
+  const logoMessage = validation.errors.logo_url || validation.warnings.logo_url;
+  if (logoMessage) {
+    const logoDetails = createElement('details', { className: 'cms-admin-settings-validation-details cms-admin-settings-logo-validation-details' });
+    logoDetails.appendChild(createElement('summary', { text: 'Kiểm tra logo kỹ thuật' }));
+    logoDetails.appendChild(createElement('p', { className: 'cms-admin-help-text', text: logoMessage }));
+    box.appendChild(logoDetails);
+  }
   const warnings = Object.entries(validation.warnings || {}).filter(([key]) => !['logo_url', 'email'].includes(key));
   if (warnings.length) {
     const details = createElement('details', { className: 'cms-admin-settings-validation-details' });
@@ -5707,64 +5700,66 @@ function renderSettingsAdminDetails(state, siteSettings) {
   return details;
 }
 
-function renderSiteSettingsLogoLibrarySection(state, siteSettings, editState) {
-  const hasDraftLogoValue = Object.prototype.hasOwnProperty.call(editState.draftValues || {}, 'logo_url');
+function renderSiteSettingsLogoTechnicalSection(state, siteSettings = {}, editState = {}) {
+  const isEditing = Boolean(editState.isEditing);
+  const hasDraftLogoValue = isEditing && Object.prototype.hasOwnProperty.call(editState.draftValues || {}, 'logo_url');
   const originalLogoValue = normalizeSiteLogoDraftValue(siteSettings.logo_url);
   const logoValue = normalizeSiteLogoDraftValue(hasDraftLogoValue ? editState.draftValues.logo_url : siteSettings.logo_url);
   const logoChanged = hasDraftLogoValue && logoValue !== originalLogoValue;
-  const section = createElement('section', {
-    className: `cms-admin-site-logo-library-section${logoChanged ? ' has-draft-logo' : ''}`,
+  const safeLogo = normalizeSafeSiteLogoMediaUrl(logoValue);
+  const details = createElement('details', {
+    className: `cms-admin-site-logo-technical-section cms-admin-site-logo-library-section${logoChanged ? ' has-draft-logo' : ''}`,
     dataset: { cmsReferenceTarget: 'site-settings', cmsReferenceId: 'site-settings', cmsReferenceField: 'logo_url' },
   });
-  const header = createElement('div', { className: 'cms-admin-site-logo-library-header' });
-  const heading = createElement('div');
-  heading.appendChild(createElement('span', { className: 'cms-admin-edit-label', text: ADMIN_COPY.settings.edit.fields.logo_url }));
-  heading.appendChild(createElement('p', {
-    className: 'cms-admin-readonly-note',
-    text: ADMIN_COPY.settings.edit.logoReadonly || 'Chọn logo chỉ cập nhật bản nháp đang chỉnh. Bấm Lưu vào CMS mới ghi lại. Website public chưa đổi.',
-  }));
-  const toggle = createElement('button', {
-    className: 'cms-admin-button cms-admin-button-secondary cms-admin-button-small',
-    type: 'button',
-    text: siteLogoMediaPickerState.open ? 'Đóng thư viện logo' : 'Đổi logo từ thư viện',
-    attrs: { 'aria-expanded': siteLogoMediaPickerState.open ? 'true' : 'false' },
-  });
-  toggle.addEventListener('click', () => handleToggleSiteLogoMediaPicker());
-  appendChildren(header, [heading, toggle]);
-  section.appendChild(header);
+  details.appendChild(createElement('summary', { text: 'Nhận diện / logo kỹ thuật' }));
 
-  const current = createElement('div', { className: 'cms-admin-site-logo-current cms-admin-site-logo-editor-current' });
-  current.appendChild(renderSiteLogoPreview(logoValue));
-  const valueBlock = createElement('div', { className: 'cms-admin-site-logo-current-value' });
-  valueBlock.appendChild(createElement('strong', { text: logoChanged ? 'Logo đang chọn trong bản nháp' : 'Logo đang dùng trong CMS' }));
-  const status = createElement('div', { className: 'cms-admin-site-logo-status-row' });
-  status.appendChild(renderBadge(logoChanged ? 'Đang chọn trong bản nháp' : 'Logo hiện tại trong CMS', logoChanged ? 'warning' : 'info'));
-  status.appendChild(renderBadge('Chưa đổi website public', 'success'));
-  valueBlock.appendChild(status);
-  valueBlock.appendChild(createElement('span', {
+  const body = createElement('div', { className: 'cms-admin-site-logo-technical-body' });
+  body.appendChild(createElement('p', {
     className: 'cms-admin-readonly-note',
-    text: logoChanged ? 'Chưa lưu vào CMS.' : ADMIN_COPY.settings.edit.logoReadonly,
+    text: 'Logo URL đang được giữ như dữ liệu kỹ thuật của CMS. Source hiện tại chưa chứng minh public header đọc trực tiếp site_settings.logo_url.',
   }));
-  valueBlock.appendChild(renderSiteLogoTechnicalDetails(logoValue, {
-    modeLabel: logoChanged ? 'Logo đang chọn trong bản nháp' : 'Logo hiện tại trong CMS',
-    originalValue: originalLogoValue,
-  }));
-  current.appendChild(valueBlock);
-  section.appendChild(current);
+  body.appendChild(renderKeyValueList([
+    ['Logo URL trong CMS — chưa xác nhận đang dùng trên public', logoValue || '—'],
+    ['Trạng thái hợp lệ', safeLogo ? 'Hợp lệ theo validator CMS' : 'Chưa có logo hợp lệ'],
+    ['Nguồn media', getSiteLogoTechnicalSourceLabel(logoValue)],
+    ['Public header dùng field này', 'Không tìm thấy trong source hiện tại'],
+    ['Trạng thái bản nháp', logoChanged ? 'Đang chọn khác bản CMS hiện tại' : 'Trùng bản CMS hiện tại'],
+  ]));
 
   const message = editState.validationErrors?.logo_url || editState.validationWarnings?.logo_url;
   if (message) {
-    section.appendChild(createElement('span', {
+    body.appendChild(createElement('span', {
       className: editState.validationErrors?.logo_url ? 'cms-admin-field-message is-error' : 'cms-admin-field-message is-warning',
       text: message,
     }));
   }
 
-  if (siteLogoMediaPickerState.open) {
-    section.appendChild(renderSiteLogoMediaPicker(state));
+  if (isEditing) {
+    const actions = createElement('div', { className: 'cms-admin-site-logo-technical-actions' });
+    const toggle = createElement('button', {
+      className: 'cms-admin-button cms-admin-button-secondary cms-admin-button-small',
+      type: 'button',
+      text: siteLogoMediaPickerState.open ? 'Đóng thư viện logo' : 'Đổi logo từ thư viện',
+      attrs: { 'aria-expanded': siteLogoMediaPickerState.open ? 'true' : 'false' },
+    });
+    toggle.addEventListener('click', () => handleToggleSiteLogoMediaPicker());
+    actions.appendChild(toggle);
+    actions.appendChild(createElement('span', {
+      className: 'cms-admin-readonly-note',
+      text: ADMIN_COPY.settings.edit.logoReadonly || 'Chọn logo chỉ cập nhật bản nháp đang chỉnh. Bấm Lưu vào CMS mới ghi lại. Website public chưa đổi.',
+    }));
+    body.appendChild(actions);
+    if (siteLogoMediaPickerState.open) {
+      body.appendChild(renderSiteLogoMediaPicker(state));
+    }
   }
 
-  return section;
+  details.appendChild(body);
+  return details;
+}
+
+function renderSiteSettingsLogoLibrarySection(state, siteSettings, editState) {
+  return renderSiteSettingsLogoTechnicalSection(state, siteSettings, editState);
 }
 
 function renderSiteLogoPreview(logoUrl = '') {

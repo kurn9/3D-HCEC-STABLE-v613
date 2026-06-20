@@ -10373,3 +10373,110 @@ body.cms-admin-page * {
     grid-template-columns: 1fr;
   }
 }
+
+/* v6.14.055.004 — full-width rail-hidden workspaces + logo source clarity */
+.cms-admin-workspace[data-cms-workspace="settings"] .cms-admin-workspace-layout,
+.cms-admin-workspace[data-cms-workspace="cleanup"] .cms-admin-workspace-layout,
+.cms-admin-workspace[data-cms-workspace="history"] .cms-admin-workspace-layout {
+  grid-template-columns: minmax(0, 1fr);
+  width: 100%;
+}
+
+.cms-admin-workspace[data-cms-workspace="settings"],
+.cms-admin-workspace[data-cms-workspace="settings"] .cms-admin-workspace-main,
+.cms-admin-workspace[data-cms-workspace="settings"] .cms-admin-workspace-panel,
+.cms-admin-workspace[data-cms-workspace="settings"] .cms-admin-workspace-source-content,
+.cms-admin-workspace[data-cms-workspace="settings"] .cms-admin-settings-single-workspace,
+.cms-admin-workspace[data-cms-workspace="cleanup"],
+.cms-admin-workspace[data-cms-workspace="cleanup"] .cms-admin-workspace-main,
+.cms-admin-workspace[data-cms-workspace="cleanup"] .cms-admin-workspace-panel,
+.cms-admin-workspace[data-cms-workspace="cleanup"] .cms-admin-workspace-source-content,
+.cms-admin-workspace[data-cms-workspace="cleanup"] .cms-admin-cleanup-view,
+.cms-admin-workspace[data-cms-workspace="cleanup"] .cms-admin-cleanup-single-workspace,
+.cms-admin-workspace[data-cms-workspace="history"],
+.cms-admin-workspace[data-cms-workspace="history"] .cms-admin-workspace-main,
+.cms-admin-workspace[data-cms-workspace="history"] .cms-admin-workspace-panel,
+.cms-admin-workspace[data-cms-workspace="history"] .cms-admin-workspace-source-content {
+  min-width: 0;
+  max-width: none;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.cms-admin-workspace[data-cms-workspace="settings"] .cms-admin-settings-summary-grid,
+.cms-admin-workspace[data-cms-workspace="settings"] .cms-admin-settings-workspace-grid,
+.cms-admin-workspace[data-cms-workspace="cleanup"] .cms-admin-cleanup-summary-grid-primary,
+.cms-admin-workspace[data-cms-workspace="cleanup"] .cms-admin-cleanup-workflow-grid {
+  width: 100%;
+}
+
+.cms-admin-workspace[data-cms-workspace="settings"] .cms-admin-settings-workspace-grid {
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 360px);
+  gap: 18px;
+}
+
+.cms-admin-workspace[data-cms-workspace="cleanup"] .cms-admin-cleanup-workflow-grid.cms-admin-cleanup-workflow-grid-compact {
+  grid-template-columns: minmax(0, 1fr) minmax(340px, 380px);
+  gap: 18px;
+}
+
+.cms-admin-site-logo-technical-section {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: var(--cms-admin-radius-md);
+  background: rgba(2, 6, 12, 0.14);
+  padding: 0;
+}
+
+.cms-admin-site-logo-technical-section summary {
+  cursor: pointer;
+  color: var(--cms-admin-text);
+  font-weight: 850;
+  padding: 12px;
+}
+
+.cms-admin-site-logo-technical-body {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 0 12px 12px;
+}
+
+.cms-admin-site-logo-technical-body .cms-admin-kv-row,
+.cms-admin-site-logo-technical-body .cms-admin-kv-value,
+.cms-admin-site-logo-technical-actions,
+.cms-admin-site-logo-technical-actions > * {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.cms-admin-site-logo-technical-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.cms-admin-site-logo-technical-actions .cms-admin-readonly-note {
+  flex: 1 1 260px;
+}
+
+.cms-admin-settings-logo-validation-details p {
+  margin: 8px 0 0;
+}
+
+@media (max-width: 1180px) {
+  .cms-admin-workspace[data-cms-workspace="settings"] .cms-admin-settings-workspace-grid,
+  .cms-admin-workspace[data-cms-workspace="cleanup"] .cms-admin-cleanup-workflow-grid.cms-admin-cleanup-workflow-grid-compact {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .cms-admin-workspace[data-cms-workspace="settings"] .cms-admin-settings-action-panel,
+  .cms-admin-workspace[data-cms-workspace="cleanup"] .cms-admin-cleanup-workflow-grid-compact .cms-admin-cleanup-right-rail {
+    position: static;
+    top: auto;
+  }
+}
