@@ -11079,3 +11079,69 @@ body.cms-admin-page * {
     padding: 12px;
   }
 }
+
+/* v6.14.057.004 — Home true full-width parent-chain root-cause fix */
+.cms-admin-workspace[data-cms-workspace="home"] {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+}
+
+.cms-admin-workspace[data-cms-workspace="home"] .cms-admin-workspace-layout {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.cms-admin-workspace[data-cms-workspace="home"] .cms-admin-workspace-main,
+.cms-admin-workspace[data-cms-workspace="home"] .cms-admin-workspace-panel,
+.cms-admin-workspace[data-cms-workspace="home"] .cms-admin-workspace-source-content,
+.cms-admin-workspace[data-cms-workspace="home"] .cms-admin-workspace-real-content,
+.cms-admin-workspace[data-cms-workspace="home"] .cms-admin-workspace-real-home,
+.cms-admin-workspace[data-cms-workspace="home"] .cms-admin-workspace-real-home-hero,
+.cms-admin-workspace[data-cms-workspace="home"] .cms-admin-workspace-real-home-experience,
+.cms-admin-workspace[data-cms-workspace="home"] .cms-admin-workspace-real-home-guide,
+.cms-admin-workspace[data-cms-workspace="home"] .cms-admin-workspace-real-home-contact,
+.cms-admin-workspace[data-cms-workspace="home"] .cms-admin-home-section-panel,
+.cms-admin-workspace[data-cms-workspace="home"] .cms-admin-home-contextual-workspace {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+}
+
+.cms-admin-workspace[data-cms-workspace="home"] .cms-admin-home-contextual-workspace {
+  grid-template-columns: minmax(560px, 1fr) clamp(360px, 29vw, 420px);
+  gap: clamp(20px, 2vw, 28px);
+  align-items: start;
+}
+
+.cms-admin-workspace[data-cms-workspace="home"] .cms-admin-home-main-column {
+  min-width: 0;
+}
+
+.cms-admin-workspace[data-cms-workspace="home"] .cms-admin-home-action-rail {
+  justify-self: stretch;
+  width: 100%;
+  max-width: 420px;
+  margin-left: auto;
+}
+
+.cms-admin-workspace[data-cms-workspace="home"] .cms-admin-public-link-row {
+  margin: 0;
+}
+
+.cms-admin-workspace[data-cms-workspace="home"] .cms-admin-home-section-quick-facts .cms-admin-home-section-fact.is-warning {
+  display: none;
+}
+
+@media (max-width: 1180px) {
+  .cms-admin-workspace[data-cms-workspace="home"] .cms-admin-home-contextual-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .cms-admin-workspace[data-cms-workspace="home"] .cms-admin-home-action-rail {
+    max-width: none;
+    margin-left: 0;
+  }
+}

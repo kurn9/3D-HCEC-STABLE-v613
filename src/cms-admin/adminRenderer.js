@@ -1822,7 +1822,6 @@ function renderHomeSectionWorkspacePanel(state, sections = [], sectionKey = 'her
   if (sectionKey !== 'contact') {
     panel.appendChild(renderHomeSectionIntroPanel(sectionKey, section, meta, copy, { isEditing: isEditingThisSection }));
   }
-  if (sectionKey === 'hero') panel.appendChild(renderPublicLink(copy.publicLink, './index.html'));
 
   const workspace = createElement('div', {
     className: `cms-admin-home-contextual-workspace cms-admin-home-contextual-workspace-${sectionKey}${isEditingThisSection ? ' is-editing' : ''}`,
@@ -2064,6 +2063,10 @@ function renderHomeContextualActionPanel(state, section, sectionKey, editState =
     panel.appendChild(openButton);
     panel.appendChild(renderHomeChecklistActionNote('Trang chủ chỉ đối chiếu thông tin liên hệ.', 'info'));
     return panel;
+  }
+
+  if (sectionKey === 'hero') {
+    panel.appendChild(renderPublicLink(ADMIN_COPY.contentViews.home?.publicLink || 'Mở Trang chủ public', './index.html'));
   }
 
   const editButton = renderHomeContextualEditButton(state, section, sectionKey);
