@@ -856,7 +856,7 @@ function renderActiveTab(state) {
     case 'cleanup':
       return renderWorkspaceShell('cleanup', renderCmsStorageCleanupTab(state, { onRerender: renderAdminShell }), state, { hideTabs: true, hideRail: true });
     case 'settings':
-      return renderWorkspaceShell('settings', renderSettingsTab(state), state);
+      return renderWorkspaceShell('settings', renderSettingsTab(state), state, { hideTabs: true });
     default:
       return renderWorkspaceShell('dashboard', renderDashboard(state), state);
   }
@@ -901,10 +901,7 @@ const WORKSPACE_TAB_DEFINITIONS = Object.freeze({
     { key: 'workspace', label: 'Luồng dọn tệp', summary: 'Quét, kiểm tra candidate, xem chi tiết và chỉ dọn khi checklist an toàn đạt.' },
   ],
   settings: [
-    { key: 'info', label: 'Thông tin', summary: 'Xem thông tin đơn vị và liên hệ.' },
-    { key: 'edit', label: 'Chỉnh sửa', summary: 'Cập nhật bản nháp thông tin website.' },
-    { key: 'identity', label: 'Logo / nhận diện', summary: 'Kiểm tra logo và trạng thái nhận diện.' },
-    { key: 'details', label: 'Chi tiết', summary: 'Xem trạng thái quản trị và thông tin phụ.' },
+    { key: 'workspace', label: 'Workspace thông tin website', summary: 'Chỉnh thông tin, kiểm tra và lưu bản nháp CMS trong một workspace.' },
   ],
 });
 
@@ -5321,144 +5318,200 @@ function renderSettingsTab(state) {
   const siteSettings = state.data.siteSettings;
   const editState = state.siteSettingsEdit || {};
   const canEdit = canEditSiteSettings(state);
-  const wrap = createElement('section', { className: 'cms-admin-grid cms-admin-settings-view cms-admin-settings-grouped-view' });
+  const wrap = createElement('section', { className: 'cms-admin-settings-workspace cms-admin-settings-single-workspace' });
 
-  if (editState.saveSuccess && !editState.isEditing) {
-    wrap.appendChild(renderNoticeBox(editState.saveSuccess, 'success'));
-  }
+  const feedback = renderSiteSettingsFeedback(editState);
+  if (feedback) wrap.appendChild(feedback);
 
-  wrap.appendChild(renderOperatorStepPanel(ADMIN_COPY.settings.operatorSteps, { status: 'Bản nháp' }));
+  wrap.appendChild(renderSiteSettingsWorkspaceHeader());
+  wrap.appendChild(renderSiteSettingsSummaryCards(state, siteSettings, editState));
 
-  if (siteSettings && editState.isEditing) {
-    wrap.appendChild(renderSiteSettingsEditPanel(state, siteSettings, editState));
-  } else {
-    wrap.appendChild(renderSiteSettingsBasicPanel(state, siteSettings, canEdit));
-  }
-
-  wrap.appendChild(renderSiteSettingsIdentityPanel(siteSettings, editState.isEditing, editState));
-  wrap.appendChild(renderSettingsAdminPanel(state));
+  const workspace = createElement('div', { className: 'cms-admin-settings-workspace-grid' });
+  workspace.appendChild(renderSiteSettingsFormWorkspacePanel(state, siteSettings, editState, canEdit));
+  workspace.appendChild(renderSiteSettingsActionPanel(state, siteSettings, editState, canEdit));
+  wrap.appendChild(workspace);
+  wrap.appendChild(renderSettingsAdminDetails(state, siteSettings));
   return wrap;
 }
 
-function renderSiteSettingsBasicPanel(state, siteSettings, canEdit) {
-  const basic = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel' });
-  basic.appendChild(renderPanelTitle(ADMIN_COPY.settings.basicTitle, siteSettings ? 'Đã đọc dữ liệu' : 'Chưa có dữ liệu'));
+function renderSiteSettingsFeedback(editState = {}) {
+  if (editState.saveError) {
+    return renderNoticeBox(`${ADMIN_COPY.settings.edit.error} ${normalizeErrorMessage(editState.saveError)}`, 'error');
+  }
+  if (editState.saveSuccess) {
+    return renderNoticeBox(editState.saveSuccess, 'success');
+  }
+  return null;
+}
+
+function renderSiteSettingsWorkspaceHeader() {
+  const header = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel cms-admin-settings-workspace-header' });
+  const title = createElement('div');
+  title.appendChild(createElement('span', { className: 'cms-admin-eyebrow', text: 'CẤU HÌNH / THÔNG TIN WEBSITE' }));
+  title.appendChild(createElement('h2', { text: ADMIN_COPY.settings.websiteTitle || 'Thông tin website' }));
+  title.appendChild(createElement('p', {
+    className: 'cms-admin-compact-copy',
+    text: ADMIN_COPY.settings.workspaceIntro || 'Cập nhật thông tin đơn vị, liên hệ và nhận diện. Lưu vào CMS chưa làm đổi website public.',
+  }));
+  const badges = createElement('div', { className: 'cms-admin-settings-header-badges' });
+  badges.appendChild(renderBadge('Bản nháp CMS', 'warning'));
+  badges.appendChild(renderBadge('Không tự công khai', 'success'));
+  appendChildren(header, [title, badges]);
+  return header;
+}
+
+function renderSiteSettingsSummaryCards(state, siteSettings, editState = {}) {
+  const validation = getSiteSettingsValidationForState(siteSettings, editState);
+  const summary = createElement('section', { className: 'cms-admin-settings-summary-grid', attrs: { 'aria-label': 'Tóm tắt trạng thái Thông tin website' } });
+  const cards = [
+    {
+      label: 'Dữ liệu CMS',
+      value: siteSettings ? 'Đã đọc' : 'Chưa đọc được',
+      note: siteSettings ? 'Đang dùng bản ghi CMS hiện có.' : 'Chưa có dữ liệu để hiển thị.',
+      tone: siteSettings ? 'success' : 'warning',
+    },
+    {
+      label: 'Chế độ chỉnh sửa',
+      value: editState.isEditing ? 'Đang chỉnh' : 'Chỉ xem',
+      note: editState.isEditing ? 'Input chỉ cập nhật bản nháp local.' : 'Mở chỉnh sửa khi cần cập nhật.',
+      tone: editState.isEditing ? 'warning' : 'default',
+    },
+    {
+      label: 'Thay đổi chưa lưu',
+      value: editState.dirty ? 'Có' : 'Không',
+      note: editState.saving ? 'Đang lưu vào CMS.' : editState.dirty ? 'Cần lưu hoặc đặt lại.' : 'Không có thay đổi mới.',
+      tone: editState.dirty ? 'warning' : 'success',
+    },
+    {
+      label: 'Website public',
+      value: 'Chưa đổi',
+      note: 'Chỉ đổi sau luồng công khai riêng.',
+      tone: validation.valid ? 'success' : 'warning',
+    },
+  ];
+  cards.forEach((card) => summary.appendChild(renderSiteSettingsSummaryCard(card)));
+  return summary;
+}
+
+function renderSiteSettingsSummaryCard(card = {}) {
+  const item = createElement('article', { className: 'cms-admin-settings-summary-card' });
+  item.appendChild(createElement('span', { className: 'cms-admin-stat-label', text: card.label }));
+  item.appendChild(createElement('strong', { text: card.value }));
+  if (card.note) item.appendChild(createElement('p', { className: 'cms-admin-stat-note', text: card.note }));
+  if (card.tone) item.appendChild(renderBadge(card.tone === 'success' ? 'Rõ' : card.tone === 'warning' ? 'Cần chú ý' : 'Thông tin', card.tone));
+  return item;
+}
+
+function renderSiteSettingsFormWorkspacePanel(state, siteSettings, editState = {}, canEdit = false) {
+  const panel = createElement('section', {
+    className: 'cms-admin-panel cms-admin-view-panel cms-admin-settings-form-panel',
+    dataset: { cmsEditPanel: 'site-settings', cmsEditId: 'site-settings' },
+  });
+  panel.appendChild(renderPanelTitle('Form thông tin website', editState.isEditing ? 'Đang chỉnh bản nháp CMS' : 'Chỉ xem'));
+  panel.appendChild(createElement('p', {
+    className: 'cms-admin-compact-copy',
+    text: editState.isEditing
+      ? 'Sửa thông tin trong form. Website public chưa đổi cho tới khi lưu CMS và công khai ở luồng riêng.'
+      : 'Thông tin đang đọc từ CMS. Mở chỉnh sửa để tạo thay đổi local trước khi lưu.',
+  }));
 
   if (!siteSettings) {
-    basic.appendChild(renderEmptyState(ADMIN_COPY.settings.siteMissing));
-    return basic;
+    panel.appendChild(renderEmptyState(ADMIN_COPY.settings.siteMissing));
+    return panel;
   }
 
-  basic.appendChild(renderKeyValueList([
+  if (editState.isEditing) {
+    panel.appendChild(renderSiteSettingsEditPanel(state, siteSettings, editState));
+  } else {
+    panel.appendChild(renderSiteSettingsReadOnlyGroups(siteSettings));
+    if (canEdit) {
+      const editButton = createElement('button', {
+        className: 'cms-admin-button cms-admin-button-primary cms-admin-settings-inline-edit-button',
+        text: ADMIN_COPY.settings.edit.button,
+        type: 'button',
+      });
+      editButton.addEventListener('click', () => handleStartSiteSettingsEdit(siteSettings));
+      panel.appendChild(editButton);
+    } else {
+      panel.appendChild(renderCompactNotice(ADMIN_COPY.settings.edit.noPermission));
+    }
+  }
+  return panel;
+}
+
+function renderSiteSettingsReadOnlyGroups(siteSettings = {}) {
+  const groups = createElement('div', { className: 'cms-admin-settings-form-groups' });
+  groups.appendChild(renderSiteSettingsReadOnlyGroup('Tên & đơn vị', [
     [ADMIN_COPY.settings.websiteFields.siteTitle, siteSettings.site_title],
     [ADMIN_COPY.settings.websiteFields.organization, siteSettings.organization_name],
-    [ADMIN_COPY.settings.websiteFields.address, siteSettings.address],
-    [ADMIN_COPY.settings.websiteFields.phone, siteSettings.phone],
-    [ADMIN_COPY.settings.websiteFields.fax, siteSettings.fax],
+  ]));
+  groups.appendChild(renderSiteSettingsReadOnlyGroup('Liên hệ', [
+    [ADMIN_COPY.settings.websiteFields.address, siteSettings.address || '—'],
+    [ADMIN_COPY.settings.websiteFields.phone, siteSettings.phone || '—'],
+    [ADMIN_COPY.settings.websiteFields.fax, siteSettings.fax || '—'],
     [ADMIN_COPY.settings.websiteFields.email, siteSettings.email || '—'],
   ]));
-  if (!siteSettings.email) basic.appendChild(renderCompactWarning(ADMIN_COPY.settings.missingEmail));
-
-  const actions = createElement('div', { className: 'cms-admin-settings-edit-actions' });
-  if (canEdit) {
-    const editButton = createElement('button', {
-      className: 'cms-admin-button cms-admin-button-primary',
-      text: ADMIN_COPY.settings.edit.button,
-      type: 'button',
-    });
-    editButton.addEventListener('click', () => {
-      const guard = requestStartEditSession({ type: 'site-settings', id: 'site-settings' });
-      if (!guard.allowed) return;
-      if (!guard.same) startSiteSettingsEdit(siteSettings);
-      queueEditPanelFocus('site-settings', 'site-settings', 'site_title');
-      renderAdminShell();
-    });
-    actions.appendChild(editButton);
-    actions.appendChild(createElement('span', { className: 'cms-admin-inline-note', text: ADMIN_COPY.settings.edit.safeNote }));
-  } else {
-    actions.appendChild(createElement('span', { className: 'cms-admin-inline-note', text: ADMIN_COPY.settings.edit.noPermission }));
-  }
-  basic.appendChild(actions);
-  return basic;
+  groups.appendChild(renderSiteSettingsIdentityGroup(siteSettings));
+  groups.appendChild(renderSiteSettingsTechnicalDetails(siteSettings));
+  return groups;
 }
 
-function renderSiteSettingsIdentityPanel(siteSettings, isEditing = false, editState = {}) {
-  const identity = createElement('section', {
-    className: 'cms-admin-panel cms-admin-view-panel',
-    dataset: { cmsReferenceTarget: 'site-settings', cmsReferenceId: 'site-settings', cmsReferenceField: 'logo_url' },
-  });
-  identity.appendChild(renderPanelTitle(ADMIN_COPY.settings.identityTitle));
-  if (siteSettings) {
-    const logoValue = isEditing && Object.prototype.hasOwnProperty.call(editState.draftValues || {}, 'logo_url')
-      ? editState.draftValues.logo_url
-      : siteSettings.logo_url;
-    identity.appendChild(renderKeyValueList([
-      [ADMIN_COPY.settings.websiteFields.logoUrl, logoValue],
-      [ADMIN_COPY.settings.websiteFields.status, getStatusLabel(siteSettings.site_status)],
-      [ADMIN_COPY.settings.websiteFields.language, getLanguageLabel(siteSettings.default_language)],
-    ]));
-    identity.appendChild(renderCompactNotice(ADMIN_COPY.settings.logoNote));
-    identity.appendChild(renderCompactNotice(ADMIN_COPY.settings.cmsStatusNote));
-    if (isEditing) {
-      identity.appendChild(renderCompactNotice(ADMIN_COPY.settings.edit.logoReadonly));
-      identity.appendChild(renderCompactNotice(ADMIN_COPY.settings.edit.statusReadonly));
-    }
-  } else {
-    identity.appendChild(renderEmptyState(ADMIN_COPY.settings.siteMissing));
-  }
-  return identity;
+function renderSiteSettingsReadOnlyGroup(title, rows = []) {
+  const group = createElement('section', { className: 'cms-admin-settings-field-group' });
+  group.appendChild(createElement('h3', { className: 'cms-admin-data-group-title', text: title }));
+  group.appendChild(renderKeyValueList(rows));
+  return group;
 }
 
-function renderSettingsAdminPanel(state) {
-  const admin = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel' });
-  admin.appendChild(renderPanelTitle(ADMIN_COPY.settings.adminTitle, ADMIN_COPY.badges.viewMode));
-  admin.appendChild(renderKeyValueList([
-    [ADMIN_COPY.settings.adminFields.role, getRoleLabel(state.profile?.role)],
-    [ADMIN_COPY.settings.adminFields.viewMode, ADMIN_FEATURE_FLAGS.readOnlyMode ? ADMIN_COPY.maps.viewMode.on : ADMIN_COPY.maps.viewMode.off],
-    [ADMIN_COPY.settings.adminFields.writeActions, getWriteActionStatusLabel()],
-    [ADMIN_COPY.settings.adminFields.connection, Object.keys(state.data.errors || {}).length ? ADMIN_COPY.dashboard.cards.connection.warning : ADMIN_COPY.dashboard.cards.connection.ok],
+function renderSiteSettingsIdentityGroup(siteSettings = {}) {
+  const group = createElement('section', { className: 'cms-admin-settings-field-group cms-admin-settings-identity-group' });
+  group.appendChild(createElement('h3', { className: 'cms-admin-data-group-title', text: 'Hiển thị & nhận diện' }));
+  const current = createElement('div', { className: 'cms-admin-site-logo-current cms-admin-settings-logo-readonly' });
+  current.appendChild(renderSiteLogoPreview(siteSettings.logo_url));
+  const value = createElement('div', { className: 'cms-admin-site-logo-current-value' });
+  value.appendChild(createElement('strong', { text: 'Logo website' }));
+  value.appendChild(createElement('span', { className: 'cms-admin-readonly-note', text: ADMIN_COPY.settings.logoDraftNote || 'Logo được quản lý trong bản ghi CMS; website public chỉ đổi sau khi công khai.' }));
+  current.appendChild(value);
+  group.appendChild(current);
+  group.appendChild(renderKeyValueList([
+    [ADMIN_COPY.settings.websiteFields.language, getLanguageLabel(siteSettings.default_language)],
   ]));
-  admin.appendChild(renderCompactNotice(ADMIN_COPY.settings.notice));
-  if (ADMIN_FEATURE_FLAGS.allowSiteSettingsEdit) {
-    admin.appendChild(renderCompactNotice(`${ADMIN_COPY.settings.edit.enabledScope}. ${ADMIN_COPY.settings.edit.readOnlyScope}`));
-  }
-  return admin;
+  return group;
 }
 
 function renderSiteSettingsEditPanel(state, siteSettings, editState) {
   const copy = ADMIN_COPY.settings.edit;
-  const panel = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel cms-admin-settings-edit-panel cms-admin-edit-panel-highlight', dataset: { cmsEditPanel: 'site-settings', cmsEditId: 'site-settings' } });
-  panel.appendChild(renderPanelTitle(copy.title, copy.enabledScope));
-  panel.appendChild(renderCompactNotice(copy.safeNote));
-
-  if (editState.saveError) {
-    panel.appendChild(renderNoticeBox(`${copy.error} ${normalizeErrorMessage(editState.saveError)}`, 'error'));
-  }
-  if (editState.saveSuccess) {
-    panel.appendChild(renderNoticeBox(editState.saveSuccess, 'success'));
-  }
-
-  const form = createElement('form', { className: 'cms-admin-edit-form cms-admin-settings-edit-form', attrs: { novalidate: 'true' } });
+  const form = createElement('form', { className: 'cms-admin-edit-form cms-admin-settings-edit-form cms-admin-settings-single-form', attrs: { novalidate: 'true' } });
   form.addEventListener('submit', (event) => {
     event.preventDefault();
     handleSaveSiteSettingsDraft();
   });
 
-  const fields = createElement('div', { className: 'cms-admin-edit-field-grid' });
-  fields.appendChild(renderEditableTextField('site_title', copy.fields.site_title, editState, { required: true, placeholder: copy.placeholders.site_title }));
-  fields.appendChild(renderEditableTextField('organization_name', copy.fields.organization_name, editState, { required: true, placeholder: copy.placeholders.organization_name }));
-  fields.appendChild(renderEditableTextField('address', copy.fields.address, editState, { multiline: true, placeholder: copy.placeholders.address }));
-  fields.appendChild(renderEditableTextField('phone', copy.fields.phone, editState, { placeholder: copy.placeholders.phone }));
-  fields.appendChild(renderEditableTextField('fax', copy.fields.fax, editState, { placeholder: copy.placeholders.fax }));
-  fields.appendChild(renderEditableTextField('email', copy.fields.email, editState, { inputType: 'email', placeholder: copy.placeholders.email }));
-  fields.appendChild(renderEditableLanguageField(editState));
-  form.appendChild(fields);
+  const identityGroup = renderSiteSettingsEditGroup('Tên & đơn vị', [
+    renderEditableTextField('site_title', copy.fields.site_title, editState, { required: true, placeholder: copy.placeholders.site_title }),
+    renderEditableTextField('organization_name', copy.fields.organization_name, editState, { required: true, placeholder: copy.placeholders.organization_name }),
+  ]);
+  const contactGroup = renderSiteSettingsEditGroup('Liên hệ', [
+    renderEditableTextField('address', copy.fields.address, editState, { multiline: true, placeholder: copy.placeholders.address }),
+    renderEditableTextField('phone', copy.fields.phone, editState, { placeholder: copy.placeholders.phone }),
+    renderEditableTextField('fax', copy.fields.fax, editState, { placeholder: copy.placeholders.fax }),
+    renderEditableTextField('email', copy.fields.email, editState, { inputType: 'email', placeholder: copy.placeholders.email }),
+  ]);
+  const displayGroup = createElement('section', { className: 'cms-admin-settings-field-group cms-admin-settings-edit-group' });
+  displayGroup.appendChild(createElement('h3', { className: 'cms-admin-data-group-title', text: 'Hiển thị & nhận diện' }));
+  const displayFields = createElement('div', { className: 'cms-admin-edit-field-grid cms-admin-settings-edit-field-grid' });
+  displayFields.appendChild(renderEditableLanguageField(editState));
+  displayGroup.appendChild(displayFields);
+  displayGroup.appendChild(renderSiteSettingsLogoLibrarySection(state, siteSettings, editState));
 
-  form.appendChild(renderSiteSettingsLogoLibrarySection(state, siteSettings, editState));
-
-  const readonly = createElement('div', { className: 'cms-admin-readonly-field-grid' });
-  readonly.appendChild(renderReadonlyField(copy.fields.site_status, getStatusLabel(siteSettings.site_status), copy.statusReadonly));
-  form.appendChild(readonly);
+  form.appendChild(identityGroup);
+  form.appendChild(contactGroup);
+  form.appendChild(displayGroup);
+  form.appendChild(renderSiteSettingsTechnicalDetails({
+    ...siteSettings,
+    logo_url: editState.draftValues?.logo_url ?? siteSettings.logo_url,
+    default_language: editState.draftValues?.default_language ?? siteSettings.default_language,
+  }, true));
 
   const dirtyNotice = createElement('p', {
     className: `cms-admin-dirty-notice${editState.dirty ? '' : ' cms-admin-hidden'}`,
@@ -5466,16 +5519,187 @@ function renderSiteSettingsEditPanel(state, siteSettings, editState) {
     attrs: { role: 'status' },
   });
   form.appendChild(dirtyNotice);
-
-  form.appendChild(renderEditActionBlock(editState, copy, {
-    onCancel: handleCancelSiteSettingsEdit,
-    onReset: () => handleResetActiveDraft('site-settings'),
-  }));
-
   form.addEventListener('input', () => updateSiteSettingsFormControls(form));
   form.addEventListener('change', () => updateSiteSettingsFormControls(form));
-  panel.appendChild(form);
+  return form;
+}
+
+function renderSiteSettingsEditGroup(title, fields = []) {
+  const group = createElement('section', { className: 'cms-admin-settings-field-group cms-admin-settings-edit-group' });
+  group.appendChild(createElement('h3', { className: 'cms-admin-data-group-title', text: title }));
+  const grid = createElement('div', { className: 'cms-admin-edit-field-grid cms-admin-settings-edit-field-grid' });
+  fields.forEach((field) => grid.appendChild(field));
+  group.appendChild(grid);
+  return group;
+}
+
+function renderSiteSettingsTechnicalDetails(siteSettings = {}, editing = false) {
+  const details = createElement('details', { className: 'cms-admin-settings-technical-details cms-admin-technical-details' });
+  details.appendChild(createElement('summary', { text: ADMIN_COPY.settings.technicalTitle || 'Thông tin kỹ thuật' }));
+  details.appendChild(renderKeyValueList([
+    ['Trạng thái bản ghi CMS', getStatusLabel(siteSettings.site_status)],
+    ['Record id', siteSettings.id || '—'],
+    ['Cập nhật lúc', siteSettings.updated_at ? formatDateTime(siteSettings.updated_at) : '—'],
+    ['Cập nhật bởi', siteSettings.updated_by || '—'],
+    ['Ngôn ngữ raw', siteSettings.default_language || '—'],
+    ['Logo URL raw', siteSettings.logo_url || '—'],
+    ['Chế độ', editing ? 'Đang chỉnh bản nháp local' : 'Chỉ xem'],
+  ]));
+  return details;
+}
+
+function renderSiteSettingsActionPanel(state, siteSettings, editState = {}, canEdit = false) {
+  const panel = createElement('aside', { className: 'cms-admin-panel cms-admin-view-panel cms-admin-settings-action-panel' });
+  panel.appendChild(renderPanelTitle('Trạng thái & thao tác', editState.isEditing ? 'Bản nháp CMS' : 'Chỉ xem'));
+  panel.appendChild(renderSiteSettingsDraftStatusBox(state, siteSettings, editState, canEdit));
+  panel.appendChild(renderSiteSettingsValidationSummary(siteSettings, editState));
+  panel.appendChild(renderSiteSettingsActionButtons(siteSettings, editState, canEdit));
+  panel.appendChild(renderCompactNotice(ADMIN_COPY.settings.publicBoundaryNote || 'Lưu vào CMS chưa làm đổi website public. Website chỉ đổi sau luồng công khai riêng.'));
   return panel;
+}
+
+function renderSiteSettingsDraftStatusBox(state, siteSettings, editState = {}, canEdit = false) {
+  const box = createElement('section', { className: 'cms-admin-settings-status-box' });
+  box.appendChild(createElement('h3', { className: 'cms-admin-data-group-title', text: 'Trạng thái bản nháp CMS' }));
+  const rows = [
+    ['Dữ liệu CMS', siteSettings ? 'Đã đọc' : 'Chưa đọc được'],
+    ['Quyền chỉnh sửa', canEdit ? 'Có thể chỉnh' : 'Không đủ điều kiện chỉnh'],
+    ['Trạng thái chỉnh sửa', editState.isEditing ? (editState.dirty ? 'Có thay đổi chưa lưu' : 'Đang chỉnh — chưa có thay đổi') : 'Chỉ xem'],
+    ['Lưu dữ liệu', editState.saving ? 'Đang lưu vào CMS' : 'Chỉ lưu khi bấm nút lưu'],
+  ];
+  box.appendChild(renderKeyValueList(rows));
+  if (!siteSettings) box.appendChild(renderCompactWarning(ADMIN_COPY.settings.siteMissing));
+  return box;
+}
+
+function renderSiteSettingsValidationSummary(siteSettings, editState = {}) {
+  const validation = getSiteSettingsValidationForState(siteSettings, editState);
+  const box = createElement('section', { className: 'cms-admin-settings-validation-panel' });
+  box.appendChild(createElement('h3', { className: 'cms-admin-data-group-title', text: 'Kiểm tra thông tin' }));
+  const items = [
+    ['Tên website', validation.errors.site_title ? 'Cần nhập' : 'Đạt', validation.errors.site_title],
+    ['Đơn vị quản lý', validation.errors.organization_name ? 'Cần nhập' : 'Đạt', validation.errors.organization_name],
+    ['Email', validation.errors.email ? 'Sai định dạng' : (validation.values.email ? 'Đạt' : 'Chưa khai báo'), validation.errors.email || validation.warnings.email],
+    ['Ngôn ngữ', validation.errors.default_language ? 'Không hợp lệ' : 'Đạt', validation.errors.default_language],
+    ['Logo', validation.errors.logo_url ? 'Cần kiểm tra đường dẫn' : (validation.values.logo_url ? 'Đạt' : 'Chưa chọn'), validation.errors.logo_url || validation.warnings.logo_url],
+  ];
+  const list = createElement('div', { className: 'cms-admin-settings-validation-list' });
+  items.forEach(([label, status, detail]) => {
+    const item = createElement('div', { className: `cms-admin-settings-validation-item${detail ? ' has-warning' : ''}` });
+    item.appendChild(createElement('span', { text: label }));
+    item.appendChild(renderBadge(status, detail ? 'warning' : 'success'));
+    if (detail) item.appendChild(createElement('small', { text: detail }));
+    list.appendChild(item);
+  });
+  box.appendChild(list);
+  const warnings = Object.entries(validation.warnings || {}).filter(([key]) => !['logo_url', 'email'].includes(key));
+  if (warnings.length) {
+    const details = createElement('details', { className: 'cms-admin-settings-validation-details' });
+    details.appendChild(createElement('summary', { text: 'Warning khác cần rà soát' }));
+    const warningList = createElement('ul');
+    warnings.forEach(([, message]) => warningList.appendChild(createElement('li', { text: message })));
+    details.appendChild(warningList);
+    box.appendChild(details);
+  }
+  return box;
+}
+
+function renderSiteSettingsActionButtons(siteSettings, editState = {}, canEdit = false) {
+  const box = createElement('section', { className: 'cms-admin-settings-action-box' });
+  box.appendChild(createElement('h3', { className: 'cms-admin-data-group-title', text: 'Thao tác' }));
+  const actions = createElement('div', { className: 'cms-admin-settings-action-buttons' });
+  if (!editState.isEditing) {
+    const editButton = createElement('button', {
+      className: 'cms-admin-button cms-admin-button-primary',
+      text: ADMIN_COPY.settings.edit.button,
+      type: 'button',
+    });
+    editButton.disabled = !canEdit || !siteSettings;
+    editButton.addEventListener('click', () => handleStartSiteSettingsEdit(siteSettings));
+    actions.appendChild(editButton);
+    box.appendChild(actions);
+    box.appendChild(renderCompactNotice(getSiteSettingsDisabledReason(siteSettings, editState, canEdit) || ADMIN_COPY.settings.edit.safeNote));
+    return box;
+  }
+
+  const validation = getSiteSettingsValidationForState(siteSettings, editState);
+  const saveButton = createElement('button', {
+    className: 'cms-admin-button cms-admin-button-primary',
+    text: editState.saving ? (ADMIN_COPY.settings.edit.saving || 'Đang lưu...') : (ADMIN_COPY.settings.edit.save || 'Lưu vào CMS'),
+    type: 'button',
+  });
+  saveButton.disabled = Boolean(editState.saving) || !Boolean(editState.dirty) || !validation.valid || !canEdit;
+  saveButton.addEventListener('click', () => handleSaveSiteSettingsDraft());
+
+  const resetButton = createElement('button', {
+    className: 'cms-admin-button cms-admin-button-secondary',
+    text: ADMIN_COPY.settings.edit.reset,
+    type: 'button',
+  });
+  resetButton.disabled = Boolean(editState.saving) || !Boolean(editState.dirty);
+  resetButton.addEventListener('click', () => handleResetActiveDraft('site-settings'));
+
+  const cancelButton = createElement('button', {
+    className: 'cms-admin-button cms-admin-button-ghost',
+    text: ADMIN_COPY.settings.edit.cancel,
+    type: 'button',
+  });
+  cancelButton.disabled = Boolean(editState.saving);
+  cancelButton.addEventListener('click', () => handleCancelSiteSettingsEdit());
+
+  appendChildren(actions, [saveButton, resetButton, cancelButton]);
+  box.appendChild(actions);
+  box.appendChild(renderCompactNotice(getSiteSettingsDisabledReason(siteSettings, editState, canEdit, validation)));
+  return box;
+}
+
+function handleStartSiteSettingsEdit(siteSettings) {
+  const guard = requestStartEditSession({ type: 'site-settings', id: 'site-settings' });
+  if (!guard.allowed) return;
+  if (!guard.same) startSiteSettingsEdit(siteSettings);
+  queueEditPanelFocus('site-settings', 'site-settings', 'site_title');
+  renderAdminShell();
+}
+
+function getSiteSettingsDisabledReason(siteSettings, editState = {}, canEdit = false, validation = null) {
+  if (!siteSettings) return 'Chưa đọc được dữ liệu CMS.';
+  if (!canEdit) return ADMIN_COPY.settings.edit.noPermission;
+  if (editState.saving) return 'Đang lưu, vui lòng chờ.';
+  if (editState.isEditing && validation && !validation.valid) return 'Cần sửa lỗi trước khi lưu.';
+  if (editState.isEditing && !editState.dirty) return 'Chưa có thay đổi để lưu.';
+  if (editState.isEditing) return 'Lưu vào CMS chưa làm đổi website public.';
+  return 'Mở chỉnh sửa để cập nhật bản nháp CMS.';
+}
+
+function getSiteSettingsValidationForState(siteSettings, editState = {}) {
+  const values = editState.isEditing
+    ? (editState.draftValues || {})
+    : {
+        site_title: siteSettings?.site_title || '',
+        organization_name: siteSettings?.organization_name || '',
+        address: siteSettings?.address || '',
+        phone: siteSettings?.phone || '',
+        fax: siteSettings?.fax || '',
+        email: siteSettings?.email || '',
+        logo_url: siteSettings?.logo_url || '',
+        default_language: siteSettings?.default_language || 'vi',
+      };
+  return validateSiteSettingsDraft(values, ADMIN_COPY.settings.edit);
+}
+
+function renderSettingsAdminDetails(state, siteSettings) {
+  const details = createElement('details', { className: 'cms-admin-panel cms-admin-view-panel cms-admin-settings-admin-details' });
+  details.appendChild(createElement('summary', { text: ADMIN_COPY.settings.adminTitle || 'Trạng thái quản trị' }));
+  details.appendChild(renderKeyValueList([
+    [ADMIN_COPY.settings.adminFields.role, getRoleLabel(state.profile?.role)],
+    [ADMIN_COPY.settings.adminFields.viewMode, ADMIN_FEATURE_FLAGS.readOnlyMode ? ADMIN_COPY.maps.viewMode.on : ADMIN_COPY.maps.viewMode.off],
+    [ADMIN_COPY.settings.adminFields.writeActions, getWriteActionStatusLabel()],
+    [ADMIN_COPY.settings.adminFields.connection, Object.keys(state.data.errors || {}).length ? ADMIN_COPY.dashboard.cards.connection.warning : ADMIN_COPY.dashboard.cards.connection.ok],
+    ['Bảng dữ liệu', 'site_settings'],
+    ['Record id', siteSettings?.id || '—'],
+  ]));
+  details.appendChild(renderCompactNotice(ADMIN_COPY.settings.notice));
+  return details;
 }
 
 function renderSiteSettingsLogoLibrarySection(state, siteSettings, editState) {
@@ -6030,10 +6254,7 @@ async function handleSaveSiteSettingsDraft() {
   renderAdminShell();
 
   const latestState = getState();
-  const valuesToSave = {
-    ...validation.values,
-    logo_url: normalizeSiteLogoDraftValue(latestState.siteSettingsEdit?.draftValues?.logo_url),
-  };
+  const valuesToSave = validation.values;
   const { error } = await updateSiteSettingsDraft(
     latestState.supabase,
     latestState.data.siteSettings?.id,
