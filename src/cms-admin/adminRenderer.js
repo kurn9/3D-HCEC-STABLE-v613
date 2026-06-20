@@ -4015,10 +4015,23 @@ function isAllowedRelativeMediaPath(value = '') {
   const raw = String(value || '').trim();
   if (!raw || raw.startsWith('//')) return false;
   if (/^[a-z][a-z0-9+.-]*:/i.test(raw)) return false;
+  if (hasUnsafeRelativeMediaPathSegment(raw)) return false;
   return safeArray(STATIC_CMS_DRAFT_CONFIG.allowedMediaPathPrefixes).some((prefix) => {
     const normalizedPrefix = String(prefix || '').trim();
     return normalizedPrefix && raw.startsWith(normalizedPrefix);
   });
+}
+
+function hasUnsafeRelativeMediaPathSegment(value = '') {
+  const raw = String(value || '');
+  const lower = raw.toLowerCase();
+  if (raw.includes('\\') || raw.includes('..') || lower.includes('%2e')) return true;
+  try {
+    const decoded = decodeURIComponent(raw);
+    return decoded.includes('\\') || decoded.includes('..');
+  } catch {
+    return true;
+  }
 }
 
 function firstAvailableValue(object = {}, keys = []) {
