@@ -833,6 +833,7 @@ function renderActiveTab(state) {
       });
     case 'staticDraft':
       return renderWorkspaceShell('staticDraft', null, state, {
+        hideRail: true,
         renderContent: ({ activeKey }) => renderStaticCmsDraftTab(state, {
           activeWorkspaceKey: activeKey,
           activeRoomKey: activeKey,

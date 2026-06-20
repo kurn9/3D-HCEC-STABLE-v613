@@ -11387,3 +11387,256 @@ body.cms-admin-page * {
     grid-template-columns: 1fr;
   }
 }
+
+/* v6.14.059.002 - Static CMS Draft full-width contextual workspace */
+.cms-admin-workspace[data-cms-workspace="staticDraft"],
+.cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-workspace-layout,
+.cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-workspace-main,
+.cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-workspace-panel,
+.cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-workspace-real-content,
+.cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-workspace-real-staticDraft,
+.cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-workspace-source-content,
+.cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-workspace-source-staticDraft,
+.cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-static-draft-shell,
+.cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-static-workspace-shell,
+.cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-static-room-first-workspace,
+.cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-featured-contextual-root {
+  max-width: none;
+  min-width: 0;
+  width: 100%;
+}
+
+.cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-workspace-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-static-command-bar {
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.72fr) minmax(320px, auto);
+  width: 100%;
+}
+
+.cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-static-command-subtitle {
+  max-width: 960px;
+}
+
+.cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-static-contextual-workspace {
+  align-items: start;
+  display: grid;
+  gap: 22px;
+  grid-template-columns: minmax(560px, 1fr) clamp(360px, 28vw, 420px);
+  max-width: none;
+  min-width: 0;
+  width: 100%;
+}
+
+.cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-static-main-column {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-static-room-main-column {
+  grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
+  align-items: start;
+}
+
+.cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-featured-main-column {
+  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+  align-items: start;
+}
+
+.cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-static-room-first-layout,
+.cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-featured-workspace-layout,
+.cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-featured-workspace-layout-repaired {
+  display: contents;
+}
+
+.cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-static-room-item-pane,
+.cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-featured-navigator {
+  align-self: start;
+  max-width: none;
+  min-width: 0;
+  position: sticky;
+  top: 88px;
+  width: 100%;
+}
+
+.cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-static-room-selected-panel,
+.cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-featured-detail-stack {
+  max-width: none;
+  min-width: 0;
+  width: 100%;
+}
+
+.cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-static-action-rail {
+  align-self: start;
+  background: linear-gradient(180deg, rgba(13, 22, 34, 0.96), rgba(9, 15, 25, 0.94));
+  border-color: rgba(214, 178, 94, 0.2);
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.26);
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  padding: 16px;
+  position: sticky;
+  top: 88px;
+  width: 100%;
+}
+
+.cms-admin-static-action-rail-header,
+.cms-admin-static-rail-focus-box,
+.cms-admin-static-action-rail-actions,
+.cms-admin-static-public-note {
+  border: 1px solid var(--cms-admin-border-soft);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.025);
+  padding: 12px 13px;
+}
+
+.cms-admin-static-action-rail-header {
+  align-items: flex-start;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.cms-admin-static-action-rail-header .cms-admin-eyebrow,
+.cms-admin-static-action-rail-header .cms-admin-panel-title {
+  margin: 0;
+}
+
+.cms-admin-static-rail-focus-box {
+  display: grid;
+  gap: 6px;
+}
+
+.cms-admin-static-rail-focus-box > span {
+  color: var(--cms-admin-muted);
+  font-size: 0.76rem;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.cms-admin-static-rail-focus-box > strong {
+  color: var(--cms-admin-text);
+  font-size: 1rem;
+}
+
+.cms-admin-static-rail-focus-box > p,
+.cms-admin-static-public-note {
+  color: var(--cms-admin-muted);
+  line-height: 1.45;
+  margin: 0;
+}
+
+.cms-admin-static-checklist {
+  display: grid;
+  gap: 10px;
+}
+
+.cms-admin-static-checklist-item {
+  align-items: flex-start;
+  border: 1px solid var(--cms-admin-border-soft);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.026);
+  display: grid;
+  gap: 10px;
+  grid-template-columns: auto minmax(0, 1fr);
+  padding: 11px 12px;
+}
+
+.cms-admin-static-checklist-item.is-pass {
+  background: rgba(16, 185, 129, 0.1);
+  border-color: rgba(16, 185, 129, 0.26);
+}
+
+.cms-admin-static-checklist-item.is-warning {
+  background: rgba(214, 178, 94, 0.1);
+  border-color: rgba(214, 178, 94, 0.3);
+}
+
+.cms-admin-static-checklist-item.is-danger {
+  background: rgba(248, 113, 113, 0.1);
+  border-color: rgba(248, 113, 113, 0.28);
+}
+
+.cms-admin-static-checklist-icon {
+  align-items: center;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  color: var(--cms-admin-text);
+  display: inline-flex;
+  font-size: 0.76rem;
+  font-weight: 900;
+  height: 24px;
+  justify-content: center;
+  margin-top: 1px;
+  width: 24px;
+}
+
+.cms-admin-static-checklist-item strong,
+.cms-admin-static-checklist-item span,
+.cms-admin-static-checklist-item p {
+  overflow-wrap: anywhere;
+}
+
+.cms-admin-static-checklist-item strong {
+  color: var(--cms-admin-text);
+  display: block;
+  font-size: 0.9rem;
+  margin-bottom: 2px;
+}
+
+.cms-admin-static-checklist-item span:not(.cms-admin-static-checklist-icon) {
+  color: var(--cms-admin-text);
+  display: block;
+  font-weight: 800;
+}
+
+.cms-admin-static-checklist-item p {
+  color: var(--cms-admin-muted);
+  line-height: 1.42;
+  margin: 4px 0 0;
+}
+
+.cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-static-room-summary-grid,
+.cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-featured-summary-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr));
+}
+
+.cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-featured-workspace-restored,
+.cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-featured-workspace-repaired,
+.cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-featured-workspace-repaired .cms-admin-featured-workspace-layout,
+.cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-featured-workspace-layout-repaired {
+  display: grid;
+  max-width: none;
+  width: 100%;
+}
+
+@media (max-width: 1180px) {
+  .cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-static-contextual-workspace,
+  .cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-static-room-main-column,
+  .cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-featured-main-column,
+  .cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-static-command-bar {
+    grid-template-columns: 1fr;
+  }
+
+  .cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-static-room-item-pane,
+  .cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-featured-navigator,
+  .cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-static-action-rail {
+    position: static;
+  }
+}
+
+@media (max-width: 760px) {
+  .cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-static-action-rail,
+  .cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-static-room-intro-panel,
+  .cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-featured-operator-intro {
+    padding: 12px;
+  }
+
+  .cms-admin-static-action-rail-header {
+    display: grid;
+  }
+}
