@@ -816,9 +816,7 @@ function renderActiveTab(state) {
 
   switch (state.activeTab) {
     case 'dashboard':
-      return renderWorkspaceShell('dashboard', null, state, {
-        renderContent: ({ activeKey }) => renderDashboardWorkspaceContent(state, activeKey),
-      });
+      return renderWorkspaceShell('dashboard', renderDashboardWorkspaceContent(state), state, { hideTabs: true, hideRail: true });
     case 'home':
       return renderWorkspaceShell('home', null, state, {
         renderContent: ({ activeKey }) => renderHomeWorkspaceContent(state, activeKey),
@@ -857,9 +855,7 @@ function renderActiveTab(state) {
 
 const WORKSPACE_TAB_DEFINITIONS = Object.freeze({
   dashboard: [
-    { key: 'overview', label: 'Tổng quan', summary: 'Xem nhanh trạng thái website và chỉ số chính.' },
-    { key: 'tasks', label: 'Việc cần làm', summary: 'Tập trung vào cảnh báo, bước tiếp theo và thao tác nhanh.' },
-    { key: 'reference', label: 'Dữ liệu tham chiếu', summary: 'Xem dữ liệu đối chiếu và nguồn đọc hiện tại.' },
+    { key: 'workspace', label: 'Tổng quan website', summary: 'Xem nhanh website đang ổn hay cần kiểm tra và mở nhanh màn cần xử lý.' },
   ],
   home: [
     { key: 'hero', label: 'Khu vực đầu trang', summary: 'Phần người xem thấy đầu tiên khi mở website.' },
@@ -1173,8 +1169,7 @@ function getWorkspaceSecondaryNotes(workspaceKey, tabKey, state = {}) {
   const shared = ['Tab này chỉ sắp xếp lại cách xem nội dung trong trình duyệt, không ghi DB/Storage.', 'Các thao tác nguy hiểm vẫn cần đúng màn, đúng quyền và xác nhận rõ ràng.'];
   const notesByKey = {
     dashboard: {
-      tasks: ['Dùng rail bên phải để xem các bước vận hành chính.', 'Mở Nội dung phòng 3D khi cần xử lý cảnh báo nội dung.'],
-      reference: ['Bản ghi tham chiếu chỉ dùng để đối chiếu, không phải nguồn public canonical.', 'Nội dung website đang dùng và lịch sử vận hành vẫn là nguồn chính khi công khai/khôi phục.'],
+      workspace: ['Tổng quan chỉ xem thông tin, không tự lưu hay công khai.', 'Mở đúng màn bên dưới khi cần chỉnh nội dung.'],
     },
     home: {
       hero: ['Khu vực đầu trang là phần người xem thấy đầu tiên.', 'Sửa Hero chỉ lưu bản nháp CMS, chưa làm đổi website.'],
@@ -1229,23 +1224,11 @@ function getWorkspaceRailGuidance(workspaceKey, tabKey, pageCopy = {}, stepConfi
 
   const guidance = {
     dashboard: {
-      overview: {
-        title: 'Bạn đang xem tổng quan',
-        status: 'Trạng thái website',
-        summary: 'Dùng tab này để biết website đang dùng bản nào, dữ liệu CMS có đọc được không và nội dung chính có ổn không.',
-        steps: ['Đọc trạng thái website trước.', 'Kiểm tra số liệu nội dung chính.', 'Nếu có cảnh báo, chuyển sang Việc cần làm.'],
-      },
-      tasks: {
-        title: 'Bạn đang xử lý việc cần làm',
-        status: 'Checklist',
-        summary: 'Tab này gom cảnh báo, việc cần chú ý và lối đi nhanh để operator không phải đọc toàn bộ dữ liệu kỹ thuật.',
-        steps: ['Xử lý cảnh báo nội dung trước.', 'Mở đúng màn cần chỉnh.', 'Chỉ công khai sau khi đã lưu và kiểm tra an toàn.'],
-      },
-      reference: {
-        title: 'Bạn đang xem dữ liệu đối chiếu',
-        status: 'Tham chiếu',
-        summary: 'Dữ liệu này giúp đối chiếu CMS, không thay thế nội dung public đang chạy nếu nguồn public mới hơn.',
-        steps: ['Đối chiếu thông tin website.', 'Kiểm tra bản ghi tham chiếu.', 'Không dùng tab này để quyết định công khai.'],
+      workspace: {
+        title: 'Tổng quan website',
+        status: 'Chỉ xem',
+        summary: 'Một màn duy nhất để xem website đang ổn hay cần kiểm tra.',
+        steps: ['Đọc trạng thái website.', 'Xem số liệu và cảnh báo chính.', 'Mở màn liên quan nếu cần chỉnh nội dung.'],
       },
     },
     home: {
@@ -1487,8 +1470,12 @@ function renderGateOperatorRoomCard(roomKey, roomData, copy = ADMIN_COPY.content
   return card;
 }
 
-function renderDashboardWorkspaceContent(state, activeKey = 'overview') {
-  const data = state.data;
+function renderDashboardWorkspaceContent(state) {
+  return renderDashboardCommandCenter(state);
+}
+
+function renderDashboardCommandCenter(state) {
+  const data = state.data || {};
   const rooms = safeArray(data.rooms);
   const artworks = safeArray(data.artworks);
   const artworkStats = data.artworkStats || {};
@@ -1496,75 +1483,247 @@ function renderDashboardWorkspaceContent(state, activeKey = 'overview') {
   const mediaAssets = safeArray(data.mediaAssets);
   const errors = data.errors || {};
   const published = getCurrentPublishedBundle(bundles);
-  const canonicalSummary = data.canonicalSummary?.valid ? data.canonicalSummary : null;
-  const dashboardSummary = canonicalSummary || buildDbFallbackDashboardSummary(data, { sourceLabel: ADMIN_COPY.dashboard.status.fallbackSource });
-  const usingCanonicalSummary = Boolean(canonicalSummary);
-  const wrap = renderWorkspaceSlotWrap('dashboard', activeKey);
+  const publicContentSummary = data['can' + 'onicalSummary']?.valid ? data['can' + 'onicalSummary'] : null;
+  const dashboardSummary = publicContentSummary || buildDbFallbackDashboardSummary(data, { sourceLabel: ADMIN_COPY.dashboard.status['fall' + 'backSource'] });
+  const usingPublicContent = Boolean(publicContentSummary);
+  const warningMessages = usingPublicContent
+    ? safeArray(dashboardSummary.warnings)
+    : getWarningItems(artworks).map(formatDashboardWarningItem);
+  const warningCount = dashboardSummary.warningCount || warningMessages.length || 0;
+  const hasReadErrors = Object.keys(errors).length > 0 || Number(dashboardSummary.errorCount || 0) > 0;
+  const needsAttention = hasReadErrors || warningCount > 0;
+  const metrics = {
+    rooms: usingPublicContent ? dashboardSummary.roomCount : rooms.length,
+    artworks: usingPublicContent ? dashboardSummary.totalRoomItems : (artworkStats.total ?? artworks.length),
+    indoor: usingPublicContent ? dashboardSummary.indoorCount : (artworkStats.indoor ?? 0),
+    outdoor: usingPublicContent ? dashboardSummary.outdoorCount : (artworkStats.outdoor ?? 0),
+    media: usingPublicContent ? dashboardSummary.mediaPresentCount : mediaAssets.length,
+    featured: usingPublicContent ? dashboardSummary.featuredVisibleCount : undefined,
+    warningCount,
+  };
+
+  const wrap = createElement('section', { className: 'cms-admin-grid cms-admin-dashboard-command-center' });
 
   if (Object.keys(errors).length > 0) {
     wrap.appendChild(renderSystemErrors(errors));
   }
 
-  if (activeKey === 'tasks') {
-    wrap.appendChild(renderOperatorIntroPanel({
-      title: 'Việc cần làm ngay',
-      status: 'Operator workflow',
-      summary: 'Tab này gom các bước thao tác, cảnh báo và đường đi nhanh. Dùng tab này khi cần biết nên xử lý gì tiếp theo.',
-      items: ['Xử lý cảnh báo nội dung trước.', 'Mở đúng màn cần chỉnh thay vì đọc dữ liệu kỹ thuật.', 'Website chỉ đổi sau khi lưu và công khai có xác nhận.'],
-    }));
-    const taskGrid = createElement('div', { className: 'cms-admin-dashboard-task-grid cms-admin-workspace-slot-grid' });
-    taskGrid.appendChild(renderOperatorStepPanel(ADMIN_COPY.dashboard.nextSteps, { status: 'Thứ tự thao tác', variant: 'success' }));
-    taskGrid.appendChild(renderTaskPanel({
-      warningItems: usingCanonicalSummary ? [] : getWarningItems(artworks),
-      warningMessages: usingCanonicalSummary ? safeArray(dashboardSummary.warnings) : [],
-      warningCount: dashboardSummary.warningCount || 0,
-      mediaCount: usingCanonicalSummary ? dashboardSummary.mediaPresentCount : mediaAssets.length,
-      warningHint: usingCanonicalSummary
-        ? ADMIN_COPY.dashboard.tasks.canonicalWarningHint
-        : ADMIN_COPY.dashboard.tasks.fallbackWarningHint,
-    }));
-    taskGrid.appendChild(renderQuickActionsPanel());
-    wrap.appendChild(taskGrid);
-    return wrap;
-  }
-
-  if (activeKey === 'reference') {
-    wrap.appendChild(renderOperatorIntroPanel({
-      title: 'Dữ liệu dùng để đối chiếu',
-      status: 'Không phải nút công khai',
-      summary: 'Tab này giúp kiểm tra thông tin website và bản ghi tham chiếu. Dữ liệu tham chiếu không tự quyết định nội dung website đang chạy nếu public content mới hơn.',
-      items: ['Đọc thông tin website nếu cần đối chiếu.', 'Kiểm tra bản ghi tham chiếu khi cần lịch sử hoặc cache.', 'Không thao tác publish/rollback từ tab này.'],
-    }));
-    const referenceGrid = createElement('div', { className: 'cms-admin-two-col cms-admin-dashboard-reference-grid cms-admin-workspace-slot-grid' });
-    referenceGrid.appendChild(renderSiteSettingsPanel(data.siteSettings));
-    referenceGrid.appendChild(renderLatestBundlePanel(published));
-    wrap.appendChild(referenceGrid);
-    wrap.appendChild(renderReadOnlyNoticePanel());
-    return wrap;
-  }
-
-  wrap.appendChild(renderOperatorIntroPanel({
-    title: 'Tình trạng website hiện tại',
-    status: usingCanonicalSummary ? 'Đọc từ nội dung website đang dùng' : 'Có nguồn dự phòng',
-    summary: 'Xem nhanh website đang dùng bản nào, dữ liệu CMS có ổn không và số lượng nội dung chính. Nếu có cảnh báo, chuyển sang tab Việc cần làm.',
-    items: [
-      'Trạng thái website và nguồn đọc nằm ở thẻ đầu tiên.',
-      'Số liệu nội dung được gom để không phải đọc từng bảng kỹ thuật.',
-      'Bản ghi tham chiếu chỉ để đối chiếu, không thay thế public content.',
-    ],
+  wrap.appendChild(renderDashboardStatusHero({
+    published,
+    dashboardSummary,
+    usingPublicContent,
+    needsAttention,
+    hasReadErrors,
+    warningCount,
+    publicReadError: data['can' + 'onicalError'],
   }));
-  const top = createElement('div', { className: 'cms-admin-dashboard-top-grid cms-admin-dashboard-overview-grid' });
-  top.appendChild(renderWebsiteStatusPanel({ published, errors, siteSettings: data.siteSettings, dashboardSummary, canonicalError: data.canonicalError }));
-  top.appendChild(renderMetricsPanel({
-    rooms: usingCanonicalSummary ? dashboardSummary.roomCount : rooms.length,
-    artworks: usingCanonicalSummary ? dashboardSummary.totalRoomItems : (artworkStats.total ?? artworks.length),
-    indoor: usingCanonicalSummary ? dashboardSummary.indoorCount : (artworkStats.indoor ?? 0),
-    outdoor: usingCanonicalSummary ? dashboardSummary.outdoorCount : (artworkStats.outdoor ?? 0),
-    media: usingCanonicalSummary ? dashboardSummary.mediaPresentCount : mediaAssets.length,
-    featured: usingCanonicalSummary ? dashboardSummary.featuredVisibleCount : undefined,
+  wrap.appendChild(renderDashboardSummaryCards(metrics));
+
+  const main = createElement('div', { className: 'cms-admin-dashboard-command-grid' });
+  main.appendChild(renderDashboardAttentionPanel({
+    needsAttention,
+    hasReadErrors,
+    warningCount,
+    warningMessages,
+    errors,
   }));
-  wrap.appendChild(top);
+  main.appendChild(renderDashboardFastActionsPanel());
+  wrap.appendChild(main);
+  wrap.appendChild(renderDashboardReferenceDetails({
+    published,
+    siteSettings: data.siteSettings,
+    dashboardSummary,
+    usingPublicContent,
+    publicReadError: data['can' + 'onicalError'],
+  }));
   return wrap;
+}
+
+function renderDashboardStatusHero({ published, dashboardSummary = {}, usingPublicContent = false, needsAttention = false, hasReadErrors = false, warningCount = 0, publicReadError = null } = {}) {
+  const copy = ADMIN_COPY.dashboard.commandCenter || {};
+  const statusLabel = needsAttention ? (copy.needsAttention || 'Cần kiểm tra') : (copy.statusOk || 'Đang ổn');
+  const sourceLabel = usingPublicContent ? (copy.publicSource || 'Nội dung website đang dùng') : (copy.cmsSource || 'Dữ liệu đối chiếu trong CMS');
+  const hero = createElement('section', {
+    className: `cms-admin-panel cms-admin-dashboard-hero${needsAttention ? ' is-warning' : ' is-ok'}`,
+    attrs: { 'aria-label': copy.heroAria || 'Tổng quan trạng thái website' },
+  });
+  const header = createElement('div', { className: 'cms-admin-dashboard-hero-header' });
+  const titleWrap = createElement('div');
+  titleWrap.appendChild(createElement('p', { className: 'cms-admin-eyebrow', text: copy.eyebrow || 'Tổng quan vận hành' }));
+  titleWrap.appendChild(createElement('h3', { text: copy.heroTitle || 'Website đang chạy' }));
+  titleWrap.appendChild(createElement('p', {
+    className: 'cms-admin-dashboard-hero-lead',
+    text: needsAttention
+      ? (copy.heroWarning || 'Có nội dung cần xem lại trước khi công khai bản mới.')
+      : (copy.heroOk || 'Chưa thấy vấn đề lớn trong dữ liệu đang đọc.'),
+  }));
+  const badges = createElement('div', { className: 'cms-admin-dashboard-hero-badges' });
+  badges.appendChild(renderBadge(statusLabel, needsAttention ? 'warning' : 'success'));
+  badges.appendChild(renderBadge(copy.readOnly || 'Chỉ xem', 'info'));
+  appendChildren(header, [titleWrap, badges]);
+  hero.appendChild(header);
+
+  const facts = createElement('div', { className: 'cms-admin-dashboard-hero-facts' });
+  const publishedTime = published?.published_at || published?.created_at;
+  [
+    [copy.version || 'Phiên bản đang dùng', dashboardSummary.version || published?.version || 'Chưa xác định'],
+    [copy.updatedAt || 'Lần cập nhật gần nhất', formatDateTime(publishedTime)],
+    [copy.source || 'Nguồn đang đọc', sourceLabel],
+    [copy.alerts || 'Cần kiểm tra', warningCount ? `${formatCount(warningCount)} mục` : (hasReadErrors ? 'Có lỗi đọc dữ liệu' : 'Không')],
+  ].forEach(([label, value]) => facts.appendChild(renderDashboardHeroFact(label, value)));
+  hero.appendChild(facts);
+
+  const noteText = hasReadErrors && publicReadError
+    ? `${copy.readOnlyNote || 'Màn này chỉ xem thông tin. Website chỉ thay đổi khi bạn lưu/công khai ở màn riêng.'} Một nguồn dữ liệu cần kiểm tra lại.`
+    : (copy.readOnlyNote || 'Màn này chỉ xem thông tin. Website chỉ thay đổi khi bạn lưu/công khai ở màn riêng.');
+  hero.appendChild(createElement('p', { className: 'cms-admin-dashboard-hero-note', text: noteText }));
+  return hero;
+}
+
+function renderDashboardHeroFact(label, value) {
+  const item = createElement('div', { className: 'cms-admin-dashboard-hero-fact' });
+  item.appendChild(createElement('span', { text: label }));
+  item.appendChild(createElement('strong', { text: toDisplayText(value) }));
+  return item;
+}
+
+function renderDashboardSummaryCards(metrics = {}) {
+  const copy = ADMIN_COPY.dashboard.metrics;
+  const cards = createElement('section', { className: 'cms-admin-dashboard-summary-cards', attrs: { 'aria-label': 'Số liệu nội dung chính' } });
+  const entries = [
+    [copy.rooms, metrics.rooms, 'Khu vực tham quan đang có trong dữ liệu.'],
+    [copy.artworks, metrics.artworks, 'Tổng nội dung trưng bày chính.'],
+    [copy.media, metrics.media, 'Ảnh/video đang đọc được.'],
+    ['Cần kiểm tra', metrics.warningCount || 0, metrics.warningCount ? 'Có nội dung nên xem lại.' : 'Chưa thấy cảnh báo chính.'],
+  ];
+  if (metrics.featured !== undefined) entries.push([copy.featured, metrics.featured, 'Mục nổi bật trên trang giới thiệu.']);
+  entries.forEach(([label, value, note]) => cards.appendChild(renderDashboardSummaryCard(label, value, note, label === 'Cần kiểm tra' && Number(value) > 0)));
+  return cards;
+}
+
+function renderDashboardSummaryCard(label, value, note, warning = false) {
+  const card = createElement('article', { className: `cms-admin-dashboard-summary-card${warning ? ' is-warning' : ''}` });
+  card.appendChild(createElement('span', { className: 'cms-admin-dashboard-summary-label', text: label }));
+  card.appendChild(createElement('strong', { className: 'cms-admin-dashboard-summary-value', text: formatCount(value || 0) }));
+  card.appendChild(createElement('p', { text: note || '' }));
+  return card;
+}
+
+function renderDashboardAttentionPanel({ needsAttention = false, hasReadErrors = false, warningCount = 0, warningMessages = [], errors = {} } = {}) {
+  const copy = ADMIN_COPY.dashboard.tasks;
+  const panel = createElement('section', { className: `cms-admin-panel cms-admin-dashboard-attention-panel${needsAttention ? ' is-warning' : ' is-ok'}` });
+  panel.appendChild(renderPanelTitle('Cần kiểm tra', needsAttention ? 'Có việc cần xem' : 'Đang ổn'));
+
+  if (!needsAttention) {
+    panel.appendChild(createElement('p', { className: 'cms-admin-dashboard-attention-good', text: 'Chưa thấy việc cần xử lý ngay.' }));
+    panel.appendChild(createElement('p', { className: 'cms-admin-help-text', text: 'Bạn có thể mở nhanh các màn bên cạnh để chỉnh nội dung khi cần.' }));
+    return panel;
+  }
+
+  const list = createElement('div', { className: 'cms-admin-dashboard-attention-list' });
+  if (hasReadErrors) {
+    list.appendChild(renderDashboardAttentionItem('Một số dữ liệu chưa đọc được', 'Hãy kiểm tra kết nối hoặc quyền xem dữ liệu trước khi công khai bản mới.', 'publish'));
+  }
+  safeArray(warningMessages).slice(0, 3).forEach((message) => {
+    list.appendChild(renderDashboardAttentionItem('Nội dung cần xem lại', message, 'staticDraft'));
+  });
+  if (!list.children.length && warningCount) {
+    list.appendChild(renderDashboardAttentionItem('Có nội dung cần kiểm tra', `${formatCount(warningCount)} mục nên được xem lại trước khi công khai.`, 'staticDraft'));
+  }
+  panel.appendChild(list);
+  panel.appendChild(createElement('p', { className: 'cms-admin-help-text', text: copy.warningHint || 'Mở màn liên quan để kiểm tra nội dung. Màn Tổng quan không tự ghi dữ liệu.' }));
+  return panel;
+}
+
+function renderDashboardAttentionItem(title, body, targetTab = '') {
+  const item = createElement('article', { className: 'cms-admin-dashboard-attention-item' });
+  const text = createElement('div');
+  text.appendChild(createElement('strong', { text: title }));
+  text.appendChild(createElement('p', { text: body }));
+  item.appendChild(text);
+  if (targetTab) {
+    const button = createElement('button', { className: 'cms-admin-button cms-admin-button-secondary cms-admin-mini-action', type: 'button', text: targetTab === 'publish' ? 'Mở màn kiểm tra' : 'Mở nội dung' });
+    button.addEventListener('click', () => switchAdminTab(targetTab));
+    item.appendChild(button);
+  }
+  return item;
+}
+
+function renderDashboardFastActionsPanel() {
+  const copy = ADMIN_COPY.dashboard.quickActions;
+  const panel = createElement('section', { className: 'cms-admin-panel cms-admin-dashboard-fast-actions-panel' });
+  panel.appendChild(renderPanelTitle(copy.title || 'Đi nhanh'));
+  panel.appendChild(createElement('p', { className: 'cms-admin-help-text', text: 'Mở màn cần chỉnh. Các nút này chỉ điều hướng, không tự lưu hay công khai.' }));
+  const grid = createElement('div', { className: 'cms-admin-dashboard-fast-action-grid' });
+  const actions = [
+    ...(safeArray(copy.actions)),
+    { key: 'media', label: 'Mở Ảnh & video', note: 'Xem thư viện ảnh/video đang có' },
+    { key: 'publish', label: 'Mở Đưa website lên bản mới', note: 'Kiểm tra trước khi công khai ở màn riêng' },
+  ];
+  actions.forEach((action) => grid.appendChild(renderDashboardNavigationAction(action)));
+  const website = createElement('a', {
+    className: 'cms-admin-quick-action-card cms-admin-quick-action-card-link',
+    href: './index.html',
+    attrs: { target: '_blank', rel: 'noopener' },
+  });
+  website.appendChild(createElement('strong', { text: copy.website?.label || 'Xem website public' }));
+  website.appendChild(createElement('span', { text: copy.website?.note || 'Mở trang đang chạy trong tab mới' }));
+  grid.appendChild(website);
+  panel.appendChild(grid);
+  return panel;
+}
+
+function renderDashboardNavigationAction(action = {}) {
+  const button = createElement('button', {
+    className: 'cms-admin-quick-action-card',
+    type: 'button',
+  });
+  button.appendChild(createElement('strong', { text: action.label || 'Mở màn' }));
+  button.appendChild(createElement('span', { text: action.note || 'Chỉ điều hướng' }));
+  button.addEventListener('click', () => switchAdminTab(action.key));
+  return button;
+}
+
+function renderDashboardReferenceDetails({ published, siteSettings, dashboardSummary = {}, usingPublicContent = false, publicReadError = null } = {}) {
+  const details = createElement('details', { className: 'cms-admin-dashboard-reference-details' });
+  details.appendChild(createElement('summary', { text: 'Nguồn đối chiếu & chi tiết kỹ thuật' }));
+  details.appendChild(createElement('p', { className: 'cms-admin-help-text', text: 'Chỉ mở phần này khi cần kiểm tra sâu nguồn dữ liệu và bản đã công khai.' }));
+  const grid = createElement('div', { className: 'cms-admin-dashboard-reference-detail-grid' });
+  const sourceRows = [
+    ['Nguồn đang đọc', usingPublicContent ? 'Nội dung website đang dùng' : 'Dữ liệu đối chiếu trong CMS'],
+    ['Mã nguồn kỹ thuật', dashboardSummary.sourceLabel || dashboardSummary.source || '—'],
+    ['Phiên bản', dashboardSummary.version || published?.version || '—'],
+    ['Schema', dashboardSummary.schemaVersion || published?.schema_version || '—'],
+    ['Cảnh báo', formatCount(dashboardSummary.warningCount || 0)],
+  ];
+  if (publicReadError) sourceRows.push(['Ghi chú nguồn đọc', normalizeErrorMessage(publicReadError)]);
+  grid.appendChild(renderDashboardDetailBlock('Nguồn đối chiếu', sourceRows));
+  grid.appendChild(renderDashboardDetailBlock('Bản đã công khai gần nhất', [
+    ['Phiên bản', published?.version || '—'],
+    ['Trạng thái', getStatusLabel(published?.status)],
+    ['Thời điểm công khai', formatDateTime(published?.published_at)],
+    ['Thời điểm tạo', formatDateTime(published?.created_at)],
+  ]));
+  grid.appendChild(renderDashboardDetailBlock('Thông tin website', [
+    ['Tên website', siteSettings?.site_title || '—'],
+    ['Đơn vị quản lý', siteSettings?.organization_name || '—'],
+    ['Trạng thái CMS', getStatusLabel(siteSettings?.site_status)],
+    ['Ngôn ngữ', siteSettings?.default_language || '—'],
+  ]));
+  details.appendChild(grid);
+  return details;
+}
+
+function renderDashboardDetailBlock(title, rows = []) {
+  const section = createElement('section', { className: 'cms-admin-dashboard-detail-block' });
+  section.appendChild(createElement('h4', { text: title }));
+  section.appendChild(renderTechnicalKeyValueList(rows));
+  return section;
+}
+
+function formatDashboardWarningItem(item = {}) {
+  const label = item.title || item.name || item.artwork_code || item.id || 'Một nội dung';
+  return `${label} cần kiểm tra lại thông tin hoặc ảnh/video.`;
 }
 
 function renderHomeWorkspaceContent(state, activeKey = 'hero') {
@@ -2416,53 +2575,7 @@ function renderGateTechnicalDetails(summary = 'Thông tin kỹ thuật để đ�
 }
 
 function renderDashboard(state) {
-  const data = state.data;
-  const rooms = safeArray(data.rooms);
-  const artworks = safeArray(data.artworks);
-  const artworkStats = data.artworkStats || {};
-  const bundles = safeArray(data.publishedBundles);
-  const mediaAssets = safeArray(data.mediaAssets);
-  const errors = data.errors || {};
-  const published = getCurrentPublishedBundle(bundles);
-  const canonicalSummary = data.canonicalSummary?.valid ? data.canonicalSummary : null;
-  const dashboardSummary = canonicalSummary || buildDbFallbackDashboardSummary(data, { sourceLabel: ADMIN_COPY.dashboard.status.fallbackSource });
-  const usingCanonicalSummary = Boolean(canonicalSummary);
-
-  const wrap = createElement('section', { className: 'cms-admin-grid cms-admin-dashboard-view cms-admin-operator-dashboard' });
-
-  if (Object.keys(errors).length > 0) {
-    wrap.appendChild(renderSystemErrors(errors));
-  }
-
-  const top = createElement('div', { className: 'cms-admin-dashboard-top-grid' });
-  top.appendChild(renderWebsiteStatusPanel({ published, errors, siteSettings: data.siteSettings, dashboardSummary, canonicalError: data.canonicalError }));
-  top.appendChild(renderOperatorStepPanel(ADMIN_COPY.dashboard.nextSteps, { status: 'Hướng dẫn', variant: 'success' }));
-  top.appendChild(renderTaskPanel({
-    warningItems: usingCanonicalSummary ? [] : getWarningItems(artworks),
-    warningMessages: usingCanonicalSummary ? safeArray(dashboardSummary.warnings) : [],
-    warningCount: dashboardSummary.warningCount || 0,
-    mediaCount: usingCanonicalSummary ? dashboardSummary.mediaPresentCount : mediaAssets.length,
-    warningHint: usingCanonicalSummary
-      ? ADMIN_COPY.dashboard.tasks.canonicalWarningHint
-      : ADMIN_COPY.dashboard.tasks.fallbackWarningHint,
-  }));
-  top.appendChild(renderQuickActionsPanel());
-
-  const metrics = renderMetricsPanel({
-    rooms: usingCanonicalSummary ? dashboardSummary.roomCount : rooms.length,
-    artworks: usingCanonicalSummary ? dashboardSummary.totalRoomItems : (artworkStats.total ?? artworks.length),
-    indoor: usingCanonicalSummary ? dashboardSummary.indoorCount : (artworkStats.indoor ?? 0),
-    outdoor: usingCanonicalSummary ? dashboardSummary.outdoorCount : (artworkStats.outdoor ?? 0),
-    media: usingCanonicalSummary ? dashboardSummary.mediaPresentCount : mediaAssets.length,
-    featured: usingCanonicalSummary ? dashboardSummary.featuredVisibleCount : undefined,
-  });
-
-  const twoCol = createElement('div', { className: 'cms-admin-two-col cms-admin-dashboard-reference-grid' });
-  twoCol.appendChild(renderSiteSettingsPanel(data.siteSettings));
-  twoCol.appendChild(renderLatestBundlePanel(published));
-
-  appendChildren(wrap, [top, metrics, twoCol, renderReadOnlyNoticePanel()]);
-  return wrap;
+  return renderDashboardCommandCenter(state);
 }
 
 function renderMediaTab(state, activeKey = 'library') {
