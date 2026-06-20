@@ -12115,3 +12115,26 @@ body.cms-admin-page * {
   font-size: 0.82rem;
   line-height: 1.45;
 }
+
+/* v6.14.060.005 — Media quarantine panel: keep deleted logs/broken refs audit-only */
+.cms-admin-workspace[data-cms-workspace="media"] .cms-admin-media-quarantine-panel {
+  margin-top: 0.85rem;
+  border-color: rgba(148, 163, 184, 0.16);
+  background: rgba(2, 6, 23, 0.26);
+}
+
+.cms-admin-workspace[data-cms-workspace="media"] .cms-admin-media-quarantine-panel > summary {
+  padding: 0.75rem 0.9rem;
+  color: var(--cms-admin-text-muted, #94a3b8);
+  font-size: 0.86rem;
+}
+
+.cms-admin-workspace[data-cms-workspace="media"] .cms-admin-media-quarantine-panel:not([open]) {
+  opacity: 0.82;
+}
+
+.cms-admin-workspace[data-cms-workspace="media"] .cms-admin-media-quarantine-panel .cms-admin-media-lifecycle-card-broken,
+.cms-admin-workspace[data-cms-workspace="media"] .cms-admin-media-quarantine-panel .cms-admin-media-lifecycle-card-deleted {
+  border-color: rgba(148, 163, 184, 0.18);
+  background: rgba(15, 23, 42, 0.4);
+}
