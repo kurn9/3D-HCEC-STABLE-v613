@@ -819,6 +819,7 @@ function renderActiveTab(state) {
       return renderWorkspaceShell('dashboard', renderDashboardWorkspaceContent(state), state, { hideTabs: true, hideRail: true });
     case 'home':
       return renderWorkspaceShell('home', null, state, {
+        hideRail: true,
         renderContent: ({ activeKey }) => renderHomeWorkspaceContent(state, activeKey),
       });
     case 'gate':
@@ -861,7 +862,7 @@ const WORKSPACE_TAB_DEFINITIONS = Object.freeze({
     { key: 'hero', label: 'Khu vực đầu trang', summary: 'Phần người xem thấy đầu tiên khi mở website.' },
     { key: 'experience', label: 'Khu vực trải nghiệm', summary: 'Phần giới thiệu hành trình và cảm giác tham quan.' },
     { key: 'guide', label: 'Hướng dẫn tham quan', summary: 'Phần giúp người xem biết cách bắt đầu và đi tiếp.' },
-    { key: 'contact', label: 'Thông tin liên hệ', summary: 'Dữ liệu tiện ích và nguồn liên hệ chính thức.' },
+    { key: 'contact', label: 'Liên hệ tham chiếu', summary: 'Đối chiếu thông tin liên hệ; chỉnh nguồn chính ở Thông tin website.' },
   ],
   gate: [
     { key: 'intro', label: 'Màn chào', summary: 'Phần người xem đọc trước khi chọn không gian.' },
@@ -1791,7 +1792,7 @@ function getHomeSectionPriorityMeta(sectionKey) {
       technical: 'CMS index_sections.section_key = guide',
     },
     contact: {
-      label: 'Thông tin liên hệ',
+      label: 'Liên hệ tham chiếu',
       badge: 'Tham chiếu',
       role: 'Thông tin đơn vị quản lý và liên hệ hỗ trợ.',
       focus: 'Đây là dữ liệu tiện ích. Thông tin liên hệ chính thức được chỉnh ở màn Thông tin website.',
@@ -1818,26 +1819,40 @@ function renderHomeSectionWorkspacePanel(state, sections = [], sectionKey = 'her
     dataset: { cmsReferenceTarget: `home-${sectionKey}`, cmsReferenceId: section?.id || sectionKey },
   });
 
+  if (sectionKey !== 'contact') {
+    panel.appendChild(renderHomeSectionIntroPanel(sectionKey, section, meta, copy, { isEditing: isEditingThisSection }));
+  }
+  if (sectionKey === 'hero') panel.appendChild(renderPublicLink(copy.publicLink, './index.html'));
+
+  const workspace = createElement('div', {
+    className: `cms-admin-home-contextual-workspace cms-admin-home-contextual-workspace-${sectionKey}${isEditingThisSection ? ' is-editing' : ''}`,
+  });
+  const main = createElement('div', { className: 'cms-admin-home-main-column' });
+  const side = renderHomeContextualChecklistPanel(state, section, sectionKey, copy, editState, { isEditing: isEditingThisSection, meta });
+
   if (sectionKey === 'contact') {
-    panel.appendChild(renderHomeContactReferencePanel(state, section, meta, copy));
-    panel.appendChild(renderHomeSectionTechnicalFooter(section, meta));
-    panel.appendChild(renderLockedNotice(getHomeSectionSafetyNote(sectionKey)));
+    main.appendChild(renderHomeContactReferencePanel(state, section, meta, copy));
+    main.appendChild(renderHomeSectionTechnicalFooter(section, meta));
+    main.appendChild(renderLockedNotice(getHomeSectionSafetyNote(sectionKey)));
+    appendChildren(workspace, [main, side]);
+    panel.appendChild(workspace);
     return panel;
   }
 
-  panel.appendChild(renderHomeSectionIntroPanel(sectionKey, section, meta, copy, { isEditing: isEditingThisSection }));
-  if (sectionKey === 'hero') panel.appendChild(renderPublicLink(copy.publicLink, './index.html'));
-
   if (!section) {
-    panel.appendChild(renderEmptyState(`Chưa tìm thấy ${meta.label} trong dữ liệu Trang chủ.`));
-    panel.appendChild(renderHomeSectionTechnicalFooter(section, meta));
+    main.appendChild(renderEmptyState(`Chưa tìm thấy ${meta.label} trong dữ liệu Trang chủ.`));
+    main.appendChild(renderHomeSectionTechnicalFooter(section, meta));
+    appendChildren(workspace, [main, side]);
+    panel.appendChild(workspace);
     return panel;
   }
 
   if (isEditingThisSection) {
-    panel.appendChild(renderHomeSectionEditZone(state, sections, section, sectionKey, copy, editState));
-    panel.appendChild(renderHomeSectionTechnicalFooter(section, meta));
-    panel.appendChild(renderLockedNotice(getHomeSectionSafetyNote(sectionKey)));
+    main.appendChild(renderHomeSectionEditZone(state, sections, section, sectionKey, copy, editState));
+    main.appendChild(renderHomeSectionTechnicalFooter(section, meta));
+    main.appendChild(renderLockedNotice(getHomeSectionSafetyNote(sectionKey)));
+    appendChildren(workspace, [main, side]);
+    panel.appendChild(workspace);
     return panel;
   }
 
@@ -1851,13 +1866,237 @@ function renderHomeSectionWorkspacePanel(state, sections = [], sectionKey = 'her
   if (mediaCard) supporting.appendChild(mediaCard);
   const readinessCard = renderHomeSectionReadinessCard(section, sectionKey, copy);
   if (readinessCard) supporting.appendChild(readinessCard);
-  supporting.appendChild(renderHomeSectionEditActionCard(state, section, sectionKey, copy));
-  layout.appendChild(supporting);
-  panel.appendChild(layout);
+  if (supporting.childNodes.length) layout.appendChild(supporting);
+  main.appendChild(layout);
 
-  panel.appendChild(renderHomeSectionTechnicalFooter(section, meta));
-  panel.appendChild(renderLockedNotice(getHomeSectionSafetyNote(sectionKey)));
+  main.appendChild(renderHomeSectionTechnicalFooter(section, meta));
+  main.appendChild(renderLockedNotice(getHomeSectionSafetyNote(sectionKey)));
+  appendChildren(workspace, [main, side]);
+  panel.appendChild(workspace);
   return panel;
+}
+
+function renderHomeContextualChecklistPanel(state, section, sectionKey, copy = ADMIN_COPY.contentViews.home, editState = {}, options = {}) {
+  const meta = options.meta || getHomeSectionPriorityMeta(sectionKey);
+  const isEditing = Boolean(options.isEditing);
+  const panel = createElement('aside', {
+    className: `cms-admin-home-context-panel cms-admin-home-context-panel-${sectionKey}${isEditing ? ' is-editing' : ''}`,
+    attrs: { 'aria-label': `Checklist ${meta.label}` },
+  });
+  panel.appendChild(renderDataCardTitle('Trạng thái khu vực', isEditing ? 'Đang chỉnh' : meta.badge));
+  panel.appendChild(createElement('p', {
+    className: 'cms-admin-operator-summary',
+    text: isEditing
+      ? 'Checklist này đọc trạng thái bản nháp đang chỉnh. Website public chưa đổi.'
+      : getHomeContextSummary(section, sectionKey, meta),
+  }));
+
+  const list = createElement('div', { className: 'cms-admin-home-context-checklist' });
+  buildHomeSectionChecklistModel(state, section, sectionKey, copy, editState, { isEditing }).forEach((item) => {
+    list.appendChild(renderHomeChecklistItem(item));
+  });
+  panel.appendChild(list);
+  panel.appendChild(renderHomeContextualActionPanel(state, section, sectionKey, editState, { isEditing }));
+  return panel;
+}
+
+function getHomeContextSummary(section, sectionKey, meta = getHomeSectionPriorityMeta(sectionKey)) {
+  if (sectionKey === 'contact') return 'Liên hệ trong Trang chủ chỉ để đối chiếu. Dữ liệu chính được chỉnh ở Thông tin website.';
+  if (!section) return `Chưa đọc được ${meta.label}.`;
+  return `${meta.label} đang ở chế độ xem. Chỉnh sửa chỉ lưu bản nháp trong CMS.`;
+}
+
+function buildHomeSectionChecklistModel(state, section, sectionKey, copy = ADMIN_COPY.contentViews.home, editState = {}, options = {}) {
+  const isEditing = Boolean(options.isEditing);
+  const missingFields = getHomeSectionImportantMissingFields(section, sectionKey, copy);
+  const media = normalizeJsonValue(section?.media_json);
+  const cta = normalizeJsonValue(section?.cta_json);
+  const items = normalizeJsonValue(section?.items_json);
+  const validationErrorCount = Object.keys(editState.validationErrors || {}).length;
+  const validationWarningCount = Object.keys(editState.validationWarnings || {}).length;
+  const canEdit = getHomeCanEditSection(state, section, sectionKey);
+  const checklist = [
+    {
+      label: 'Dữ liệu khu vực',
+      value: section ? 'Đã đọc' : 'Thiếu dữ liệu',
+      status: section ? 'pass' : 'warning',
+      detail: section ? 'Đang dùng dữ liệu Trang chủ đã tải.' : 'Không thấy dữ liệu khu vực này trong state hiện tại.',
+    },
+    {
+      label: 'Hiển thị trên website',
+      value: section ? getVisibleLabel(section?.is_visible) : 'Chưa rõ',
+      status: section ? (section?.is_visible === false ? 'warning' : 'pass') : 'warning',
+      detail: section?.is_visible === false ? 'Khu vực đang ẩn hoặc chưa bật hiển thị.' : 'Trạng thái hiển thị chỉ thay đổi khi lưu và công khai theo luồng riêng.',
+    },
+    {
+      label: 'Nội dung chính',
+      value: missingFields.length ? `${missingFields.length} mục cần xem` : 'Đạt',
+      status: missingFields.length ? 'warning' : 'pass',
+      detail: missingFields.length ? `Cần kiểm tra: ${missingFields.slice(0, 3).join(', ')}.` : 'Không thấy thiếu trường nội dung chính theo checklist hiện tại.',
+    },
+    buildHomeMediaChecklistItem(sectionKey, media),
+    buildHomeButtonChecklistItem(sectionKey, cta),
+  ];
+
+  if (sectionKey === 'guide') {
+    checklist.push({
+      label: 'Bước hướng dẫn',
+      value: Array.isArray(items) && items.length ? `${items.length} bước` : 'Cần kiểm tra',
+      status: Array.isArray(items) && items.length ? 'pass' : 'warning',
+      detail: Array.isArray(items) && items.length ? 'Danh sách bước hướng dẫn đã có trong dữ liệu.' : 'Chưa thấy danh sách bước hướng dẫn rõ ràng.',
+    });
+  }
+
+  checklist.push({
+    label: 'Quyền chỉnh',
+    value: canEdit ? 'Có thể chỉnh' : 'Chỉ xem',
+    status: canEdit ? 'pass' : 'info',
+    detail: canEdit ? 'Tài khoản và viewport hiện tại đủ điều kiện mở chỉnh sửa.' : 'Không đủ quyền, chưa bật chức năng hoặc đang ở viewport an toàn.',
+  });
+
+  if (isEditing) {
+    checklist.push(
+      {
+        label: 'Trạng thái chỉnh sửa',
+        value: editState.dirty ? 'Có thay đổi chưa lưu' : 'Chưa có thay đổi',
+        status: editState.dirty ? 'warning' : 'info',
+        detail: editState.dirty ? 'Rời màn sẽ có cảnh báo mất thay đổi.' : 'Nút lưu sẽ mở khi có thay đổi local.',
+      },
+      {
+        label: 'Kiểm tra dữ liệu',
+        value: validationErrorCount ? `${validationErrorCount} lỗi` : validationWarningCount ? `${validationWarningCount} cảnh báo` : 'Chưa thấy lỗi',
+        status: validationErrorCount ? 'blocked' : validationWarningCount ? 'warning' : 'pass',
+        detail: validationErrorCount ? 'Sửa lỗi trong form trước khi lưu.' : validationWarningCount ? 'Có cảnh báo nên xem lại trước khi công khai.' : 'Chưa có lỗi validation trong state hiện tại.',
+      },
+      {
+        label: 'Đang lưu',
+        value: editState.saving ? 'Có' : 'Không',
+        status: editState.saving ? 'warning' : 'pass',
+        detail: editState.saving ? 'Đợi thao tác lưu kết thúc trước khi rời màn.' : 'Không có thao tác lưu đang chạy.',
+      },
+    );
+    if (editState.saveError) {
+      checklist.push({
+        label: 'Lỗi lưu',
+        value: 'Cần kiểm tra',
+        status: 'blocked',
+        detail: normalizeErrorMessage(editState.saveError),
+      });
+    }
+  }
+
+  checklist.push({
+    label: 'Website public',
+    value: 'Chưa tự đổi',
+    status: 'info',
+    detail: 'Mở, chỉnh hoặc lưu bản nháp trong CMS chưa công khai website. Website chỉ đổi ở workflow công khai riêng.',
+  });
+  return checklist;
+}
+
+function buildHomeMediaChecklistItem(sectionKey, media) {
+  if (sectionKey === 'contact') {
+    return { label: 'Ảnh/video', value: 'Không dùng ở khu vực này', status: 'info', detail: 'Thông tin liên hệ tham chiếu không quản lý ảnh/video riêng.' };
+  }
+  if (sectionKey === 'hero') {
+    return { label: 'Ảnh/video', value: isBlank(media) ? 'Cần kiểm tra' : 'Đã có', status: isBlank(media) ? 'warning' : 'pass', detail: isBlank(media) ? 'Khu vực đầu trang nên có ảnh/video giới thiệu rõ ràng.' : 'Đã có dữ liệu ảnh/video; đường dẫn kỹ thuật nằm trong details.' };
+  }
+  return { label: 'Ảnh/video', value: isBlank(media) ? 'Không dùng ở khu vực này' : 'Đã có', status: isBlank(media) ? 'info' : 'pass', detail: isBlank(media) ? 'Khu vực này không bắt buộc có ảnh/video.' : 'Đã có dữ liệu ảnh/video bổ trợ.' };
+}
+
+function buildHomeButtonChecklistItem(sectionKey, cta) {
+  if (sectionKey === 'contact') {
+    return { label: 'Nút', value: 'Mở Thông tin website', status: 'info', detail: 'Liên hệ chính thức chỉnh ở màn Thông tin website.' };
+  }
+  if (sectionKey === 'hero') {
+    return { label: 'Nút', value: isBlank(cta) ? 'Cần kiểm tra' : 'Đã có', status: isBlank(cta) ? 'warning' : 'pass', detail: isBlank(cta) ? 'Khu vực đầu trang nên có nút rõ để người xem đi tiếp.' : 'Đã có dữ liệu nút; đường dẫn kỹ thuật nằm trong details nếu cần đối chiếu.' };
+  }
+  return { label: 'Nút', value: isBlank(cta) ? 'Không dùng ở khu vực này' : 'Đã có', status: isBlank(cta) ? 'info' : 'pass', detail: isBlank(cta) ? 'Không thấy nút riêng trong khu vực này.' : 'Đã có dữ liệu nút bổ trợ.' };
+}
+
+function renderHomeChecklistItem({ label, value, status = 'info', detail = '' } = {}) {
+  const item = createElement('div', { className: `cms-admin-home-checklist-item is-${status}` });
+  item.appendChild(createElement('span', { className: 'cms-admin-home-checklist-icon', text: status === 'pass' ? '✓' : status === 'blocked' ? '!' : '•', attrs: { 'aria-hidden': 'true' } }));
+  const body = createElement('div', { className: 'cms-admin-home-checklist-body' });
+  body.appendChild(createElement('strong', { text: label }));
+  body.appendChild(createElement('span', { text: value }));
+  if (detail) body.appendChild(createElement('p', { text: detail }));
+  item.appendChild(body);
+  return item;
+}
+
+function getHomeCanEditSection(state, section, sectionKey) {
+  if (sectionKey === 'hero') return canEditHomeHero(state, section);
+  if (sectionKey === 'guide') return canEditHomeGuide(state, section);
+  if (sectionKey === 'experience') return canEditHomeExperience(state, section);
+  return false;
+}
+
+function renderHomeContextualActionPanel(state, section, sectionKey, editState = {}, options = {}) {
+  const panel = createElement('section', { className: 'cms-admin-home-context-action-panel' });
+  panel.appendChild(createElement('h4', { className: 'cms-admin-data-group-title', text: 'Thao tác' }));
+  if (options.isEditing) {
+    panel.appendChild(createElement('p', {
+      className: 'cms-admin-compact-copy',
+      text: 'Nút Lưu vào CMS, Đặt lại thay đổi và Hủy nằm trong form đang chỉnh để giữ đúng hành vi submit hiện có.',
+    }));
+    panel.appendChild(renderHomeChecklistActionNote(editState.dirty ? 'Có thay đổi chưa lưu.' : 'Chưa có thay đổi để lưu.', editState.dirty ? 'warning' : 'info'));
+    return panel;
+  }
+
+  if (sectionKey === 'contact') {
+    const openButton = createElement('button', {
+      className: 'cms-admin-button cms-admin-button-primary',
+      text: 'Mở Thông tin website',
+      type: 'button',
+      ariaLabel: 'Mở màn Thông tin website để chỉnh dữ liệu liên hệ chính thức',
+    });
+    openButton.addEventListener('click', () => switchAdminTab('settings'));
+    panel.appendChild(openButton);
+    panel.appendChild(renderHomeChecklistActionNote('Trang chủ chỉ đối chiếu thông tin liên hệ.', 'info'));
+    return panel;
+  }
+
+  const editButton = renderHomeContextualEditButton(state, section, sectionKey);
+  if (editButton) {
+    panel.appendChild(editButton);
+    panel.appendChild(renderHomeChecklistActionNote('Mở chỉnh sửa chỉ tạo bản nháp local. Website public chưa đổi.', 'info'));
+  } else {
+    panel.appendChild(renderHomeChecklistActionNote('Tài khoản hiện tại chỉ xem hoặc chưa đủ điều kiện chỉnh khu vực này.', 'warning'));
+  }
+  return panel;
+}
+
+function renderHomeChecklistActionNote(text, tone = 'info') {
+  return createElement('p', { className: `cms-admin-home-context-action-note is-${tone}`, text });
+}
+
+function renderHomeContextualEditButton(state, section, sectionKey) {
+  if (!getHomeCanEditSection(state, section, sectionKey)) return null;
+  const labels = {
+    hero: 'Chỉnh sửa khu vực đầu trang',
+    experience: 'Chỉnh sửa khu vực trải nghiệm',
+    guide: 'Chỉnh sửa hướng dẫn tham quan',
+  };
+  const button = createElement('button', {
+    className: 'cms-admin-button cms-admin-button-primary',
+    text: labels[sectionKey] || 'Chỉnh sửa phần này',
+    type: 'button',
+  });
+  button.addEventListener('click', () => {
+    const editId = section.id || section.section_key || sectionKey;
+    const guard = requestStartEditSession({ type: 'home', id: editId });
+    if (!guard.allowed) return;
+    if (!guard.same) {
+      if (sectionKey === 'hero') startHomeHeroEdit(section);
+      else if (sectionKey === 'experience') startHomeExperienceEdit(section);
+      else if (sectionKey === 'guide') startHomeGuideEdit(section);
+    }
+    setWorkspaceTabState('home', sectionKey);
+    queueEditPanelFocus(`home-${sectionKey}`, editId, sectionKey === 'hero' ? 'eyebrow' : 'title');
+    renderAdminShell();
+  });
+  return button;
 }
 
 function renderHomeSectionIntroPanel(sectionKey, section, meta = getHomeSectionPriorityMeta(sectionKey), copy = ADMIN_COPY.contentViews.home, options = {}) {
@@ -1888,8 +2127,8 @@ function getHomeSectionQuickSummary(section, sectionKey, copy = ADMIN_COPY.conte
     const media = getHomeMediaHumanSummary(section?.media_json);
     const cta = getHomeCtaHumanSummary(section?.cta_json);
     facts.push(['Cần xem', missing.length ? `${missing.length} mục` : 'Tạm ổn', missing.length ? 'warning' : 'success']);
-    facts.push(['Media', media.includes('Chưa') ? 'Cần rõ' : 'Đã có dữ liệu', media.includes('Chưa') ? 'warning' : 'success']);
-    facts.push(['Nút/CTA', cta.includes('Chưa') || cta.includes('thiếu') ? 'Cần rõ' : 'Đã khai báo', cta.includes('Chưa') || cta.includes('thiếu') ? 'warning' : 'success']);
+    facts.push(['Ảnh/video', media.includes('Chưa') ? 'Cần rõ' : 'Đã có dữ liệu', media.includes('Chưa') ? 'warning' : 'success']);
+    facts.push(['Nút', cta.includes('Chưa') || cta.includes('thiếu') ? 'Cần rõ' : 'Đã khai báo', cta.includes('Chưa') || cta.includes('thiếu') ? 'warning' : 'success']);
   } else if (missing.length) {
     facts.push(['Cần xem', `${missing.length} mục`, 'warning']);
   }
@@ -1955,12 +2194,12 @@ function renderHomeSectionMediaActionCard(section, sectionKey, copy = ADMIN_COPY
 
 function getHomeSectionMediaHint(sectionKey) {
   const hints = {
-    hero: 'Media và nút của khu vực đầu trang cần rõ vì đây là điểm người xem nhìn thấy đầu tiên.',
-    experience: 'Media hoặc nút ở đây chỉ hiển thị khi dữ liệu thật sự có, nhằm bổ trợ cảm giác tham quan.',
-    guide: 'Media hoặc nút ở đây chỉ hiển thị khi dữ liệu thật sự có và hỗ trợ hướng dẫn.',
-    contact: 'Thông tin liên hệ không dùng media/CTA riêng trong màn Trang chủ.',
+    hero: 'Ảnh/video và nút của khu vực đầu trang cần rõ vì đây là điểm người xem nhìn thấy đầu tiên.',
+    experience: 'Ảnh/video hoặc nút ở đây chỉ hiển thị khi dữ liệu thật sự có, nhằm bổ trợ cảm giác tham quan.',
+    guide: 'Ảnh/video hoặc nút ở đây chỉ hiển thị khi dữ liệu thật sự có và hỗ trợ hướng dẫn.',
+    contact: 'Thông tin liên hệ tham chiếu không dùng ảnh/video hoặc nút riêng trong màn Trang chủ.',
   };
-  return hints[sectionKey] || 'Kiểm tra media và nút gắn với đúng khu vực này.';
+  return hints[sectionKey] || 'Kiểm tra ảnh/video và nút gắn với đúng khu vực này.';
 }
 
 
@@ -1997,7 +2236,7 @@ function renderHomeSectionReadinessList(section, sectionKey, missingFields = [])
 
 function renderHomeSectionEditActionCard(state, section, sectionKey, copy = ADMIN_COPY.contentViews.home) {
   const card = createElement('article', { className: `cms-admin-data-card cms-admin-home-section-card cms-admin-home-section-edit-card cms-admin-home-section-edit-card-${sectionKey}` });
-  card.appendChild(renderDataCardTitle('Chỉnh sửa khu vực này', 'Bản nháp'));
+  card.appendChild(renderDataCardTitle('Chỉnh sửa khu vực này', 'Bản nháp trong CMS'));
   card.appendChild(createElement('p', { className: 'cms-admin-operator-summary', text: getHomeSectionEditHint(sectionKey) }));
   if (sectionKey === 'hero') card.appendChild(renderHomeHeroEditActions(state, section));
   else if (sectionKey === 'experience') card.appendChild(renderHomeExperienceEditActions(state, section));
@@ -2007,7 +2246,7 @@ function renderHomeSectionEditActionCard(state, section, sectionKey, copy = ADMI
 
 function renderHomeSectionEditZone(state, sections = [], section, sectionKey, copy = ADMIN_COPY.contentViews.home, editState = {}) {
   const zone = createElement('section', { className: `cms-admin-home-section-edit-zone cms-admin-home-section-edit-zone-${sectionKey}` });
-  zone.appendChild(renderDataCardTitle(`Đang chỉnh sửa ${getHomeSectionPriorityMeta(sectionKey).label}`, 'Bản nháp CMS'));
+  zone.appendChild(renderDataCardTitle(`Đang chỉnh sửa ${getHomeSectionPriorityMeta(sectionKey).label}`, 'Bản nháp trong CMS'));
   zone.appendChild(createElement('p', { className: 'cms-admin-operator-summary', text: 'Form này chỉ sửa bản nháp của khu vực đang mở. Website public chưa thay đổi cho đến khi lưu bản nháp và chạy workflow công khai riêng.' }));
   const focusedEditPanel = renderHomeFocusedEditPanel(state, sections, editState);
   if (focusedEditPanel) zone.appendChild(focusedEditPanel);
@@ -2125,11 +2364,16 @@ function renderHomeSectionMediaCtaSummary(section, copy = ADMIN_COPY.contentView
   const cta = normalizeJsonValue(section?.cta_json);
   const summaryGrid = createElement('div', { className: 'cms-admin-home-media-cta-grid' });
   summaryGrid.appendChild(renderHomeMiniSummaryCard('Ảnh/video', getHomeMediaHumanSummary(media), isBlank(media) ? 'warning' : 'success'));
-  summaryGrid.appendChild(renderHomeMiniSummaryCard('Nút/CTA', getHomeCtaHumanSummary(cta), isBlank(cta) ? 'warning' : 'success'));
+  summaryGrid.appendChild(renderHomeMiniSummaryCard('Nút', getHomeCtaHumanSummary(cta), isBlank(cta) ? 'warning' : 'success'));
   box.appendChild(summaryGrid);
   if (!isBlank(media)) {
     const mediaDetails = renderMediaSummary(media, copy);
-    if (mediaDetails) box.appendChild(renderDataGroup('Đường dẫn media để đối chiếu', mediaDetails));
+    if (mediaDetails) {
+      const details = createElement('details', { className: 'cms-admin-home-media-technical-details' });
+      details.appendChild(createElement('summary', { text: 'Đường dẫn kỹ thuật' }));
+      details.appendChild(renderDataGroup('Thông tin kỹ thuật để đối chiếu', mediaDetails));
+      box.appendChild(details);
+    }
   }
   return box;
 }
@@ -2144,28 +2388,28 @@ function renderHomeMiniSummaryCard(label, value, tone = '') {
 function getHomeMediaHumanSummary(value) {
   const normalized = normalizeJsonValue(value);
   if (isBlank(normalized)) return 'Chưa khai báo ảnh/video rõ ràng.';
-  if (Array.isArray(normalized)) return `${normalized.length} mục media đã khai báo.`;
+  if (Array.isArray(normalized)) return `${normalized.length} mục ảnh/video đã khai báo.`;
   if (normalized && typeof normalized === 'object') {
     const caption = firstValue(normalized, ['caption', 'alt', 'title', 'label']);
     const url = firstValue(normalized, ['videoUrl', 'video_url', 'video', 'mp4', 'src', 'url', 'imageUrl', 'image_url', 'image', 'poster', 'posterUrl', 'poster_url', 'thumbnail']);
     if (!isBlank(caption)) return summarizeData(caption);
-    if (!isBlank(url)) return 'Đã có đường dẫn media để đối chiếu.';
-    return 'Đã khai báo object media nhưng thiếu nhãn dễ đọc.';
+    if (!isBlank(url)) return 'Đã có ảnh/video để đối chiếu.';
+    return 'Đã khai báo ảnh/video nhưng thiếu nhãn dễ đọc.';
   }
-  return 'Đã khai báo media.';
+  return 'Đã khai báo ảnh/video.';
 }
 
 function getHomeCtaHumanSummary(value) {
   const normalized = normalizeJsonValue(value);
-  if (isBlank(normalized)) return 'Chưa khai báo nút/CTA rõ ràng.';
-  if (Array.isArray(normalized)) return `${normalized.length} nút/CTA đã khai báo.`;
+  if (isBlank(normalized)) return 'Chưa khai báo nút rõ ràng.';
+  if (Array.isArray(normalized)) return `${normalized.length} nút đã khai báo.`;
   if (normalized && typeof normalized === 'object') {
     const label = firstValue(normalized, ['label', 'text', 'title', 'name']);
     const href = firstValue(normalized, ['href', 'url', 'to', 'link']);
     if (!isBlank(label) && !isBlank(href)) return `${summarizeData(label)} → đã có liên kết.`;
     if (!isBlank(label)) return `${summarizeData(label)} → cần kiểm tra liên kết.`;
     if (!isBlank(href)) return 'Đã có liên kết nhưng thiếu nhãn nút dễ hiểu.';
-    return 'Đã khai báo CTA nhưng thiếu nhãn dễ đọc.';
+    return 'Đã khai báo nút nhưng thiếu nhãn dễ đọc.';
   }
   return summarizeData(normalized);
 }
@@ -2204,7 +2448,7 @@ function getHomeSectionImportantMissingFields(section, sectionKey, copy = ADMIN_
     if (isBlank(section?.subtitle)) missing.push(labels.subtitle || 'Tiêu đề phụ');
     if (isBlank(section?.body)) missing.push(labels.body || 'Nội dung mô tả');
     if (isBlank(media)) missing.push(labels.media || 'Ảnh/video giới thiệu');
-    if (isBlank(cta)) missing.push(labels.cta || 'Nút/CTA');
+    if (isBlank(cta)) missing.push(labels.cta || 'Nút');
   } else if (sectionKey === 'experience') {
     if (isBlank(description)) missing.push('Mô tả trải nghiệm');
   } else if (sectionKey === 'guide') {
@@ -6609,7 +6853,7 @@ function getHomeEditSectionUiMeta(sectionKey = 'hero') {
   const key = String(sectionKey || 'hero');
   const map = {
     hero: {
-      badge: 'Bản nháp CMS',
+      badge: 'Bản nháp trong CMS',
       title: 'Đang chỉnh sửa Khu vực đầu trang',
       lead: 'Sửa phần người xem thấy đầu tiên. Website public chỉ thay đổi sau khi lưu bản nháp và chạy workflow công khai riêng.',
       mainTitle: 'Nội dung chính',
@@ -6619,7 +6863,7 @@ function getHomeEditSectionUiMeta(sectionKey = 'hero') {
     experience: {
       badge: 'Nội dung chữ',
       title: 'Đang chỉnh sửa Khu vực trải nghiệm',
-      lead: 'Sửa phần giới thiệu trải nghiệm và các card hiện có. Mã phòng, route và CTA kỹ thuật vẫn được khóa.',
+      lead: 'Sửa phần giới thiệu trải nghiệm và các card hiện có. Mã phòng, đường dẫn và nút kỹ thuật vẫn được khóa.',
       mainTitle: 'Nội dung trải nghiệm',
       mainNote: 'Giữ nội dung ngắn, rõ, giúp người xem hiểu hành trình hoặc điểm nhấn trước khi vào phòng trưng bày.',
       role: 'Bổ trợ hành trình',
