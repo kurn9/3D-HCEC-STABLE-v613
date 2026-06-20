@@ -467,8 +467,6 @@ function renderStaticRoomFirstWorkspace(draftState = {}, appState = {}, currentI
     className: `cms-admin-static-room-first-workspace cms-admin-static-room-first-workspace-${roomKey} cms-admin-static-contextual-workspace-root`,
     dataset: { cmsStaticRoom: roomKey },
   });
-  shell.appendChild(renderStaticRoomIntroPanel(draftState, roomItems, currentItem, roomCopy));
-
   const layout = createElement('div', { className: 'cms-admin-static-contextual-workspace cms-admin-static-room-contextual-workspace' });
   const mainColumn = createElement('div', { className: 'cms-admin-static-main-column cms-admin-static-room-main-column' });
   mainColumn.appendChild(renderStaticRoomItemList(draftState, roomItems, currentItem, handlers, roomCopy));
@@ -939,8 +937,6 @@ function renderFeaturedWorkspaceShell(draftState = {}, appState = {}, handlers =
   const selectedIndex = getSelectedFeaturedIndex(draftState, featured);
   const selectedItem = selectedIndex >= 0 ? featured.items[selectedIndex] : null;
   const shell = createElement('section', { className: 'cms-admin-static-workspace cms-admin-featured-workspace cms-admin-featured-workspace-restored cms-admin-featured-workspace-repaired cms-admin-featured-contextual-root' });
-  shell.appendChild(renderFeaturedOperatorIntro(featured, validation));
-
   const layout = createElement('div', { className: 'cms-admin-static-contextual-workspace cms-admin-featured-contextual-workspace' });
   const mainColumn = createElement('div', { className: 'cms-admin-static-main-column cms-admin-featured-main-column' });
   mainColumn.appendChild(renderFeaturedWorkspaceNavigator(draftState, featured, validation, handlers));

@@ -11791,3 +11791,14 @@ body.cms-admin-page * {
     position: static;
   }
 }
+
+/* v6.14.059.004 - Static CMS duplicate summary card removal spacing */
+.cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-static-room-first-workspace,
+.cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-featured-contextual-root {
+  gap: 12px;
+}
+
+.cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-static-room-contextual-workspace,
+.cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-featured-contextual-workspace {
+  margin-top: 0;
+}
