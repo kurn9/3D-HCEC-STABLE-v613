@@ -1091,7 +1091,7 @@ export const ADMIN_COPY = Object.freeze({
       safeNote: 'Lưu vào CMS chưa làm đổi website public.',
       leaveConfirm: 'Bạn có thay đổi chưa lưu. Rời màn này sẽ mất thay đổi. Tiếp tục?',
       noPermission: 'Tài khoản hiện tại chỉ được xem thông tin website.',
-      logoReadonly: 'Chọn logo từ thư viện chỉ cập nhật bản nháp local; bấm Lưu vào CMS mới ghi thay đổi.',
+      logoReadonly: 'Chọn logo chỉ cập nhật bản nháp đang chỉnh. Bấm Lưu vào CMS mới ghi lại. Website public chưa đổi.',
       statusReadonly: 'Trạng thái bản ghi CMS chỉ xem ở bước này.',
       fields: {
         site_title: 'Tên website',
@@ -1101,7 +1101,7 @@ export const ADMIN_COPY = Object.freeze({
         fax: 'Số fax',
         email: 'Thư điện tử',
         default_language: 'Ngôn ngữ mặc định',
-        logo_url: 'Đường dẫn logo',
+        logo_url: 'Logo website',
         site_status: 'Trạng thái bản ghi CMS',
       },
       placeholders: {
@@ -1123,7 +1123,7 @@ export const ADMIN_COPY = Object.freeze({
         addressShort: 'Địa chỉ đang khá ngắn. Vui lòng kiểm tra lại trước khi công khai.',
         siteTitleLong: 'Tên website khá dài. Nên kiểm tra lại cách hiển thị trên giao diện public.',
         organizationLong: 'Tên đơn vị quản lý khá dài. Nên kiểm tra lại cách hiển thị trên giao diện public.',
-        logoMissing: 'Chưa chọn logo. Có thể lưu nếu website chưa cần logo.',
+        logoMissing: 'Chưa có logo hợp lệ. Có thể lưu nếu website chưa cần logo.',
       },
     },
   },
