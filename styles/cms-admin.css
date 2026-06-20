@@ -9972,3 +9972,124 @@ body.cms-admin-page * {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* v6.14.054.002 — public cleanup UX clarity + 2-column workspace */
+.cms-admin-cleanup-summary-grid-primary {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.cms-admin-cleanup-summary-card-primary {
+  min-height: 92px;
+  border-color: rgba(214, 178, 94, 0.24);
+  background: linear-gradient(135deg, rgba(214, 178, 94, 0.11), rgba(15, 23, 42, 0.28));
+}
+
+.cms-admin-cleanup-summary-card-primary strong {
+  font-size: 1.1rem;
+}
+
+.cms-admin-cleanup-explainer {
+  display: grid;
+  gap: 6px;
+}
+
+.cms-admin-cleanup-explainer p {
+  margin: 0;
+}
+
+.cms-admin-cleanup-workflow-grid.cms-admin-cleanup-workflow-grid-compact {
+  grid-template-columns: minmax(0, 1.55fr) minmax(320px, 0.9fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.cms-admin-cleanup-workflow-grid-compact .cms-admin-cleanup-right-rail {
+  position: sticky;
+  top: 16px;
+}
+
+.cms-admin-cleanup-workflow-grid-compact .cms-admin-cleanup-candidate-list-panel,
+.cms-admin-cleanup-workflow-grid-compact .cms-admin-cleanup-action-panel {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.cms-admin-cleanup-workflow-grid-compact .cms-admin-cleanup-candidate-list {
+  max-height: min(720px, 72vh);
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.cms-admin-cleanup-workflow-grid-compact .cms-admin-cleanup-candidate-card {
+  padding: 12px;
+}
+
+.cms-admin-cleanup-workflow-grid-compact .cms-admin-cleanup-candidate-meta span {
+  font-size: 0.76rem;
+}
+
+.cms-admin-cleanup-workflow-grid-compact .cms-admin-cleanup-candidate-reason {
+  margin: 0;
+  line-height: 1.45;
+}
+
+.cms-admin-cleanup-workflow-grid-compact .cms-admin-cleanup-action-panel {
+  gap: 12px;
+}
+
+.cms-admin-cleanup-workflow-grid-compact .cms-admin-cleanup-selected-delete-summary {
+  border-color: rgba(214, 178, 94, 0.24);
+  background: rgba(15, 23, 42, 0.28);
+}
+
+.cms-admin-cleanup-workflow-grid-compact .cms-admin-cleanup-selected-delete-summary.is-ready {
+  border-color: rgba(34, 197, 94, 0.38);
+  background: rgba(20, 83, 45, 0.18);
+}
+
+.cms-admin-cleanup-workflow-grid-compact .cms-admin-cleanup-selected-mini-facts {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.cms-admin-cleanup-workflow-grid-compact .cms-admin-cleanup-usage-box {
+  background: rgba(2, 6, 23, 0.2);
+}
+
+.cms-admin-cleanup-workflow-grid-compact .cms-admin-cleanup-usage-box h5,
+.cms-admin-cleanup-workflow-grid-compact .cms-admin-cleanup-usage-box p {
+  margin: 0;
+}
+
+.cms-admin-cleanup-activity-panel {
+  grid-column: auto;
+}
+
+.cms-admin-cleanup-activity-panel .cms-admin-cleanup-fact-grid {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+@media (max-width: 1260px) {
+  .cms-admin-cleanup-summary-grid-primary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .cms-admin-cleanup-workflow-grid.cms-admin-cleanup-workflow-grid-compact {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .cms-admin-cleanup-workflow-grid-compact .cms-admin-cleanup-right-rail {
+    position: static;
+    top: auto;
+  }
+
+  .cms-admin-cleanup-workflow-grid-compact .cms-admin-cleanup-candidate-list {
+    max-height: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .cms-admin-cleanup-summary-grid-primary,
+  .cms-admin-cleanup-workflow-grid-compact .cms-admin-cleanup-selected-mini-facts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
