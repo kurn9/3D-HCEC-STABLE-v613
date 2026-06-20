@@ -11640,3 +11640,154 @@ body.cms-admin-page * {
     display: grid;
   }
 }
+
+/* v6.14.059.003 - Static CMS room layout breakage recovery */
+.cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-static-command-bar {
+  align-items: start;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 1fr);
+  min-height: 0;
+  padding: 16px 18px;
+  position: static;
+  width: 100%;
+}
+
+.cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-static-command-main,
+.cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-static-command-title-row,
+.cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-static-command-subtitle {
+  max-width: none;
+  min-width: 0;
+  width: 100%;
+}
+
+.cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-static-title,
+.cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-static-command-title-row .cms-admin-static-title,
+.cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-static-command-main h2,
+.cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-featured-command-bar h2 {
+  line-height: 1.05;
+  max-width: 100%;
+  min-width: 0;
+  overflow-wrap: normal;
+  white-space: normal;
+  word-break: normal;
+}
+
+.cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-static-command-subtitle,
+.cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-static-command-main p {
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+.cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-static-command-context {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
+  width: 100%;
+}
+
+.cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-static-command-actions-compact {
+  justify-content: flex-start;
+}
+
+.cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-static-command-actions-compact .cms-admin-static-main-load-actions {
+  display: flex;
+}
+
+.cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-static-room-intro-panel,
+.cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-featured-operator-intro {
+  min-height: 0;
+  padding: 16px 18px;
+}
+
+.cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-static-room-intro-panel .cms-admin-panel-title,
+.cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-featured-operator-intro .cms-admin-panel-title {
+  overflow-wrap: normal;
+  white-space: normal;
+  word-break: normal;
+}
+
+.cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-static-contextual-workspace {
+  align-items: start;
+  display: grid;
+  gap: 20px;
+  grid-template-columns: minmax(0, 1fr) clamp(340px, 28vw, 400px);
+  width: 100%;
+}
+
+.cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-static-room-main-column {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+  min-width: 0;
+}
+
+.cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-featured-main-column {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(240px, 310px) minmax(0, 1fr);
+  min-width: 0;
+}
+
+.cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-static-room-item-pane,
+.cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-featured-navigator,
+.cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-static-room-selected-panel,
+.cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-featured-detail-stack,
+.cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-static-action-rail {
+  min-width: 0;
+}
+
+.cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-static-action-rail {
+  gap: 12px;
+  max-height: none;
+  position: sticky;
+  top: 18px;
+}
+
+.cms-admin-static-rail-primary-actions,
+.cms-admin-static-rail-secondary-actions {
+  display: grid;
+  gap: 8px;
+}
+
+.cms-admin-static-rail-primary-actions .cms-admin-static-main-load-actions,
+.cms-admin-static-rail-primary-actions .cms-admin-static-primary-actions {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 1fr;
+}
+
+.cms-admin-static-rail-primary-actions .cms-admin-button,
+.cms-admin-static-rail-secondary-actions .cms-admin-button {
+  justify-content: center;
+  width: 100%;
+}
+
+.cms-admin-static-rail-technical-actions {
+  border: 1px solid var(--cms-admin-border-soft);
+  border-radius: 14px;
+  padding: 10px 12px;
+}
+
+.cms-admin-static-rail-technical-actions > summary {
+  cursor: pointer;
+  font-weight: 850;
+}
+
+.cms-admin-static-form-note {
+  margin-top: 0;
+}
+
+@media (max-width: 1180px) {
+  .cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-static-contextual-workspace,
+  .cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-static-room-main-column,
+  .cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-featured-main-column {
+    grid-template-columns: 1fr;
+  }
+
+  .cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-static-action-rail,
+  .cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-static-room-item-pane,
+  .cms-admin-workspace[data-cms-workspace="staticDraft"] .cms-admin-featured-navigator {
+    position: static;
+  }
+}

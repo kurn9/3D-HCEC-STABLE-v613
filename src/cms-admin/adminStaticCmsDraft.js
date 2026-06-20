@@ -359,15 +359,10 @@ function renderStaticWorkspaceCommandBar(draftState = {}, appState = {}, current
   context.appendChild(renderInfoTile('Số nội dung', `${roomItems.length} mục`));
   context.appendChild(renderInfoTile('Cần kiểm tra', `${countRoomItemsMissingMainContent(roomItems)} mục`));
 
-  const actions = createElement('div', { className: 'cms-admin-actions cms-admin-static-command-actions' });
-  actions.appendChild(renderMainLoadActions(draftState, handlers));
-  if (draftState.draftJson) {
-    actions.appendChild(renderPrimaryOperatorActions(draftState, appState, handlers));
-    actions.appendChild(renderDrawerTrigger('Quản lý bản nháp', 'drafts', handlers));
-    actions.appendChild(renderDrawerTrigger('Dành cho kỹ thuật', 'advanced', handlers));
-  }
+  const compactActions = createElement('div', { className: 'cms-admin-actions cms-admin-static-command-actions cms-admin-static-command-actions-compact' });
+  if (!draftState.draftJson) compactActions.appendChild(renderMainLoadActions(draftState, handlers));
 
-  appendChildren(bar, [left, context, actions]);
+  appendChildren(bar, compactActions.childNodes.length ? [left, context, compactActions] : [left, context]);
   return bar;
 }
 
@@ -397,15 +392,10 @@ function renderFeaturedWorkspaceCommandBar(draftState = {}, appState = {}, handl
   context.appendChild(renderInfoTile('Số mục', `${safeArray(featured.items).length}/${FEATURED_OPERATOR_MAX_ITEMS}`));
   context.appendChild(renderInfoTile('Cần xem', issueCount ? `${issueCount} cảnh báo/lỗi` : 'Sạch'));
 
-  const actions = createElement('div', { className: 'cms-admin-actions cms-admin-static-command-actions' });
-  actions.appendChild(renderMainLoadActions(draftState, handlers));
-  if (draftState.draftJson) {
-    actions.appendChild(renderPrimaryOperatorActions(draftState, appState, handlers));
-    actions.appendChild(renderDrawerTrigger('Quản lý bản nháp', 'drafts', handlers));
-    actions.appendChild(renderDrawerTrigger('Dành cho kỹ thuật', 'advanced', handlers));
-  }
+  const compactActions = createElement('div', { className: 'cms-admin-actions cms-admin-static-command-actions cms-admin-static-command-actions-compact' });
+  if (!draftState.draftJson) compactActions.appendChild(renderMainLoadActions(draftState, handlers));
 
-  appendChildren(bar, [left, context, actions]);
+  appendChildren(bar, compactActions.childNodes.length ? [left, context, compactActions] : [left, context]);
   return bar;
 }
 
@@ -589,11 +579,24 @@ function buildStaticRoomChecklistModel(draftState = {}, currentItem = null, room
 
 function renderStaticRoomRailActions(draftState = {}, appState = {}, handlers = {}, copy = {}) {
   const wrap = createElement('div', { className: 'cms-admin-static-action-rail-actions' });
+  const primary = createElement('div', { className: 'cms-admin-static-rail-primary-actions' });
+  primary.appendChild(renderMainLoadActions(draftState, handlers));
+  if (draftState.draftJson) primary.appendChild(renderPrimaryOperatorActions(draftState, appState, handlers));
+  wrap.appendChild(primary);
+
+  const technical = createElement('details', { className: 'cms-admin-static-rail-technical-actions' });
+  technical.appendChild(createElement('summary', { text: 'Thao tác phụ và kỹ thuật' }));
+  const technicalActions = createElement('div', { className: 'cms-admin-actions cms-admin-static-rail-secondary-actions' });
+  technicalActions.appendChild(renderDrawerTrigger('Quản lý bản nháp', 'drafts', handlers));
+  technicalActions.appendChild(renderDrawerTrigger('Dành cho kỹ thuật', 'advanced', handlers));
+  technical.appendChild(technicalActions);
+  wrap.appendChild(technical);
+
   wrap.appendChild(renderValidationPanelCompact(draftState, copy));
   wrap.appendChild(renderPublishInspectorPanel(draftState, appState, handlers));
   wrap.appendChild(createElement('p', {
-    className: 'cms-admin-help-text',
-    text: 'Nút lưu, đặt lại và hủy nằm trong form đang chỉnh để giữ đúng hành vi hiện có.',
+    className: 'cms-admin-help-text cms-admin-static-form-note',
+    text: 'Nút lưu trong form vẫn giữ đúng hành vi hiện có; các nút ở đây chỉ dùng các handler CMS sẵn có.',
   }));
   return wrap;
 }
@@ -963,11 +966,25 @@ function renderFeaturedContextualActionRail(draftState = {}, featured = {}, sele
   const checklist = createElement('div', { className: 'cms-admin-static-checklist' });
   buildFeaturedChecklistModel(draftState, featured, selectedItem, selectedIndex, validation).forEach((item) => checklist.appendChild(renderStaticChecklistItem(item)));
   rail.appendChild(checklist);
-  rail.appendChild(createElement('div', { className: 'cms-admin-static-action-rail-actions' }));
-  const actions = rail.querySelector('.cms-admin-static-action-rail-actions');
-  actions.appendChild(createElement('p', { className: 'cms-admin-help-text', text: 'Nút thêm, sửa, lưu và đặt lại vẫn nằm trong cột nội dung để giữ đúng hành vi hiện có.' }));
-  actions.appendChild(createElement('p', { className: 'cms-admin-help-text cms-admin-static-public-note', text: 'Lưu bản nháp chưa làm đổi website. Website chỉ đổi ở workflow công khai riêng.' }));
+  rail.appendChild(renderFeaturedRailActions(draftState, handlers));
   return rail;
+}
+
+function renderFeaturedRailActions(draftState = {}, handlers = {}) {
+  const wrap = createElement('div', { className: 'cms-admin-static-action-rail-actions' });
+  const primary = createElement('div', { className: 'cms-admin-static-rail-primary-actions' });
+  primary.appendChild(renderMainLoadActions(draftState, handlers));
+  const technical = createElement('details', { className: 'cms-admin-static-rail-technical-actions' });
+  technical.appendChild(createElement('summary', { text: 'Thao tác phụ và kỹ thuật' }));
+  const technicalActions = createElement('div', { className: 'cms-admin-actions cms-admin-static-rail-secondary-actions' });
+  technicalActions.appendChild(renderDrawerTrigger('Quản lý bản nháp', 'drafts', handlers));
+  technicalActions.appendChild(renderDrawerTrigger('Dành cho kỹ thuật', 'advanced', handlers));
+  technical.appendChild(technicalActions);
+  wrap.appendChild(primary);
+  wrap.appendChild(technical);
+  wrap.appendChild(createElement('p', { className: 'cms-admin-help-text', text: 'Nút thêm, sửa, lưu và đặt lại vẫn nằm trong cột nội dung để giữ đúng hành vi hiện có.' }));
+  wrap.appendChild(createElement('p', { className: 'cms-admin-help-text cms-admin-static-public-note', text: 'Lưu bản nháp chưa làm đổi website. Website chỉ đổi ở workflow công khai riêng.' }));
+  return wrap;
 }
 
 function buildFeaturedChecklistModel(draftState = {}, featured = {}, selectedItem = null, selectedIndex = -1, validation = {}) {
