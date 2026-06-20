@@ -11145,3 +11145,245 @@ body.cms-admin-page * {
     margin-left: 0;
   }
 }
+
+/* v6.14.058.002 — Gate full-width contextual right rail */
+.cms-admin-workspace[data-cms-workspace="gate"] {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+}
+
+.cms-admin-workspace[data-cms-workspace="gate"] .cms-admin-workspace-layout {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.cms-admin-workspace[data-cms-workspace="gate"] .cms-admin-workspace-main,
+.cms-admin-workspace[data-cms-workspace="gate"] .cms-admin-workspace-panel,
+.cms-admin-workspace[data-cms-workspace="gate"] .cms-admin-workspace-real-content,
+.cms-admin-workspace[data-cms-workspace="gate"] .cms-admin-workspace-real-gate,
+.cms-admin-workspace[data-cms-workspace="gate"] .cms-admin-workspace-real-gate-intro,
+.cms-admin-workspace[data-cms-workspace="gate"] .cms-admin-workspace-real-gate-indoor,
+.cms-admin-workspace[data-cms-workspace="gate"] .cms-admin-workspace-real-gate-outdoor,
+.cms-admin-workspace[data-cms-workspace="gate"] .cms-admin-gate-section-panel,
+.cms-admin-workspace[data-cms-workspace="gate"] .cms-admin-gate-contextual-workspace {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+}
+
+.cms-admin-workspace[data-cms-workspace="gate"] .cms-admin-gate-section-panel {
+  padding: 18px;
+  align-content: start;
+}
+
+.cms-admin-gate-contextual-workspace {
+  display: grid;
+  grid-template-columns: minmax(560px, 1fr) clamp(360px, 29vw, 420px);
+  gap: clamp(20px, 2vw, 28px);
+  align-items: start;
+}
+
+.cms-admin-gate-left-flow {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  align-content: start;
+}
+
+.cms-admin-gate-action-rail {
+  position: sticky;
+  top: 18px;
+  align-self: start;
+  justify-self: stretch;
+  display: grid;
+  gap: 16px;
+  width: 100%;
+  max-width: 420px;
+  margin-left: auto;
+  padding: 18px;
+  border: 1px solid rgba(214, 178, 94, 0.24);
+  border-radius: var(--cms-admin-radius-lg);
+  background:
+    linear-gradient(180deg, rgba(10, 20, 31, 0.96), rgba(5, 12, 20, 0.9)),
+    radial-gradient(circle at top right, rgba(214, 178, 94, 0.14), transparent 36%);
+  box-shadow: 0 24px 54px rgba(0, 0, 0, 0.26);
+}
+
+.cms-admin-gate-action-rail-header {
+  display: grid;
+  gap: 10px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+}
+
+.cms-admin-gate-action-rail-header .cms-admin-data-card-title {
+  align-items: start;
+}
+
+.cms-admin-gate-action-rail-header .cms-admin-data-card-title h3 {
+  font-size: 1rem;
+}
+
+.cms-admin-gate-action-rail-current {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid rgba(214, 178, 94, 0.16);
+  border-radius: var(--cms-admin-radius-md);
+  background: rgba(214, 178, 94, 0.06);
+}
+
+.cms-admin-gate-action-rail-current span {
+  color: var(--cms-admin-muted);
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.cms-admin-gate-action-rail-current strong {
+  color: var(--cms-admin-text);
+  font-size: 0.95rem;
+}
+
+.cms-admin-gate-context-checklist {
+  display: grid;
+  gap: 10px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.cms-admin-gate-checklist-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  padding: 11px 12px;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: var(--cms-admin-radius-md);
+  background: rgba(2, 8, 15, 0.52);
+}
+
+.cms-admin-gate-checklist-item.is-pass {
+  border-color: rgba(94, 227, 161, 0.18);
+  background: rgba(20, 83, 45, 0.18);
+}
+
+.cms-admin-gate-checklist-item.is-warning {
+  border-color: rgba(214, 178, 94, 0.22);
+  background: rgba(214, 178, 94, 0.08);
+}
+
+.cms-admin-gate-checklist-item.is-blocked {
+  border-color: rgba(248, 113, 113, 0.25);
+  background: rgba(127, 29, 29, 0.16);
+}
+
+.cms-admin-gate-checklist-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  color: var(--cms-admin-text);
+  background: rgba(148, 163, 184, 0.16);
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.cms-admin-gate-checklist-item.is-pass .cms-admin-gate-checklist-icon {
+  background: rgba(94, 227, 161, 0.28);
+}
+
+.cms-admin-gate-checklist-item.is-warning .cms-admin-gate-checklist-icon {
+  background: rgba(214, 178, 94, 0.24);
+}
+
+.cms-admin-gate-checklist-item.is-blocked .cms-admin-gate-checklist-icon {
+  background: rgba(248, 113, 113, 0.24);
+}
+
+.cms-admin-gate-checklist-body {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.cms-admin-gate-checklist-body strong,
+.cms-admin-gate-checklist-body span {
+  color: var(--cms-admin-text);
+}
+
+.cms-admin-gate-checklist-body p {
+  margin: 0;
+  color: var(--cms-admin-muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.cms-admin-gate-context-action-panel {
+  display: grid;
+  gap: 10px;
+}
+
+.cms-admin-gate-context-action-panel .cms-admin-button {
+  width: 100%;
+  justify-content: center;
+}
+
+.cms-admin-gate-context-action-panel .cms-admin-public-link-row {
+  margin: 0;
+}
+
+.cms-admin-gate-context-action-note {
+  margin: 0;
+  padding: 9px 10px;
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: var(--cms-admin-radius-md);
+  color: var(--cms-admin-muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
+  background: rgba(4, 10, 17, 0.34);
+}
+
+.cms-admin-gate-context-action-note.is-warning {
+  border-color: rgba(214, 178, 94, 0.22);
+  color: var(--cms-admin-text);
+  background: rgba(214, 178, 94, 0.07);
+}
+
+.cms-admin-workspace[data-cms-workspace="gate"] .cms-admin-gate-action-card {
+  display: none;
+}
+
+.cms-admin-workspace[data-cms-workspace="gate"] .cms-admin-gate-preview-card {
+  min-width: 0;
+}
+
+@media (max-width: 1180px) {
+  .cms-admin-gate-contextual-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .cms-admin-gate-action-rail {
+    position: static;
+    max-width: none;
+    margin-left: 0;
+  }
+}
+
+@media (max-width: 760px) {
+  .cms-admin-workspace[data-cms-workspace="gate"] .cms-admin-gate-section-panel,
+  .cms-admin-gate-action-rail,
+  .cms-admin-gate-action-rail-header,
+  .cms-admin-gate-action-rail-current,
+  .cms-admin-gate-checklist-item,
+  .cms-admin-gate-context-action-note {
+    padding: 12px;
+  }
+
+  .cms-admin-gate-checklist-item {
+    grid-template-columns: 1fr;
+  }
+}

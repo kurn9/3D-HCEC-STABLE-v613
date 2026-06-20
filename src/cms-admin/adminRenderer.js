@@ -824,6 +824,7 @@ function renderActiveTab(state) {
       });
     case 'gate':
       return renderWorkspaceShell('gate', null, state, {
+        hideRail: true,
         renderContent: ({ activeKey }) => renderGateWorkspaceContent(state, activeKey),
       });
     case 'media':
@@ -1180,8 +1181,8 @@ function getWorkspaceSecondaryNotes(workspaceKey, tabKey, state = {}) {
     },
     gate: {
       intro: ['Màn chào chỉ hiển thị nội dung người xem đọc trước khi chọn không gian.', 'Sửa Màn chào chỉ lưu bản nháp CMS, chưa làm đổi website.'],
-      indoor: ['Không gian trong nhà chỉ hiển thị dữ liệu phòng indoor.', 'Route/query kỹ thuật được giữ trong phần đối chiếu phụ.'],
-      outdoor: ['Không gian ngoài trời chỉ hiển thị dữ liệu phòng outdoor.', 'Route/query kỹ thuật được giữ trong phần đối chiếu phụ.'],
+      indoor: ['Không gian trong nhà chỉ hiển thị dữ liệu phòng indoor.', 'Đường dẫn kỹ thuật được giữ trong phần đối chiếu phụ.'],
+      outdoor: ['Không gian ngoài trời chỉ hiển thị dữ liệu phòng outdoor.', 'Đường dẫn kỹ thuật được giữ trong phần đối chiếu phụ.'],
     },
     staticDraft: {
       indoor: ['Tab này chỉ hiển thị item thuộc phòng trong nhà.', 'Chọn item cần sửa trong danh sách indoor; lưu bản nháp chưa làm đổi website.'],
@@ -1268,13 +1269,13 @@ function getWorkspaceRailGuidance(workspaceKey, tabKey, pageCopy = {}, stepConfi
       indoor: {
         title: 'Bạn đang xem Không gian trong nhà',
         status: 'Phòng indoor',
-        summary: 'Chỉ kiểm tra tên, mô tả và nút vào phòng trong nhà. Route/query kỹ thuật chỉ để đối chiếu.',
+        summary: 'Chỉ kiểm tra tên, mô tả và nút vào phòng trong nhà. Đường dẫn kỹ thuật chỉ để đối chiếu.',
         steps: ['Kiểm tra tên hiển thị indoor.', 'Kiểm tra mô tả phòng trong nhà.', 'Sửa Không gian trong nhà nếu chữ chưa đúng.'],
       },
       outdoor: {
         title: 'Bạn đang xem Không gian ngoài trời',
         status: 'Phòng outdoor',
-        summary: 'Chỉ kiểm tra tên, mô tả và nút vào phòng ngoài trời. Route/query kỹ thuật chỉ để đối chiếu.',
+        summary: 'Chỉ kiểm tra tên, mô tả và nút vào phòng ngoài trời. Đường dẫn kỹ thuật chỉ để đối chiếu.',
         steps: ['Kiểm tra tên hiển thị outdoor.', 'Kiểm tra mô tả phòng ngoài trời.', 'Sửa Không gian ngoài trời nếu chữ chưa đúng.'],
       },
     },
@@ -2559,32 +2560,260 @@ function getGateRoomData(gate, roomKey) {
   return normalizePlainObject(normalizePlainObject(gate?.rooms_json)?.[roomKey]);
 }
 
+
+function renderGateContextualWorkspace(leftContent, rightRail, sectionKey = 'intro') {
+  const workspace = createElement('div', {
+    className: `cms-admin-gate-contextual-workspace cms-admin-gate-contextual-workspace-${sectionKey}`,
+  });
+  const main = createElement('div', { className: 'cms-admin-gate-main-column' });
+  if (leftContent) main.appendChild(leftContent);
+  appendChildren(workspace, [main, rightRail]);
+  return workspace;
+}
+
+function renderGateContextualChecklistPanel(state, gate, sectionKey = 'intro', editState = {}, copy = ADMIN_COPY.contentViews.gate, options = {}) {
+  const isEditing = Boolean(options.isEditing);
+  const label = getGateContextLabel(sectionKey);
+  const panel = createElement('aside', {
+    className: `cms-admin-gate-context-panel cms-admin-gate-action-rail cms-admin-gate-action-rail-${sectionKey}${isEditing ? ' is-editing' : ''}`,
+    attrs: { 'aria-label': `Checklist và thao tác ${label}` },
+  });
+
+  const header = createElement('header', { className: 'cms-admin-gate-action-rail-header' });
+  header.appendChild(renderDataCardTitle('Checklist & thao tác', isEditing ? 'Đang chỉnh' : getGateContextBadge(gate, sectionKey)));
+  header.appendChild(createElement('p', {
+    className: 'cms-admin-operator-summary',
+    text: isEditing
+      ? 'Đang chỉnh bản nháp trong CMS. Website public chưa đổi.'
+      : getGateContextSummary(gate, sectionKey),
+  }));
+  header.appendChild(renderGateActionRailCurrentSection(label));
+  panel.appendChild(header);
+
+  const list = createElement('div', { className: 'cms-admin-gate-context-checklist cms-admin-gate-action-rail-section' });
+  buildGateChecklistModel(state, gate, sectionKey, editState, { isEditing }).forEach((item) => {
+    list.appendChild(renderGateChecklistItem(item));
+  });
+  panel.appendChild(list);
+  panel.appendChild(renderGateContextualActionPanel(state, gate, sectionKey, editState, copy, { isEditing }));
+  return panel;
+}
+
+function getGateContextLabel(sectionKey = 'intro') {
+  if (sectionKey === 'indoor') return 'Không gian trong nhà';
+  if (sectionKey === 'outdoor') return 'Không gian ngoài trời';
+  return 'Màn chọn không gian';
+}
+
+function getGateContextBadge(gate, sectionKey = 'intro') {
+  if (sectionKey === 'intro') return gate?.is_active ? 'Đang hoạt động' : 'Đang ẩn';
+  return getGateRoomTone(sectionKey);
+}
+
+function getGateContextSummary(gate, sectionKey = 'intro') {
+  if (!gate) return 'Chưa đọc được dữ liệu Cổng triển lãm.';
+  if (sectionKey === 'intro') return 'Màn người xem đọc trước khi chọn không gian tham quan.';
+  return `Kiểm tra chữ hiển thị của ${getGateRoomLabel(sectionKey).toLowerCase()}. Đường dẫn kỹ thuật vẫn giữ nguyên.`;
+}
+
+function renderGateActionRailCurrentSection(label = 'Cổng triển lãm') {
+  const row = createElement('div', { className: 'cms-admin-gate-action-rail-current' });
+  row.appendChild(createElement('span', { text: 'Đang xem khu vực' }));
+  row.appendChild(createElement('strong', { text: label }));
+  return row;
+}
+
+function buildGateChecklistModel(state, gate, sectionKey = 'intro', editState = {}, options = {}) {
+  const isEditing = Boolean(options.isEditing);
+  const canEdit = canEditGateContent(state);
+  const validationErrorCount = Object.keys(editState.validationErrors || {}).length;
+  const validationWarningCount = Object.keys(editState.validationWarnings || {}).length;
+  const checklist = [];
+
+  if (sectionKey === 'intro') {
+    checklist.push(
+      {
+        label: 'Dữ liệu cổng',
+        value: gate ? 'Đã đọc' : 'Thiếu dữ liệu',
+        status: gate ? 'pass' : 'warning',
+        detail: gate ? 'Đang dùng dữ liệu Cổng triển lãm đã tải.' : 'Không thấy dữ liệu Cổng triển lãm trong state hiện tại.',
+      },
+      {
+        label: 'Màn chọn không gian',
+        value: gate?.is_active ? 'Đang hoạt động' : 'Đang ẩn',
+        status: gate?.is_active ? 'pass' : 'warning',
+        detail: 'Trạng thái này chỉ thay đổi khi lưu và công khai theo luồng riêng.',
+      },
+      gateTextChecklistItem('Nhãn nhỏ', gate?.eyebrow, 'Cần kiểm tra'),
+      gateTextChecklistItem('Tiêu đề', gate?.title, 'Cần tiêu đề'),
+      gateTextChecklistItem('Mô tả', gate?.description, 'Cần mô tả'),
+      gateTextChecklistItem('Nút quay lại Trang chủ', gate?.back_label, 'Cần nhãn'),
+    );
+  } else {
+    const room = getGateRoomData(gate, sectionKey);
+    const roomLabel = getGateRoomLabel(sectionKey).toLowerCase();
+    checklist.push(
+      {
+        label: `Dữ liệu phòng ${sectionKey === 'outdoor' ? 'ngoài trời' : 'trong nhà'}`,
+        value: !isBlank(room) ? 'Đã đọc' : 'Thiếu dữ liệu',
+        status: !isBlank(room) ? 'pass' : 'warning',
+        detail: !isBlank(room) ? `Đang dùng dữ liệu ${roomLabel}.` : 'Không thấy dữ liệu phòng trong state hiện tại.',
+      },
+      gateTextChecklistItem('Tên hiển thị', firstText(room, ['label', 'title', 'name']), 'Cần tên'),
+      gateTextChecklistItem('Mô tả', firstText(room, ['description', 'lead', 'subtitle']), 'Cần mô tả'),
+      gateTextChecklistItem('Nút vào phòng', getGateRoomCtaLabel(room), 'Cần nhãn'),
+      {
+        label: 'Đường dẫn kỹ thuật',
+        value: 'Giữ nguyên',
+        status: 'info',
+        detail: 'Mã phòng và đường dẫn vào phòng chỉ để đối chiếu trong phần kỹ thuật.',
+      },
+    );
+  }
+
+  checklist.push({
+    label: 'Quyền chỉnh',
+    value: canEdit ? 'Có thể chỉnh' : 'Chỉ xem',
+    status: canEdit ? 'pass' : 'info',
+    detail: canEdit ? 'Tài khoản hiện tại có thể mở form chỉnh bản nháp.' : 'Tài khoản hiện tại chỉ được xem hoặc chức năng chỉnh đang khóa.',
+  });
+
+  if (isEditing) {
+    checklist.push(
+      {
+        label: 'Đang chỉnh bản nháp',
+        value: 'Có',
+        status: 'warning',
+        detail: 'Thay đổi chỉ nằm trong phiên chỉnh sửa cho đến khi bấm lưu.',
+      },
+      {
+        label: 'Có thay đổi chưa lưu',
+        value: editState.dirty ? 'Có' : 'Không',
+        status: editState.dirty ? 'warning' : 'info',
+        detail: editState.dirty ? 'Rời màn sẽ có cảnh báo mất thay đổi.' : 'Nút lưu mở khi có thay đổi local.',
+      },
+      {
+        label: 'Kiểm tra dữ liệu',
+        value: validationErrorCount ? `${validationErrorCount} lỗi` : validationWarningCount ? `${validationWarningCount} cảnh báo` : 'Chưa thấy lỗi',
+        status: validationErrorCount ? 'blocked' : validationWarningCount ? 'warning' : 'pass',
+        detail: validationErrorCount ? 'Sửa lỗi trong form trước khi lưu.' : validationWarningCount ? 'Có cảnh báo nên xem lại trước khi công khai.' : 'Chưa có lỗi validation trong state hiện tại.',
+      },
+      {
+        label: 'Đang lưu',
+        value: editState.saving ? 'Có' : 'Không',
+        status: editState.saving ? 'warning' : 'pass',
+        detail: editState.saving ? 'Đợi thao tác lưu kết thúc trước khi rời màn.' : 'Không có thao tác lưu đang chạy.',
+      },
+    );
+    if (editState.saveError) {
+      checklist.push({
+        label: 'Lỗi lưu',
+        value: 'Cần kiểm tra',
+        status: 'blocked',
+        detail: normalizeErrorMessage(editState.saveError),
+      });
+    }
+  }
+
+  checklist.push({
+    label: 'Website public',
+    value: 'Chưa đổi',
+    status: 'info',
+    detail: 'Mở, chỉnh hoặc lưu bản nháp trong CMS chưa công khai website. Website chỉ đổi ở workflow công khai riêng.',
+  });
+  return checklist;
+}
+
+function gateTextChecklistItem(label, value, missingValue = 'Cần kiểm tra') {
+  const hasValue = !isBlank(value);
+  return {
+    label,
+    value: hasValue ? 'Đạt' : missingValue,
+    status: hasValue ? 'pass' : 'warning',
+    detail: hasValue ? `${label} đã có dữ liệu hiển thị.` : `${label} đang trống hoặc chưa rõ trong dữ liệu hiện tại.`,
+  };
+}
+
+function renderGateChecklistItem({ label, value, status = 'info', detail = '' } = {}) {
+  const item = createElement('div', { className: `cms-admin-gate-checklist-item is-${status}` });
+  item.appendChild(createElement('span', { className: 'cms-admin-gate-checklist-icon', text: status === 'pass' ? '✓' : status === 'blocked' ? '!' : '•', attrs: { 'aria-hidden': 'true' } }));
+  const body = createElement('div', { className: 'cms-admin-gate-checklist-body' });
+  body.appendChild(createElement('strong', { text: label }));
+  body.appendChild(createElement('span', { text: value }));
+  if (detail) body.appendChild(createElement('p', { text: detail }));
+  item.appendChild(body);
+  return item;
+}
+
+function renderGateContextualActionPanel(state, gate, sectionKey = 'intro', editState = {}, copy = ADMIN_COPY.contentViews.gate, options = {}) {
+  const panel = createElement('section', { className: 'cms-admin-gate-context-action-panel cms-admin-gate-action-rail-actions' });
+  panel.appendChild(createElement('h4', { className: 'cms-admin-data-group-title', text: 'Thao tác chính' }));
+  if (options.isEditing) {
+    panel.appendChild(createElement('p', {
+      className: 'cms-admin-compact-copy',
+      text: 'Nút lưu nằm trong form đang chỉnh để giữ đúng hành vi lưu hiện có.',
+    }));
+    panel.appendChild(renderGateChecklistActionNote(editState.dirty ? 'Có thay đổi chưa lưu.' : 'Chưa có thay đổi để lưu.', editState.dirty ? 'warning' : 'info'));
+    return panel;
+  }
+
+  if (canEditGateContent(state)) {
+    const button = createElement('button', {
+      className: 'cms-admin-button cms-admin-button-primary',
+      text: getGateEditButtonLabel(sectionKey),
+      type: 'button',
+    });
+    button.addEventListener('click', () => {
+      const focusField = sectionKey === 'intro' ? 'eyebrow' : `rooms.${sectionKey}.displayName`;
+      startGateContextualEdit(gate, sectionKey, focusField);
+    });
+    panel.appendChild(button);
+    panel.appendChild(renderGateChecklistActionNote(copy.edit?.safeNote || 'Lưu vào CMS, chưa đổi website.', 'info'));
+  } else {
+    panel.appendChild(renderGateChecklistActionNote(copy.edit?.noPermission || 'Tài khoản hiện tại chỉ được xem Cổng triển lãm.', 'warning'));
+  }
+  panel.appendChild(renderPublicLink(copy.publicLink || 'Mở Cổng triển lãm public', './gallery.html'));
+  panel.appendChild(renderGateChecklistActionNote('Màn này chỉ chỉnh chữ hiển thị. Đường dẫn kỹ thuật và mã phòng giữ nguyên.', 'info'));
+  return panel;
+}
+
+function getGateEditButtonLabel(sectionKey = 'intro') {
+  if (sectionKey === 'indoor') return 'Chỉnh sửa Không gian trong nhà';
+  if (sectionKey === 'outdoor') return 'Chỉnh sửa Không gian ngoài trời';
+  return 'Chỉnh sửa Màn chọn không gian';
+}
+
+function renderGateChecklistActionNote(text, tone = 'info') {
+  return createElement('p', { className: `cms-admin-gate-context-action-note is-${tone}`, text });
+}
+
 function renderGateIntroWorkspacePanel(state, gate, editState = {}, copy = ADMIN_COPY.contentViews.gate) {
   const isEditing = Boolean(editState.isEditing && getGateWorkspaceSectionKey(getWorkspaceActiveTab('gate', getWorkspaceTabs('gate'))) === 'intro');
   const panel = createElement('section', {
     className: `cms-admin-panel cms-admin-view-panel cms-admin-gate-section-panel cms-admin-gate-intro-panel${isEditing ? ' is-editing' : ''}`,
     dataset: { cmsReferenceTarget: 'gate', cmsReferenceId: gate.id || 'gate' },
   });
-  panel.appendChild(renderPanelTitle('Màn chào', isEditing ? 'Đang sửa bản nháp' : 'Người xem đọc trước khi chọn không gian'));
+  panel.appendChild(renderPanelTitle('Màn chọn không gian', isEditing ? 'Đang chỉnh bản nháp' : 'Người xem đọc trước khi chọn không gian'));
   panel.appendChild(createElement('p', {
     className: 'cms-admin-operator-summary',
-    text: 'Đây là phần người xem đọc trước khi chọn Không gian trong nhà hoặc Không gian ngoài trời.',
+    text: 'Phần người xem đọc trước khi chọn Không gian trong nhà hoặc Không gian ngoài trời.',
   }));
+
+  const left = createElement('div', { className: 'cms-admin-gate-left-flow' });
   if (isEditing) {
-    panel.appendChild(renderGateIntroEditPanel(state, gate, editState, copy));
-    return panel;
+    left.appendChild(renderGateIntroEditPanel(state, gate, editState, copy));
+  } else {
+    left.appendChild(renderGateIntroPreviewCard(gate, copy));
+    left.appendChild(renderGateTechnicalDetails('Thông tin kỹ thuật để đối chiếu', [
+      ['Content id', gate.id],
+      [copy.fields?.active || 'Trạng thái sử dụng', getActiveLabel(Boolean(gate.is_active))],
+      [copy.fields?.updatedAt || 'Cập nhật gần nhất', formatDateTime(gate.updated_at)],
+      ['Dữ liệu trình chỉnh sửa', gate.editor_json ? 'Đã có dữ liệu kỹ thuật' : '—'],
+      ['Nguồn dữ liệu', 'CMS gate_content, bản nháp quản trị'],
+    ]));
   }
-  panel.appendChild(renderPublicLink(copy.publicLink, './gallery.html'));
-  panel.appendChild(renderGateIntroPreviewCard(gate, copy));
-  panel.appendChild(renderGateIntroActionCard(state, gate, copy));
-  panel.appendChild(renderGateTechnicalDetails('Thông tin kỹ thuật để đối chiếu', [
-    ['Content id', gate.id],
-    [copy.fields?.active || 'Trạng thái sử dụng', getActiveLabel(Boolean(gate.is_active))],
-    [copy.fields?.updatedAt || 'Cập nhật gần nhất', formatDateTime(gate.updated_at)],
-    ['editor_json', gate.editor_json ? 'Đã có dữ liệu kỹ thuật' : '—'],
-    ['Nguồn', 'CMS gate_content, bản nháp quản trị'],
-  ]));
-  panel.appendChild(renderLockedNotice(copy.safety));
+  const rail = renderGateContextualChecklistPanel(state, gate, 'intro', editState, copy, { isEditing });
+  panel.appendChild(renderGateContextualWorkspace(left, rail, 'intro'));
   return panel;
 }
 
@@ -2603,7 +2832,7 @@ function renderGateIntroPreviewCard(gate, copy = ADMIN_COPY.contentViews.gate) {
 
 function renderGateIntroActionCard(state, gate, copy = ADMIN_COPY.contentViews.gate) {
   const card = createElement('section', { className: 'cms-admin-data-card cms-admin-gate-action-card' });
-  card.appendChild(renderDataCardTitle('Chỉnh sửa Màn chào', 'Bản nháp CMS'));
+  card.appendChild(renderDataCardTitle('Chỉnh sửa Màn chọn không gian', 'Bản nháp trong CMS'));
   card.appendChild(createElement('p', {
     className: 'cms-admin-compact-copy',
     text: 'Chỉ mở form sửa nhãn nhỏ, tiêu đề, mô tả và nhãn quay lại Trang chủ. Không mở form indoor/outdoor trong tab này.',
@@ -2633,21 +2862,21 @@ function renderGateRoomWorkspacePanel(state, gate, roomKey, editState = {}, copy
     className: `cms-admin-panel cms-admin-view-panel cms-admin-gate-section-panel cms-admin-gate-room-section-panel cms-admin-gate-room-section-${roomKey}${isEditing ? ' is-editing' : ''}`,
     dataset: { cmsReferenceTarget: 'gate-room', cmsReferenceId: roomKey },
   });
-  panel.appendChild(renderPanelTitle(label, isEditing ? 'Đang sửa bản nháp' : getGateRoomTone(roomKey)));
+  panel.appendChild(renderPanelTitle(label, isEditing ? 'Đang chỉnh bản nháp' : getGateRoomTone(roomKey)));
   panel.appendChild(createElement('p', {
     className: 'cms-admin-operator-summary',
-    text: `Tab này chỉ kiểm tra và chỉnh chữ hiển thị của ${label.toLowerCase()}. Không render không gian còn lại trong tab này.`,
+    text: `Kiểm tra và chỉnh chữ hiển thị của ${label.toLowerCase()}. Đường dẫn kỹ thuật vào phòng vẫn giữ nguyên.`,
   }));
 
+  const left = createElement('div', { className: 'cms-admin-gate-left-flow' });
   if (isEditing) {
-    panel.appendChild(renderGateRoomContextualEditPanel(roomKey, gate, editState, copy));
-    return panel;
+    left.appendChild(renderGateRoomContextualEditPanel(roomKey, gate, editState, copy));
+  } else {
+    left.appendChild(renderGateRoomPreviewCard(roomKey, room, copy));
+    left.appendChild(renderGateTechnicalDetails('Thông tin kỹ thuật để đối chiếu', getGateRoomTechnicalRows(roomKey, room), 'cms-admin-gate-room-technical-details'));
   }
-
-  panel.appendChild(renderGateRoomPreviewCard(roomKey, room, copy));
-  panel.appendChild(renderGateRoomActionCard(state, gate, roomKey, copy));
-  panel.appendChild(renderGateTechnicalDetails('Thông tin kỹ thuật để đối chiếu', getGateRoomTechnicalRows(roomKey, room), 'cms-admin-gate-room-technical-details'));
-  panel.appendChild(renderLockedNotice(copy.safety));
+  const rail = renderGateContextualChecklistPanel(state, gate, roomKey, editState, copy, { isEditing });
+  panel.appendChild(renderGateContextualWorkspace(left, rail, roomKey));
   return panel;
 }
 
@@ -2661,7 +2890,7 @@ function renderGateRoomPreviewCard(roomKey, room, copy = ADMIN_COPY.contentViews
     ['Nút bắt đầu tham quan', roomCtaLabel],
   ]))));
   if (isBlank(roomCtaLabel)) {
-    card.appendChild(renderCompactNotice('Chưa khai báo nhãn nút bắt đầu tham quan trong dữ liệu gốc. Không tạo CTA rỗng mới.'));
+    card.appendChild(renderCompactNotice('Chưa khai báo nhãn nút bắt đầu tham quan trong dữ liệu gốc. Không tạo nút rỗng mới.'));
   }
   return card;
 }
@@ -2669,10 +2898,10 @@ function renderGateRoomPreviewCard(roomKey, room, copy = ADMIN_COPY.contentViews
 function renderGateRoomActionCard(state, gate, roomKey, copy = ADMIN_COPY.contentViews.gate) {
   const label = getGateRoomLabel(roomKey);
   const card = createElement('section', { className: 'cms-admin-data-card cms-admin-gate-action-card' });
-  card.appendChild(renderDataCardTitle(`Chỉnh sửa ${label}`, 'Bản nháp CMS'));
+  card.appendChild(renderDataCardTitle(`Chỉnh sửa ${label}`, 'Bản nháp trong CMS'));
   card.appendChild(createElement('p', {
     className: 'cms-admin-compact-copy',
-    text: `Chỉ mở form sửa tên hiển thị, mô tả và nhãn CTA của ${label.toLowerCase()} nếu dữ liệu gốc cho phép. Route/query vẫn chỉ xem.`,
+    text: `Chỉ mở form sửa tên hiển thị, mô tả và nhãn nút của ${label.toLowerCase()} nếu dữ liệu gốc cho phép. Đường dẫn kỹ thuật vẫn chỉ xem.`,
   }));
   const actions = createElement('div', { className: 'cms-admin-settings-edit-actions cms-admin-gate-edit-actions' });
   if (canEditGateContent(state)) {
@@ -2712,8 +2941,8 @@ function renderGateIntroEditPanel(state, gate, editState) {
     className: 'cms-admin-data-card cms-admin-gate-edit-panel cms-admin-gate-contextual-edit-panel cms-admin-gate-intro-edit-panel cms-admin-edit-panel-highlight',
     dataset: { cmsEditPanel: 'gate-intro', cmsEditId: gate.id || 'gate' },
   });
-  panel.appendChild(renderDataCardTitle('Đang chỉnh sửa Màn chào', copy.enabledScope));
-  panel.appendChild(renderCompactNotice('Form này chỉ sửa nội dung Màn chào. Không render trường indoor/outdoor trong ngữ cảnh này.'));
+  panel.appendChild(renderDataCardTitle('Đang chỉnh sửa Màn chọn không gian', copy.enabledScope));
+  panel.appendChild(renderCompactNotice('Form này chỉ sửa nội dung Màn chọn không gian. Không ảnh hưởng chữ của hai không gian còn lại.'));
   if (editState.saveError) panel.appendChild(renderNoticeBox(`${copy.error} ${normalizeErrorMessage(editState.saveError)}`, 'error'));
   if (editState.saveSuccess) panel.appendChild(renderNoticeBox(editState.saveSuccess, 'success'));
 
@@ -2741,8 +2970,8 @@ function renderGateIntroEditPanel(state, gate, editState) {
   form.appendChild(renderGateTechnicalDetails(copy.technicalTitle || 'Thông tin kỹ thuật chỉ xem', [
     [copy.fields.active, getActiveLabel(Boolean(gate.is_active)), 'Không chỉnh ở form Màn chào.'],
     ['Content id', gate.id, 'Chỉ dùng để đối chiếu.'],
-    [copy.fields.route, 'gallery.html?room=indoor / gallery.html?room=outdoor', copy.jsonSafeNote],
-    ['editor_json', gate.editor_json ? 'Đã có dữ liệu kỹ thuật' : '—', copy.editorReadonly],
+    ['Đường dẫn kỹ thuật', 'gallery.html?room=indoor / gallery.html?room=outdoor', copy.jsonSafeNote],
+    ['Dữ liệu trình chỉnh sửa', gate.editor_json ? 'Đã có dữ liệu kỹ thuật' : '—', copy.editorReadonly],
   ], 'cms-admin-gate-edit-technical-details'));
 
   form.addEventListener('input', () => updateGateFormControls(form));
@@ -2760,8 +2989,8 @@ function renderGateRoomContextualEditPanel(roomKey, gate, editState) {
     className: `cms-admin-data-card cms-admin-gate-edit-panel cms-admin-gate-contextual-edit-panel cms-admin-gate-room-contextual-edit-panel cms-admin-gate-${roomKey}-edit-panel cms-admin-edit-panel-highlight`,
     dataset: { cmsEditPanel: 'gate-room', cmsEditId: roomKey },
   });
-  panel.appendChild(renderDataCardTitle(`Đang chỉnh sửa ${label}`, 'Bản nháp CMS'));
-  panel.appendChild(renderCompactNotice(`Form này chỉ sửa chữ hiển thị của ${label.toLowerCase()}. Không render trường Màn chào hoặc không gian còn lại.`));
+  panel.appendChild(renderDataCardTitle(`Đang chỉnh sửa ${label}`, 'Bản nháp trong CMS'));
+  panel.appendChild(renderCompactNotice(`Form này chỉ sửa chữ hiển thị của ${label.toLowerCase()}. Không ảnh hưởng Màn chọn không gian hoặc không gian còn lại.`));
   if (editState.saveError) panel.appendChild(renderNoticeBox(`${copy.error} ${normalizeErrorMessage(editState.saveError)}`, 'error'));
   if (editState.saveSuccess) panel.appendChild(renderNoticeBox(editState.saveSuccess, 'success'));
 
@@ -2811,8 +3040,8 @@ function getGateRoomTechnicalRows(roomKey, room = {}, copy = ADMIN_COPY.contentV
   return [
     [copy.fields?.roomKey || 'Mã phòng kỹ thuật', roomKey, 'Không chỉnh ở form nội dung.'],
     [copy.fields?.route || 'Đường dẫn tham quan', `gallery.html?room=${roomKey}`, 'Đường dẫn kỹ thuật giữ nguyên.'],
-    ['CTA target/query', firstText(ctaObject, ['href', 'url', 'link', 'path', 'to', 'route', 'query']) || firstText(normalized, ['href', 'url', 'link', 'path', 'to', 'route', 'query']) || '—', 'Chỉ đối chiếu, không chỉnh ở phase này.'],
-    ['room metadata', normalized ? 'Đã đọc rooms_json' : '—', 'Dữ liệu gốc vẫn giữ trong rooms_json.'],
+    ['Đường dẫn kỹ thuật của nút', firstText(ctaObject, ['href', 'url', 'link', 'path', 'to', 'route', 'query']) || firstText(normalized, ['href', 'url', 'link', 'path', 'to', 'route', 'query']) || '—', 'Chỉ đối chiếu, không chỉnh ở phase này.'],
+    ['Dữ liệu phòng', normalized ? 'Đã đọc dữ liệu kỹ thuật' : '—', 'Dữ liệu gốc vẫn được giữ nguyên.'],
   ];
 }
 
