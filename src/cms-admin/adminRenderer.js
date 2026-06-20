@@ -1864,8 +1864,6 @@ function renderHomeSectionWorkspacePanel(state, sections = [], sectionKey = 'her
   const supporting = createElement('div', { className: 'cms-admin-home-section-supporting-flow' });
   const mediaCard = renderHomeSectionMediaActionCard(section, sectionKey, copy);
   if (mediaCard) supporting.appendChild(mediaCard);
-  const readinessCard = renderHomeSectionReadinessCard(section, sectionKey, copy);
-  if (readinessCard) supporting.appendChild(readinessCard);
   if (supporting.childNodes.length) layout.appendChild(supporting);
   main.appendChild(layout);
 
@@ -1880,18 +1878,21 @@ function renderHomeContextualChecklistPanel(state, section, sectionKey, copy = A
   const meta = options.meta || getHomeSectionPriorityMeta(sectionKey);
   const isEditing = Boolean(options.isEditing);
   const panel = createElement('aside', {
-    className: `cms-admin-home-context-panel cms-admin-home-context-panel-${sectionKey}${isEditing ? ' is-editing' : ''}`,
-    attrs: { 'aria-label': `Checklist ${meta.label}` },
+    className: `cms-admin-home-context-panel cms-admin-home-action-rail cms-admin-home-context-panel-${sectionKey}${isEditing ? ' is-editing' : ''}`,
+    attrs: { 'aria-label': `Checklist và thao tác ${meta.label}` },
   });
-  panel.appendChild(renderDataCardTitle('Trạng thái khu vực', isEditing ? 'Đang chỉnh' : meta.badge));
-  panel.appendChild(createElement('p', {
+  const header = createElement('header', { className: 'cms-admin-home-action-rail-header' });
+  header.appendChild(renderDataCardTitle('Checklist & thao tác', isEditing ? 'Đang chỉnh' : meta.badge));
+  header.appendChild(createElement('p', {
     className: 'cms-admin-operator-summary',
     text: isEditing
-      ? 'Checklist này đọc trạng thái bản nháp đang chỉnh. Website public chưa đổi.'
+      ? 'Đang kiểm tra bản nháp của khu vực này. Website public chưa đổi.'
       : getHomeContextSummary(section, sectionKey, meta),
   }));
+  header.appendChild(renderHomeActionRailCurrentSection(meta, sectionKey));
+  panel.appendChild(header);
 
-  const list = createElement('div', { className: 'cms-admin-home-context-checklist' });
+  const list = createElement('div', { className: 'cms-admin-home-context-checklist cms-admin-home-action-rail-section' });
   buildHomeSectionChecklistModel(state, section, sectionKey, copy, editState, { isEditing }).forEach((item) => {
     list.appendChild(renderHomeChecklistItem(item));
   });
@@ -1904,6 +1905,14 @@ function getHomeContextSummary(section, sectionKey, meta = getHomeSectionPriorit
   if (sectionKey === 'contact') return 'Liên hệ trong Trang chủ chỉ để đối chiếu. Dữ liệu chính được chỉnh ở Thông tin website.';
   if (!section) return `Chưa đọc được ${meta.label}.`;
   return `${meta.label} đang ở chế độ xem. Chỉnh sửa chỉ lưu bản nháp trong CMS.`;
+}
+
+
+function renderHomeActionRailCurrentSection(meta = {}, sectionKey = '') {
+  const row = createElement('div', { className: 'cms-admin-home-action-rail-current' });
+  row.appendChild(createElement('span', { text: 'Đang xem khu vực' }));
+  row.appendChild(createElement('strong', { text: meta.label || sectionKey || 'Trang chủ' }));
+  return row;
 }
 
 function buildHomeSectionChecklistModel(state, section, sectionKey, copy = ADMIN_COPY.contentViews.home, editState = {}, options = {}) {
@@ -2033,12 +2042,12 @@ function getHomeCanEditSection(state, section, sectionKey) {
 }
 
 function renderHomeContextualActionPanel(state, section, sectionKey, editState = {}, options = {}) {
-  const panel = createElement('section', { className: 'cms-admin-home-context-action-panel' });
-  panel.appendChild(createElement('h4', { className: 'cms-admin-data-group-title', text: 'Thao tác' }));
+  const panel = createElement('section', { className: 'cms-admin-home-context-action-panel cms-admin-home-action-rail-actions' });
+  panel.appendChild(createElement('h4', { className: 'cms-admin-data-group-title', text: 'Thao tác chính' }));
   if (options.isEditing) {
     panel.appendChild(createElement('p', {
       className: 'cms-admin-compact-copy',
-      text: 'Nút Lưu vào CMS, Đặt lại thay đổi và Hủy nằm trong form đang chỉnh để giữ đúng hành vi submit hiện có.',
+      text: 'Nút lưu nằm cuối form đang chỉnh để giữ đúng hành vi lưu hiện có.',
     }));
     panel.appendChild(renderHomeChecklistActionNote(editState.dirty ? 'Có thay đổi chưa lưu.' : 'Chưa có thay đổi để lưu.', editState.dirty ? 'warning' : 'info'));
     return panel;

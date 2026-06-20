@@ -10942,3 +10942,140 @@ body.cms-admin-page * {
     height: 24px;
   }
 }
+
+/* v6.14.057.003 — Home right action rail visual hierarchy hotfix */
+.cms-admin-workspace[data-cms-workspace="home"] .cms-admin-workspace-panel {
+  max-width: none;
+}
+
+.cms-admin-workspace[data-cms-workspace="home"] .cms-admin-home-section-panel {
+  padding: 18px;
+}
+
+.cms-admin-home-contextual-workspace {
+  grid-template-columns: minmax(0, 1fr) clamp(340px, 28vw, 420px);
+  gap: 22px;
+}
+
+.cms-admin-home-main-column {
+  align-content: start;
+  gap: 16px;
+}
+
+.cms-admin-home-action-rail {
+  position: sticky;
+  top: 18px;
+  align-self: start;
+  gap: 16px;
+  padding: 18px;
+  border-color: rgba(214, 178, 94, 0.24);
+  background:
+    linear-gradient(180deg, rgba(10, 20, 31, 0.96), rgba(5, 12, 20, 0.9)),
+    radial-gradient(circle at top right, rgba(214, 178, 94, 0.14), transparent 36%);
+  box-shadow: 0 24px 54px rgba(0, 0, 0, 0.26);
+}
+
+.cms-admin-home-action-rail-header {
+  display: grid;
+  gap: 10px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.14);
+}
+
+.cms-admin-home-action-rail-header .cms-admin-data-card-title {
+  align-items: start;
+}
+
+.cms-admin-home-action-rail-header .cms-admin-data-card-title h3 {
+  font-size: 1rem;
+}
+
+.cms-admin-home-action-rail-current {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid rgba(214, 178, 94, 0.16);
+  border-radius: var(--cms-admin-radius-md);
+  background: rgba(214, 178, 94, 0.06);
+}
+
+.cms-admin-home-action-rail-current span {
+  color: var(--cms-admin-muted);
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.cms-admin-home-action-rail-current strong {
+  color: var(--cms-admin-text);
+  font-size: 0.95rem;
+}
+
+.cms-admin-home-action-rail-section {
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.cms-admin-home-action-rail-actions {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.cms-admin-home-context-action-panel .cms-admin-data-group-title {
+  margin-bottom: 2px;
+}
+
+.cms-admin-home-checklist-item {
+  padding: 11px 12px;
+  background: rgba(2, 8, 15, 0.52);
+}
+
+.cms-admin-home-checklist-body p {
+  max-width: 34rem;
+}
+
+.cms-admin-home-section-intro {
+  padding: 14px 16px;
+}
+
+.cms-admin-home-section-intro .cms-admin-home-section-focus {
+  max-width: 68ch;
+}
+
+.cms-admin-home-section-layout {
+  gap: 14px;
+}
+
+.cms-admin-home-section-supporting-flow {
+  gap: 12px;
+}
+
+.cms-admin-home-section-media-card {
+  border-color: rgba(148, 163, 184, 0.12);
+  background: rgba(7, 16, 24, 0.5);
+}
+
+.cms-admin-home-section-readiness-card {
+  display: none;
+}
+
+@media (max-width: 1180px) {
+  .cms-admin-home-contextual-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .cms-admin-home-action-rail {
+    position: static;
+  }
+}
+
+@media (max-width: 760px) {
+  .cms-admin-workspace[data-cms-workspace="home"] .cms-admin-home-section-panel {
+    padding: 12px;
+  }
+
+  .cms-admin-home-action-rail,
+  .cms-admin-home-action-rail-header,
+  .cms-admin-home-action-rail-current {
+    padding: 12px;
+  }
+}
