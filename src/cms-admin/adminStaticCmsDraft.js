@@ -1592,7 +1592,9 @@ function renderFeaturedMediaLibraryPicker(draftState = {}, item = {}, sourceInde
   if (!isFeaturedMediaLibraryPickerOpenForItem(item, sourceIndex)) return null;
 
   const appState = getState();
-  const sourceAssets = safeArray(appState.data?.cmsMediaUploads).map(normalizeStaticPickerMediaAsset);
+  const sourceAssets = safeArray(appState.data?.cmsMediaUploads)
+    .map(normalizeStaticPickerMediaAsset)
+    .filter(isSelectableStaticPickerMediaAsset);
   const mediaError = appState.data?.errors?.cmsMediaUploads || null;
   const filteredAssets = sourceAssets.filter((asset) => matchesFeaturedPickerFilters(asset, featuredMediaLibraryPickerState));
 
@@ -1805,6 +1807,7 @@ function matchesFeaturedPickerFilters(asset = {}, pickerState = {}) {
 }
 
 function getFeaturedPickerCompatibility(asset = {}) {
+  if (!isSelectableStaticPickerMediaAsset(asset)) return { allowed: false, reason: 'Media này đã xóa, bị hỏng hoặc không có URL an toàn nên không thể chọn.' };
   if (!asset.hasSafeUrl) return { allowed: false, reason: 'Đường dẫn media không thuộc nguồn được phép. Không thể chọn media này.' };
   if (!['image', 'poster'].includes(asset.mediaKind)) {
     return { allowed: false, reason: 'Media này không phù hợp với ảnh Tác phẩm tiêu biểu.' };
@@ -1818,6 +1821,12 @@ function handleAttachFeaturedPickerMedia(asset = {}, draftState = {}, item = {},
   const currentItem = featured.items[sourceIndex];
   if (!current.draftJson || getFeaturedImageReplaceKey(currentItem, sourceIndex) !== featuredMediaLibraryPickerState.itemKey) {
     featuredMediaLibraryPickerState.error = 'Tác phẩm tiêu biểu đang chỉnh đã thay đổi. Hãy mở lại picker để chọn đúng field đích.';
+    handlers.onRerender?.();
+    return;
+  }
+
+  if (!isSelectableStaticPickerMediaAsset(asset)) {
+    featuredMediaLibraryPickerState.error = 'Media này đã xóa, bị hỏng hoặc không có URL an toàn nên không thể chọn.';
     handlers.onRerender?.();
     return;
   }
@@ -2850,7 +2859,9 @@ function renderStaticMediaLibraryPicker(draftState = {}, item = {}, handlers = {
   if (!isPickerOpenForField(draftState, item, staticMediaLibraryPickerState.fieldName)) return null;
 
   const appState = getState();
-  const sourceAssets = safeArray(appState.data?.cmsMediaUploads).map(normalizeStaticPickerMediaAsset);
+  const sourceAssets = safeArray(appState.data?.cmsMediaUploads)
+    .map(normalizeStaticPickerMediaAsset)
+    .filter(isSelectableStaticPickerMediaAsset);
   const mediaError = appState.data?.errors?.cmsMediaUploads || null;
   const fieldName = staticMediaLibraryPickerState.fieldName;
   const filteredAssets = sourceAssets.filter((asset) => matchesStaticPickerFilters(asset, staticMediaLibraryPickerState));
@@ -3056,6 +3067,12 @@ function handleAttachStaticPickerMedia(asset = {}, draftState = {}, item = {}, f
     return;
   }
 
+  if (!isSelectableStaticPickerMediaAsset(asset)) {
+    staticMediaLibraryPickerState.error = 'Media này đã xóa, bị hỏng hoặc không có URL an toàn nên không thể chọn.';
+    handlers.onRerender?.();
+    return;
+  }
+
   const safeUrl = normalizeSafeStaticPickerMediaUrl(asset.rawUrl);
   if (!safeUrl) {
     staticMediaLibraryPickerState.error = 'Đường dẫn media không thuộc nguồn được phép. Không thể chọn media này.';
@@ -3135,6 +3152,15 @@ function normalizeStaticPickerMediaAsset(asset = {}) {
   };
 }
 
+
+function isSelectableStaticPickerMediaAsset(asset = {}) {
+  const status = String(asset.status || asset.lifecycle || '').trim().toLowerCase();
+  if (status === 'deleted' || status === 'deleted-reference' || status === 'broken-reference') return false;
+  if (asset.isDeleted || asset.deleted || asset.isBrokenDeletedReference) return false;
+  if (!asset.hasSafeUrl || !asset.rawUrl) return false;
+  return true;
+}
+
 function normalizeSafeStaticPickerMediaUrl(value = '') {
   const raw = String(value || '').trim();
   if (!raw) return '';
@@ -3185,6 +3211,7 @@ function matchesStaticPickerFilters(asset = {}, pickerState = {}) {
 }
 
 function getStaticPickerCompatibility(asset = {}, fieldName = '') {
+  if (!isSelectableStaticPickerMediaAsset(asset)) return { allowed: false, reason: 'Media này đã xóa, bị hỏng hoặc không có URL an toàn nên không thể chọn.' };
   if (!asset.hasSafeUrl) return { allowed: false, reason: 'Đường dẫn media không thuộc nguồn được phép. Không thể chọn media này.' };
   if (asset.mediaKind === 'unknown') return { allowed: false, reason: 'Không xác định được loại media nên chưa thể gắn vào field này.' };
   if (!isMediaKindCompatibleWithField(asset.mediaKind, fieldName)) {

@@ -1048,7 +1048,6 @@ export const ADMIN_COPY = Object.freeze({
     websiteTitle: 'Thông tin website',
     workspaceIntro: 'Cập nhật thông tin đơn vị, liên hệ và ngôn ngữ. Lưu vào CMS chưa làm đổi website public.',
     publicBoundaryNote: 'Lưu vào CMS chưa làm đổi website public. Website chỉ đổi sau luồng công khai riêng.',
-    logoDraftNote: 'Logo URL hiện giữ ở mức kỹ thuật trong CMS; chưa xác nhận public header đọc trực tiếp field này.',
     adminTitle: 'Trạng thái quản trị',
     basicTitle: 'Thông tin cơ bản',
     identityTitle: 'Hiển thị website',
@@ -1061,7 +1060,6 @@ export const ADMIN_COPY = Object.freeze({
       phone: 'Điện thoại',
       fax: 'Số fax',
       email: 'Thư điện tử',
-      logoUrl: 'Logo URL kỹ thuật',
       status: 'Trạng thái bản ghi CMS',
       language: 'Ngôn ngữ mặc định',
     },
@@ -1073,7 +1071,6 @@ export const ADMIN_COPY = Object.freeze({
     },
     missingEmail: 'Chưa khai báo thư điện tử.',
     cmsStatusNote: 'Đây là trạng thái bản ghi quản trị trong CMS, không phải trạng thái phiên bản website đang chạy.',
-    logoNote: 'Logo URL là dữ liệu kỹ thuật trong bản ghi CMS; chưa xác nhận đang dùng trực tiếp trên public header.',
     notice: 'Chỉ màn Thông tin website, Cổng vào triển lãm và Khu vực đầu trang của Trang chủ được bật chỉnh sửa bản nháp ở bước này. Các khu vực khác vẫn đang chỉ xem.',
     edit: {
       title: 'Chỉnh sửa thông tin website',
@@ -1091,7 +1088,6 @@ export const ADMIN_COPY = Object.freeze({
       safeNote: 'Lưu vào CMS chưa làm đổi website public.',
       leaveConfirm: 'Bạn có thay đổi chưa lưu. Rời màn này sẽ mất thay đổi. Tiếp tục?',
       noPermission: 'Tài khoản hiện tại chỉ được xem thông tin website.',
-      logoReadonly: 'Chọn logo chỉ cập nhật field kỹ thuật logo_url trong bản nháp đang chỉnh. Bấm Lưu vào CMS mới ghi lại; website public chưa đổi.',
       statusReadonly: 'Trạng thái bản ghi CMS chỉ xem ở bước này.',
       fields: {
         site_title: 'Tên website',
@@ -1101,7 +1097,6 @@ export const ADMIN_COPY = Object.freeze({
         fax: 'Số fax',
         email: 'Thư điện tử',
         default_language: 'Ngôn ngữ mặc định',
-        logo_url: 'Logo URL kỹ thuật',
         site_status: 'Trạng thái bản ghi CMS',
       },
       placeholders: {
@@ -1117,13 +1112,11 @@ export const ADMIN_COPY = Object.freeze({
         organizationRequired: 'Đơn vị quản lý không được để trống.',
         emailInvalid: 'Thư điện tử không đúng định dạng.',
         languageInvalid: 'Ngôn ngữ mặc định không hợp lệ.',
-        logoInvalid: 'Đường dẫn logo không an toàn hoặc không thuộc nguồn được phép.',
       },
       warnings: {
         addressShort: 'Địa chỉ đang khá ngắn. Vui lòng kiểm tra lại trước khi công khai.',
         siteTitleLong: 'Tên website khá dài. Nên kiểm tra lại cách hiển thị trên giao diện public.',
         organizationLong: 'Tên đơn vị quản lý khá dài. Nên kiểm tra lại cách hiển thị trên giao diện public.',
-        logoMissing: 'Chưa có logo URL hợp lệ. Đây là field kỹ thuật và chưa xác nhận đang dùng trên public header.',
       },
     },
   },

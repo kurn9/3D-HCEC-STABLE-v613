@@ -1,5 +1,4 @@
 import '../shared/cmsSchemaValidator.js';
-import { STATIC_CMS_DRAFT_CONFIG } from './adminConfig.js';
 
 const SITE_SETTINGS_ALLOWED_LANGUAGES = ['vi'];
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -25,13 +24,6 @@ export function validateSiteSettingsDraft(values = {}, copy = {}) {
 
   if (!SITE_SETTINGS_ALLOWED_LANGUAGES.includes(normalized.default_language)) {
     errors.default_language = copy.errors?.languageInvalid || 'Ngôn ngữ mặc định không hợp lệ.';
-  }
-
-  const logoCheck = validateSiteSettingsLogoUrl(normalized.logo_url);
-  if (!logoCheck.valid) {
-    errors.logo_url = copy.errors?.logoInvalid || 'Đường dẫn logo không an toàn hoặc không thuộc nguồn được phép.';
-  } else if (!normalized.logo_url) {
-    warnings.logo_url = copy.warnings?.logoMissing || 'Chưa chọn logo. Có thể lưu nếu website chưa cần logo.';
   }
 
   ['phone', 'fax'].forEach((fieldName) => {
@@ -70,44 +62,9 @@ export function normalizeSiteSettingsValues(values = {}) {
     phone: normalizeText(values.phone),
     fax: normalizeText(values.fax),
     email: normalizeText(values.email),
-    logo_url: normalizeText(values.logo_url),
     default_language: normalizeText(values.default_language) || 'vi',
   };
 }
-
-function validateSiteSettingsLogoUrl(value = '') {
-  const raw = normalizeText(value);
-  if (!raw) return { valid: true, reason: 'empty' };
-  const lower = raw.toLowerCase();
-  if (lower.startsWith('javascript:') || lower.startsWith('data:') || lower.startsWith('blob:') || lower.startsWith('file:')) {
-    return { valid: false, reason: 'blocked-protocol' };
-  }
-  if (raw.startsWith('//') || raw.includes('..') || raw.includes('\\')) {
-    return { valid: false, reason: 'unsafe-path' };
-  }
-
-  const allowedPrefixes = safeArray(STATIC_CMS_DRAFT_CONFIG.allowedMediaPathPrefixes).map((prefix) => String(prefix || '').trim()).filter(Boolean);
-  if (allowedPrefixes.some((prefix) => raw.startsWith(prefix))) {
-    return { valid: true, reason: 'relative-allowlisted' };
-  }
-
-  let url;
-  try {
-    url = new URL(raw);
-  } catch {
-    return { valid: false, reason: 'malformed-url' };
-  }
-  if (url.protocol !== 'https:') {
-    return { valid: false, reason: 'blocked-protocol' };
-  }
-  const allowedOrigins = new Set(safeArray(STATIC_CMS_DRAFT_CONFIG.allowedMediaOrigins).map((origin) => String(origin || '').trim()).filter(Boolean));
-  const allowedHosts = new Set(safeArray(STATIC_CMS_DRAFT_CONFIG.allowedMediaHosts).map((host) => String(host || '').trim().toLowerCase()).filter(Boolean));
-  if (allowedOrigins.has(url.origin) || allowedHosts.has(url.hostname.toLowerCase()) || allowedHosts.has(url.host.toLowerCase())) {
-    return { valid: true, reason: 'remote-allowlisted' };
-  }
-  return { valid: false, reason: 'remote-host-not-allowlisted' };
-}
-
 
 export function validateIndexSectionDraft(values = {}, copy = {}) {
   const errors = {};
