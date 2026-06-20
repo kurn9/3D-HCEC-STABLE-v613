@@ -819,7 +819,7 @@ export const ADMIN_COPY = Object.freeze({
       insufficient: 'Không đủ dữ liệu để kết luận media đang dùng hay không.',
     },
     referencesTitle: 'Nơi đang dùng đã tìm thấy',
-    referencesIntro: 'Dữ liệu này cho biết ảnh/video đang xuất hiện ở đâu trong nội dung đã kiểm tra.',
+    referencesIntro: 'Dữ liệu này cho biết file hoặc đường dẫn ảnh/video đang xuất hiện ở đâu trong nội dung đã kiểm tra.',
     referenceMore: 'tham chiếu khác',
     referenceFields: {
       source: 'Nguồn',
@@ -845,11 +845,11 @@ export const ADMIN_COPY = Object.freeze({
       target: 'Nơi đang dùng',
       room: 'Phòng',
       item: 'Nội dung',
-      field: 'Trường ảnh/video',
-      status: 'Trạng thái từ bản ghi upload',
+      field: 'Vị trí ảnh/video',
+      status: 'Trạng thái media',
       url: 'Đường dẫn',
     },
-    statusNote: 'Trạng thái này chỉ là metadata upload, không dùng để kết luận media đang được dùng hay vòng đời media.',
+    statusNote: 'Trạng thái này là thông tin kỹ thuật từ bản ghi upload, không thay thế bản đồ nơi dùng ảnh/video.',
     actions: {
       copyUrl: 'Sao chép đường dẫn',
       copyUrlAria: 'Sao chép đường dẫn media',
@@ -872,7 +872,7 @@ export const ADMIN_COPY = Object.freeze({
     technicalTitle: 'Thông tin kỹ thuật để đối chiếu',
     technicalRows: [
       ['Nơi lưu ảnh/video', 'Đã cấu hình', 'cms-media'],
-      ['Nguồn danh sách ảnh/video', 'Đã cấu hình', 'cms_media_uploads'],
+      ['Nguồn file thật trong Thư viện', 'Đã cấu hình', 'cms_media_uploads'],
       ['Nơi lưu nội dung website', 'Đã cấu hình', 'cms-public'],
     ],
   },

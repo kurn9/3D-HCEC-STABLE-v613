@@ -12087,3 +12087,31 @@ body.cms-admin-page * {
     max-height: none;
   }
 }
+
+/* v6.14.060.004 — Media semantics separation: reference-only action notice */
+.cms-admin-workspace[data-cms-workspace="media"] .cms-admin-media-reference-only-notice {
+  display: grid;
+  gap: 6px;
+  border: 1px solid rgba(234, 179, 8, 0.28);
+  border-radius: var(--cms-admin-radius-md);
+  background: rgba(113, 63, 18, 0.12);
+  padding: 11px 12px;
+}
+
+.cms-admin-workspace[data-cms-workspace="media"] .cms-admin-media-reference-only-notice-broken-reference {
+  border-color: rgba(248, 113, 113, 0.26);
+  background: rgba(127, 29, 29, 0.14);
+}
+
+.cms-admin-workspace[data-cms-workspace="media"] .cms-admin-media-reference-only-notice h3 {
+  margin: 0;
+  color: var(--cms-admin-text);
+  font-size: 0.9rem;
+}
+
+.cms-admin-workspace[data-cms-workspace="media"] .cms-admin-media-reference-only-notice p {
+  margin: 0;
+  color: var(--cms-admin-muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
