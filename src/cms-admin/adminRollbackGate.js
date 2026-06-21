@@ -271,7 +271,7 @@ function buildHistoryViewModels(items = []) {
 
     if (status === 'rolled_back' && isRollbackOperation && log.rollback_verified !== false) {
       addRestorePoint(restorePointMap, createRestorePoint(log, {
-        sourcePath: log.rollback_from_path || log.version_path,
+        sourcePath: log.rollback_to_path || log.version_path,
         kind: 'restored',
         title: log.published_version || 'Phiên bản đã khôi phục',
         label: 'Đã khôi phục',
@@ -328,6 +328,7 @@ function createRestorePoint(log = {}, options = {}, index = 0) {
     backupPath: log.backup_path || '',
     versionPath: log.version_path || '',
     rollbackFromPath: log.rollback_from_path || '',
+    rollbackToPath: log.rollback_to_path || '',
     rollbackReason: log.rollback_reason || '',
     errorMessage: log.error_message || '',
   };
