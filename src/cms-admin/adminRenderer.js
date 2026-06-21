@@ -189,7 +189,7 @@ async function loadDashboardData(client) {
 
 async function refreshReleaseOperationGate(client) {
   setReleaseOperationGateState({ loading: true, error: null });
-  const result = await reconcileCmsReleasePointer(client, {});
+  const result = await reconcileCmsReleasePointer(client, { mode: 'status' });
   const data = result.data || {};
   if (result.error) {
     const code = result.error.code || data.classification || '';

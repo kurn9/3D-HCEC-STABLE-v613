@@ -962,11 +962,12 @@ export async function reconcileCmsReleasePointer(clientOrExpected = {}, maybeExp
   const token = sessionData?.session?.access_token;
   if (!token) return { data: null, error: new Error('Cần đăng nhập để kiểm tra trạng thái release.') };
   const operationId = normalizeOptionalText(expected.operationId || expected.id);
+  const mode = normalizeOptionalText(expected.mode) || 'reconcile';
   try {
     const response = await fetch(CMS_RELEASE_RECONCILE_CONFIG.endpoint, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(operationId ? { operationId } : {}),
+      body: JSON.stringify({ mode, ...(operationId ? { operationId } : {}) }),
     });
     const body = await response.json().catch(() => ({}));
     if (!response.ok || body?.ok === false) {

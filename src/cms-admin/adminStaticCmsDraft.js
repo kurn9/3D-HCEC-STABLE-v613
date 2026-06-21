@@ -4865,6 +4865,7 @@ export async function handleReconcileStaticCmsPublishPointer({ handlers = {} } =
   });
   handlers.onRerender?.();
   const result = await reconcileCmsReleasePointer(getState().supabase, {
+    mode: 'reconcile',
     operationId: current.publishResult?.operationId || gate.operationId || '',
     releaseId: expectedReleaseId,
     contentHash: expectedContentHash,

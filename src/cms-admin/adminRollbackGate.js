@@ -1019,7 +1019,6 @@ async function handlePreviewVersion(sourcePath, handlers = {}) {
       previewResult: null,
     });
   } else {
-    setReleaseOperationGateState({ blocked: true, reconciliationRequired: true, reconciling: false, state: 'pointer_unknown', message: 'Chưa xác định website đang dùng bản nào. Không bấm công khai hoặc khôi phục lại. Hãy kiểm tra trạng thái hiện tại.', lastCheckedAt: new Date().toISOString(), result: data });
     setCmsPublishHistoryState({
       isPreviewing: false,
       previewRequestPath: '',
@@ -1205,7 +1204,7 @@ async function handleReconcileRollbackPointer({ handlers = {} } = {}) {
   });
   handlers.onRerender?.();
   setReleaseOperationGateState({ reconciling: true, error: null });
-  const result = await reconcileCmsReleasePointer(getState().supabase, { operationId: current.rollbackResult?.operationId || getState().releaseOperationGate?.operationId || '', releaseId: expectedReleaseId, contentHash: expectedContentHash });
+  const result = await reconcileCmsReleasePointer(getState().supabase, { mode: 'reconcile', operationId: current.rollbackResult?.operationId || getState().releaseOperationGate?.operationId || '', releaseId: expectedReleaseId, contentHash: expectedContentHash });
   const data = result.data || {};
   if (result.error) {
     setCmsPublishHistoryState({
@@ -1245,7 +1244,6 @@ async function handleReconcileRollbackPointer({ handlers = {} } = {}) {
       rollbackDryRunResult: null,
     });
   } else {
-    setReleaseOperationGateState({ blocked: true, reconciliationRequired: true, reconciling: false, state: 'pointer_unknown', message: 'Chưa xác định website đang dùng bản nào. Không bấm công khai hoặc khôi phục lại. Hãy kiểm tra trạng thái hiện tại.', lastCheckedAt: new Date().toISOString(), result: data });
     setCmsPublishHistoryState({
       isReconcilingRollbackPointer: false,
       rollbackPointerState: 'unknown',
@@ -1402,11 +1400,12 @@ function isRollbackFeatureEnabled() {
 }
 
 function isSafeVersionPath(path = '') {
-  return /^published\/versions\/cms_public_content_[A-Za-z0-9._-]+\.json$/.test(String(path || ''))
-    && !String(path || '').includes('..')
-    && !String(path || '').includes('\\')
-    && !String(path || '').includes('//');
+  const text = String(path || '').trim();
+  if (!text || text.includes('..') || text.includes('\\') || text.includes('//')) return false;
+  return /^published\/releases\/[0-9a-f-]{36}\/cms_public_content\.json$/i.test(text)
+    || /^published\/versions\/cms_public_content_[A-Za-z0-9._-]+\.json$/.test(text);
 }
+
 
 function getPathFileName(path = '') {
   const text = String(path || '').trim();
