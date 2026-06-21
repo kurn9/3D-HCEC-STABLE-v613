@@ -79,6 +79,7 @@ import {
   handleLoadStaticCmsBaseline,
   handleSaveStaticCmsDraft,
   handlePublishStaticCmsDraft,
+  buildCmsPublishInclusionStatus,
   hasCurrentDryRunPass,
   renderStaticCmsDraftTab,
 } from './adminStaticCmsDraft.js';
@@ -6730,7 +6731,8 @@ function buildPublishCommandCenterModel(state = {}) {
   const context = getPublishContext(state);
   const { data, draftState, bundle, canonicalKnown, validation, dryRun } = context;
   const access = getPublishGateAccess(state);
-  const readiness = getPublishReadiness(draftState, access);
+  const publishInclusion = buildCmsPublishInclusionStatus({ data, draftState });
+  const readiness = getPublishReadiness(draftState, access, publishInclusion);
   const dryRunReady = hasCurrentDryRunPass(draftState);
   const publishResult = draftState.publishResult || null;
   const publishSucceeded = publishResult?.ok === true && publishResult?.dryRun !== true;
@@ -6763,6 +6765,7 @@ function buildPublishCommandCenterModel(state = {}) {
     publishSucceeded,
     publishFailed,
     publishError: draftState.publishError,
+    publishInclusion,
     isLoadingDraft,
     isSavingDraft,
     isPublishingCms,
@@ -6790,6 +6793,7 @@ function buildPublishCommandCenterModel(state = {}) {
     publishStatus: draftState.publishStatus || '',
     publishError: draftState.publishError || null,
     publishLastVerifiedAt: draftState.publishLastVerifiedAt || '',
+    publishInclusion,
     isLoadingDraft,
     isSavingDraft,
     isPublishingCms,
@@ -6876,6 +6880,14 @@ function getPublishCommandNextAction(model = {}) {
       disabledReason: 'Chưa thể kiểm tra an toàn hoặc đưa lên website khi nội dung chưa đạt.',
     };
   }
+  if (model.publishInclusion?.blocksPublish) {
+    return {
+      state: 'inclusion-blocked',
+      label: model.publishInclusion.primaryActionLabel || 'Xem khu vực cần đối chiếu',
+      note: model.publishInclusion.primaryActionNote || 'Một số khu vực có thể chưa nằm trong bản chuẩn bị đang chọn. Hãy xem bảng đối chiếu trước khi tiếp tục.',
+      kind: 'focus-inclusion',
+    };
+  }
   if (model.publishFailed) {
     if (model.dryRunReady && model.access?.allowed) {
       return {
@@ -6955,7 +6967,8 @@ function getPublishCommandSteps(model = {}) {
   const hasPreparedContent = Boolean(model.hasDraftJson);
   const saved = model.hasSavedDraft && !model.hasDirtyDraft;
   const contentOk = saved && model.validationOk;
-  const checked = contentOk && model.dryRunReady;
+  const inclusionOk = contentOk && !model.publishInclusion?.blocksPublish;
+  const checked = inclusionOk && model.dryRunReady;
   const published = model.publishSucceeded;
   return [
     {
@@ -6971,7 +6984,7 @@ function getPublishCommandSteps(model = {}) {
     {
       label: 'Kiểm tra trước khi đưa lên',
       status: !saved ? 'upcoming' : checked ? 'done' : 'current',
-      value: !saved ? 'Chưa đến bước.' : !model.validationOk ? 'Cần sửa nội dung trước.' : checked ? 'Đã kiểm tra cho bản hiện tại.' : 'Cần chạy kiểm tra.',
+      value: !saved ? 'Chưa đến bước.' : !model.validationOk ? 'Cần sửa nội dung trước.' : model.publishInclusion?.blocksPublish ? 'Cần đối chiếu bản chuẩn bị.' : checked ? 'Đã kiểm tra cho bản hiện tại.' : 'Cần chạy kiểm tra.',
     },
     {
       label: 'Đưa lên website',
@@ -6986,6 +6999,7 @@ function renderPublishCommandMain(model = {}) {
   main.appendChild(renderPublishOperationStatusCard(model));
   main.appendChild(renderPublishLiveWebsiteCard(model));
   main.appendChild(renderPublishDraftCard(model));
+  main.appendChild(renderPublishInclusionStatusCard(model));
   main.appendChild(renderPublishSafetyCheckCard(model));
   main.appendChild(renderPublishLatestResultCard(model));
   return main;
@@ -7108,6 +7122,75 @@ function formatPublishValidationKey(key = '') {
   return text || 'Nội dung';
 }
 
+
+function renderPublishInclusionStatusCard(model = {}) {
+  const inclusion = model.publishInclusion || buildCmsPublishInclusionStatus({ data: model.data || {}, draftState: model.draftState || {} });
+  const card = createElement('article', {
+    className: 'cms-admin-panel cms-admin-view-panel cms-admin-publish-command-card cms-admin-publish-inclusion-card',
+    attrs: { 'data-publish-inclusion-table': 'true', tabindex: '-1' },
+  });
+  card.appendChild(renderPanelTitle('Bản chuẩn bị sẽ đưa lên gồm gì', inclusion.blocksPublish ? 'Cần đối chiếu' : 'Đã đối chiếu'));
+  card.appendChild(createElement('p', {
+    className: 'cms-admin-compact-copy',
+    text: 'Bảng này so sánh bản chuẩn bị đang chọn với những khu vực có thể được lưu riêng. Hệ thống chỉ công khai an toàn khi không phát hiện thay đổi mới hơn hoặc trạng thái không xác minh được.',
+  }));
+  const list = createElement('div', { className: 'cms-admin-publish-inclusion-list' });
+  safeArray(inclusion.items).forEach((item) => list.appendChild(renderPublishInclusionRow(item)));
+  card.appendChild(list);
+  if (inclusion.blocksPublish) {
+    card.appendChild(renderNoticeBox('Chưa thể công khai an toàn cho đến khi xử lý hoặc xác minh các khu vực đang bị chặn.', 'warning'));
+  }
+  return card;
+}
+
+function renderPublishInclusionRow(item = {}) {
+  const row = createElement('article', { className: `cms-admin-publish-inclusion-row is-${getPublishInclusionTone(item)}` });
+  const head = createElement('div', { className: 'cms-admin-publish-inclusion-row-head' });
+  head.appendChild(createElement('strong', { text: item.label || 'Khu vực' }));
+  head.appendChild(renderBadge(getPublishInclusionStatusLabel(item.status), getPublishInclusionBadgeTone(item)));
+  row.appendChild(head);
+  row.appendChild(createElement('p', { text: item.reason || 'Chưa có thông tin đối chiếu.' }));
+  if (item.nextAction) {
+    row.appendChild(createElement('small', { className: 'cms-admin-help-text', text: `Bước tiếp theo: ${item.nextAction}` }));
+  }
+  const details = createElement('details', { className: 'cms-admin-publish-inclusion-technical-details' });
+  details.appendChild(createElement('summary', { text: 'Thông tin kỹ thuật' }));
+  details.appendChild(renderKeyValueList([
+    ['Key', item.key || '—'],
+    ['Status', item.status || '—'],
+    ['updatedAt', item.updatedAt || '—'],
+    ['draftSavedAt', item.draftSavedAt || '—'],
+    ['blocksPublish', item.blocksPublish ? 'true' : 'false'],
+  ]));
+  row.appendChild(details);
+  return row;
+}
+
+function getPublishInclusionStatusLabel(status = '') {
+  const labels = {
+    included: 'Đã có trong bản chuẩn bị',
+    no_newer_change_detected: 'Chưa phát hiện thay đổi mới hơn',
+    newer_than_draft: 'Có thay đổi chưa nằm trong bản chuẩn bị',
+    unverifiable: 'Chưa xác minh được',
+    not_applicable: 'Không áp dụng',
+  };
+  return labels[status] || 'Chưa rõ';
+}
+
+function getPublishInclusionBadgeTone(item = {}) {
+  if (item.blocksPublish) return 'warning';
+  if (item.status === 'included') return 'success';
+  if (item.status === 'no_newer_change_detected') return 'info';
+  return 'default';
+}
+
+function getPublishInclusionTone(item = {}) {
+  if (item.blocksPublish) return 'blocked';
+  if (item.status === 'included') return 'included';
+  if (item.status === 'no_newer_change_detected') return 'neutral';
+  return 'default';
+}
+
 function renderPublishSafetyCheckCard(model = {}) {
   const card = createElement('article', { className: 'cms-admin-panel cms-admin-view-panel cms-admin-publish-command-card' });
   card.appendChild(renderPanelTitle('Kiểm tra trước khi đưa lên', model.dryRunReady ? 'Đã kiểm tra' : 'Chưa đạt'));
@@ -7165,33 +7248,44 @@ function renderPublishCommandChecklist(model = {}) {
 
 function buildPublishCommandChecklistItems(model = {}) {
   const accessAllowed = Boolean(model.access?.allowed);
+  const inclusion = model.publishInclusion || buildCmsPublishInclusionStatus({ data: model.data || {}, draftState: model.draftState || {} });
   return [
     {
-      label: 'Đã tải nội dung',
-      value: model.hasDraftJson ? 'Đạt' : 'Cần tải',
-      tone: model.hasDraftJson ? 'success' : 'warning',
-      detail: model.hasDraftJson ? 'Đã có nội dung trong trình duyệt.' : 'Tải nội dung website hiện tại để bắt đầu.',
+      label: 'Có bản chuẩn bị đã lưu',
+      value: model.hasSavedDraft ? 'Đạt' : 'Cần lưu',
+      tone: model.hasSavedDraft ? 'success' : 'warning',
+      detail: model.hasSavedDraft ? 'Đã có bản chuẩn bị CMS để kiểm tra.' : 'Cần lưu nội dung thành bản chuẩn bị trước.',
     },
     {
-      label: 'Đã lưu bản chuẩn bị',
-      value: model.hasSavedDraft && !model.hasDirtyDraft ? 'Đạt' : 'Cần lưu',
-      tone: model.hasSavedDraft && !model.hasDirtyDraft ? 'success' : 'warning',
-      detail: model.hasSavedDraft && !model.hasDirtyDraft ? 'Có bản chuẩn bị CMS đã lưu.' : 'Cần lưu trước khi kiểm tra hoặc đưa lên.',
+      label: 'Không có thay đổi local chưa lưu',
+      value: model.hasDirtyDraft ? 'Cần lưu' : 'Đạt',
+      tone: model.hasDirtyDraft ? 'warning' : 'success',
+      detail: model.hasDirtyDraft ? 'Bản chuẩn bị trong trình duyệt có thay đổi chưa lưu.' : 'Không thấy thay đổi local chưa lưu trong bản đang mở.',
     },
     {
-      label: 'Nội dung không còn lỗi',
-      value: model.validationOk ? 'Đạt' : model.validationKnown ? 'Cần sửa' : 'Chưa kiểm tra',
-      tone: model.validationOk ? 'success' : 'warning',
-      detail: model.validationOk ? 'Không thấy lỗi nội dung trong trạng thái hiện tại.' : 'Cần xử lý nội dung trước khi tiếp tục.',
+      label: 'Không có khu vực mới hơn bản chuẩn bị',
+      value: inclusion.hasNewerChanges ? 'Cần xử lý' : inclusion.hasDraftTimestamp ? 'Đạt' : 'Chưa xác minh',
+      tone: inclusion.hasNewerChanges || !inclusion.hasDraftTimestamp ? 'warning' : 'success',
+      detail: inclusion.hasNewerChanges
+        ? 'Có khu vực được lưu sau thời điểm lưu bản chuẩn bị.'
+        : inclusion.hasDraftTimestamp
+          ? 'Không phát hiện dữ liệu lưu riêng mới hơn bản chuẩn bị.'
+          : 'Thiếu thời điểm lưu bản chuẩn bị để đối chiếu.',
     },
     {
-      label: 'Đã kiểm tra trước khi đưa lên',
+      label: 'Tất cả khu vực quan trọng xác minh được',
+      value: inclusion.hasUnverifiableCritical ? 'Chưa xác minh' : 'Đạt',
+      tone: inclusion.hasUnverifiableCritical ? 'warning' : 'success',
+      detail: inclusion.hasUnverifiableCritical ? 'Một số khu vực thiếu metadata đối chiếu.' : 'Các khu vực quan trọng có đủ trạng thái đối chiếu cần thiết.',
+    },
+    {
+      label: 'Kiểm tra trước khi đưa lên còn hiệu lực',
       value: model.dryRunReady ? 'Đạt' : 'Chưa kiểm tra',
       tone: model.dryRunReady ? 'success' : 'warning',
-      detail: model.dryRunReady ? 'Kết quả kiểm tra còn hiệu lực cho bản hiện tại.' : 'Chạy kiểm tra trước khi đưa lên website.',
+      detail: model.dryRunReady ? 'Kết quả kiểm tra còn hiệu lực cho bản hiện tại.' : 'Cần chạy kiểm tra trước khi đưa lên website.',
     },
     {
-      label: 'Có quyền đưa lên website',
+      label: 'Có quyền công khai',
       value: accessAllowed ? 'Đạt' : 'Không đủ quyền',
       tone: accessAllowed ? 'success' : 'warning',
       detail: accessAllowed ? 'Tài khoản đủ điều kiện theo luồng hiện hữu.' : (model.access?.reason || 'Tài khoản chưa đủ quyền.'),
@@ -7265,12 +7359,30 @@ async function executePublishCommandAction(action = {}) {
     case 'save-existing-draft':
       await handleSaveStaticCmsDraft({ asNew: false, handlers });
       return;
-    case 'dry-run':
+    case 'focus-inclusion': {
+      const target = document.querySelector('[data-publish-inclusion-table]');
+      target?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+      target?.focus?.({ preventScroll: true });
+      return;
+    }
+    case 'dry-run': {
+      const currentModel = buildPublishCommandCenterModel(getState());
+      if (currentModel.publishInclusion?.blocksPublish) {
+        renderAdminShell();
+        return;
+      }
       await handlePublishStaticCmsDraft({ dryRun: true, handlers });
       return;
-    case 'publish-live':
+    }
+    case 'publish-live': {
+      const currentModel = buildPublishCommandCenterModel(getState());
+      if (currentModel.publishInclusion?.blocksPublish) {
+        renderAdminShell();
+        return;
+      }
       await handlePublishStaticCmsDraft({ dryRun: false, handlers });
       return;
+    }
     default:
       renderAdminShell();
   }
@@ -7322,6 +7434,7 @@ function renderPublishCommandTechnicalDetails(model = {}) {
     ['Published version', model.publicVersion || '—'],
     ['Dry-run raw', model.dryRun?.ok === true ? JSON.stringify({ ok: model.dryRun.ok, dryRun: model.dryRun.dryRun, version: model.dryRun.publishedVersion || model.dryRun.plan?.publishedVersion || '' }) : 'not-ready'],
     ['Publish result raw', model.publishResult ? JSON.stringify({ ok: model.publishResult.ok, dryRun: model.publishResult.dryRun, publishedVersion: model.publishResult.publishedVersion || model.publishResult.plan?.publishedVersion || '' }) : '—'],
+    ['Publish inclusion status', JSON.stringify({ blocksPublish: Boolean(model.publishInclusion?.blocksPublish), statuses: safeArray(model.publishInclusion?.items).map((item) => ({ key: item.key, status: item.status, blocksPublish: item.blocksPublish })) })],
   ]));
   return details;
 }
