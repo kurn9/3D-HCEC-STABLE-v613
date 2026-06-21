@@ -608,8 +608,10 @@ function renderRollbackPanel(state = {}, historyState = {}, handlers = {}) {
   const previewMatches = Boolean(selectedPath && historyState.previewResult?.sourcePath === selectedPath);
   const dryRunMatches = hasValidDryRunForSource(historyState, selectedPath);
   const hasReason = hasValidRollbackReason(historyState.rollbackReason);
-  const needsReconciliation = Boolean(historyState.rollbackRequiresReconciliation || historyState.rollbackPointerState === 'unknown');
-  const ready = !needsReconciliation && canDoRealRollback(historyState, selectedPath);
+  const gate = state.releaseOperationGate || {};
+  const serverGateBlocked = Boolean(gate.blocked || gate.lineageRepairRequired || gate.repairRequired);
+  const needsReconciliation = Boolean(historyState.rollbackRequiresReconciliation || historyState.rollbackPointerState === 'unknown' || gate.reconciliationRequired);
+  const ready = !serverGateBlocked && !needsReconciliation && canDoRealRollback(historyState, selectedPath);
 
   const title = createElement('div', { className: 'cms-admin-panel-title-row' });
   const heading = createElement('div', { className: 'cms-admin-cell-stack' });
@@ -619,7 +621,7 @@ function renderRollbackPanel(state = {}, historyState = {}, handlers = {}) {
     text: 'Panel thao tác cho phiên bản đang chọn: kiểm tra điều kiện, nhập lý do và chỉ khôi phục khi guard hiện có cho phép.',
   }));
   title.appendChild(heading);
-  title.appendChild(renderBadge(ready ? 'Đủ điều kiện UI' : 'Guarded rollback', ready ? 'success' : 'warning'));
+  title.appendChild(renderBadge(ready ? 'Đủ điều kiện UI' : (serverGateBlocked ? 'Đang bị khóa bởi trạng thái máy chủ' : 'Guarded rollback'), ready ? 'success' : 'warning'));
   panel.appendChild(title);
 
   panel.appendChild(renderSelectedRollbackTarget(selectedPoint, selectedPath));
@@ -638,11 +640,21 @@ function renderRollbackPanel(state = {}, historyState = {}, handlers = {}) {
     title: getDryRunDisabledReason(state, historyState, selectedPath) || ROLLBACK_COPY.actions?.dryRun || 'Kiểm tra khôi phục cho bản đã chọn.',
     ariaLabel: getDryRunDisabledReason(state, historyState, selectedPath) || ROLLBACK_COPY.actions?.dryRun || 'Kiểm tra khôi phục cho bản đã chọn.',
   });
-  dryRunButton.disabled = !isRollbackAdmin(state) || !selectedPath || historyState.isRollingBack || needsReconciliation;
+  dryRunButton.disabled = !isRollbackAdmin(state) || !selectedPath || historyState.isRollingBack || needsReconciliation || serverGateBlocked;
   dryRunButton.addEventListener('click', () => handleRollbackCmsJson({ sourcePath: selectedPath, dryRun: true, handlers }));
   dryRunActions.appendChild(dryRunButton);
   panel.appendChild(dryRunActions);
-  if (needsReconciliation) {
+  if (serverGateBlocked && (gate.lineageRepairRequired || gate.repairRequired)) {
+    panel.appendChild(createElement('div', {
+      className: 'cms-admin-alert cms-admin-alert-warning',
+      text: 'Bản công khai đã được xác nhận nhưng lịch sử vận hành chưa hoàn tất. Không công khai hoặc khôi phục thêm. Hãy sửa lịch sử vận hành trước.',
+    }));
+    const repairButton = createElement('button', { className: 'cms-admin-button cms-admin-button-secondary', type: 'button', text: gate.reconciling ? 'Đang sửa lịch sử...' : 'Sửa lịch sử vận hành' });
+    repairButton.disabled = Boolean(gate.reconciling);
+    repairButton.addEventListener('click', () => handleRepairReleaseLineage({ handlers }));
+    panel.appendChild(repairButton);
+  }
+  if (needsReconciliation && !(gate.lineageRepairRequired || gate.repairRequired)) {
     panel.appendChild(createElement('div', {
       className: 'cms-admin-alert cms-admin-alert-warning',
       text: 'Chưa xác định website đang dùng bản nào. Không bấm khôi phục lại. Bấm “Kiểm tra trạng thái hiện tại”.',
@@ -664,7 +676,7 @@ function renderRollbackPanel(state = {}, historyState = {}, handlers = {}) {
     ariaLabel: ROLLBACK_COPY.actions?.reason || 'Lý do khôi phục',
     attrs: { rows: '3', placeholder: 'Nhập lý do vận hành, ví dụ: Khôi phục bản sạch sau khi kiểm tra UAT.' },
   });
-  reasonInput.disabled = !selectedPath || historyState.isRollingBack || needsReconciliation;
+  reasonInput.disabled = !selectedPath || historyState.isRollingBack || needsReconciliation || serverGateBlocked;
   panel.appendChild(labeledControl('Lý do khôi phục bắt buộc', reasonInput));
   panel.appendChild(createElement('p', {
     className: 'cms-admin-help-text cms-admin-rollback-reason-help',
@@ -693,7 +705,7 @@ function renderRollbackPanel(state = {}, historyState = {}, handlers = {}) {
   reasonInput.addEventListener('input', () => {
     const reasonReady = hasValidRollbackReason(reasonInput.value);
     setCmsPublishHistoryState({ rollbackReason: reasonInput.value, rollbackError: null });
-    const nowReady = Boolean(selectedPath && dryRunMatches && reasonReady);
+    const nowReady = Boolean(selectedPath && dryRunMatches && reasonReady && !serverGateBlocked && !needsReconciliation);
     rollbackButton.disabled = !isRollbackAdmin(state) || historyState.isRollingBack || !nowReady;
     rollbackButton.title = getRollbackDisabledReason(state, historyState, selectedPath, dryRunMatches, reasonReady) || ROLLBACK_COPY.actions?.rollback || 'Khôi phục thật bản đã chọn.';
     rollbackButton.setAttribute('aria-label', rollbackButton.title);
@@ -784,7 +796,8 @@ function renderRollbackReadinessPanel(state = {}, historyState = {}, flags = {})
     ['Đã xem trước bản chọn', Boolean(flags.previewMatches), 'Xem trước chỉ đọc bản đã chọn.'],
     ['Kiểm tra khôi phục đã đạt', Boolean(flags.dryRunMatches), 'Kiểm tra khôi phục chạy qua bộ kiểm tra trên server.'],
     ['Có lý do vận hành', Boolean(flags.hasReason), 'Cần lý do vận hành trước khi rollback thật.'],
-    ['Sẵn sàng xác nhận khôi phục', Boolean(flags.dryRunMatches && flags.hasReason), 'Hai hộp xác nhận vẫn xuất hiện tại thời điểm bấm khôi phục thật.'],
+    ['Không bị khóa bởi trạng thái máy chủ', !Boolean((state.releaseOperationGate || {}).blocked || (state.releaseOperationGate || {}).lineageRepairRequired || (state.releaseOperationGate || {}).repairRequired), 'Server gate phải idle trước khi thao tác nguy hiểm.'],
+    ['Sẵn sàng xác nhận khôi phục', Boolean(flags.dryRunMatches && flags.hasReason && !((state.releaseOperationGate || {}).blocked || (state.releaseOperationGate || {}).lineageRepairRequired || (state.releaseOperationGate || {}).repairRequired)), 'Hai hộp xác nhận vẫn xuất hiện tại thời điểm bấm khôi phục thật.'],
   ];
   const blockedReasons = getRollbackBlockedReasons(state, historyState, {
     selectedPath,
@@ -841,6 +854,9 @@ function getRollbackBlockedReasons(state = {}, historyState = {}, flags = {}) {
 }
 
 function getDryRunDisabledReason(state = {}, historyState = {}, selectedPath = '') {
+  const gate = state.releaseOperationGate || {};
+  if (gate.lineageRepairRequired || gate.repairRequired) return 'Đang bị khóa bởi trạng thái máy chủ: cần sửa lịch sử vận hành trước.';
+  if (gate.blocked) return gate.message || 'Đang bị khóa bởi trạng thái máy chủ.';
   if (!isRollbackAdmin(state)) return 'Chỉ quản trị viên đang hoạt động mới chạy được kiểm tra khôi phục.';
   if (!selectedPath) return 'Hãy chọn phiên bản trước khi kiểm tra khôi phục.';
   if (!isSafeVersionPath(selectedPath)) return 'Đường dẫn bản được chọn không hợp lệ.';
@@ -849,6 +865,9 @@ function getDryRunDisabledReason(state = {}, historyState = {}, selectedPath = '
 }
 
 function getRollbackDisabledReason(state = {}, historyState = {}, selectedPath = '', dryRunMatches = false, hasReason = false) {
+  const gate = state.releaseOperationGate || {};
+  if (gate.lineageRepairRequired || gate.repairRequired) return 'Đang bị khóa bởi trạng thái máy chủ: cần sửa lịch sử vận hành trước.';
+  if (gate.blocked) return gate.message || 'Đang bị khóa bởi trạng thái máy chủ.';
   if (!isRollbackAdmin(state)) return 'Chỉ quản trị viên đang hoạt động mới khôi phục thật.';
   if (!selectedPath) return 'Hãy chọn phiên bản trước khi khôi phục.';
   if (!isSafeVersionPath(selectedPath)) return 'Đường dẫn bản được chọn không hợp lệ.';
@@ -1097,6 +1116,9 @@ async function handleRollbackCmsJson({ sourcePath, dryRun = true, handlers = {} 
   const result = await rollbackCmsJson(state.supabase, {
     sourcePath,
     confirmHash,
+    targetContentHash: confirmHash,
+    expectedCurrentReleaseId: dryRunResult?.expectedCurrentReleaseId || dryRunResult?.currentReleaseId || '',
+    expectedCurrentContentHash: dryRunResult?.expectedCurrentContentHash || dryRunResult?.currentContentHash || '',
     reason: historyState.rollbackReason || '',
     dryRun,
   });
@@ -1136,6 +1158,26 @@ async function handleRollbackCmsJson({ sourcePath, dryRun = true, handlers = {} 
         rollbackResult: result.data || null,
         rollbackDryRunResult: null,
       });
+      handlers.onRerender?.();
+      return;
+    }
+    if (resultCode === 'CURRENT_RELEASE_CHANGED') {
+      setCmsPublishHistoryState({
+        isRollingBack: false,
+        rollbackRequestPath: '',
+        rollbackError: 'Bản đang công khai đã thay đổi sau lần kiểm tra. Không khôi phục bằng xác nhận cũ. Hãy tải lại lịch sử và kiểm tra khôi phục lại.',
+        rollbackStatus: '',
+        rollbackResult: result.data || null,
+        rollbackDryRunResult: null,
+        rollbackReason: '',
+      });
+      await handleLoadPublishHistory({ onRerender: () => {} }, { resetWorkflow: false });
+      handlers.onRerender?.();
+      return;
+    }
+    if (resultCode === 'RELEASE_LINEAGE_REPAIR_REQUIRED') {
+      applyReleaseOperationGateFromServer(result.data || {}, 'Bản công khai đã được xác nhận nhưng lịch sử vận hành chưa hoàn tất. Hãy sửa lịch sử vận hành trước khi tiếp tục.');
+      setCmsPublishHistoryState({ isRollingBack: false, rollbackRequestPath: '', rollbackError: 'Bản công khai đã được xác nhận nhưng lịch sử vận hành chưa hoàn tất. Hãy sửa lịch sử vận hành trước.', rollbackStatus: '', rollbackResult: result.data || null, rollbackDryRunResult: null });
       handlers.onRerender?.();
       return;
     }
@@ -1259,6 +1301,30 @@ async function handleReconcileRollbackPointer({ handlers = {} } = {}) {
   handlers.onRerender?.();
 }
 
+
+async function handleRepairReleaseLineage({ handlers = {} } = {}) {
+  const gate = getState().releaseOperationGate || {};
+  if (!gate.operationId) {
+    setCmsPublishHistoryState({ rollbackError: 'Không tìm thấy thao tác cần sửa lịch sử vận hành.' });
+    handlers.onRerender?.();
+    return;
+  }
+  setReleaseOperationGateState({ reconciling: true, error: null });
+  setCmsPublishHistoryState({ rollbackStatus: 'Đang sửa lịch sử vận hành...', rollbackError: null });
+  handlers.onRerender?.();
+  const result = await reconcileCmsReleasePointer(getState().supabase, { mode: 'repair-lineage', operationId: gate.operationId });
+  if (result.error) {
+    setReleaseOperationGateState({ reconciling: false, error: normalizeErrorMessage(result.error), lastCheckedAt: new Date().toISOString() });
+    setCmsPublishHistoryState({ rollbackStatus: '', rollbackError: normalizeErrorMessage(result.error) });
+    handlers.onRerender?.();
+    return;
+  }
+  setReleaseOperationGateState({ blocked: false, lineageRepairRequired: false, repairRequired: false, reconciliationRequired: false, reconciling: false, message: '', state: 'succeeded', phase: 'resolved', result: result.data || null, lastCheckedAt: new Date().toISOString() });
+  setCmsPublishHistoryState({ rollbackStatus: 'Đã sửa lịch sử vận hành. Hãy tải lại lịch sử trước khi thao tác tiếp.', rollbackError: null });
+  await handleLoadPublishHistory({ onRerender: () => {} }, { resetWorkflow: false });
+  handlers.onRerender?.();
+}
+
 function queueLoadPublishHistory(handlers = {}) {
   if (historyLoadQueued) return;
   historyLoadQueued = true;
@@ -1324,6 +1390,8 @@ function hasValidDryRunForSource(historyState = {}, sourcePath = '') {
     && dryRun?.dryRun === true
     && dryRun?.sourcePath === sourcePath
     && dryRun?.sourceHash
+    && dryRun?.expectedCurrentReleaseId
+    && dryRun?.expectedCurrentContentHash
   );
 }
 

@@ -890,6 +890,10 @@ export async function rollbackCmsJson(client, payload = {}) {
     bodyPayload.confirmHash = confirmHash;
     bodyPayload.targetContentHash = confirmHash;
   }
+  const expectedCurrentReleaseId = normalizeReleaseId(payload.expectedCurrentReleaseId);
+  const expectedCurrentContentHash = normalizeOptionalText(payload.expectedCurrentContentHash).toLowerCase();
+  if (expectedCurrentReleaseId) bodyPayload.expectedCurrentReleaseId = expectedCurrentReleaseId;
+  if (expectedCurrentContentHash) bodyPayload.expectedCurrentContentHash = expectedCurrentContentHash;
   const reason = normalizeOptionalText(payload.reason);
   if (reason) bodyPayload.reason = reason;
 

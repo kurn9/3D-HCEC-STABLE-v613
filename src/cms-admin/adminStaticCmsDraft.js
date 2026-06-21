@@ -4792,9 +4792,9 @@ export async function handlePublishStaticCmsDraft({ dryRun = true, handlers = {}
       handlers.onRerender?.();
       return;
     }
-    if (resultCode === 'RELEASE_OPERATION_BLOCKED') {
-      applyReleaseOperationGateFromServer(result.data || {}, 'Đang có một thao tác công khai hoặc khôi phục chưa hoàn tất. Hãy kiểm tra trạng thái hiện tại trước khi tiếp tục.');
-      setStaticCmsPublishState({ isPublishingCms: false, publishError: 'Đang có một thao tác công khai hoặc khôi phục chưa hoàn tất. Hãy kiểm tra trạng thái hiện tại trước khi tiếp tục.', publishStatus: '', publishResult: result.data || null });
+    if (resultCode === 'RELEASE_OPERATION_BLOCKED' || resultCode === 'RELEASE_LINEAGE_REPAIR_REQUIRED') {
+      applyReleaseOperationGateFromServer(result.data || {}, resultCode === 'RELEASE_LINEAGE_REPAIR_REQUIRED' ? 'Bản công khai đã được xác nhận nhưng lịch sử vận hành chưa hoàn tất. Hãy sửa lịch sử vận hành trước khi tiếp tục.' : 'Đang có một thao tác công khai hoặc khôi phục chưa hoàn tất. Hãy kiểm tra trạng thái hiện tại trước khi tiếp tục.');
+      setStaticCmsPublishState({ isPublishingCms: false, publishError: resultCode === 'RELEASE_LINEAGE_REPAIR_REQUIRED' ? 'Bản công khai đã được xác nhận nhưng lịch sử vận hành chưa hoàn tất. Hãy sửa lịch sử vận hành trước khi tiếp tục.' : 'Đang có một thao tác công khai hoặc khôi phục chưa hoàn tất. Hãy kiểm tra trạng thái hiện tại trước khi tiếp tục.', publishStatus: '', publishResult: result.data || null });
       handlers.onRerender?.();
       return;
     }

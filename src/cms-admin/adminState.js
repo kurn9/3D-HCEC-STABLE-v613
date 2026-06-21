@@ -149,6 +149,8 @@ export function createEmptyReleaseOperationGateState() {
     reconciling: false,
     lastCheckedAt: null,
     error: null,
+    lineageRepairRequired: false,
+    repairRequired: false,
     result: null,
   };
 }
@@ -169,7 +171,9 @@ export function clearReleaseOperationGateState() {
 
 export function applyReleaseOperationGateFromServer(data = {}, fallbackMessage = '') {
   const stateText = String(data.state || data.operationState || '').trim();
-  const blocked = Boolean(data.operationId) && ['in_progress', 'pointer_unknown'].includes(stateText);
+  const classification = String(data.classification || data.code || '').trim();
+  const lineageRepairRequired = Boolean(data.lineageRepairRequired || classification === 'lineage_repair_required' || classification === 'RELEASE_LINEAGE_REPAIR_REQUIRED' || data.code === 'RELEASE_LINEAGE_REPAIR_REQUIRED');
+  const blocked = Boolean(data.operationId) && (['in_progress', 'pointer_unknown'].includes(stateText) || lineageRepairRequired);
   return setReleaseOperationGateState({
     loading: false,
     blocked,
@@ -181,8 +185,10 @@ export function applyReleaseOperationGateFromServer(data = {}, fallbackMessage =
     targetReleaseId: String(data.targetReleaseId || ''),
     contentHash: String(data.contentHash || ''),
     contentPath: String(data.contentPath || ''),
-    message: blocked ? (fallbackMessage || 'Đang có một thao tác công khai hoặc khôi phục chưa hoàn tất. Hãy kiểm tra trạng thái hiện tại trước khi tiếp tục.') : '',
-    reconciliationRequired: blocked,
+    message: blocked ? (fallbackMessage || (lineageRepairRequired ? 'Bản công khai đã được xác nhận nhưng lịch sử vận hành chưa hoàn tất. Hãy sửa lịch sử vận hành trước khi tiếp tục.' : 'Đang có một thao tác công khai hoặc khôi phục chưa hoàn tất. Hãy kiểm tra trạng thái hiện tại trước khi tiếp tục.')) : '',
+    reconciliationRequired: blocked && !lineageRepairRequired,
+    lineageRepairRequired,
+    repairRequired: lineageRepairRequired,
     reconciling: false,
     lastCheckedAt: new Date().toISOString(),
     error: null,

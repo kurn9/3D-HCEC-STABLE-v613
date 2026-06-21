@@ -200,7 +200,7 @@ async function refreshReleaseOperationGate(client) {
     setReleaseOperationGateState({ loading: false, error: normalizeErrorMessage(result.error), lastCheckedAt: new Date().toISOString() });
     return;
   }
-  if (data.operationId && ['in_progress', 'pointer_unknown'].includes(String(data.state || data.operationState || ''))) {
+  if (data.operationId && (['in_progress', 'pointer_unknown'].includes(String(data.state || data.operationState || '')) || data.classification === 'lineage_repair_required' || data.lineageRepairRequired === true)) {
     applyReleaseOperationGateFromServer(data);
     return;
   }
