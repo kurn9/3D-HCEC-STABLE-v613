@@ -4579,7 +4579,7 @@ export function hasCurrentDryRunPass(draftState = {}) {
   if (!currentVersion || !verifiedVersion || currentVersion !== verifiedVersion) return false;
   const resultVersion = String(result.publishedVersion || result.plan?.publishedVersion || '').trim();
   if (!resultVersion || resultVersion !== currentVersion) return false;
-  const resultCandidateHash = normalizeSha256Hash(result.candidateHash || result.contentHash || result.plan?.contentHash || '');
+  const resultCandidateHash = normalizeSha256Hash(result.candidateHash || result.plan?.candidateHash || '');
   const verifiedCandidateHash = normalizeSha256Hash(draftState.publishVerifiedCandidateHash || '');
   if (!resultCandidateHash || !verifiedCandidateHash || resultCandidateHash !== verifiedCandidateHash) return false;
   if (!isPlainObjectValue(draftState.draftJson) || !isPlainObjectValue(draftState.baselineJson)) return false;
@@ -4673,7 +4673,7 @@ export async function handlePublishStaticCmsDraft({ dryRun = true, handlers = {}
     const verifiedId = String(draftState.publishVerifiedDraftId || '').trim();
     const verifiedUpdatedAt = normalizeDraftRevisionToken(draftState.publishVerifiedDraftUpdatedAt || '');
     const verifiedVersion = String(draftState.publishVerifiedDraftVersion || '').trim();
-    const verifiedCandidateHash = normalizeSha256Hash(draftState.publishVerifiedCandidateHash || draftState.publishDryRunResult?.candidateHash || draftState.publishDryRunResult?.contentHash || '');
+    const verifiedCandidateHash = normalizeSha256Hash(draftState.publishVerifiedCandidateHash || draftState.publishDryRunResult?.candidateHash || draftState.publishDryRunResult?.plan?.candidateHash || '');
     if (verifiedId !== persistedDraft.id || !areDraftRevisionTokensEqual(verifiedUpdatedAt, persistedDraft.updatedAt) || verifiedVersion !== persistedDraft.version || !verifiedCandidateHash) {
       setStaticCmsPublishState({
         isPublishingCms: false,
@@ -4727,7 +4727,7 @@ export async function handlePublishStaticCmsDraft({ dryRun = true, handlers = {}
     dryRun,
     expectedDraftUpdatedAt: persistedDraft.updatedAt,
     expectedDraftVersion: persistedDraft.version,
-    expectedCandidateHash: dryRun ? '' : normalizeSha256Hash(draftState.publishVerifiedCandidateHash || draftState.publishDryRunResult?.candidateHash || draftState.publishDryRunResult?.contentHash || ''),
+    expectedCandidateHash: dryRun ? '' : normalizeSha256Hash(draftState.publishVerifiedCandidateHash || draftState.publishDryRunResult?.candidateHash || draftState.publishDryRunResult?.plan?.candidateHash || ''),
   });
 
   if (result.error) {
@@ -4768,7 +4768,7 @@ export async function handlePublishStaticCmsDraft({ dryRun = true, handlers = {}
     publishVerifiedDraftId: dryRun ? persistedDraft.id : draftState.publishVerifiedDraftId,
     publishVerifiedDraftUpdatedAt: dryRun ? persistedDraft.updatedAt : draftState.publishVerifiedDraftUpdatedAt,
     publishVerifiedDraftVersion: dryRun ? persistedDraft.version : draftState.publishVerifiedDraftVersion,
-    publishVerifiedCandidateHash: dryRun ? normalizeSha256Hash(result.data?.candidateHash || result.data?.contentHash || result.data?.plan?.contentHash || '') : draftState.publishVerifiedCandidateHash,
+    publishVerifiedCandidateHash: dryRun ? normalizeSha256Hash(result.data?.candidateHash || result.data?.plan?.candidateHash || '') : draftState.publishVerifiedCandidateHash,
     publishVerificationInvalidatedAt: null,
     publishVerificationInvalidationReason: '',
   });

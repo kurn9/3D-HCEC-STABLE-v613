@@ -7505,7 +7505,7 @@ function renderPublishCommandTechnicalDetails(model = {}) {
     ['Draft ID', model.currentDraftId || 'Chưa có'],
     ['Draft version', model.draftVersion || '—'],
     ['Published version', model.publicVersion || '—'],
-    ['Dry-run raw', model.dryRun?.ok === true ? JSON.stringify({ ok: model.dryRun.ok, dryRun: model.dryRun.dryRun, version: model.dryRun.publishedVersion || model.dryRun.plan?.publishedVersion || '', candidateHash: model.dryRun.candidateHash || model.dryRun.contentHash || '' }) : 'not-ready'],
+    ['Dry-run raw', model.dryRun?.ok === true ? JSON.stringify({ ok: model.dryRun.ok, dryRun: model.dryRun.dryRun, version: model.dryRun.publishedVersion || model.dryRun.plan?.publishedVersion || '', candidateHash: model.dryRun.candidateHash || model.dryRun.plan?.candidateHash || '' }) : 'not-ready'],
     ['Publish result raw', model.publishResult ? JSON.stringify({ ok: model.publishResult.ok, dryRun: model.publishResult.dryRun, releaseId: model.publishResult.releaseId || '', contentHash: model.publishResult.contentHash || '', publishedVersion: model.publishResult.publishedVersion || model.publishResult.plan?.publishedVersion || '' }) : '—'],
     ['Publish inclusion status', JSON.stringify({ blocksPublish: Boolean(model.publishInclusion?.blocksPublish), statuses: safeArray(model.publishInclusion?.items).map((item) => ({ key: item.key, status: item.status, blocksPublish: item.blocksPublish })) })],
   ]));
