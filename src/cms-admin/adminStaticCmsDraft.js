@@ -3799,7 +3799,8 @@ export function hasCurrentDryRunPass(draftState = {}) {
   if (!result || result.ok !== true || result.dryRun !== true) return false;
   const version = String(draftState.draftJson?.version || '').trim();
   const resultVersion = String(result.publishedVersion || result.plan?.publishedVersion || '').trim();
-  return !version || !resultVersion || version === resultVersion;
+  if (!version || !resultVersion) return false;
+  return version === resultVersion;
 }
 
 export function getPublishReadiness(draftState = {}, access = {}) {
@@ -3813,7 +3814,7 @@ export function getPublishReadiness(draftState = {}, access = {}) {
   return { ready: true, reason: 'OK' };
 }
 
-async function handlePublishStaticCmsDraft({ dryRun = true, handlers = {} } = {}) {
+export async function handlePublishStaticCmsDraft({ dryRun = true, handlers = {} } = {}) {
   const appState = getState();
   const draftState = appState.staticCmsDraft || {};
   const access = getPublishGateAccess(appState);

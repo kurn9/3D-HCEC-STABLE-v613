@@ -1180,7 +1180,7 @@ body.cms-admin-page * {
 
 .cms-admin-metric-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
 }
 
@@ -8568,7 +8568,7 @@ body.cms-admin-page * {
 
 .cms-admin-publish-launchpad-steps {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
   list-style: none;
   margin: 0;
@@ -12603,7 +12603,7 @@ body.cms-admin-page * {
   }
 }
 
-/* v6.14.063.002 — Publish single command center + contextual checklist */
+/* v6.14.063.004 — Publish in-place workflow + fail-closed safety */
 .cms-admin-workspace[data-cms-workspace="publish"],
 .cms-admin-workspace[data-cms-workspace="publish"] .cms-admin-workspace-layout,
 .cms-admin-workspace[data-cms-workspace="publish"] .cms-admin-workspace-main,
@@ -12671,7 +12671,7 @@ body.cms-admin-page * {
 
 .cms-admin-publish-command-stepper {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
   list-style: none;
   margin: 0;
@@ -12760,6 +12760,20 @@ body.cms-admin-page * {
   display: grid;
   align-content: start;
   gap: 10px;
+}
+
+.cms-admin-publish-command-status-card {
+  grid-column: 1 / -1;
+  border-color: rgba(214, 178, 94, 0.24);
+}
+
+.cms-admin-publish-validation-issues {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid rgba(214, 178, 94, 0.24);
+  border-radius: 14px;
+  background: rgba(120, 83, 16, 0.12);
 }
 
 .cms-admin-publish-command-facts {
