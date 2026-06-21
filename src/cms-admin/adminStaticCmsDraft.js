@@ -3712,25 +3712,22 @@ export function buildCmsPublishInclusionStatus({ data = {}, draftState = {} } = 
   const hasDraftJson = Boolean(draftJson);
   const hasDraftVersion = Boolean(String(draftJson?.version || draftState.draftMeta?.version || '').trim());
   const draftClean = hasSavedDraft && hasDraftJson && !draftState.dirty;
-  const context = { draftJson, draftSavedAt, hasSavedDraft, hasDraftJson, hasDraftVersion, draftClean };
+  const baselineJson = draftState.baselineJson || null;
+  const context = { draftJson, baselineJson, draftSavedAt, hasSavedDraft, hasDraftJson, hasDraftVersion, draftClean };
   const items = [
-    buildDraftBackedInclusionItem({
+    buildDraftContentBackedInclusionItem({
       key: 'static_rooms',
       label: 'Nội dung phòng 3D',
-      draftSavedAt,
-      hasSavedDraft,
-      hasDraftJson,
-      hasDraftVersion,
-      draftClean,
+      context,
+      fragmentGetter: pickRoomsCompositionFragment,
+      technical: 'draft.rooms.indoor + draft.rooms.outdoor compared against persisted baseline snapshot',
     }),
-    buildDraftBackedInclusionItem({
+    buildDraftContentBackedInclusionItem({
       key: 'featured_artworks',
       label: 'Tác phẩm tiêu biểu',
-      draftSavedAt,
-      hasSavedDraft,
-      hasDraftJson,
-      hasDraftVersion,
-      draftClean,
+      context,
+      fragmentGetter: pickFeaturedCompositionFragment,
+      technical: 'draft.index.featuredArtworks compared against persisted baseline snapshot',
     }),
     buildContentBackedInclusionItem({
       key: 'home',
@@ -3782,8 +3779,9 @@ export function buildCmsPublishInclusionStatus({ data = {}, draftState = {} } = 
   };
 }
 
-function buildDraftBackedInclusionItem({ key, label, draftSavedAt, hasSavedDraft, hasDraftJson, hasDraftVersion, draftClean } = {}) {
-  if (!hasDraftJson) {
+function buildDraftContentBackedInclusionItem({ key, label, context = {}, fragmentGetter = null, technical = '' } = {}) {
+  const draftSavedAt = context.draftSavedAt || '';
+  if (!context.hasDraftJson) {
     return buildPublishInclusionItem({
       key,
       label,
@@ -3792,9 +3790,10 @@ function buildDraftBackedInclusionItem({ key, label, draftSavedAt, hasSavedDraft
       draftSavedAt,
       blocksPublish: true,
       nextAction: 'Tải nội dung website hiện tại rồi lưu bản chuẩn bị.',
+      technical,
     });
   }
-  if (!hasSavedDraft || !draftSavedAt) {
+  if (!context.hasSavedDraft || !draftSavedAt) {
     return buildPublishInclusionItem({
       key,
       label,
@@ -3803,9 +3802,10 @@ function buildDraftBackedInclusionItem({ key, label, draftSavedAt, hasSavedDraft
       draftSavedAt,
       blocksPublish: true,
       nextAction: 'Lưu bản chuẩn bị trước khi kiểm tra hoặc công khai.',
+      technical,
     });
   }
-  if (!hasDraftVersion) {
+  if (!context.hasDraftVersion) {
     return buildPublishInclusionItem({
       key,
       label,
@@ -3814,9 +3814,10 @@ function buildDraftBackedInclusionItem({ key, label, draftSavedAt, hasSavedDraft
       draftSavedAt,
       blocksPublish: true,
       nextAction: 'Kiểm tra lại nội dung bản chuẩn bị trước khi tiếp tục.',
+      technical,
     });
   }
-  if (!draftClean) {
+  if (!context.draftClean) {
     return buildPublishInclusionItem({
       key,
       label,
@@ -3825,18 +3826,63 @@ function buildDraftBackedInclusionItem({ key, label, draftSavedAt, hasSavedDraft
       draftSavedAt,
       blocksPublish: true,
       nextAction: 'Lưu thay đổi vào bản chuẩn bị.',
+      technical,
+    });
+  }
+  if (typeof fragmentGetter !== 'function' || !isPlainObjectValue(context.baselineJson)) {
+    return buildPublishInclusionItem({
+      key,
+      label,
+      status: 'unverifiable',
+      reason: 'Chưa có bản đã lưu để đối chiếu nội dung thật của khu vực này.',
+      draftSavedAt,
+      blocksPublish: true,
+      nextAction: 'Lưu bản chuẩn bị rồi kiểm tra lại.',
+      technical,
+    });
+  }
+  const draftFragment = fragmentGetter(context.draftJson || {});
+  const persistedFragment = fragmentGetter(context.baselineJson || {});
+  if (!normalizedDeepEqual(draftFragment, persistedFragment)) {
+    return buildPublishInclusionItem({
+      key,
+      label,
+      status: 'different',
+      reason: `${label} trong trình duyệt khác với bản chuẩn bị đã lưu. Cần lưu lại bản chuẩn bị trước khi kiểm tra hoặc công khai.`,
+      draftSavedAt,
+      blocksPublish: true,
+      nextAction: 'Lưu thay đổi vào bản chuẩn bị.',
+      technical,
     });
   }
   return buildPublishInclusionItem({
     key,
     label,
     status: 'included',
-    reason: 'Nội dung này được đọc trực tiếp từ bản chuẩn bị đang chọn.',
+    reason: 'Nội dung này đã khớp với bản chuẩn bị đã lưu.',
     draftSavedAt,
     updatedAt: draftSavedAt,
     blocksPublish: false,
     nextAction: '',
+    technical,
   });
+}
+
+function pickRoomsCompositionFragment(cmsJson = {}) {
+  return {
+    rooms: {
+      indoor: cloneJson(cmsJson?.rooms?.indoor || {}),
+      outdoor: cloneJson(cmsJson?.rooms?.outdoor || {}),
+    },
+  };
+}
+
+function pickFeaturedCompositionFragment(cmsJson = {}) {
+  return {
+    index: {
+      featuredArtworks: cloneJson(cmsJson?.index?.featuredArtworks || []),
+    },
+  };
 }
 
 function buildContentBackedInclusionItem({ key, label, projection, context = {}, updatedAt = '', required = true } = {}) {
@@ -4342,6 +4388,118 @@ function isPublishTimestampAfter(left = '', right = '') {
 }
 
 
+export function normalizePersistedCmsDraftSnapshot(row = {}, expectedDraftId = '') {
+  const expectedId = String(expectedDraftId || '').trim();
+  const id = String(row?.id || '').trim();
+  if (!id) return { ok: false, code: 'missing_id', reason: 'Không đọc lại được ID bản chuẩn bị đã lưu.' };
+  if (expectedId && id !== expectedId) return { ok: false, code: 'draft_id_mismatch', reason: 'Bản đã đọc lại không khớp ID bản đang mở.' };
+  const rawContent = row?.content_json || row?.contentJson || null;
+  if (!isPlainObjectValue(rawContent)) return { ok: false, code: 'missing_content_json', reason: 'Không đọc lại được nội dung bản chuẩn bị đã lưu.' };
+  const contentJson = sanitizeStaticCmsExport(rawContent, { keepVersion: true });
+  const version = String(contentJson?.version || row?.source_version || row?.sourceVersion || '').trim();
+  if (!version) return { ok: false, code: 'missing_version', reason: 'Bản chuẩn bị đã lưu thiếu phiên bản dữ liệu.' };
+  const updatedAt = normalizePublishTimestamp(row?.updated_at || row?.updatedAt || '');
+  if (!updatedAt) return { ok: false, code: 'missing_updated_at', reason: 'Bản chuẩn bị đã lưu thiếu thời điểm cập nhật.' };
+  return {
+    ok: true,
+    snapshot: {
+      id,
+      updatedAt,
+      version,
+      contentJson,
+      title: row?.title || '',
+      note: row?.note || '',
+      sourceVersion: row?.source_version || row?.sourceVersion || '',
+    },
+  };
+}
+
+async function readPersistedCmsDraftSnapshot(client, expectedDraftId = '') {
+  const result = await getCmsDraft(client, expectedDraftId);
+  if (result.error || !result.data) {
+    return { ok: false, code: 'readback_failed', reason: normalizeErrorMessage(result.error || 'Không tìm thấy bản chuẩn bị đã lưu.') };
+  }
+  return normalizePersistedCmsDraftSnapshot(result.data, expectedDraftId);
+}
+
+export async function verifyPersistedDraftForPublish({ appState = getState(), draftState = null, expectedDraftId = '' } = {}) {
+  const currentDraftState = draftState || appState.staticCmsDraft || {};
+  const draftId = String(expectedDraftId || currentDraftState.currentDraftId || '').trim();
+  if (!draftId) return { ok: false, code: 'missing_draft_id', reason: 'Cần lưu bản chuẩn bị trước khi kiểm tra hoặc đưa lên website.' };
+  if (currentDraftState.dirty) return { ok: false, code: 'local_dirty', reason: 'Bản chuẩn bị trong trình duyệt có thay đổi chưa lưu.' };
+  const readback = await readPersistedCmsDraftSnapshot(appState.supabase, draftId);
+  if (!readback.ok) return readback;
+  const persistedDraft = readback.snapshot;
+  const localJson = isPlainObjectValue(currentDraftState.draftJson)
+    ? sanitizeStaticCmsExport(currentDraftState.draftJson, { keepVersion: true })
+    : null;
+  if (!localJson || !normalizedDeepEqual(localJson, persistedDraft.contentJson)) {
+    return {
+      ok: false,
+      code: 'local_persisted_mismatch',
+      reason: 'Bản đang mở không khớp bản đã lưu trong CMS. Hãy lưu lại bản chuẩn bị rồi kiểm tra lại.',
+      persistedDraft,
+    };
+  }
+  const validation = validateStaticCmsDraft(persistedDraft.contentJson, STATIC_CMS_DRAFT_CONFIG);
+  if (!validation.valid) {
+    return {
+      ok: false,
+      code: 'persisted_validation_failed',
+      reason: 'Bản chuẩn bị đã lưu chưa đạt kiểm tra cấu trúc. Hãy sửa và lưu lại trước khi đưa lên website.',
+      persistedDraft,
+      validation,
+    };
+  }
+  const dashboard = await fetchDashboardData(appState.supabase);
+  const refreshErrors = dashboard?.errors || {};
+  const criticalError = refreshErrors.siteSettings || refreshErrors.indexSections || refreshErrors.gateContent || null;
+  if (criticalError) {
+    return {
+      ok: false,
+      code: 'dashboard_refresh_failed',
+      reason: `Không đọc được nội dung đã lưu mới nhất để đối chiếu: ${normalizeErrorMessage(criticalError)}`,
+      persistedDraft,
+      validation,
+      dashboardData: dashboard?.data || null,
+    };
+  }
+  const persistedDraftState = {
+    ...currentDraftState,
+    draftJson: persistedDraft.contentJson,
+    baselineJson: persistedDraft.contentJson,
+    currentDraftId: persistedDraft.id,
+    draftLastSavedAt: persistedDraft.updatedAt,
+    persistedDraftId: persistedDraft.id,
+    persistedDraftUpdatedAt: persistedDraft.updatedAt,
+    persistedDraftVersion: persistedDraft.version,
+    dirty: false,
+    validation,
+  };
+  const inclusionStatus = buildCmsPublishInclusionStatus({ data: dashboard?.data || {}, draftState: persistedDraftState });
+  if (inclusionStatus.blocksPublish) {
+    return {
+      ok: false,
+      code: 'inclusion_blocked',
+      reason: inclusionStatus.firstBlock?.reason || 'Một số khu vực chưa có trong bản chuẩn bị.',
+      persistedDraft,
+      validation,
+      dashboardData: dashboard?.data || null,
+      inclusionStatus,
+    };
+  }
+  return {
+    ok: true,
+    code: 'ok',
+    reason: 'OK',
+    persistedDraft,
+    validation,
+    dashboardData: dashboard?.data || null,
+    inclusionStatus,
+  };
+}
+
+
 export function getPublishGateAccess(appState = {}) {
   if (!appState.supabase) return { allowed: false, reason: 'Supabase client chưa sẵn sàng.' };
   if (!appState.session?.user?.id) return { allowed: false, reason: 'Cần đăng nhập để công khai bản nháp.' };
@@ -4356,16 +4514,30 @@ export function getPublishGateAccess(appState = {}) {
 export function hasCurrentDryRunPass(draftState = {}) {
   const result = draftState.publishDryRunResult || null;
   if (!result || result.ok !== true || result.dryRun !== true) return false;
-  const version = String(draftState.draftJson?.version || '').trim();
+  if (draftState.dirty) return false;
+  if (draftState.publishVerificationInvalidatedAt) return false;
+  const currentDraftId = String(draftState.currentDraftId || '').trim();
+  const persistedId = String(draftState.persistedDraftId || currentDraftId || '').trim();
+  const verifiedId = String(draftState.publishVerifiedDraftId || '').trim();
+  if (!currentDraftId || !persistedId || !verifiedId || currentDraftId !== persistedId || verifiedId !== currentDraftId) return false;
+  const currentUpdatedAt = normalizePublishTimestamp(draftState.persistedDraftUpdatedAt || draftState.draftLastSavedAt || '');
+  const verifiedUpdatedAt = normalizePublishTimestamp(draftState.publishVerifiedDraftUpdatedAt || '');
+  if (!currentUpdatedAt || !verifiedUpdatedAt || currentUpdatedAt !== verifiedUpdatedAt) return false;
+  const currentVersion = String(draftState.persistedDraftVersion || draftState.draftJson?.version || '').trim();
+  const verifiedVersion = String(draftState.publishVerifiedDraftVersion || '').trim();
+  if (!currentVersion || !verifiedVersion || currentVersion !== verifiedVersion) return false;
   const resultVersion = String(result.publishedVersion || result.plan?.publishedVersion || '').trim();
-  if (!version || !resultVersion) return false;
-  return version === resultVersion;
+  if (!resultVersion || resultVersion !== currentVersion) return false;
+  return true;
 }
 
 export function getPublishReadiness(draftState = {}, access = {}, publishInclusionStatus = null) {
   if (!access.allowed) return { ready: false, reason: access.reason || 'Không đủ quyền công khai.' };
   if (!draftState.draftJson) return { ready: false, reason: 'Chưa tải bản nháp.' };
   if (!draftState.currentDraftId) return { ready: false, reason: 'Cần lưu thay đổi trước khi công khai.' };
+  if (draftState.persistedDraftId && String(draftState.persistedDraftId) !== String(draftState.currentDraftId)) {
+    return { ready: false, reason: 'Bản đang mở không khớp bản đã lưu trong CMS. Hãy lưu lại bản chuẩn bị.' };
+  }
   if (draftState.dirty) return { ready: false, reason: 'Bản nháp đang có thay đổi chưa lưu. Hãy lưu thay đổi trước khi công khai.' };
   if (draftState.isSavingDraft) return { ready: false, reason: 'Đang lưu thay đổi, vui lòng chờ hoàn tất.' };
   if (draftState.isUploadingMedia) return { ready: false, reason: 'Đang upload media, vui lòng chờ hoàn tất.' };
@@ -4388,32 +4560,105 @@ export async function handlePublishStaticCmsDraft({ dryRun = true, handlers = {}
     return;
   }
   if (!dryRun && !hasCurrentDryRunPass(draftState)) {
-    setStaticCmsPublishState({ publishError: 'Cần bấm “Kiểm tra an toàn” và nội dung phải đạt trước khi công khai.', publishStatus: '', publishResult: null });
+    setStaticCmsPublishState({ publishError: 'Cần bấm “Kiểm tra trước khi đưa lên” và nội dung phải đạt cho đúng bản chuẩn bị đã lưu.', publishStatus: '', publishResult: null });
     handlers.onRerender?.();
     return;
-  }
-
-  const confirmVersion = String(draftState.draftJson?.version || '').trim();
-  if (!dryRun) {
-    const stepOne = window.confirm('Thao tác này sẽ thay đổi website đang hoạt động bằng bản nháp CMS đã lưu. Tiếp tục?');
-    if (!stepOne) return;
-    const indoorCount = getDraftRoomItems(draftState.draftJson, 'indoor').length;
-    const outdoorCount = getDraftRoomItems(draftState.draftJson, 'outdoor').length;
-    const stepTwo = window.confirm(`Xác nhận công khai version ${confirmVersion || 'không rõ'} với indoor ${indoorCount} item và outdoor ${outdoorCount} item?`);
-    if (!stepTwo) return;
   }
 
   setStaticCmsPublishState({
     isPublishingCms: true,
     publishError: null,
-    publishStatus: dryRun ? 'Đang kiểm tra an toàn...' : 'Đang công khai bản nháp...',
+    publishStatus: dryRun ? 'Đang đọc lại bản chuẩn bị đã lưu trước khi kiểm tra...' : 'Đang xác minh lại bản chuẩn bị đã lưu trước khi đưa lên...',
+    publishResult: dryRun ? draftState.publishResult : null,
+  });
+  handlers.onRerender?.();
+
+  const preflight = await verifyPersistedDraftForPublish({ appState: getState(), draftState: getState().staticCmsDraft || {}, expectedDraftId: draftState.currentDraftId });
+  if (preflight.dashboardData) setNestedData(preflight.dashboardData);
+  if (!preflight.ok) {
+    setStaticCmsPublishState({
+      isPublishingCms: false,
+      publishError: preflight.reason || 'Bản chuẩn bị chưa qua bước xác minh trước khi đưa lên website.',
+      publishStatus: '',
+      publishResult: dryRun ? draftState.publishResult : null,
+      publishDryRunResult: null,
+      publishLastVerifiedAt: null,
+      publishVerifiedDraftId: '',
+      publishVerifiedDraftUpdatedAt: null,
+      publishVerifiedDraftVersion: '',
+      publishVerificationInvalidatedAt: new Date().toISOString(),
+      publishVerificationInvalidationReason: preflight.reason || 'Bản chuẩn bị chưa qua bước xác minh.',
+    });
+    handlers.onRerender?.();
+    return;
+  }
+
+  const persistedDraft = preflight.persistedDraft;
+  setStaticCmsPublishState({
+    currentDraftId: persistedDraft.id,
+    persistedDraftId: persistedDraft.id,
+    persistedDraftUpdatedAt: persistedDraft.updatedAt,
+    persistedDraftVersion: persistedDraft.version,
+    draftLastSavedAt: persistedDraft.updatedAt,
+    baselineJson: cloneJson(persistedDraft.contentJson),
+    draftJson: cloneJson(persistedDraft.contentJson),
+    dirty: false,
+    validation: preflight.validation,
+    preparationCompositionError: null,
+  });
+
+  if (!dryRun) {
+    const verifiedId = String(draftState.publishVerifiedDraftId || '').trim();
+    const verifiedUpdatedAt = normalizePublishTimestamp(draftState.publishVerifiedDraftUpdatedAt || '');
+    const verifiedVersion = String(draftState.publishVerifiedDraftVersion || '').trim();
+    if (verifiedId !== persistedDraft.id || verifiedUpdatedAt !== persistedDraft.updatedAt || verifiedVersion !== persistedDraft.version) {
+      setStaticCmsPublishState({
+        isPublishingCms: false,
+        publishError: 'Bản chuẩn bị đã thay đổi sau lần kiểm tra. Hãy lưu và kiểm tra lại trước khi đưa lên website.',
+        publishStatus: '',
+        publishDryRunResult: null,
+        publishResult: null,
+        publishLastVerifiedAt: null,
+        publishVerifiedDraftId: '',
+        publishVerifiedDraftUpdatedAt: null,
+        publishVerifiedDraftVersion: '',
+        publishVerificationInvalidatedAt: new Date().toISOString(),
+        publishVerificationInvalidationReason: 'Bản chuẩn bị đã thay đổi sau lần kiểm tra.',
+      });
+      handlers.onRerender?.();
+      return;
+    }
+  }
+
+  const confirmVersion = String(persistedDraft.version || '').trim();
+  if (!dryRun) {
+    const stepOne = window.confirm('Thao tác này sẽ thay đổi website đang hoạt động bằng bản chuẩn bị đã lưu. Tiếp tục?');
+    if (!stepOne) {
+      setStaticCmsPublishState({ isPublishingCms: false, publishStatus: '' });
+      handlers.onRerender?.();
+      return;
+    }
+    const indoorCount = getDraftRoomItems(persistedDraft.contentJson, 'indoor').length;
+    const outdoorCount = getDraftRoomItems(persistedDraft.contentJson, 'outdoor').length;
+    const stepTwo = window.confirm(`Xác nhận công khai version ${confirmVersion || 'không rõ'} với indoor ${indoorCount} item và outdoor ${outdoorCount} item?`);
+    if (!stepTwo) {
+      setStaticCmsPublishState({ isPublishingCms: false, publishStatus: '' });
+      handlers.onRerender?.();
+      return;
+    }
+  }
+
+  setStaticCmsPublishState({
+    isPublishingCms: true,
+    publishError: null,
+    publishStatus: dryRun ? 'Đang kiểm tra trước khi đưa lên...' : 'Đang đưa bản chuẩn bị lên website...',
     publishDryRunResult: dryRun ? null : draftState.publishDryRunResult,
     publishResult: dryRun ? draftState.publishResult : null,
   });
   handlers.onRerender?.();
 
   const result = await publishCmsJson(appState.supabase, {
-    draftId: draftState.currentDraftId,
+    draftId: persistedDraft.id,
     confirmVersion,
     dryRun,
   });
@@ -4437,6 +4682,11 @@ export async function handlePublishStaticCmsDraft({ dryRun = true, handlers = {}
     publishDryRunResult: dryRun ? result.data : draftState.publishDryRunResult,
     publishResult: dryRun ? draftState.publishResult : result.data,
     publishLastVerifiedAt: new Date().toISOString(),
+    publishVerifiedDraftId: dryRun ? persistedDraft.id : draftState.publishVerifiedDraftId,
+    publishVerifiedDraftUpdatedAt: dryRun ? persistedDraft.updatedAt : draftState.publishVerifiedDraftUpdatedAt,
+    publishVerifiedDraftVersion: dryRun ? persistedDraft.version : draftState.publishVerifiedDraftVersion,
+    publishVerificationInvalidatedAt: null,
+    publishVerificationInvalidationReason: '',
   });
   handlers.onRerender?.();
 }
@@ -4659,18 +4909,81 @@ export async function handleSaveStaticCmsDraft({ asNew = false, handlers = {} } 
     return;
   }
 
+  const savedDraftId = result.data?.id || draftState.currentDraftId || '';
+  const readback = await readPersistedCmsDraftSnapshot(appState.supabase, savedDraftId);
+  if (!readback.ok) {
+    setStaticCmsDraftPersistenceState({
+      isSavingDraft: false,
+      draftPersistenceError: readback.reason || 'Không đọc lại được bản chuẩn bị đã lưu.',
+      draftSaveStatus: '',
+      dirty: true,
+      publishDryRunResult: null,
+      publishResult: null,
+      publishStatus: '',
+      publishError: null,
+      publishLastVerifiedAt: null,
+      publishVerifiedDraftId: '',
+      publishVerifiedDraftUpdatedAt: null,
+      publishVerifiedDraftVersion: '',
+      publishVerificationInvalidatedAt: new Date().toISOString(),
+      publishVerificationInvalidationReason: 'Không đọc lại được bản chuẩn bị đã lưu.',
+    });
+    handlers.onRerender?.();
+    return;
+  }
+
+  const persistedDraft = readback.snapshot;
+  const persistedValidation = validateStaticCmsDraft(persistedDraft.contentJson, STATIC_CMS_DRAFT_CONFIG);
+  if (!persistedValidation.valid) {
+    setStaticCmsDraftPersistenceState({
+      isSavingDraft: false,
+      currentDraftId: persistedDraft.id,
+      persistedDraftId: persistedDraft.id,
+      persistedDraftUpdatedAt: persistedDraft.updatedAt,
+      persistedDraftVersion: persistedDraft.version,
+      draftPersistenceError: 'Bản chuẩn bị đã lưu nhưng nội dung đọc lại chưa đạt kiểm tra cấu trúc. Chưa thể dùng để công khai.',
+      draftSaveStatus: '',
+      dirty: true,
+      publishDryRunResult: null,
+      publishResult: null,
+      publishStatus: '',
+      publishError: null,
+      publishLastVerifiedAt: null,
+      publishVerifiedDraftId: '',
+      publishVerifiedDraftUpdatedAt: null,
+      publishVerifiedDraftVersion: '',
+      publishVerificationInvalidatedAt: new Date().toISOString(),
+      publishVerificationInvalidationReason: 'Bản chuẩn bị đọc lại chưa đạt kiểm tra cấu trúc.',
+    });
+    handlers.onRerender?.();
+    return;
+  }
+
   setStaticCmsDraftPersistenceState({
     isSavingDraft: false,
-    currentDraftId: result.data?.id || draftState.currentDraftId || '',
-    draftLastSavedAt: result.data?.updated_at || new Date().toISOString(),
-    draftTitle: payload.title,
+    currentDraftId: persistedDraft.id,
+    persistedDraftId: persistedDraft.id,
+    persistedDraftUpdatedAt: persistedDraft.updatedAt,
+    persistedDraftVersion: persistedDraft.version,
+    draftLastSavedAt: persistedDraft.updatedAt,
+    draftTitle: result.data?.title || payload.title,
     draftTitleTouched: Boolean(draftState.draftTitleTouched || asNew),
     draftSaveStatus: 'Đã lưu trong bản chuẩn bị. Website đang hoạt động chưa thay đổi.',
     dirty: false,
-    validation,
-    baselineJson: cloneJson(exportJson),
-    draftJson: cloneJson(exportJson),
+    validation: persistedValidation,
+    baselineJson: cloneJson(persistedDraft.contentJson),
+    draftJson: cloneJson(persistedDraft.contentJson),
     draftPersistenceError: null,
+    publishDryRunResult: null,
+    publishResult: null,
+    publishStatus: '',
+    publishError: null,
+    publishLastVerifiedAt: null,
+    publishVerifiedDraftId: '',
+    publishVerifiedDraftUpdatedAt: null,
+    publishVerifiedDraftVersion: '',
+    publishVerificationInvalidatedAt: null,
+    publishVerificationInvalidationReason: '',
   });
   await handleLoadSavedCmsDrafts({ onRerender: () => {} });
   handlers.onRerender?.();
@@ -4893,6 +5206,11 @@ async function handleUploadStaticCmsMedia({ input, target = {}, handlers = {} } 
 
 export async function handleLoadStaticCmsBaseline(handlers = {}) {
   if (!ADMIN_FEATURE_FLAGS.allowStaticCmsDraftEdit) return;
+  const currentDraftState = getState().staticCmsDraft || {};
+  if (currentDraftState.currentDraftId) {
+    const ok = window.confirm('Mở lại nội dung website đang chạy sẽ rời bản chuẩn bị hiện tại. Các thay đổi đã lưu vẫn còn trong CMS nhưng sẽ không còn là bản đang mở. Tiếp tục?');
+    if (!ok) return;
+  }
   setStaticCmsDraftState({ loading: true, loadError: null, exportError: null, exportSuccess: null });
   handlers.onRerender?.();
   try {

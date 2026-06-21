@@ -26,6 +26,7 @@ import {
   getActiveEditSession,
   getAllActiveEditSessions,
   hasDirtyEditSession,
+  invalidateStaticCmsPublishVerification,
   resetGateEdit,
   resetHomeEdit,
   resetSiteSettingsEdit,
@@ -8559,6 +8560,7 @@ async function handleSaveSiteSettingsDraft() {
   }
 
   await loadDashboardData(latestState.supabase);
+  invalidateStaticCmsPublishVerification('Thông tin website đã được lưu lại. Hãy cập nhật bản chuẩn bị và kiểm tra lại trước khi đưa lên website.');
   setSiteSettingsEditState({
     isEditing: false,
     draftValues: {},
@@ -8770,6 +8772,7 @@ async function handleSaveGateContentDraft() {
   }
 
   await loadDashboardData(latestState.supabase);
+  invalidateStaticCmsPublishVerification('Cổng vào triển lãm đã được lưu lại. Hãy cập nhật bản chuẩn bị và kiểm tra lại trước khi đưa lên website.');
   setGateEditState({
     isEditing: false,
     draftValues: {},
@@ -10066,6 +10069,7 @@ async function handleSaveHomeGuideDraft() {
   }
 
   await loadDashboardData(latestState.supabase);
+  invalidateStaticCmsPublishVerification('Trang chủ đã được lưu lại. Hãy cập nhật bản chuẩn bị và kiểm tra lại trước khi đưa lên website.');
   setHomeEditState({
     isEditing: false,
     editingSectionId: null,
@@ -10332,6 +10336,7 @@ async function handleSaveHomeExperienceDraft() {
   }
 
   await loadDashboardData(latestState.supabase);
+  invalidateStaticCmsPublishVerification('Trang chủ đã được lưu lại. Hãy cập nhật bản chuẩn bị và kiểm tra lại trước khi đưa lên website.');
   setHomeEditState({
     isEditing: false,
     editingSectionId: null,
@@ -10416,6 +10421,7 @@ async function handleSaveHomeHeroDraft() {
   }
 
   await loadDashboardData(latestState.supabase);
+  invalidateStaticCmsPublishVerification('Trang chủ đã được lưu lại. Hãy cập nhật bản chuẩn bị và kiểm tra lại trước khi đưa lên website.');
   setHomeEditState({
     isEditing: false,
     editingSectionId: null,
