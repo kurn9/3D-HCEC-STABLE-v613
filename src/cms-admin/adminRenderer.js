@@ -420,7 +420,7 @@ function getGlobalLeaveMessage() {
 }
 
 function getSavingBlockedMessage() {
-  return ADMIN_COPY.globalEdit?.savingBlocked || 'Đang lưu bản nháp, vui lòng chờ hoàn tất.';
+  return ADMIN_COPY.globalEdit?.savingBlocked || 'Đang lưu thay đổi, vui lòng chờ hoàn tất.';
 }
 
 function isSameEditSession(current, target = {}) {
@@ -540,10 +540,10 @@ function renderEditActionBlock(editState = {}, copy = {}, handlers = {}) {
 
   const saveButton = createElement('button', {
     className: 'cms-admin-button cms-admin-button-primary',
-    text: editState.saving ? (copy.saving || 'Đang lưu...') : (copy.save || 'Lưu bản nháp'),
-    title: copy.saveTitle || copy.saveAria || 'Lưu nội dung vào bản nháp CMS',
+    text: editState.saving ? (copy.saving || 'Đang lưu...') : (copy.save || 'Lưu thay đổi'),
+    title: copy.saveTitle || copy.saveAria || 'Lưu thay đổi ở màn này',
     type: 'submit',
-    ariaLabel: copy.saveAria || copy.saveTitle || 'Lưu nội dung vào bản nháp CMS',
+    ariaLabel: copy.saveAria || copy.saveTitle || 'Lưu thay đổi ở màn này',
   });
   saveButton.disabled = Boolean(editState.saving) || !Boolean(editState.dirty);
 
@@ -552,6 +552,31 @@ function renderEditActionBlock(editState = {}, copy = {}, handlers = {}) {
   block.appendChild(renderCleanEditNotice(editState, copy));
   block.appendChild(renderSaveDisabledReason(editState, copy));
   return block;
+}
+
+
+function renderPostSavePublishNextStep(message = 'Khi hoàn tất chỉnh sửa, mở “Đưa website lên bản mới”.') {
+  const wrap = createElement('div', { className: 'cms-admin-post-save-next-step' });
+  wrap.appendChild(createElement('p', {
+    className: 'cms-admin-help-text',
+    text: message,
+  }));
+  const button = createElement('button', {
+    className: 'cms-admin-button cms-admin-button-secondary cms-admin-button-small',
+    type: 'button',
+    text: 'Tiếp tục: Đưa website lên bản mới',
+    attrs: { 'aria-label': 'Mở màn Đưa website lên bản mới' },
+  });
+  button.addEventListener('click', () => switchAdminTab('publish'));
+  wrap.appendChild(button);
+  return wrap;
+}
+
+function renderPostSaveSuccessBlock(message = 'Đã lưu ở màn này. Website đang hoạt động chưa thay đổi.') {
+  const wrap = createElement('div', { className: 'cms-admin-post-save-success-block' });
+  wrap.appendChild(renderNoticeBox(message, 'success'));
+  wrap.appendChild(renderPostSavePublishNextStep());
+  return wrap;
 }
 
 function getResetConfirmMessage() {
@@ -856,6 +881,7 @@ function renderActiveTab(state) {
           activeRoomKey: activeKey,
           onRerender: renderAdminShell,
           onOpenHistory: () => switchAdminTab('history'),
+          onOpenPublish: () => switchAdminTab('publish'),
         }),
       });
     case 'publish':
@@ -910,7 +936,7 @@ const WORKSPACE_TAB_DEFINITIONS = Object.freeze({
     { key: 'workspace', label: 'Luồng dọn tệp', summary: 'Quét, kiểm tra candidate, xem chi tiết và chỉ dọn khi checklist an toàn đạt.' },
   ],
   settings: [
-    { key: 'workspace', label: 'Workspace thông tin website', summary: 'Chỉnh thông tin, kiểm tra và lưu bản nháp CMS trong một workspace.' },
+    { key: 'workspace', label: 'Workspace thông tin website', summary: 'Chỉnh thông tin, kiểm tra và lưu thay đổi CMS trong một workspace.' },
   ],
 });
 
@@ -1198,19 +1224,19 @@ function getWorkspaceSecondaryNotes(workspaceKey, tabKey, state = {}) {
       workspace: ['Tổng quan chỉ xem thông tin, không tự lưu hay công khai.', 'Mở đúng màn bên dưới khi cần chỉnh nội dung.'],
     },
     home: {
-      hero: ['Khu vực đầu trang là phần người xem thấy đầu tiên.', 'Sửa Hero chỉ lưu bản nháp CMS, chưa làm đổi website.'],
+      hero: ['Khu vực đầu trang là phần người xem thấy đầu tiên.', 'Sửa Hero chỉ lưu thay đổi CMS, chưa làm đổi website.'],
       experience: ['Khu vực trải nghiệm chỉ hiển thị nội dung của section experience.', 'Mã phòng và route kỹ thuật không đổi ở tab này.'],
       guide: ['Hướng dẫn tham quan chỉ hiển thị nội dung của section guide.', 'Danh sách/nội dung con được giữ theo dữ liệu hiện có.'],
       contact: ['Thông tin liên hệ là dữ liệu tiện ích để đối chiếu.', 'Muốn sửa liên hệ chính thức thì mở màn Thông tin website.'],
     },
     gate: {
-      intro: ['Màn chào chỉ hiển thị nội dung người xem đọc trước khi chọn không gian.', 'Sửa Màn chào chỉ lưu bản nháp CMS, chưa làm đổi website.'],
+      intro: ['Màn chào chỉ hiển thị nội dung người xem đọc trước khi chọn không gian.', 'Sửa Màn chào chỉ lưu thay đổi CMS, chưa làm đổi website.'],
       indoor: ['Không gian trong nhà chỉ hiển thị dữ liệu phòng indoor.', 'Đường dẫn kỹ thuật được giữ trong phần đối chiếu phụ.'],
       outdoor: ['Không gian ngoài trời chỉ hiển thị dữ liệu phòng outdoor.', 'Đường dẫn kỹ thuật được giữ trong phần đối chiếu phụ.'],
     },
     staticDraft: {
-      indoor: ['Tab này chỉ hiển thị item thuộc phòng trong nhà.', 'Chọn item cần sửa trong danh sách indoor; lưu bản nháp chưa làm đổi website.'],
-      outdoor: ['Tab này chỉ hiển thị item thuộc phòng ngoài trời.', 'Chọn item cần sửa trong danh sách outdoor; lưu bản nháp chưa làm đổi website.'],
+      indoor: ['Tab này chỉ hiển thị item thuộc phòng trong nhà.', 'Chọn item cần sửa trong danh sách indoor; lưu thay đổi chưa làm đổi website.'],
+      outdoor: ['Tab này chỉ hiển thị item thuộc phòng ngoài trời.', 'Chọn item cần sửa trong danh sách outdoor; lưu thay đổi chưa làm đổi website.'],
       featured: ['Tab này chỉ hiển thị dữ liệu index.featuredArtworks.', 'Đây là nội dung nổi bật trên Trang chủ/Intro, không phải danh sách item canonical của phòng.'],
     },
     media: {
@@ -1230,7 +1256,7 @@ function getWorkspaceSecondaryNotes(workspaceKey, tabKey, state = {}) {
       confirm: ['Dọn dẹp thật chỉ thực hiện khi có feature flag, quyền admin và cụm xác nhận hợp lệ.', 'Không có auto-delete khi chuyển tab.'],
     },
     settings: {
-      edit: ['Chỉnh sửa thông tin website chỉ lưu bản nháp CMS.', 'Website vẫn cần công khai bản đã lưu để thay đổi public.'],
+      edit: ['Chỉnh sửa thông tin website chỉ lưu thay đổi CMS.', 'Website chỉ thay đổi tại màn Đưa website lên bản mới.'],
       identity: ['Thông tin hiển thị chỉ gồm tên, đơn vị, liên hệ và ngôn ngữ.', 'Các field legacy không thuộc thao tác operator ở màn này.'],
       details: ['Trạng thái quản trị và dữ liệu kỹ thuật dùng để hỗ trợ vận hành, không phải nội dung chính.'],
     },
@@ -1308,19 +1334,19 @@ function getWorkspaceRailGuidance(workspaceKey, tabKey, pageCopy = {}, stepConfi
         title: 'Bạn đang xem Phòng trong nhà',
         status: 'Room indoor',
         summary: 'Chỉ xem danh sách item và nội dung thuộc phòng trong nhà. Chọn item cần sửa, kiểm tra chữ/media trong đúng ngữ cảnh phòng này.',
-        steps: ['Kiểm tra danh sách item indoor.', 'Chọn item cần sửa.', 'Sửa bản nháp nếu chữ hoặc media chưa đúng.', 'Lưu bản nháp chưa làm đổi website.'],
+        steps: ['Kiểm tra danh sách item indoor.', 'Chọn item cần sửa.', 'Sửa bản nháp nếu chữ hoặc media chưa đúng.', 'Lưu thay đổi chưa làm đổi website.'],
       },
       outdoor: {
         title: 'Bạn đang xem Phòng ngoài trời',
         status: 'Room outdoor',
         summary: 'Chỉ xem danh sách item và nội dung thuộc phòng ngoài trời. Chọn item cần sửa, kiểm tra chữ/media trong đúng ngữ cảnh phòng này.',
-        steps: ['Kiểm tra danh sách item outdoor.', 'Chọn item cần sửa.', 'Sửa bản nháp nếu chữ hoặc media chưa đúng.', 'Lưu bản nháp chưa làm đổi website.'],
+        steps: ['Kiểm tra danh sách item outdoor.', 'Chọn item cần sửa.', 'Sửa bản nháp nếu chữ hoặc media chưa đúng.', 'Lưu thay đổi chưa làm đổi website.'],
       },
       featured: {
         title: 'Bạn đang xem Tác phẩm tiêu biểu',
         status: 'index.featuredArtworks',
         summary: 'Đây là nội dung nổi bật trên Trang chủ/Intro. Dữ liệu có thể tham chiếu tác phẩm/phòng nhưng owner là index.featuredArtworks, không phải rooms.indoor/outdoor.artworks.',
-        steps: ['Kiểm tra tiêu đề và mô tả khu vực tiêu biểu.', 'Kiểm tra từng mục tiêu biểu, ảnh, room và artworkId nếu có.', 'Sửa bản nháp khi item tiêu biểu thiếu chữ hoặc ảnh.', 'Lưu bản nháp chưa làm đổi website.'],
+        steps: ['Kiểm tra tiêu đề và mô tả khu vực tiêu biểu.', 'Kiểm tra từng mục tiêu biểu, ảnh, room và artworkId nếu có.', 'Sửa bản nháp khi item tiêu biểu thiếu chữ hoặc ảnh.', 'Lưu thay đổi chưa làm đổi website.'],
       },
     },
 
@@ -1760,7 +1786,7 @@ function renderHomeWorkspaceContent(state, activeKey = 'hero') {
   const wrap = renderWorkspaceSlotWrap('home', normalizedActiveKey);
 
   if (editState.saveSuccess && !editState.isEditing) {
-    wrap.appendChild(renderNoticeBox(editState.saveSuccess, 'success'));
+    wrap.appendChild(renderPostSaveSuccessBlock(editState.saveSuccess));
   }
 
   if (!sections.length) {
@@ -1928,7 +1954,7 @@ function renderHomeContextualChecklistPanel(state, section, sectionKey, copy = A
 function getHomeContextSummary(section, sectionKey, meta = getHomeSectionPriorityMeta(sectionKey)) {
   if (sectionKey === 'contact') return 'Liên hệ trong Trang chủ chỉ để đối chiếu. Dữ liệu chính được chỉnh ở Thông tin website.';
   if (!section) return `Chưa đọc được ${meta.label}.`;
-  return `${meta.label} đang ở chế độ xem. Chỉnh sửa chỉ lưu bản nháp trong CMS.`;
+  return `${meta.label} đang ở chế độ xem. Chỉnh sửa chỉ lưu thay đổi trong CMS.`;
 }
 
 
@@ -2022,7 +2048,7 @@ function buildHomeSectionChecklistModel(state, section, sectionKey, copy = ADMIN
     label: 'Website public',
     value: 'Chưa tự đổi',
     status: 'info',
-    detail: 'Mở, chỉnh hoặc lưu bản nháp trong CMS chưa công khai website. Website chỉ đổi ở workflow công khai riêng.',
+    detail: 'Mở, chỉnh hoặc lưu thay đổi trong CMS chưa công khai website. Website chỉ đổi ở workflow công khai riêng.',
   });
   return checklist;
 }
@@ -2284,7 +2310,7 @@ function renderHomeSectionEditActionCard(state, section, sectionKey, copy = ADMI
 function renderHomeSectionEditZone(state, sections = [], section, sectionKey, copy = ADMIN_COPY.contentViews.home, editState = {}) {
   const zone = createElement('section', { className: `cms-admin-home-section-edit-zone cms-admin-home-section-edit-zone-${sectionKey}` });
   zone.appendChild(renderDataCardTitle(`Đang chỉnh sửa ${getHomeSectionPriorityMeta(sectionKey).label}`, 'Bản nháp trong CMS'));
-  zone.appendChild(createElement('p', { className: 'cms-admin-operator-summary', text: 'Form này chỉ sửa bản nháp của khu vực đang mở. Website public chưa thay đổi cho đến khi lưu bản nháp và chạy workflow công khai riêng.' }));
+  zone.appendChild(createElement('p', { className: 'cms-admin-operator-summary', text: 'Form này chỉ sửa bản nháp của khu vực đang mở. Website public chưa thay đổi cho đến khi lưu thay đổi và chạy workflow công khai riêng.' }));
   const focusedEditPanel = renderHomeFocusedEditPanel(state, sections, editState);
   if (focusedEditPanel) zone.appendChild(focusedEditPanel);
   else zone.appendChild(renderEmptyState('Không mở được form chỉnh sửa cho khu vực này trong trạng thái hiện tại.'));
@@ -2392,7 +2418,7 @@ function getHomeSectionEditHint(sectionKey) {
 
 function getHomeSectionSafetyNote(sectionKey) {
   if (sectionKey === 'contact') return 'Tab này chỉ đối chiếu thông tin liên hệ. Nếu cần sửa, mở màn Thông tin website.';
-  return 'Lưu bản nháp chưa làm đổi website. Website chỉ thay đổi sau khi công khai bản đã lưu ở workflow riêng.';
+  return 'Lưu thay đổi chưa làm đổi website. Website chỉ thay đổi tại màn Đưa website lên bản mới.';
 }
 
 function renderHomeSectionMediaCtaSummary(section, copy = ADMIN_COPY.contentViews.home) {
@@ -2542,7 +2568,7 @@ function renderGateWorkspaceContent(state, activeKey = 'intro') {
   const wrap = renderWorkspaceSlotWrap('gate', sectionKey);
 
   if (editState.saveSuccess && !editState.isEditing) {
-    wrap.appendChild(renderNoticeBox(editState.saveSuccess, 'success'));
+    wrap.appendChild(renderPostSaveSuccessBlock(editState.saveSuccess));
   }
 
   if (!gate) {
@@ -2743,7 +2769,7 @@ function buildGateChecklistModel(state, gate, sectionKey = 'intro', editState = 
     label: 'Website public',
     value: 'Chưa đổi',
     status: 'info',
-    detail: 'Mở, chỉnh hoặc lưu bản nháp trong CMS chưa công khai website. Website chỉ đổi ở workflow công khai riêng.',
+    detail: 'Mở, chỉnh hoặc lưu thay đổi trong CMS chưa công khai website. Website chỉ đổi ở workflow công khai riêng.',
   });
   return checklist;
 }
@@ -2792,7 +2818,7 @@ function renderGateContextualActionPanel(state, gate, sectionKey = 'intro', edit
       startGateContextualEdit(gate, sectionKey, focusField);
     });
     panel.appendChild(button);
-    panel.appendChild(renderGateChecklistActionNote(copy.edit?.safeNote || 'Lưu vào CMS, chưa đổi website.', 'info'));
+    panel.appendChild(renderGateChecklistActionNote(copy.edit?.safeNote || 'Lưu thay đổi, chưa đổi website.', 'info'));
   } else {
     panel.appendChild(renderGateChecklistActionNote(copy.edit?.noPermission || 'Tài khoản hiện tại chỉ được xem Cổng triển lãm.', 'warning'));
   }
@@ -2870,7 +2896,7 @@ function renderGateIntroActionCard(state, gate, copy = ADMIN_COPY.contentViews.g
     });
     button.addEventListener('click', () => startGateContextualEdit(gate, 'intro', 'eyebrow'));
     actions.appendChild(button);
-    actions.appendChild(createElement('span', { className: 'cms-admin-inline-note', text: copy.edit?.safeNote || 'Lưu bản nháp chưa làm đổi website.' }));
+    actions.appendChild(createElement('span', { className: 'cms-admin-inline-note', text: copy.edit?.safeNote || 'Lưu thay đổi chưa làm đổi website.' }));
   } else {
     actions.appendChild(createElement('span', { className: 'cms-admin-inline-note', text: copy.edit?.noPermission || 'Tài khoản hiện tại chỉ được xem Cổng vào triển lãm.' }));
   }
@@ -2936,7 +2962,7 @@ function renderGateRoomActionCard(state, gate, roomKey, copy = ADMIN_COPY.conten
     });
     button.addEventListener('click', () => startGateContextualEdit(gate, roomKey, `rooms.${roomKey}.displayName`));
     actions.appendChild(button);
-    actions.appendChild(createElement('span', { className: 'cms-admin-inline-note', text: copy.edit?.safeNote || 'Lưu bản nháp chưa làm đổi website.' }));
+    actions.appendChild(createElement('span', { className: 'cms-admin-inline-note', text: copy.edit?.safeNote || 'Lưu thay đổi chưa làm đổi website.' }));
   } else {
     actions.appendChild(createElement('span', { className: 'cms-admin-inline-note', text: copy.edit?.noPermission || 'Tài khoản hiện tại chỉ được xem Cổng vào triển lãm.' }));
   }
@@ -3449,7 +3475,7 @@ function renderMediaCleanupProgress(cleanupModel = {}, candidate = null) {
       state: hasPatch ? 'done' : hasDecision ? 'active' : 'blocked',
     },
     {
-      label: 'Lưu bản nháp CMS',
+      label: 'Lưu thay đổi CMS',
       state: isDirty ? 'active' : hasPatch ? 'done' : 'blocked',
     },
   ];
@@ -3750,7 +3776,7 @@ function renderMediaCleanupHeader(cleanupModel = {}) {
   const copy = createElement('div');
   copy.appendChild(createElement('span', { className: 'cms-admin-eyebrow', text: 'ẢNH & VIDEO' }));
   copy.appendChild(createElement('h3', { className: 'cms-admin-section-title', text: 'Sửa đường dẫn ảnh/video trong bản nháp' }));
-  copy.appendChild(createElement('p', { className: 'cms-admin-help-text', text: 'Chọn từng mục, chọn cách xử lý, cập nhật bản nháp trong trình duyệt rồi lưu bản nháp CMS. Website đang công khai chưa thay đổi.' }));
+  copy.appendChild(createElement('p', { className: 'cms-admin-help-text', text: 'Chọn từng mục, chọn cách xử lý, cập nhật bản nháp trong trình duyệt rồi lưu thay đổi CMS. Website đang công khai chưa thay đổi.' }));
   const badges = createElement('div', { className: 'cms-admin-media-command-badges' });
   badges.appendChild(renderBadge(cleanupModel.hasDraft ? 'Bản nháp CMS' : 'Chưa có bản nháp', cleanupModel.hasDraft ? 'info' : 'warning'));
   badges.appendChild(renderBadge('Không xóa file', 'success'));
@@ -4032,9 +4058,9 @@ function renderMediaCleanupActionRail(cleanupModel = {}, candidate = null) {
   rail.appendChild(applyGroup);
 
   const saveGroup = createElement('section', { className: 'cms-admin-media-cleanup-action-group cms-admin-media-cleanup-save-group' });
-  saveGroup.appendChild(createElement('h4', { text: '3. Lưu bản nháp CMS' }));
-  saveGroup.appendChild(createElement('p', { className: 'cms-admin-help-text', text: 'Lưu bản nháp chưa làm website đang công khai thay đổi.' }));
-  const saveButton = createElement('button', { className: 'cms-admin-button cms-admin-button-primary', text: cleanupModel.draftState?.isSavingDraft ? 'Đang lưu...' : 'Lưu bản nháp CMS', type: 'button' });
+  saveGroup.appendChild(createElement('h4', { text: '3. Lưu thay đổi CMS' }));
+  saveGroup.appendChild(createElement('p', { className: 'cms-admin-help-text', text: 'Lưu thay đổi chưa làm website đang công khai thay đổi.' }));
+  const saveButton = createElement('button', { className: 'cms-admin-button cms-admin-button-primary', text: cleanupModel.draftState?.isSavingDraft ? 'Đang lưu...' : 'Lưu thay đổi CMS', type: 'button' });
   saveButton.disabled = !cleanupModel.draftState?.dirty || cleanupModel.draftState?.isSavingDraft;
   saveButton.addEventListener('click', () => {
     mediaWorkspaceState.cleanupSaveConfirmOpen = true;
@@ -4086,7 +4112,7 @@ function buildMediaCleanupChecklist(cleanupModel = {}, candidate = null) {
     { label: 'Cách xử lý', value: decision ? getMediaCleanupDecisionLabel(decision) : 'Chưa chọn', pass: Boolean(decision), detail: decision ? 'Phương án đã được ghi nhận, chưa cập nhật bản nháp.' : 'Chọn thay thế, giữ nguyên hoặc bỏ qua lần này.' },
     { label: 'File thay thế', value: hasValidReplacement ? 'Đã chọn' : 'Chưa chọn', pass: hasValidReplacement || decision?.action === 'keep' || decision?.action === 'skip', detail: hasValidReplacement ? 'File lấy từ Thư viện.' : 'Chỉ cần chọn nếu muốn thay đường dẫn.' },
     { label: 'Bản nháp trong trình duyệt', value: cleanupModel.applyResult?.validation?.valid ? 'Đã cập nhật' : 'Chưa cập nhật', pass: Boolean(cleanupModel.applyResult?.validation?.valid), detail: cleanupModel.applyResult?.message || 'Chưa áp dụng phương án vào bản nháp local.' },
-    { label: 'Bản nháp CMS', value: cleanupModel.draftState?.dirty ? 'Chưa lưu' : 'Chưa có thay đổi mới', tone: cleanupModel.draftState?.dirty ? 'warning' : 'neutral', detail: cleanupModel.draftState?.dirty ? 'Cần bấm Lưu bản nháp CMS nếu muốn giữ thay đổi.' : 'Chưa có thay đổi local cần lưu.' },
+    { label: 'Bản nháp CMS', value: cleanupModel.draftState?.dirty ? 'Chưa lưu' : 'Chưa có thay đổi mới', tone: cleanupModel.draftState?.dirty ? 'warning' : 'neutral', detail: cleanupModel.draftState?.dirty ? 'Cần bấm Lưu thay đổi CMS nếu muốn giữ thay đổi.' : 'Chưa có thay đổi local cần lưu.' },
     { label: 'Website đang công khai', value: 'Chưa đổi', pass: true, detail: 'Chỉ thay đổi khi publish ở workflow riêng.' },
   ];
 }
@@ -4142,7 +4168,7 @@ function applyMediaCleanupDraftDecisions(cleanupModel = {}) {
     return;
   }
   updateStaticCmsDraftJson(nextDraft, validation);
-  mediaWorkspaceState.cleanupApplyResult = { ok: true, message: `Đã cập nhật ${formatCount(changed.length)} thay đổi vào bản nháp trong trình duyệt. Bước tiếp theo: lưu bản nháp CMS.`, validation, changedCount: changed.length };
+  mediaWorkspaceState.cleanupApplyResult = { ok: true, message: `Đã cập nhật ${formatCount(changed.length)} thay đổi vào bản nháp trong trình duyệt. Bước tiếp theo: lưu thay đổi CMS.`, validation, changedCount: changed.length };
   renderAdminShell();
 }
 
@@ -4169,7 +4195,7 @@ function renderMediaCleanupApplyResult(result = {}) {
 function renderMediaCleanupSaveConfirmModal(cleanupModel = {}) {
   const backdrop = createElement('div', { className: 'cms-admin-modal-backdrop cms-admin-media-cleanup-save-modal' });
   const dialog = createElement('section', { className: 'cms-admin-modal cms-admin-panel', attrs: { role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'cms-media-cleanup-save-title' } });
-  dialog.appendChild(createElement('h3', { id: 'cms-media-cleanup-save-title', text: 'Lưu bản nháp CMS?' }));
+  dialog.appendChild(createElement('h3', { id: 'cms-media-cleanup-save-title', text: 'Lưu thay đổi CMS?' }));
   const list = createElement('ul', { className: 'cms-admin-media-cleanup-confirm-list' });
   [
     'Chỉ sửa bản nháp CMS.',
@@ -4186,7 +4212,7 @@ function renderMediaCleanupSaveConfirmModal(cleanupModel = {}) {
     mediaWorkspaceState.cleanupSaveConfirmOpen = false;
     renderAdminShell();
   });
-  const save = createElement('button', { className: 'cms-admin-button cms-admin-button-primary', text: cleanupModel.draftState?.isSavingDraft ? 'Đang lưu...' : 'Lưu bản nháp CMS', type: 'button' });
+  const save = createElement('button', { className: 'cms-admin-button cms-admin-button-primary', text: cleanupModel.draftState?.isSavingDraft ? 'Đang lưu...' : 'Lưu thay đổi CMS', type: 'button' });
   save.disabled = Boolean(cleanupModel.draftState?.isSavingDraft);
   save.addEventListener('click', async () => {
     mediaWorkspaceState.cleanupSaveConfirmOpen = false;
@@ -6877,7 +6903,7 @@ function getPublishCommandNextAction(model = {}) {
   if (model.hasDirtyDraft) {
     return {
       state: 'dirty-draft',
-      label: 'Lưu thay đổi',
+      label: 'Lưu bản chuẩn bị',
       note: 'Bản chuẩn bị có thay đổi chưa lưu. Cần lưu trước khi kiểm tra hoặc đưa lên website.',
       kind: 'save-existing-draft',
     };
@@ -7638,8 +7664,8 @@ function renderPublishCheckWorkspacePanel(state = {}) {
       label: 'Bản nháp đã lưu',
       status: draftState.currentDraftId ? 'ready' : 'blocked',
       value: draftState.currentDraftId ? `Đã có bản nháp ${draftState.currentDraftId}.` : 'Chưa có bằng chứng bản nháp đã lưu trong state hiện tại.',
-      nextAction: draftState.currentDraftId ? 'Có thể chuyển sang bước dry-run ở publish gate.' : 'Mở Nội dung phòng 3D để lưu bản nháp trước khi công khai.',
-      action: draftState.currentDraftId ? null : { label: 'Mở Nội dung phòng 3D để lưu bản nháp', handler: openStaticDraftPublishGateFromPublishScreen },
+      nextAction: draftState.currentDraftId ? 'Có thể chuyển sang bước dry-run ở publish gate.' : 'Mở Nội dung phòng 3D để lưu thay đổi trước khi công khai.',
+      action: draftState.currentDraftId ? null : { label: 'Mở Nội dung phòng 3D để lưu thay đổi', handler: openStaticDraftPublishGateFromPublishScreen },
     }),
     buildPublishCheckRow({
       label: 'Dirty state',
@@ -7718,7 +7744,7 @@ function renderPublishActionWorkspacePanel(state = {}) {
   panel.appendChild(renderPanelTitle('Publish Launchpad', 'Điều hướng an toàn'));
   panel.appendChild(createElement('p', {
     className: 'cms-admin-publish-action-lead',
-    text: 'Mở đúng workflow công khai thật, nhưng màn này không tự publish website.',
+    text: 'Màn Đưa website lên bản mới là nơi duy nhất kiểm tra và công khai website.',
   }));
   panel.appendChild(renderPublishLaunchpadSteps());
 
@@ -7727,7 +7753,7 @@ function renderPublishActionWorkspacePanel(state = {}) {
   const actions = createElement('div', { className: 'cms-admin-publish-cta-row' });
   const openButton = createElement('button', {
     className: 'cms-admin-button cms-admin-button-primary cms-admin-publish-navigation-cta',
-    text: 'Mở publish gate trong Nội dung phòng 3D',
+    text: 'Mở Đưa website lên bản mới',
     type: 'button',
     attrs: { 'aria-label': 'Mở Nội dung phòng 3D để tiếp tục publish gate an toàn' },
   });
@@ -7742,7 +7768,7 @@ function renderPublishActionWorkspacePanel(state = {}) {
   ctaShell.appendChild(actions);
   ctaShell.appendChild(createElement('p', {
     className: 'cms-admin-publish-safe-note',
-    text: 'Nút chính chỉ mở workflow publish hiện có, không tự công khai website. Publish thật chỉ xảy ra sau dry-run, confirmVersion và xác nhận tại gate đó.',
+    text: 'Website chỉ thay đổi sau kiểm tra trước khi đưa lên và xác nhận công khai tại màn Đưa website lên bản mới.',
   }));
   panel.appendChild(ctaShell);
 
@@ -7755,7 +7781,7 @@ function renderPublishActionWorkspacePanel(state = {}) {
 
 function renderPublishLaunchpadSteps() {
   const steps = [
-    ['1', 'Lưu bản nháp', 'Hoàn tất và lưu nội dung CMS trên server.'],
+    ['1', 'Lưu thay đổi', 'Hoàn tất và lưu nội dung CMS trên server.'],
     ['2', 'Kiểm tra/dry-run', 'Chạy kiểm tra tại publish gate hiện có.'],
     ['3', 'Xác nhận version', 'Đọc cảnh báo và confirmVersion rõ ràng.'],
     ['4', 'Công khai thật', 'Chỉ thao tác tại gate hiện có, không tại màn này.'],
@@ -7862,12 +7888,12 @@ function renderPublishReadinessPanel(state = {}, bundle = null) {
   const rows = [
     [fields.canonicalJson, canonicalKnown ? 'Chưa ghi nhận lỗi ở nội dung website đang dùng' : `Cần kiểm tra: ${normalizeErrorMessage(data.canonicalError)}`],
     [fields.publicBundle, bundle?.version ? `Bản ghi tham chiếu ${bundle.version} · chỉ để đối chiếu` : 'Chưa đọc được bản ghi tham chiếu'],
-    [fields.savedDraft, draftState.currentDraftId ? `Đã lưu bản nháp ${draftState.currentDraftId}` : 'Chỉ có thể công khai từ bản nháp đã lưu trong Nội dung phòng 3D'],
+    [fields.savedDraft, draftState.currentDraftId ? `Đã lưu thay đổi ${draftState.currentDraftId}` : 'Chỉ có thể công khai từ bản nháp đã lưu trong Nội dung phòng 3D'],
     [fields.dirtyState, draftState.dirty ? 'Đang có thay đổi chưa lưu — phải lưu trước khi công khai' : 'Không ghi nhận thay đổi chưa lưu trong bản nháp đang mở'],
     [fields.validation, validation ? (validation.valid ? 'Kiểm tra nội dung hiện tại đạt' : 'Kiểm tra nội dung còn lỗi/cảnh báo cần xử lý') : 'Chưa có kết quả kiểm tra nội dung trong trạng thái hiện tại'],
     [fields.dryRun, dryRun?.ok === true && dryRun?.dryRun === true ? 'Kiểm tra an toàn gần nhất đạt' : 'Chưa có kiểm tra an toàn đạt cho bản nháp hiện tại'],
     [fields.mainTabWrite, 'Đã khóa — màn này chỉ hướng dẫn và xem trạng thái'],
-    [fields.publishGate, 'Dùng bước công khai trong Nội dung phòng 3D sau khi lưu bản nháp'],
+    [fields.publishGate, 'Dùng bước công khai trong Nội dung phòng 3D sau khi lưu thay đổi'],
     [fields.history, 'Lịch sử/khôi phục là quy trình riêng, không tự chạy từ màn này'],
   ];
 
@@ -7926,7 +7952,7 @@ function renderSiteSettingsWorkspaceHeader() {
   title.appendChild(createElement('h2', { text: ADMIN_COPY.settings.websiteTitle || 'Thông tin website' }));
   title.appendChild(createElement('p', {
     className: 'cms-admin-compact-copy',
-    text: ADMIN_COPY.settings.workspaceIntro || 'Cập nhật thông tin đơn vị, liên hệ và nhận diện. Lưu vào CMS chưa làm đổi website public.',
+    text: ADMIN_COPY.settings.workspaceIntro || 'Cập nhật thông tin đơn vị, liên hệ và nhận diện. Lưu thay đổi chưa làm đổi website public.',
   }));
   const badges = createElement('div', { className: 'cms-admin-settings-header-badges' });
   badges.appendChild(renderBadge('Bản nháp CMS', 'warning'));
@@ -7954,7 +7980,7 @@ function renderSiteSettingsSummaryCards(state, siteSettings, editState = {}) {
     {
       label: 'Thay đổi chưa lưu',
       value: editState.dirty ? 'Có' : 'Không',
-      note: editState.saving ? 'Đang lưu vào CMS.' : editState.dirty ? 'Cần lưu hoặc đặt lại.' : 'Không có thay đổi mới.',
+      note: editState.saving ? 'Đang lưu thay đổi.' : editState.dirty ? 'Cần lưu hoặc đặt lại.' : 'Không có thay đổi mới.',
       tone: editState.dirty ? 'warning' : 'success',
     },
     {
@@ -8118,7 +8144,7 @@ function renderSiteSettingsActionPanel(state, siteSettings, editState = {}, canE
   panel.appendChild(renderSiteSettingsDraftStatusBox(state, siteSettings, editState, canEdit));
   panel.appendChild(renderSiteSettingsValidationSummary(siteSettings, editState));
   panel.appendChild(renderSiteSettingsActionButtons(siteSettings, editState, canEdit));
-  panel.appendChild(renderCompactNotice(ADMIN_COPY.settings.publicBoundaryNote || 'Lưu vào CMS chưa làm đổi website public. Website chỉ đổi sau luồng công khai riêng.'));
+  panel.appendChild(renderCompactNotice(ADMIN_COPY.settings.publicBoundaryNote || 'Lưu thay đổi chưa làm đổi website public. Website chỉ đổi sau luồng công khai riêng.'));
   return panel;
 }
 
@@ -8129,7 +8155,7 @@ function renderSiteSettingsDraftStatusBox(state, siteSettings, editState = {}, c
     ['Dữ liệu CMS', siteSettings ? 'Đã đọc' : 'Chưa đọc được'],
     ['Quyền chỉnh sửa', canEdit ? 'Có thể chỉnh' : 'Không đủ điều kiện chỉnh'],
     ['Trạng thái chỉnh sửa', editState.isEditing ? (editState.dirty ? 'Có thay đổi chưa lưu' : 'Đang chỉnh — chưa có thay đổi') : 'Chỉ xem'],
-    ['Lưu dữ liệu', editState.saving ? 'Đang lưu vào CMS' : 'Chỉ lưu khi bấm nút lưu'],
+    ['Lưu dữ liệu', editState.saving ? 'Đang lưu thay đổi' : 'Chỉ lưu khi bấm nút lưu'],
   ];
   box.appendChild(renderKeyValueList(rows));
   if (!siteSettings) box.appendChild(renderCompactWarning(ADMIN_COPY.settings.siteMissing));
@@ -8188,7 +8214,7 @@ function renderSiteSettingsActionButtons(siteSettings, editState = {}, canEdit =
   const validation = getSiteSettingsValidationForState(siteSettings, editState);
   const saveButton = createElement('button', {
     className: 'cms-admin-button cms-admin-button-primary',
-    text: editState.saving ? (ADMIN_COPY.settings.edit.saving || 'Đang lưu...') : (ADMIN_COPY.settings.edit.save || 'Lưu vào CMS'),
+    text: editState.saving ? (ADMIN_COPY.settings.edit.saving || 'Đang lưu...') : (ADMIN_COPY.settings.edit.save || 'Lưu thay đổi'),
     type: 'button',
   });
   saveButton.disabled = Boolean(editState.saving) || !Boolean(editState.dirty) || !validation.valid || !canEdit;
@@ -8230,8 +8256,8 @@ function getSiteSettingsDisabledReason(siteSettings, editState = {}, canEdit = f
   if (editState.saving) return 'Đang lưu, vui lòng chờ.';
   if (editState.isEditing && validation && !validation.valid) return 'Cần sửa lỗi trước khi lưu.';
   if (editState.isEditing && !editState.dirty) return 'Chưa có thay đổi để lưu.';
-  if (editState.isEditing) return 'Lưu vào CMS chưa làm đổi website public.';
-  return 'Mở chỉnh sửa để cập nhật bản nháp CMS.';
+  if (editState.isEditing) return 'Lưu thay đổi chỉ lưu nội dung ở màn này. Website đang hoạt động chưa thay đổi.';
+  return 'Mở chỉnh sửa để cập nhật nội dung ở màn này.';
 }
 
 function getSiteSettingsValidationForState(siteSettings, editState = {}) {
@@ -8792,7 +8818,7 @@ function renderHomeDataView(state) {
   const wrap = createElement('section', { className: 'cms-admin-grid cms-admin-readonly-data-view cms-admin-home-data-view' });
 
   if (editState.saveSuccess && !editState.isEditing) {
-    wrap.appendChild(renderNoticeBox(editState.saveSuccess, 'success'));
+    wrap.appendChild(renderPostSaveSuccessBlock(editState.saveSuccess));
   }
 
   wrap.appendChild(renderOperatorStepPanel(copy.operatorSteps, { status: 'Bản nháp' }));
@@ -8828,7 +8854,7 @@ function renderGateDataView(state) {
   const wrap = createElement('section', { className: 'cms-admin-grid cms-admin-readonly-data-view cms-admin-gate-data-view' });
 
   if (editState.saveSuccess && !editState.isEditing) {
-    wrap.appendChild(renderNoticeBox(editState.saveSuccess, 'success'));
+    wrap.appendChild(renderPostSaveSuccessBlock(editState.saveSuccess));
   }
 
   wrap.appendChild(renderOperatorStepPanel(copy.operatorSteps, { status: 'Bản nháp' }));
@@ -9079,7 +9105,7 @@ function getHomeEditSectionUiMeta(sectionKey = 'hero') {
     hero: {
       badge: 'Bản nháp trong CMS',
       title: 'Đang chỉnh sửa Khu vực đầu trang',
-      lead: 'Sửa phần người xem thấy đầu tiên. Website public chỉ thay đổi sau khi lưu bản nháp và chạy workflow công khai riêng.',
+      lead: 'Sửa phần người xem thấy đầu tiên. Website public chỉ thay đổi sau khi lưu thay đổi và chạy workflow công khai riêng.',
       mainTitle: 'Nội dung chính',
       mainNote: 'Ưu tiên tiêu đề, nhãn nhỏ và mô tả. Đây là phần quan trọng nhất của Trang chủ.',
       role: 'Ấn tượng đầu tiên',
@@ -9240,7 +9266,7 @@ function renderHomeHeroEditableTextField(fieldName, label, editState, options = 
 }
 
 function renderHomeHeroMediaEditGroup(section, editState, copy) {
-  const group = renderHomeEditSectionGroup(copy.groups.media, 'Chỉnh chú thích và chọn media đã upload cho các field media hiện có. Website public chưa thay đổi cho đến khi lưu bản nháp và công khai.', 'cms-admin-home-media-edit-group');
+  const group = renderHomeEditSectionGroup(copy.groups.media, 'Chỉnh chú thích và chọn media đã upload cho các field media hiện có. Website public chưa thay đổi cho đến khi lưu thay đổi và công khai.', 'cms-admin-home-media-edit-group');
 
   const fields = createElement('div', { className: 'cms-admin-edit-field-grid cms-admin-home-compact-field-grid' });
   fields.appendChild(renderHomeHeroMediaTextField('caption', copy.fields.mediaCaption, editState, { placeholder: copy.placeholders.mediaCaption }));
@@ -9819,7 +9845,7 @@ function renderHomeGuideEditActions(state, section) {
       renderAdminShell();
     });
     actions.appendChild(editButton);
-    actions.appendChild(createElement('span', { className: 'cms-admin-inline-note', text: copy.safeNote || 'Chức năng này chỉ lưu bản nháp CMS, không công khai lên website.' }));
+    actions.appendChild(createElement('span', { className: 'cms-admin-inline-note', text: copy.safeNote || 'Chức năng này chỉ lưu thay đổi CMS, không công khai lên website.' }));
   } else {
     actions.appendChild(createElement('span', { className: 'cms-admin-inline-note', text: copy.noPermission || 'Tài khoản hiện tại chỉ được xem Trang chủ hoặc chưa bật chỉnh sửa Hướng dẫn tham quan.' }));
   }
@@ -10085,7 +10111,7 @@ function renderHomeExperienceEditActions(state, section) {
       renderAdminShell();
     });
     actions.appendChild(editButton);
-    actions.appendChild(createElement('span', { className: 'cms-admin-inline-note', text: copy?.safeNote || 'Chức năng này chỉ lưu bản nháp CMS, không công khai lên website.' }));
+    actions.appendChild(createElement('span', { className: 'cms-admin-inline-note', text: copy?.safeNote || 'Chức năng này chỉ lưu thay đổi CMS, không công khai lên website.' }));
   } else {
     actions.appendChild(createElement('span', { className: 'cms-admin-inline-note', text: copy?.noPermission || 'Tài khoản hiện tại chỉ được xem Trang chủ hoặc chưa bật chỉnh sửa Khu vực trải nghiệm.' }));
   }

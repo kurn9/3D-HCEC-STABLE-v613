@@ -12986,3 +12986,30 @@ body.cms-admin-page * {
     flex-direction: column;
   }
 }
+
+/* v6.14.064.004 — publish entrypoint simplification */
+.cms-admin-post-save-success-block,
+.cms-admin-static-next-step-box {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.cms-admin-post-save-next-step,
+.cms-admin-static-next-step-box {
+  border: 1px solid rgba(234, 191, 83, 0.3);
+  border-radius: 14px;
+  padding: 0.85rem;
+  background: rgba(234, 191, 83, 0.08);
+}
+
+.cms-admin-post-save-next-step .cms-admin-button,
+.cms-admin-static-next-step-box .cms-admin-button {
+  margin-top: 0.4rem;
+}
+
+@media (max-width: 900px) {
+  .cms-admin-post-save-next-step,
+  .cms-admin-static-next-step-box {
+    padding: 0.75rem;
+  }
+}
