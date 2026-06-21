@@ -12390,3 +12390,215 @@ body.cms-admin-page * {
     grid-template-columns: 1fr;
   }
 }
+
+/* v6.14.062.002 — Media cleanup novice-flow copy/action hierarchy polish */
+.cms-admin-media-cleanup-steps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.65rem;
+  list-style: none;
+  margin: 0.85rem 0 0;
+  padding: 0;
+}
+
+.cms-admin-media-cleanup-step {
+  align-items: center;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 0.9rem;
+  background: rgba(255, 255, 255, 0.028);
+  display: grid;
+  gap: 0.2rem 0.55rem;
+  grid-template-columns: auto minmax(0, 1fr);
+  min-width: 0;
+  padding: 0.65rem 0.75rem;
+}
+
+.cms-admin-media-cleanup-step-index {
+  align-items: center;
+  background: rgba(148, 163, 184, 0.16);
+  border-radius: 999px;
+  color: var(--cms-admin-text, #f8fafc);
+  display: inline-flex;
+  font-size: 0.76rem;
+  font-weight: 900;
+  height: 1.65rem;
+  justify-content: center;
+  width: 1.65rem;
+}
+
+.cms-admin-media-cleanup-step-label {
+  color: var(--cms-admin-text, #f8fafc);
+  font-size: 0.86rem;
+  font-weight: 850;
+  line-height: 1.25;
+  min-width: 0;
+}
+
+.cms-admin-media-cleanup-step small {
+  color: var(--cms-admin-muted-soft, #94a3b8);
+  font-size: 0.72rem;
+  grid-column: 2;
+}
+
+.cms-admin-media-cleanup-step.is-active {
+  border-color: rgba(214, 178, 94, 0.38);
+  background: rgba(214, 178, 94, 0.08);
+}
+
+.cms-admin-media-cleanup-step.is-active .cms-admin-media-cleanup-step-index {
+  background: rgba(214, 178, 94, 0.24);
+}
+
+.cms-admin-media-cleanup-step.is-done {
+  border-color: rgba(94, 227, 161, 0.24);
+  background: rgba(20, 83, 45, 0.12);
+}
+
+.cms-admin-media-cleanup-step.is-done .cms-admin-media-cleanup-step-index {
+  background: rgba(94, 227, 161, 0.24);
+}
+
+.cms-admin-media-cleanup-step.is-blocked {
+  opacity: 0.78;
+}
+
+.cms-admin-media-cleanup-validation-summary {
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 0.85rem;
+  color: var(--cms-admin-muted, #cbd5e1);
+  margin: 0;
+  padding: 0.7rem 0.85rem;
+}
+
+.cms-admin-media-command-stats.cms-admin-media-command-stats-compact {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.cms-admin-media-cleanup-action-rail {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.cms-admin-media-cleanup-short-checklist {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.cms-admin-media-cleanup-short-checklist .cms-admin-media-checklist-item {
+  padding: 0.7rem 0.8rem;
+}
+
+.cms-admin-media-cleanup-short-checklist .cms-admin-media-checklist-body p {
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.cms-admin-media-cleanup-action-group,
+.cms-admin-media-cleanup-reset-details {
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: 0.95rem;
+  background: rgba(255, 255, 255, 0.025);
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.8rem;
+}
+
+.cms-admin-media-cleanup-action-group h4,
+.cms-admin-media-cleanup-reset-details summary {
+  color: var(--cms-admin-text, #f8fafc);
+  font-size: 0.86rem;
+  font-weight: 900;
+  margin: 0;
+}
+
+.cms-admin-media-cleanup-action-group .cms-admin-button,
+.cms-admin-media-cleanup-reset-details .cms-admin-button {
+  justify-content: center;
+  width: 100%;
+}
+
+.cms-admin-media-cleanup-action-feedback {
+  border: 1px solid rgba(94, 227, 161, 0.24);
+  border-radius: 0.75rem;
+  background: rgba(20, 83, 45, 0.12);
+  color: var(--cms-admin-text, #f8fafc);
+  font-size: 0.8rem;
+  line-height: 1.4;
+  margin: 0;
+  padding: 0.55rem 0.65rem;
+}
+
+.cms-admin-media-cleanup-save-group {
+  border-color: rgba(214, 178, 94, 0.22);
+  background: rgba(214, 178, 94, 0.06);
+}
+
+.cms-admin-media-cleanup-reset-details summary {
+  cursor: pointer;
+}
+
+.cms-admin-media-cleanup-candidate strong,
+.cms-admin-media-cleanup-candidate span {
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+.cms-admin-media-cleanup-detail-grid dd,
+.cms-admin-media-cleanup-detail-grid dt {
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+.cms-admin-media-cleanup-technical-details dd,
+.cms-admin-media-cleanup-diagnostics dd {
+  overflow-wrap: anywhere;
+}
+
+.cms-admin-media-cleanup-replacement h4,
+.cms-admin-media-cleanup-replacement p {
+  margin: 0;
+}
+
+.cms-admin-media-cleanup-preview .cms-admin-help-text {
+  margin: 0 0 0.65rem;
+}
+
+@media (max-width: 1320px) {
+  .cms-admin-media-cleanup-grid {
+    grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
+  }
+
+  .cms-admin-media-cleanup-action-rail {
+    grid-column: 2;
+    position: static;
+  }
+}
+
+@media (max-width: 980px) {
+  .cms-admin-media-cleanup-steps,
+  .cms-admin-media-command-stats.cms-admin-media-command-stats-compact,
+  .cms-admin-media-cleanup-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .cms-admin-media-cleanup-action-rail {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 760px) {
+  .cms-admin-media-cleanup-step,
+  .cms-admin-media-cleanup-action-group,
+  .cms-admin-media-cleanup-reset-details,
+  .cms-admin-media-cleanup-candidate,
+  .cms-admin-media-cleanup-replacement {
+    padding: 0.75rem;
+  }
+
+  .cms-admin-media-cleanup-action-group .cms-admin-button,
+  .cms-admin-media-cleanup-reset-details .cms-admin-button,
+  .cms-admin-media-cleanup-empty-actions .cms-admin-button {
+    min-height: 44px;
+    width: 100%;
+  }
+}
