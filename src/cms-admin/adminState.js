@@ -837,6 +837,10 @@ export function createEmptyStaticCmsDraftState() {
     publishStatus: '',
     publishError: null,
     publishLastVerifiedAt: null,
+    isComposingPreparationDraft: false,
+    preparationCompositionStatus: '',
+    preparationCompositionError: null,
+    preparationCompositionResult: null,
     activeWorkspace: 'room',
     activeEditorTab: 'content',
     activeDrawer: '',
@@ -891,6 +895,10 @@ export function setStaticCmsDraftBaseline({ baselineJson = null, source = '', so
       publishStatus: '',
       publishError: null,
       publishLastVerifiedAt: null,
+      isComposingPreparationDraft: false,
+      preparationCompositionStatus: '',
+      preparationCompositionError: null,
+      preparationCompositionResult: null,
       activeWorkspace: 'room',
       activeEditorTab: 'content',
       activeDrawer: '',
@@ -932,6 +940,8 @@ export function updateStaticCmsDraftJson(draftJson, validation = null) {
     publishStatus: '',
     publishError: null,
     publishLastVerifiedAt: null,
+    preparationCompositionStatus: '',
+    preparationCompositionError: null,
   });
 }
 
@@ -966,6 +976,8 @@ export function resetStaticCmsDraftToBaseline(validation = null) {
     publishStatus: '',
     publishError: null,
     publishLastVerifiedAt: null,
+    preparationCompositionStatus: '',
+    preparationCompositionError: null,
   });
 }
 

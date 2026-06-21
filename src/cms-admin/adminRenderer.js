@@ -79,6 +79,7 @@ import {
   handleLoadStaticCmsBaseline,
   handleSaveStaticCmsDraft,
   handlePublishStaticCmsDraft,
+  handleComposeCmsPreparationDraft,
   buildCmsPublishInclusionStatus,
   hasCurrentDryRunPass,
   renderStaticCmsDraftTab,
@@ -6752,7 +6753,8 @@ function buildPublishCommandCenterModel(state = {}) {
   const isLoadingDraft = Boolean(draftState.loading || draftState.isLoadingBaseline);
   const isSavingDraft = Boolean(draftState.isSavingDraft);
   const isPublishingCms = Boolean(draftState.isPublishingCms);
-  const operationBusy = isLoadingDraft || isSavingDraft || isPublishingCms;
+  const isComposingPreparationDraft = Boolean(draftState.isComposingPreparationDraft);
+  const operationBusy = isLoadingDraft || isSavingDraft || isPublishingCms || isComposingPreparationDraft;
   const nextAction = getPublishCommandNextAction({
     access,
     canonicalKnown,
@@ -6769,6 +6771,7 @@ function buildPublishCommandCenterModel(state = {}) {
     isLoadingDraft,
     isSavingDraft,
     isPublishingCms,
+    isComposingPreparationDraft,
   });
   return {
     state,
@@ -6797,6 +6800,7 @@ function buildPublishCommandCenterModel(state = {}) {
     isLoadingDraft,
     isSavingDraft,
     isPublishingCms,
+    isComposingPreparationDraft,
     operationBusy,
     hasDraftJson,
     hasSavedDraft,
@@ -6826,6 +6830,15 @@ function getPublishCommandNextAction(model = {}) {
       note: 'Đang lưu bản chuẩn bị CMS. Vui lòng không bấm lại khi thao tác đang chạy.',
       kind: 'disabled',
       disabledReason: 'Đang lưu bản chuẩn bị CMS.',
+    };
+  }
+  if (model.isComposingPreparationDraft) {
+    return {
+      state: 'composing-preparation',
+      label: 'Đang cập nhật bản chuẩn bị...',
+      note: 'Đang đọc nội dung đã lưu mới nhất và cập nhật bản chuẩn bị trong trình duyệt. Website đang hoạt động chưa thay đổi.',
+      kind: 'disabled',
+      disabledReason: 'Đang cập nhật bản chuẩn bị.',
     };
   }
   if (model.isPublishingCms) {
@@ -6880,11 +6893,19 @@ function getPublishCommandNextAction(model = {}) {
       disabledReason: 'Chưa thể kiểm tra an toàn hoặc đưa lên website khi nội dung chưa đạt.',
     };
   }
+  if (model.publishInclusion?.hasDifferent) {
+    return {
+      state: 'needs-preparation-sync',
+      label: 'Cập nhật bản chuẩn bị từ nội dung đã lưu',
+      note: 'Đưa nội dung đã lưu ở các màn vào bản chuẩn bị trong trình duyệt. Website đang hoạt động chưa thay đổi và bạn vẫn cần lưu bản chuẩn bị.',
+      kind: 'compose-preparation',
+    };
+  }
   if (model.publishInclusion?.blocksPublish) {
     return {
       state: 'inclusion-blocked',
       label: model.publishInclusion.primaryActionLabel || 'Xem khu vực cần đối chiếu',
-      note: model.publishInclusion.primaryActionNote || 'Một số khu vực có thể chưa nằm trong bản chuẩn bị đang chọn. Hãy xem bảng đối chiếu trước khi tiếp tục.',
+      note: model.publishInclusion.primaryActionNote || 'Một số khu vực chưa xác minh được. Hãy xem bảng đối chiếu trước khi tiếp tục.',
       kind: 'focus-inclusion',
     };
   }
@@ -7012,11 +7033,25 @@ function renderPublishOperationStatusCard(model = {}) {
     className: 'cms-admin-compact-copy',
     text: model.nextAction?.note || 'Làm theo bước tiếp theo ở cột bên phải.',
   }));
-  if (model.isLoadingDraft || model.isSavingDraft || model.isPublishingCms) {
+  if (model.isLoadingDraft || model.isSavingDraft || model.isPublishingCms || model.isComposingPreparationDraft) {
     card.appendChild(createElement('div', {
       className: 'cms-admin-alert cms-admin-alert-warning',
       attrs: { role: 'status', 'aria-live': 'polite' },
-      text: model.isLoadingDraft ? 'Đang tải nội dung...' : model.isSavingDraft ? 'Đang lưu bản chuẩn bị...' : 'Đang xử lý bước kiểm tra hoặc công khai...',
+      text: model.isLoadingDraft ? 'Đang tải nội dung...' : model.isSavingDraft ? 'Đang lưu bản chuẩn bị...' : model.isComposingPreparationDraft ? 'Đang cập nhật bản chuẩn bị...' : 'Đang xử lý bước kiểm tra hoặc công khai...',
+    }));
+  }
+  if (model.draftState.preparationCompositionStatus) {
+    card.appendChild(createElement('div', {
+      className: 'cms-admin-alert cms-admin-alert-success',
+      attrs: { role: 'status', 'aria-live': 'polite' },
+      text: model.draftState.preparationCompositionStatus,
+    }));
+  }
+  if (model.draftState.preparationCompositionError) {
+    card.appendChild(createElement('div', {
+      className: 'cms-admin-alert cms-admin-alert-error',
+      attrs: { role: 'alert' },
+      text: `Chưa cập nhật được bản chuẩn bị: ${normalizeErrorMessage(model.draftState.preparationCompositionError)}`,
     }));
   }
   if (model.publishError) {
@@ -7041,11 +7076,13 @@ function getPublishReadableStateLabel(state = '') {
     'loading-content': 'Đang tải',
     'saving-draft': 'Đang lưu',
     publishing: 'Đang xử lý',
+    'composing-preparation': 'Đang cập nhật',
     verify: 'Đã công khai',
     'no-content': 'Chưa tải nội dung',
     'unsaved-draft': 'Chưa lưu bản chuẩn bị',
     'dirty-draft': 'Có thay đổi chưa lưu',
     'content-error': 'Cần sửa nội dung',
+    'needs-preparation-sync': 'Cần cập nhật bản chuẩn bị',
     'retry-publish': 'Cần thử lại',
     'retry-check': 'Cần kiểm tra lại',
     'needs-safety-check': 'Sẵn sàng kiểm tra',
@@ -7132,13 +7169,13 @@ function renderPublishInclusionStatusCard(model = {}) {
   card.appendChild(renderPanelTitle('Bản chuẩn bị sẽ đưa lên gồm gì', inclusion.blocksPublish ? 'Cần đối chiếu' : 'Đã đối chiếu'));
   card.appendChild(createElement('p', {
     className: 'cms-admin-compact-copy',
-    text: 'Bảng này so sánh bản chuẩn bị đang chọn với những khu vực có thể được lưu riêng. Hệ thống chỉ công khai an toàn khi không phát hiện thay đổi mới hơn hoặc trạng thái không xác minh được.',
+    text: 'Bảng này so sánh bản chuẩn bị đang chọn với nội dung đã lưu ở từng khu vực. Chỉ khi nội dung thật khớp, hệ thống mới coi khu vực đó đã có trong bản chuẩn bị.',
   }));
   const list = createElement('div', { className: 'cms-admin-publish-inclusion-list' });
   safeArray(inclusion.items).forEach((item) => list.appendChild(renderPublishInclusionRow(item)));
   card.appendChild(list);
   if (inclusion.blocksPublish) {
-    card.appendChild(renderNoticeBox('Chưa thể công khai an toàn cho đến khi xử lý hoặc xác minh các khu vực đang bị chặn.', 'warning'));
+    card.appendChild(renderNoticeBox(inclusion.hasDifferent ? 'Có nội dung đã lưu chưa nằm trong bản chuẩn bị. Hãy cập nhật bản chuẩn bị, sau đó lưu lại trước khi kiểm tra hoặc đưa lên website.' : 'Chưa thể công khai an toàn cho đến khi xử lý hoặc xác minh các khu vực đang bị chặn.', 'warning'));
   }
   return card;
 }
@@ -7161,6 +7198,7 @@ function renderPublishInclusionRow(item = {}) {
     ['updatedAt', item.updatedAt || '—'],
     ['draftSavedAt', item.draftSavedAt || '—'],
     ['blocksPublish', item.blocksPublish ? 'true' : 'false'],
+    ['Mapping', item.technical || '—'],
   ]));
   row.appendChild(details);
   return row;
@@ -7171,6 +7209,8 @@ function getPublishInclusionStatusLabel(status = '') {
     included: 'Đã có trong bản chuẩn bị',
     no_newer_change_detected: 'Chưa phát hiện thay đổi mới hơn',
     newer_than_draft: 'Có thay đổi chưa nằm trong bản chuẩn bị',
+    different: 'Khác bản chuẩn bị',
+    missing_draft: 'Chưa có bản chuẩn bị',
     unverifiable: 'Chưa xác minh được',
     not_applicable: 'Không áp dụng',
   };
@@ -7181,6 +7221,7 @@ function getPublishInclusionBadgeTone(item = {}) {
   if (item.blocksPublish) return 'warning';
   if (item.status === 'included') return 'success';
   if (item.status === 'no_newer_change_detected') return 'info';
+  if (item.status === 'different') return 'warning';
   return 'default';
 }
 
@@ -7188,6 +7229,7 @@ function getPublishInclusionTone(item = {}) {
   if (item.blocksPublish) return 'blocked';
   if (item.status === 'included') return 'included';
   if (item.status === 'no_newer_change_detected') return 'neutral';
+  if (item.status === 'different') return 'blocked';
   return 'default';
 }
 
@@ -7263,13 +7305,13 @@ function buildPublishCommandChecklistItems(model = {}) {
       detail: model.hasDirtyDraft ? 'Bản chuẩn bị trong trình duyệt có thay đổi chưa lưu.' : 'Không thấy thay đổi local chưa lưu trong bản đang mở.',
     },
     {
-      label: 'Không có khu vực mới hơn bản chuẩn bị',
-      value: inclusion.hasNewerChanges ? 'Cần xử lý' : inclusion.hasDraftTimestamp ? 'Đạt' : 'Chưa xác minh',
-      tone: inclusion.hasNewerChanges || !inclusion.hasDraftTimestamp ? 'warning' : 'success',
-      detail: inclusion.hasNewerChanges
-        ? 'Có khu vực được lưu sau thời điểm lưu bản chuẩn bị.'
+      label: 'Nội dung đã lưu khớp bản chuẩn bị',
+      value: inclusion.hasDifferent ? 'Cần cập nhật' : inclusion.hasDraftTimestamp ? 'Đạt' : 'Chưa xác minh',
+      tone: inclusion.hasDifferent || !inclusion.hasDraftTimestamp ? 'warning' : 'success',
+      detail: inclusion.hasDifferent
+        ? 'Có khu vực đã lưu nội dung khác với bản chuẩn bị đang chọn.'
         : inclusion.hasDraftTimestamp
-          ? 'Không phát hiện dữ liệu lưu riêng mới hơn bản chuẩn bị.'
+          ? 'Không phát hiện khác biệt nội dung thật ở các khu vực đã đối chiếu.'
           : 'Thiếu thời điểm lưu bản chuẩn bị để đối chiếu.',
     },
     {
@@ -7358,6 +7400,9 @@ async function executePublishCommandAction(action = {}) {
       return;
     case 'save-existing-draft':
       await handleSaveStaticCmsDraft({ asNew: false, handlers });
+      return;
+    case 'compose-preparation':
+      await handleComposeCmsPreparationDraft({ handlers });
       return;
     case 'focus-inclusion': {
       const target = document.querySelector('[data-publish-inclusion-table]');

@@ -1,5 +1,5 @@
 import { ADMIN_COPY } from './adminCopy.js';
-import { createCmsDraft, discardCmsDraft, getCmsDraft, listCmsDrafts, publishCmsJson, updateCmsDraft, uploadCmsMedia } from './adminApi.js';
+import { createCmsDraft, discardCmsDraft, fetchDashboardData, getCmsDraft, listCmsDrafts, publishCmsJson, updateCmsDraft, uploadCmsMedia } from './adminApi.js';
 import { ADMIN_FEATURE_FLAGS, CMS_MEDIA_UPLOAD_CONFIG, CMS_PUBLISH_GATE_CONFIG, STATIC_CMS_DRAFT_CONFIG } from './adminConfig.js';
 import {
   appendChildren,
@@ -15,6 +15,7 @@ import {
 import {
   getState,
   applySavedStaticCmsDraft,
+  setNestedData,
   setStaticCmsDraftBaseline,
   setStaticCmsDraftPersistenceState,
   setStaticCmsDraftState,
@@ -3787,11 +3788,13 @@ function renderPublishGateHelp() {
 }
 
 export function buildCmsPublishInclusionStatus({ data = {}, draftState = {} } = {}) {
+  const draftJson = draftState.draftJson || null;
   const draftSavedAt = normalizePublishTimestamp(draftState.draftLastSavedAt);
   const hasSavedDraft = Boolean(String(draftState.currentDraftId || '').trim());
-  const hasDraftJson = Boolean(draftState.draftJson);
-  const hasDraftVersion = Boolean(String(draftState.draftJson?.version || draftState.draftMeta?.version || '').trim());
+  const hasDraftJson = Boolean(draftJson);
+  const hasDraftVersion = Boolean(String(draftJson?.version || draftState.draftMeta?.version || '').trim());
   const draftClean = hasSavedDraft && hasDraftJson && !draftState.dirty;
+  const context = { draftJson, draftSavedAt, hasSavedDraft, hasDraftJson, hasDraftVersion, draftClean };
   const items = [
     buildDraftBackedInclusionItem({
       key: 'static_rooms',
@@ -3811,44 +3814,53 @@ export function buildCmsPublishInclusionStatus({ data = {}, draftState = {} } = 
       hasDraftVersion,
       draftClean,
     }),
-    buildDbFirstInclusionItem({
+    buildContentBackedInclusionItem({
       key: 'home',
       label: 'Trang chủ',
+      projection: projectIndexSectionsToDraftPatch(safeArray(data.indexSections), draftJson?.index || {}),
+      context,
       updatedAt: getLatestUpdatedAt(safeArray(data.indexSections)),
-      draftSavedAt,
       required: true,
     }),
-    buildDbFirstInclusionItem({
+    buildContentBackedInclusionItem({
       key: 'gate',
       label: 'Cổng vào triển lãm',
+      projection: projectGateContentToDraftPatch(data.gateContent || null, draftJson?.gate || {}),
+      context,
       updatedAt: data.gateContent?.updated_at || data.gateContent?.updatedAt || '',
-      draftSavedAt,
       required: true,
     }),
-    buildDbFirstInclusionItem({
+    buildContentBackedInclusionItem({
       key: 'site_settings',
       label: 'Thông tin website',
+      projection: projectSiteSettingsToDraftPatch(data.siteSettings || null, draftJson || {}),
+      context,
       updatedAt: data.siteSettings?.updated_at || data.siteSettings?.updatedAt || '',
-      draftSavedAt,
       required: true,
     }),
   ];
-  const hasNewerChanges = items.some((item) => item.status === 'newer_than_draft');
-  const hasUnverifiableCritical = items.some((item) => item.blocksPublish && item.status === 'unverifiable');
   const blocksPublish = items.some((item) => item.blocksPublish === true);
   const firstBlock = items.find((item) => item.blocksPublish);
+  const hasDifferent = items.some((item) => item.status === 'different');
+  const hasNewerChanges = hasDifferent || items.some((item) => item.status === 'newer_than_draft');
+  const hasUnverifiableCritical = items.some((item) => item.blocksPublish && ['unverifiable', 'missing_draft'].includes(item.status));
   return {
     items,
     blocksPublish,
     firstBlock,
+    hasDifferent,
     hasNewerChanges,
     hasUnverifiableCritical,
     hasDraftTimestamp: Boolean(draftSavedAt),
     summary: blocksPublish
-      ? 'Có khu vực cần đối chiếu trước khi công khai.'
-      : 'Không phát hiện khu vực chặn công khai ở mức source hiện tại.',
-    primaryActionLabel: firstBlock?.status === 'newer_than_draft' ? 'Xem khu vực có thay đổi mới hơn' : 'Xem khu vực cần đối chiếu',
-    primaryActionNote: firstBlock?.reason || 'Cần xem bảng đối chiếu bản chuẩn bị trước khi tiếp tục.',
+      ? hasDifferent
+        ? 'Có nội dung đã lưu khác với bản chuẩn bị.'
+        : 'Có khu vực cần đối chiếu trước khi công khai.'
+      : 'Các khu vực quan trọng đã được đối chiếu bằng nội dung thật.',
+    primaryActionLabel: hasDifferent ? 'Cập nhật bản chuẩn bị từ nội dung đã lưu' : 'Xem khu vực cần đối chiếu',
+    primaryActionNote: hasDifferent
+      ? 'Đưa nội dung đã lưu ở các màn vào bản chuẩn bị trong trình duyệt. Website đang hoạt động chưa thay đổi.'
+      : (firstBlock?.reason || 'Cần xem bảng đối chiếu bản chuẩn bị trước khi tiếp tục.'),
   };
 }
 
@@ -3857,7 +3869,7 @@ function buildDraftBackedInclusionItem({ key, label, draftSavedAt, hasSavedDraft
     return buildPublishInclusionItem({
       key,
       label,
-      status: 'unverifiable',
+      status: 'missing_draft',
       reason: 'Chưa có bản chuẩn bị trong trình duyệt để đối chiếu.',
       draftSavedAt,
       blocksPublish: true,
@@ -3909,57 +3921,62 @@ function buildDraftBackedInclusionItem({ key, label, draftSavedAt, hasSavedDraft
   });
 }
 
-function buildDbFirstInclusionItem({ key, label, updatedAt, draftSavedAt, required = true } = {}) {
+function buildContentBackedInclusionItem({ key, label, projection, context = {}, updatedAt = '', required = true } = {}) {
+  const draftSavedAt = context.draftSavedAt || '';
   const normalizedUpdatedAt = normalizePublishTimestamp(updatedAt);
-  if (!draftSavedAt) {
+  if (!context.hasDraftJson) {
     return buildPublishInclusionItem({
       key,
       label,
-      status: 'unverifiable',
-      reason: 'Thiếu thời điểm lưu bản chuẩn bị để đối chiếu khu vực này.',
+      status: 'missing_draft',
+      reason: 'Chưa có bản chuẩn bị để đối chiếu nội dung đã lưu.',
       updatedAt: normalizedUpdatedAt,
       draftSavedAt,
       blocksPublish: required,
-      nextAction: 'Lưu bản chuẩn bị trước khi kiểm tra hoặc công khai.',
+      nextAction: 'Tải nội dung website hiện tại rồi lưu bản chuẩn bị.',
     });
   }
-  if (!normalizedUpdatedAt) {
+  if (!projection?.ok) {
     return buildPublishInclusionItem({
       key,
       label,
       status: 'unverifiable',
-      reason: 'Thiếu thông tin thời điểm lưu của khu vực này nên chưa thể xác minh.',
+      reason: projection?.reason || 'Thiếu dữ liệu hoặc mapping để đối chiếu khu vực này.',
       updatedAt: normalizedUpdatedAt,
       draftSavedAt,
       blocksPublish: required,
       nextAction: 'Tải lại trạng thái hoặc kiểm tra nguồn dữ liệu của khu vực này.',
+      technical: projection?.technical || '',
     });
   }
-  if (isPublishTimestampAfter(normalizedUpdatedAt, draftSavedAt)) {
+  const included = normalizedDeepEqual(projection.draftFragment, projection.sourceFragment);
+  if (!included) {
     return buildPublishInclusionItem({
       key,
       label,
-      status: 'newer_than_draft',
-      reason: `${label} đã được lưu sau thời điểm lưu bản chuẩn bị. Chưa thể chứng minh thay đổi này nằm trong bản sẽ công khai.`,
+      status: 'different',
+      reason: `${label} đang khác với nội dung trong bản chuẩn bị. Cần cập nhật bản chuẩn bị trước khi kiểm tra hoặc công khai.`,
       updatedAt: normalizedUpdatedAt,
       draftSavedAt,
       blocksPublish: true,
-      nextAction: 'Tạo hoặc lưu lại bản chuẩn bị sau khi đã cập nhật khu vực này.',
+      nextAction: 'Cập nhật bản chuẩn bị từ nội dung đã lưu.',
+      technical: projection.technical || '',
     });
   }
   return buildPublishInclusionItem({
     key,
     label,
-    status: 'no_newer_change_detected',
-    reason: `Không phát hiện bản lưu ${label} nào mới hơn thời điểm lưu bản chuẩn bị. Hệ thống chưa xác nhận từng trường dữ liệu đã được nhập vào bản này.`,
+    status: 'included',
+    reason: 'Nội dung tương ứng đã có trong bản chuẩn bị đang chọn.',
     updatedAt: normalizedUpdatedAt,
     draftSavedAt,
     blocksPublish: false,
     nextAction: '',
+    technical: projection.technical || '',
   });
 }
 
-function buildPublishInclusionItem({ key = '', label = '', status = 'unverifiable', reason = '', updatedAt = '', draftSavedAt = '', blocksPublish = false, nextAction = '' } = {}) {
+function buildPublishInclusionItem({ key = '', label = '', status = 'unverifiable', reason = '', updatedAt = '', draftSavedAt = '', blocksPublish = false, nextAction = '', technical = '' } = {}) {
   return {
     key,
     label,
@@ -3969,7 +3986,418 @@ function buildPublishInclusionItem({ key = '', label = '', status = 'unverifiabl
     draftSavedAt: draftSavedAt || '',
     blocksPublish: Boolean(blocksPublish),
     nextAction,
+    technical,
   };
+}
+
+export function composeCmsPreparationDraft({ draftJson = null, data = {} } = {}) {
+  if (!isPlainObjectValue(draftJson)) {
+    return {
+      ok: false,
+      draftJson: null,
+      changed: false,
+      changedAreas: [],
+      unchangedAreas: [],
+      blockedAreas: [{ key: 'draft', label: 'Bản chuẩn bị', reason: 'Chưa có draft JSON hợp lệ để cập nhật.' }],
+      errors: ['Chưa có draft JSON hợp lệ để cập nhật.'],
+      changes: [],
+    };
+  }
+  const nextDraft = cloneJson(draftJson);
+  const changedAreas = [];
+  const unchangedAreas = [];
+  const blockedAreas = [];
+  const errors = [];
+  const changes = [];
+  const areas = [
+    {
+      key: 'home',
+      label: 'Trang chủ',
+      projection: projectIndexSectionsToDraftPatch(safeArray(data.indexSections), draftJson.index || {}),
+      apply: (draft, sourceFragment, projection) => { draft.index = cloneJson(projection.fullIndex || sourceFragment.index); },
+    },
+    {
+      key: 'gate',
+      label: 'Cổng vào triển lãm',
+      projection: projectGateContentToDraftPatch(data.gateContent || null, draftJson.gate || {}),
+      apply: (draft, sourceFragment) => { draft.gate = cloneJson(sourceFragment.gate); },
+    },
+    {
+      key: 'site_settings',
+      label: 'Thông tin website',
+      projection: projectSiteSettingsToDraftPatch(data.siteSettings || null, draftJson),
+      apply: (draft, sourceFragment) => {
+        draft.site = cloneJson(sourceFragment.site);
+        draft.index = isPlainObjectValue(draft.index) ? draft.index : {};
+        if (isPlainObjectValue(sourceFragment.indexContact)) {
+          draft.index.contact = cloneJson(sourceFragment.indexContact);
+        }
+      },
+    },
+  ];
+
+  areas.forEach((area) => {
+    const projection = area.projection || {};
+    if (!projection.ok) {
+      const reason = projection.reason || `Không thể đối chiếu ${area.label}.`;
+      blockedAreas.push({ key: area.key, label: area.label, reason });
+      errors.push(`${area.label}: ${reason}`);
+      return;
+    }
+    if (normalizedDeepEqual(projection.draftFragment, projection.sourceFragment)) {
+      unchangedAreas.push({ key: area.key, label: area.label });
+      return;
+    }
+    area.apply(nextDraft, projection.sourceFragment, projection);
+    changedAreas.push({ key: area.key, label: area.label });
+    changes.push({ key: area.key, label: area.label, technical: projection.technical || '' });
+  });
+
+  return {
+    ok: blockedAreas.length === 0,
+    draftJson: blockedAreas.length === 0 ? nextDraft : cloneJson(draftJson),
+    changed: changedAreas.length > 0,
+    changedAreas,
+    unchangedAreas,
+    blockedAreas,
+    errors,
+    changes,
+  };
+}
+
+export async function handleComposeCmsPreparationDraft({ handlers = {} } = {}) {
+  const appState = getState();
+  const draftState = appState.staticCmsDraft || {};
+  if (!draftState.draftJson) {
+    setStaticCmsDraftState({ preparationCompositionError: 'Cần tải nội dung hoặc mở bản chuẩn bị trước khi cập nhật.', preparationCompositionStatus: '', preparationCompositionResult: null });
+    handlers.onRerender?.();
+    return;
+  }
+  if (draftState.isSavingDraft || draftState.isPublishingCms || draftState.isComposingPreparationDraft) {
+    setStaticCmsDraftState({ preparationCompositionError: 'Đang có thao tác lưu/kiểm tra/công khai. Hãy chờ thao tác hiện tại hoàn tất.', preparationCompositionStatus: '', preparationCompositionResult: null });
+    handlers.onRerender?.();
+    return;
+  }
+  const dirtyExternal = getBlockingExternalEditSessions(appState);
+  if (dirtyExternal.length) {
+    setStaticCmsDraftState({
+      preparationCompositionError: `Bạn đang có thay đổi chưa lưu ở ${dirtyExternal.map((item) => item.label).join(', ')}. Hãy lưu hoặc hủy thay đổi đó trước khi cập nhật bản chuẩn bị.`,
+      preparationCompositionStatus: '',
+      preparationCompositionResult: null,
+    });
+    handlers.onRerender?.();
+    return;
+  }
+
+  const currentDraftJson = cloneJson(draftState.draftJson);
+  setStaticCmsDraftState({
+    isComposingPreparationDraft: true,
+    preparationCompositionError: null,
+    preparationCompositionStatus: 'Đang đọc nội dung đã lưu mới nhất...',
+    preparationCompositionResult: null,
+  });
+  handlers.onRerender?.();
+
+  try {
+    const refresh = await fetchDashboardData(appState.supabase);
+    const refreshErrors = refresh?.errors || {};
+    const criticalError = refreshErrors.siteSettings || refreshErrors.indexSections || refreshErrors.gateContent || null;
+    if (criticalError) {
+      throw new Error(`Không đọc được dữ liệu cần ghép: ${normalizeErrorMessage(criticalError)}`);
+    }
+    if (refresh?.data) setNestedData(refresh.data);
+    const composition = composeCmsPreparationDraft({ draftJson: currentDraftJson, data: refresh?.data || appState.data || {} });
+    if (!composition.ok) {
+      setStaticCmsDraftState({
+        isComposingPreparationDraft: false,
+        preparationCompositionError: composition.errors.join(' | ') || 'Không thể cập nhật bản chuẩn bị từ nội dung đã lưu.',
+        preparationCompositionStatus: '',
+        preparationCompositionResult: composition,
+      });
+      handlers.onRerender?.();
+      return;
+    }
+    const validation = validateStaticCmsDraft(composition.draftJson, STATIC_CMS_DRAFT_CONFIG);
+    if (!validation.valid) {
+      setStaticCmsDraftState({
+        isComposingPreparationDraft: false,
+        preparationCompositionError: `Bản chuẩn bị sau cập nhật chưa đạt kiểm tra cấu trúc (${Object.keys(validation.errors || {}).length} lỗi). Chưa cập nhật vào state.`,
+        preparationCompositionStatus: '',
+        preparationCompositionResult: { ...composition, validation },
+      });
+      handlers.onRerender?.();
+      return;
+    }
+    setStaticCmsDraftState({
+      draftJson: composition.draftJson,
+      dirty: true,
+      validation,
+      isComposingPreparationDraft: false,
+      preparationCompositionError: null,
+      preparationCompositionStatus: composition.changed
+        ? `Đã cập nhật vào bản chuẩn bị: ${composition.changedAreas.map((area) => area.label).join(', ')}. Chưa lưu bản chuẩn bị.`
+        : 'Bản chuẩn bị đã khớp với nội dung đã lưu. Không có thay đổi mới cần ghép.',
+      preparationCompositionResult: composition,
+      draftSaveStatus: composition.changed ? 'Có thay đổi chưa lưu lại bản chuẩn bị server.' : draftState.draftSaveStatus,
+      draftPersistenceError: null,
+      publishDryRunResult: null,
+      publishResult: null,
+      publishStatus: '',
+      publishError: null,
+      publishLastVerifiedAt: null,
+    });
+  } catch (error) {
+    setStaticCmsDraftState({
+      isComposingPreparationDraft: false,
+      preparationCompositionError: normalizeErrorMessage(error),
+      preparationCompositionStatus: '',
+      preparationCompositionResult: null,
+    });
+  }
+  handlers.onRerender?.();
+}
+
+function getBlockingExternalEditSessions(appState = {}) {
+  const blockers = [];
+  if (appState.siteSettingsEdit?.dirty || appState.siteSettingsEdit?.saving) blockers.push({ label: 'Thông tin website' });
+  if (appState.gateEdit?.dirty || appState.gateEdit?.saving) blockers.push({ label: 'Cổng vào triển lãm' });
+  if (appState.homeEdit?.dirty || appState.homeEdit?.saving) blockers.push({ label: 'Trang chủ' });
+  if (appState.staticCmsDraft?.isSavingDraft || appState.staticCmsDraft?.isPublishingCms) blockers.push({ label: 'Bản chuẩn bị CMS' });
+  return blockers;
+}
+
+function projectIndexSectionsToDraftPatch(indexSections = [], draftIndex = {}) {
+  if (!Array.isArray(indexSections)) {
+    return { ok: false, reason: 'Không đọc được danh sách khu vực Trang chủ.', technical: 'index_sections not array' };
+  }
+  if (!indexSections.length) {
+    return { ok: false, reason: 'Chưa có dữ liệu Trang chủ để đối chiếu.', technical: 'index_sections empty' };
+  }
+  const byKey = new Map(indexSections.map((section) => [String(section?.section_key || '').trim(), section]).filter(([key]) => key));
+  const nextIndex = cloneJson(draftIndex || {});
+  const hero = byKey.get('hero');
+  if (hero) nextIndex.hero = projectHeroSection(hero, nextIndex.hero || {});
+  const experience = byKey.get('experience');
+  if (experience) nextIndex.experience = projectExperienceSection(experience, nextIndex.experience || {});
+  const guide = byKey.get('guide');
+  if (guide) nextIndex.guide = projectGuideSection(guide, nextIndex.guide || {});
+  const contact = byKey.get('contact');
+  if (contact) nextIndex.contact = projectIndexContactSection(contact, nextIndex.contact || {});
+  return {
+    ok: true,
+    draftFragment: { index: pickIndexCompositionFragment(draftIndex || {}) },
+    sourceFragment: { index: pickIndexCompositionFragment(nextIndex) },
+    fullIndex: nextIndex,
+    technical: 'index_sections -> index.hero, index.experience, index.guide, index.contact; index.featuredArtworks preserved',
+  };
+}
+
+function pickIndexCompositionFragment(index = {}) {
+  const source = isPlainObjectValue(index) ? index : {};
+  const fragment = {};
+  ['hero', 'experience', 'guide', 'contact'].forEach((key) => {
+    if (isPlainObjectValue(source[key])) fragment[key] = cloneJson(source[key]);
+  });
+  return fragment;
+}
+
+function projectHeroSection(section = {}, existing = {}) {
+  const out = cloneJson(existing || {});
+  setTextIfOwn(out, 'eyebrow', section, 'eyebrow');
+  setTextIfOwn(out, 'title', section, 'title');
+  setTextIfOwn(out, 'subtitle', section, 'subtitle');
+  setTextIfOwn(out, 'lead', section, 'lead');
+  if (hasOwn(section, 'body') && String(section.body || '').trim()) {
+    if (hasOwn(out, 'recommendation')) out.recommendation = normalizeTextValue(section.body);
+    else out.body = normalizeTextValue(section.body);
+  }
+  const items = coerceArrayValue(section.items_json);
+  if (Array.isArray(items)) out.proofChips = items.map((item) => typeof item === 'string' ? item : firstTextValue(item, ['title', 'label', 'name', 'text'])).filter(Boolean);
+  const media = coerceObjectValue(section.media_json);
+  if (media) out.media = media;
+  const cta = coerceObjectValue(section.cta_json);
+  if (cta) out.cta = cta;
+  return out;
+}
+
+function projectExperienceSection(section = {}, existing = {}) {
+  const out = cloneJson(existing || {});
+  if (hasOwn(section, 'eyebrow')) out.kicker = normalizeTextValue(section.eyebrow);
+  setTextIfOwn(out, 'title', section, 'title');
+  setTextIfOwn(out, 'subtitle', section, 'subtitle');
+  setTextIfOwn(out, 'lead', section, 'lead');
+  setTextIfOwn(out, 'body', section, 'body');
+  const items = coerceArrayValue(section.items_json);
+  if (Array.isArray(items)) out.routes = items.map((item) => coerceObjectValue(item) || { title: normalizeTextValue(item) });
+  const media = coerceObjectValue(section.media_json);
+  if (media) out.media = media;
+  const cta = coerceObjectValue(section.cta_json);
+  if (cta) out.cta = cta;
+  return out;
+}
+
+function projectGuideSection(section = {}, existing = {}) {
+  const out = cloneJson(existing || {});
+  if (hasOwn(section, 'eyebrow')) out.kicker = normalizeTextValue(section.eyebrow);
+  setTextIfOwn(out, 'title', section, 'title');
+  setTextIfOwn(out, 'subtitle', section, 'subtitle');
+  setTextIfOwn(out, 'lead', section, 'lead');
+  setTextIfOwn(out, 'body', section, 'body');
+  const items = coerceArrayValue(section.items_json);
+  if (Array.isArray(items)) out.steps = items.map((item) => coerceObjectValue(item) || { title: normalizeTextValue(item) });
+  return out;
+}
+
+function projectIndexContactSection(section = {}, existing = {}) {
+  const out = cloneJson(existing || {});
+  if (hasOwn(section, 'eyebrow') && String(section.eyebrow || '').trim()) out.label = normalizeTextValue(section.eyebrow);
+  if (hasOwn(section, 'title') && String(section.title || '').trim()) out.organizationName = normalizeTextValue(section.title);
+  if (hasOwn(section, 'lead') && String(section.lead || '').trim()) out.address = normalizeTextValue(section.lead);
+  if (hasOwn(section, 'body') && String(section.body || '').trim()) out.phoneFax = normalizeTextValue(section.body);
+  return out;
+}
+
+function projectGateContentToDraftPatch(gateContent = null, draftGate = {}) {
+  if (!isPlainObjectValue(gateContent)) {
+    return { ok: false, reason: 'Không đọc được dữ liệu Cổng vào triển lãm.', technical: 'gate_content missing' };
+  }
+  const nextGate = cloneJson(draftGate || {});
+  setTextIfOwn(nextGate, 'eyebrow', gateContent, 'eyebrow');
+  setTextIfOwn(nextGate, 'title', gateContent, 'title');
+  setTextIfOwn(nextGate, 'description', gateContent, 'description');
+  if (hasOwn(gateContent, 'back_label')) nextGate.backLabel = normalizeTextValue(gateContent.back_label);
+  const rooms = coerceObjectValue(gateContent.rooms_json);
+  if (rooms) nextGate.rooms = rooms;
+  const editor = coerceObjectValue(gateContent.editor_json);
+  if (editor) nextGate.editor = editor;
+  return {
+    ok: true,
+    draftFragment: { gate: cloneJson(draftGate || {}) },
+    sourceFragment: { gate: nextGate },
+    technical: 'gate_content -> gate.eyebrow/title/description/backLabel/rooms/editor',
+  };
+}
+
+function projectSiteSettingsToDraftPatch(siteSettings = null, draftJson = {}) {
+  if (!isPlainObjectValue(siteSettings)) {
+    return { ok: false, reason: 'Không đọc được dữ liệu Thông tin website.', technical: 'site_settings missing' };
+  }
+  const currentSite = isPlainObjectValue(draftJson.site) ? draftJson.site : {};
+  const nextSite = cloneJson(currentSite || {});
+  const fieldMap = [
+    ['site_title', 'siteTitle'],
+    ['organization_name', 'organizationName'],
+    ['address', 'address'],
+    ['phone', 'phone'],
+    ['fax', 'fax'],
+    ['email', 'email'],
+    ['logo_url', 'logoUrl'],
+  ];
+  fieldMap.forEach(([sourceKey, targetKey]) => setTextIfOwn(nextSite, targetKey, siteSettings, sourceKey));
+
+  const currentContact = isPlainObjectValue(draftJson.index?.contact) ? draftJson.index.contact : {};
+  const nextContact = cloneJson(currentContact || {});
+  if (!nextContact.label) nextContact.label = 'Đơn vị thực hiện';
+  if (hasOwn(siteSettings, 'organization_name')) nextContact.organizationName = normalizeTextValue(siteSettings.organization_name);
+  if (hasOwn(siteSettings, 'address')) nextContact.address = normalizeTextValue(siteSettings.address);
+  if (hasOwn(siteSettings, 'phone') || hasOwn(siteSettings, 'fax')) {
+    const phone = hasOwn(siteSettings, 'phone') ? normalizeTextValue(siteSettings.phone) : normalizeTextValue(currentSite.phone || '');
+    const fax = hasOwn(siteSettings, 'fax') ? normalizeTextValue(siteSettings.fax) : normalizeTextValue(currentSite.fax || '');
+    nextContact.phoneFax = buildPhoneFaxLabel(phone, fax);
+  }
+  return {
+    ok: true,
+    draftFragment: {
+      site: cloneJson(currentSite || {}),
+      indexContact: cloneJson(currentContact || {}),
+    },
+    sourceFragment: {
+      site: nextSite,
+      indexContact: nextContact,
+    },
+    technical: 'site_settings -> site.* and index.contact display fields',
+  };
+}
+
+function buildPhoneFaxLabel(phone = '', fax = '') {
+  const normalizedPhone = normalizeTextValue(phone);
+  const normalizedFax = normalizeTextValue(fax);
+  if (normalizedPhone && normalizedFax) return `${normalizedPhone} - Fax: ${normalizedFax}`;
+  if (normalizedPhone) return normalizedPhone;
+  if (normalizedFax) return `Fax: ${normalizedFax}`;
+  return '';
+}
+
+function setTextIfOwn(target = {}, targetKey = '', source = {}, sourceKey = '') {
+  if (!hasOwn(source, sourceKey)) return;
+  target[targetKey] = normalizeTextValue(source[sourceKey]);
+}
+
+function firstTextValue(object = {}, keys = []) {
+  const source = isPlainObjectValue(object) ? object : {};
+  for (const key of keys) {
+    if (!hasOwn(source, key)) continue;
+    const text = normalizeTextValue(source[key]);
+    if (text) return text;
+  }
+  return '';
+}
+
+function coerceObjectValue(value) {
+  if (!value) return null;
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return isPlainObjectValue(parsed) ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+  return isPlainObjectValue(value) ? cloneJson(value) : null;
+}
+
+function coerceArrayValue(value) {
+  if (!value) return null;
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? cloneJson(parsed) : null;
+    } catch {
+      return null;
+    }
+  }
+  return Array.isArray(value) ? cloneJson(value) : null;
+}
+
+function normalizeTextValue(value = '') {
+  if (value === null || value === undefined) return '';
+  return typeof value === 'string' ? value.trim() : String(value).trim();
+}
+
+function normalizedDeepEqual(left, right) {
+  return JSON.stringify(normalizeForStableCompare(left)) === JSON.stringify(normalizeForStableCompare(right));
+}
+
+function normalizeForStableCompare(value) {
+  if (Array.isArray(value)) return value.map((item) => normalizeForStableCompare(item));
+  if (isPlainObjectValue(value)) {
+    return Object.keys(value)
+      .filter((key) => value[key] !== undefined)
+      .sort()
+      .reduce((out, key) => {
+        out[key] = normalizeForStableCompare(value[key]);
+        return out;
+      }, {});
+  }
+  return value;
+}
+
+function isPlainObjectValue(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function hasOwn(object = {}, key = '') {
+  return Object.prototype.hasOwnProperty.call(object || {}, key);
 }
 
 function getLatestUpdatedAt(records = []) {
