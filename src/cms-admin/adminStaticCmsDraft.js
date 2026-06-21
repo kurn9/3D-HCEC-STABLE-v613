@@ -3783,7 +3783,7 @@ function renderPublishGateHelp() {
   return wrap;
 }
 
-function getPublishGateAccess(appState = {}) {
+export function getPublishGateAccess(appState = {}) {
   if (!appState.supabase) return { allowed: false, reason: 'Supabase client chưa sẵn sàng.' };
   if (!appState.session?.user?.id) return { allowed: false, reason: 'Cần đăng nhập để công khai bản nháp.' };
   const role = String(appState.profile?.role || '').trim().toLowerCase();
@@ -3794,7 +3794,7 @@ function getPublishGateAccess(appState = {}) {
   return { allowed: true, userId: appState.session.user.id, role };
 }
 
-function hasCurrentDryRunPass(draftState = {}) {
+export function hasCurrentDryRunPass(draftState = {}) {
   const result = draftState.publishDryRunResult || null;
   if (!result || result.ok !== true || result.dryRun !== true) return false;
   const version = String(draftState.draftJson?.version || '').trim();
@@ -3802,7 +3802,7 @@ function hasCurrentDryRunPass(draftState = {}) {
   return !version || !resultVersion || version === resultVersion;
 }
 
-function getPublishReadiness(draftState = {}, access = {}) {
+export function getPublishReadiness(draftState = {}, access = {}) {
   if (!access.allowed) return { ready: false, reason: access.reason || 'Không đủ quyền công khai.' };
   if (!draftState.draftJson) return { ready: false, reason: 'Chưa tải bản nháp.' };
   if (!draftState.currentDraftId) return { ready: false, reason: 'Cần lưu bản nháp trước khi công khai.' };

@@ -73,7 +73,14 @@ import {
 } from './adminCopy.js';
 import { validateGateContentDraft, validateHomeExperienceSectionDraft, validateHomeGuideSectionDraft, validateIndexSectionDraft, validateSiteSettingsDraft, validateStaticCmsDraft } from './adminValidation.js';
 import { buildDbFallbackDashboardSummary } from './adminDashboardSummary.js';
-import { handleLoadStaticCmsBaseline, handleSaveStaticCmsDraft, renderStaticCmsDraftTab } from './adminStaticCmsDraft.js';
+import {
+  getPublishGateAccess,
+  getPublishReadiness,
+  handleLoadStaticCmsBaseline,
+  handleSaveStaticCmsDraft,
+  hasCurrentDryRunPass,
+  renderStaticCmsDraftTab,
+} from './adminStaticCmsDraft.js';
 import { renderRollbackHistoryTab } from './adminRollbackGate.js';
 import { renderCmsStorageCleanupTab } from './adminCleanupGate.js';
 
