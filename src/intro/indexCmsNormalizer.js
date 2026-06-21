@@ -7,6 +7,9 @@ const VIDEO_EXTENSIONS = Object.freeze(['mp4', 'webm', 'ogg', 'ogv', 'mov', 'm4v
 const DEFAULT_INDEX_CMS_LOADER_OPTIONS = Object.freeze({
   context: 'index',
   remoteEnabled: true,
+  pointerUrl: 'https://ocmidhgabyrvqbvqgorw.supabase.co/storage/v1/object/public/cms-public/published/current_release.json',
+  legacyLatestUrl: 'https://ocmidhgabyrvqbvqgorw.supabase.co/storage/v1/object/public/cms-public/published/cms_public_content.json',
+  releasePublicBaseUrl: 'https://ocmidhgabyrvqbvqgorw.supabase.co/storage/v1/object/public/cms-public',
   remoteUrl: 'https://ocmidhgabyrvqbvqgorw.supabase.co/storage/v1/object/public/cms-public/published/cms_public_content.json',
   fallbackUrl: './data/cms_content_fallback.json',
   timeoutMs: 1200,

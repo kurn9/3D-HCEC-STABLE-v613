@@ -1,4 +1,4 @@
-// v6.14.038 — Canonical CMS latest/fallback loader with safe media override and legacy alias compatibility.
+// v6.14.066.006 — Canonical release-pointer CMS loader with strict legacy fallback boundary.
 // No upload/admin integration here; this is a frontend content layer with local/legacy fallback.
 (function initCmsContentLoader(global) {
   if (global.cmsContentLoader) return;
@@ -7,7 +7,9 @@
     enabled: true,
     remoteEnabled: false,
     remoteUrl: '',
+    legacyLatestUrl: '',
     pointerUrl: '',
+    releasePublicBaseUrl: '',
     fallbackUrl: './data/cms_content_fallback.json',
     timeoutMs: 1200,
     galleryTimeoutMs: 1600,
@@ -91,6 +93,7 @@
   let cachedContent = null;
   let cachedSource = 'none';
   let cachedValidation = null;
+  let cachedReleaseMetadata = null;
   let loadPromise = null;
   let contentSourcesCache = null;
   let contentSourcesPromise = null;
@@ -188,7 +191,10 @@
   }
 
   function getRemoteStorageBaseUrl(remoteUrl = '') {
-    const text = sanitizeText(remoteUrl);
+    const explicit = sanitizeText(getCmsConfig().releasePublicBaseUrl);
+    if (explicit) return explicit.replace(/\/$/, '');
+    const legacyLatest = sanitizeText(getCmsConfig().legacyLatestUrl);
+    const text = sanitizeText(remoteUrl || legacyLatest);
     const marker = '/published/';
     const index = text.indexOf(marker);
     return index >= 0 ? text.slice(0, index) : text.replace(/\/?$/, '');
@@ -197,7 +203,7 @@
   function getPointerUrl(config = getCmsConfig()) {
     const configured = sanitizeText(config.pointerUrl);
     if (configured) return configured;
-    const remoteUrl = sanitizeText(config.remoteUrl);
+    const remoteUrl = sanitizeText(config.pointerUrl || config.remoteUrl || config.legacyLatestUrl);
     if (!remoteUrl) return '';
     if (/\/published\/cms_public_content\.json(?:$|[?#])/.test(remoteUrl)) {
       return remoteUrl.replace(/\/published\/cms_public_content\.json(?:[?#].*)?$/, '/published/current_release.json');
@@ -209,7 +215,7 @@
     const path = sanitizeText(contentPath);
     if (!path || path.includes('..') || path.includes('\\') || path.includes('//')) return '';
     if (/^https?:\/\//i.test(path)) return path;
-    const base = getRemoteStorageBaseUrl(config.remoteUrl);
+    const base = getRemoteStorageBaseUrl(config.remoteUrl || config.legacyLatestUrl || config.pointerUrl);
     return base ? `${base}/${path.replace(/^\/+/, '')}` : '';
   }
 
@@ -217,11 +223,18 @@
     return error?.status === 404 || /HTTP 404|not found|does not exist/i.test(error?.message || String(error || ''));
   }
 
+  function getExpectedReleaseContentPath(releaseId = '') {
+    const id = sanitizeText(releaseId);
+    return /^[0-9a-f-]{36}$/i.test(id) ? `published/releases/${id}/cms_public_content.json` : '';
+  }
+
   function isValidReleasePointer(pointer = {}) {
-    return isPlainObject(pointer)
-      && pointer.schemaVersion === 1
-      && /^[0-9a-f-]{36}$/i.test(sanitizeText(pointer.releaseId))
-      && /^published\/releases\/[0-9a-f-]{36}\/cms_public_content\.json$/i.test(sanitizeText(pointer.contentPath))
+    if (!isPlainObject(pointer)) return false;
+    const releaseId = sanitizeText(pointer.releaseId);
+    const expectedPath = getExpectedReleaseContentPath(releaseId);
+    return pointer.schemaVersion === 1
+      && Boolean(expectedPath)
+      && sanitizeText(pointer.contentPath) === expectedPath
       && /^[a-f0-9]{64}$/i.test(sanitizeText(pointer.contentHash).toLowerCase());
   }
 
@@ -266,7 +279,19 @@
     const validation = getContentValidation(content, config);
     logContentValidation(validation, config, 'release');
     if (validation.valid !== true) return { handled: true, content: null, status: 'release-invalid', validation, pointer };
-    return { handled: true, content, status: 'release-loaded', validation, pointer };
+    const releaseHash = hash || '';
+    const metadata = {
+      json: content,
+      sourceType: 'release-pointer',
+      pointer,
+      releaseId: pointer.releaseId,
+      contentPath: pointer.contentPath,
+      contentHash: pointer.contentHash,
+      releaseHash,
+      loadedAt: new Date().toISOString(),
+      legacyFallbackUsed: false,
+    };
+    return { handled: true, content, status: 'release-loaded', validation, pointer, releaseHash, metadata };
   }
 
   function getContentValidation(content, config) {
@@ -293,6 +318,7 @@
     if (config.enabled === false) {
       cachedContent = null;
       cachedSource = 'legacy';
+      cachedReleaseMetadata = null;
       cachedValidation = { valid: true, errors: [], warnings: ['CMS disabled.'] };
       logCms('disabled; using legacy', {}, 'debug', config);
       return null;
@@ -314,20 +340,24 @@
               cachedContent = releaseResult.content;
               cachedSource = 'release-pointer';
               cachedValidation = releaseResult.validation;
+              cachedReleaseMetadata = releaseResult.metadata || null;
               logCms('loaded release pointer', { releaseId: releaseResult.pointer?.releaseId || '', version: cachedContent.version || '' }, 'debug', config);
               return cachedContent;
             }
             cachedValidation = releaseResult.validation || { valid: false, errors: [releaseResult.status], warnings: [] };
             cachedSource = 'release-error';
+            cachedReleaseMetadata = null;
             if (cachedContent) return cachedContent;
             logCms('release pointer invalid; refusing silent legacy fallback', { status: releaseResult.status }, 'warn', config);
             return null;
           }
-          logCms('loading legacy remote latest', { url: config.remoteUrl }, 'debug', config);
-          const remote = await fetchJsonWithTimeout(config.remoteUrl, timeout, config, 'remote-legacy-latest');
+          const legacyUrl = sanitizeText(config.legacyLatestUrl || config.remoteUrl);
+          logCms('loading legacy remote latest because pointer is missing', { url: legacyUrl }, 'debug', config);
+          const remote = await fetchJsonWithTimeout(legacyUrl, timeout, config, 'remote-legacy-latest');
           if (validateContent(remote, config, 'remote-legacy-latest')) {
             cachedContent = remote;
-            cachedSource = 'remote-legacy-latest';
+            cachedSource = 'legacy-fallback';
+            cachedReleaseMetadata = { json: remote, sourceType: 'legacy-fallback', pointer: null, releaseId: '', contentPath: 'published/cms_public_content.json', contentHash: '', releaseHash: '', loadedAt: new Date().toISOString(), legacyFallbackUsed: true };
             logCms('loaded legacy remote latest', { version: remote.version || '', schemaVersion: remote.schemaVersion }, 'debug', config);
             return cachedContent;
           }
@@ -357,6 +387,7 @@
 
       cachedContent = null;
       cachedSource = 'legacy';
+      cachedReleaseMetadata = null;
       cachedValidation = { valid: true, errors: [], warnings: ['Using legacy content.'] };
       logCms('fallback legacy', {}, 'warn', config);
       return null;
@@ -381,10 +412,19 @@
         fallbackStatus: 'disabled',
         remoteValidation: null,
         fallbackValidation: null,
-        config
+        config,
+        releaseMetadata: null,
+        sourceType: 'legacy',
+        pointer: null,
+        releaseId: '',
+        contentPath: '',
+        contentHash: '',
+        releaseHash: '',
+        legacyFallbackUsed: false,
       };
       cachedContent = null;
       cachedSource = 'legacy';
+      cachedReleaseMetadata = null;
       cachedValidation = { valid: true, errors: [], warnings: ['CMS disabled.'] };
       contentSourcesCache = disabled;
       return disabled;
@@ -406,7 +446,7 @@
         try {
           if (label === 'remote') {
             const releaseResult = await loadRemoteContentWithPointer(config, timeout);
-            if (releaseResult.handled) return { content: releaseResult.content, status: releaseResult.status, validation: releaseResult.validation, pointer: releaseResult.pointer };
+            if (releaseResult.handled) return { content: releaseResult.content, status: releaseResult.status, validation: releaseResult.validation, pointer: releaseResult.pointer, metadata: releaseResult.metadata || null };
           }
           logCms(`loading ${label}`, { url: cleanUrl }, 'debug', config);
           const content = await fetchJsonWithTimeout(cleanUrl, timeout, config, label);
@@ -432,6 +472,7 @@
       cachedValidation = remoteResult.content
         ? remoteResult.validation
         : (remotePointerHandled ? (remoteResult.validation || { valid: false, errors: [remoteResult.status], warnings: [] }) : (fallbackResult.content ? fallbackResult.validation : { valid: true, errors: [], warnings: ['Using legacy content.'] }));
+      cachedReleaseMetadata = remoteResult.metadata || (source === 'legacy-fallback' ? { json: selectedContent, sourceType: 'legacy-fallback', pointer: null, releaseId: '', contentPath: 'published/cms_public_content.json', contentHash: '', releaseHash: '', loadedAt: new Date().toISOString(), legacyFallbackUsed: true } : null);
 
       const result = {
         remoteContent: remoteResult.content,
@@ -442,7 +483,15 @@
         fallbackStatus: fallbackResult.status,
         remoteValidation: remoteResult.validation,
         fallbackValidation: fallbackResult.validation,
-        config
+        config,
+        releaseMetadata: cachedReleaseMetadata,
+        sourceType: cachedReleaseMetadata?.sourceType || source,
+        pointer: cachedReleaseMetadata?.pointer || remoteResult.pointer || null,
+        releaseId: cachedReleaseMetadata?.releaseId || '',
+        contentPath: cachedReleaseMetadata?.contentPath || '',
+        contentHash: cachedReleaseMetadata?.contentHash || '',
+        releaseHash: cachedReleaseMetadata?.releaseHash || '',
+        legacyFallbackUsed: Boolean(cachedReleaseMetadata?.legacyFallbackUsed),
       };
       contentSourcesCache = result;
       logCms('content sources resolved', {
@@ -463,10 +512,12 @@
   function getCmsContent() { return cachedContent; }
   function getCmsSource() { return cachedSource; }
   function getCmsValidation() { return cachedValidation; }
+  function getCmsReleaseMetadata() { return cachedReleaseMetadata; }
   function clearCmsContentCache() {
     cachedContent = null;
     cachedSource = 'none';
     cachedValidation = null;
+    cachedReleaseMetadata = null;
     loadPromise = null;
     contentSourcesCache = null;
     contentSourcesPromise = null;
@@ -740,6 +791,7 @@
     getCmsContent,
     getCmsSource,
     getCmsValidation,
+    getCmsReleaseMetadata,
     getCmsIndexContent,
     getCmsGateContent,
     getCmsRoomContent,
@@ -749,6 +801,7 @@
     getCmsConfig,
     getCmsMediaValidationOptions,
     getPointerUrl,
+    getExpectedReleaseContentPath,
     normalizeCmsContentDocument: (...args) => getValidator().normalizeCmsContentDocument?.(...args),
     sanitizeText,
     isSafeMediaUrl,

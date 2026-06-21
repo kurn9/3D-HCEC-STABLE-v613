@@ -1,4 +1,4 @@
-import { ADMIN_TABLES, ADMIN_UI, CMS_MEDIA_DELETE_CONFIG, CMS_MEDIA_UPLOAD_CONFIG, CMS_PUBLISH_GATE_CONFIG, CMS_ROLLBACK_GATE_CONFIG, CMS_STORAGE_CLEANUP_CONFIG, STATIC_CMS_DRAFT_CONFIG } from './adminConfig.js';
+import { ADMIN_TABLES, ADMIN_UI, CMS_MEDIA_DELETE_CONFIG, CMS_MEDIA_UPLOAD_CONFIG, CMS_PUBLISH_GATE_CONFIG, CMS_RELEASE_RECONCILE_CONFIG, CMS_ROLLBACK_GATE_CONFIG, CMS_STORAGE_CLEANUP_CONFIG, STATIC_CMS_DRAFT_CONFIG } from './adminConfig.js';
 import { safeArray } from './adminUtils.js';
 import { buildCanonicalDashboardSummary } from './adminDashboardSummary.js';
 
@@ -306,30 +306,53 @@ export async function fetchCmsMediaUploads(client) {
 }
 
 export async function fetchDashboardCanonicalCmsContent() {
-  const sourceUrl = STATIC_CMS_DRAFT_CONFIG.remoteUrl;
-  if (!sourceUrl) {
-    return { name: 'canonicalCms', data: null, error: new Error('Chưa cấu hình URL CMS public JSON.') };
+  const loader = await getCanonicalCmsContentLoader();
+  if (!loader?.loadCmsContentSources) {
+    return { name: 'canonicalCms', data: null, error: new Error('Canonical release loader chưa sẵn sàng.') };
   }
 
   try {
-    const separator = sourceUrl.includes('?') ? '&' : '?';
-    const response = await fetch(`${sourceUrl}${separator}v=${Date.now()}`, { cache: 'no-store' });
-    const text = await response.text();
-    if (!response.ok) {
-      throw new Error(`Không đọc được CMS public JSON HTTP ${response.status}.`);
+    const sources = await loader.loadCmsContentSources({
+      forceReload: true,
+      remoteEnabled: true,
+      pointerUrl: STATIC_CMS_DRAFT_CONFIG.pointerUrl,
+      legacyLatestUrl: STATIC_CMS_DRAFT_CONFIG.legacyLatestUrl,
+      remoteUrl: STATIC_CMS_DRAFT_CONFIG.legacyLatestUrl,
+      releasePublicBaseUrl: STATIC_CMS_DRAFT_CONFIG.releasePublicBaseUrl,
+      fallbackUrl: STATIC_CMS_DRAFT_CONFIG.fallbackUrl,
+    });
+    const json = sources.selectedContent;
+    if (!json) {
+      throw new Error(sources.remoteStatus === 'pointer-missing'
+        ? 'Chưa có release pointer và không tải được legacy fallback.'
+        : `Không đọc được canonical release (${sources.remoteStatus || sources.source}).`);
     }
-    const json = JSON.parse(text);
+    const sourceType = sources.sourceType || sources.source || 'release-pointer';
     const summary = buildCanonicalDashboardSummary(json, {
-      source: 'canonical-public',
-      sourceLabel: 'CMS public JSON',
-      sourceUrl,
+      source: sourceType === 'legacy-fallback' ? 'legacy-fallback' : 'release-pointer',
+      sourceLabel: sourceType === 'legacy-fallback' ? 'Nguồn legacy dự phòng' : 'Release hiện tại',
+      sourceUrl: sources.contentPath || STATIC_CMS_DRAFT_CONFIG.pointerUrl,
+      releaseId: sources.releaseId || '',
+      contentPath: sources.contentPath || '',
+      contentHash: sources.contentHash || '',
     });
     if (!summary.valid) {
-      throw new Error(`CMS public JSON chưa đạt summary contract: ${summary.errors.join(' | ')}`);
+      throw new Error(`CMS release chưa đạt summary contract: ${summary.errors.join(' | ')}`);
     }
     return {
       name: 'canonicalCms',
-      data: { json, summary, sourceUrl },
+      data: {
+        json,
+        summary,
+        sourceUrl: sources.contentPath || STATIC_CMS_DRAFT_CONFIG.pointerUrl,
+        sourceType,
+        releaseId: sources.releaseId || '',
+        contentPath: sources.contentPath || '',
+        contentHash: sources.contentHash || '',
+        releaseHash: sources.releaseHash || '',
+        legacyFallbackUsed: Boolean(sources.legacyFallbackUsed),
+        pointer: sources.pointer || null,
+      },
       error: null,
     };
   } catch (error) {
@@ -337,6 +360,14 @@ export async function fetchDashboardCanonicalCmsContent() {
   }
 }
 
+
+
+async function getCanonicalCmsContentLoader() {
+  if (!globalThis.cmsContentLoader?.loadCmsContentSources) {
+    await import('../shared/cmsContentLoader.js');
+  }
+  return globalThis.cmsContentLoader || null;
+}
 
 export async function updateSiteSettingsDraft(client, siteSettingsId, values = {}, userId = null) {
   if (!client) {
@@ -921,63 +952,43 @@ async function sha256BrowserText(text) {
 }
 
 
-export async function reconcileCmsReleasePointer(expected = {}) {
-  const pointerPath = 'published/current_release.json';
-  const pointerUrl = `${CMS_ROLLBACK_GATE_CONFIG.publicStorageBaseUrl}/${pointerPath}`;
-  const expectedReleaseId = normalizeReleaseId(expected.releaseId || expected.expectedReleaseId);
-  const expectedContentHash = normalizeOptionalText(expected.contentHash || expected.expectedContentHash).toLowerCase();
+export async function reconcileCmsReleasePointer(clientOrExpected = {}, maybeExpected = {}) {
+  const hasClient = Boolean(clientOrExpected?.auth?.getSession);
+  const client = hasClient ? clientOrExpected : getCachedSupabaseClient();
+  const expected = hasClient ? maybeExpected : clientOrExpected;
+  if (!client) return { data: null, error: new Error('Supabase client chưa sẵn sàng để kiểm tra trạng thái release.') };
+  const { data: sessionData, error: sessionError } = await client.auth.getSession();
+  if (sessionError) return { data: null, error: sessionError };
+  const token = sessionData?.session?.access_token;
+  if (!token) return { data: null, error: new Error('Cần đăng nhập để kiểm tra trạng thái release.') };
+  const operationId = normalizeOptionalText(expected.operationId || expected.id);
   try {
-    const pointerResponse = await fetch(`${pointerUrl}?v=${Date.now()}`, { cache: 'no-store' });
-    if (pointerResponse.status === 404) {
-      return { data: { ok: false, classification: 'pointer_missing', pointerPath, expectedReleaseId, expectedContentHash }, error: null };
+    const response = await fetch(CMS_RELEASE_RECONCILE_CONFIG.endpoint, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(operationId ? { operationId } : {}),
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok || body?.ok === false) {
+      const error = new Error(body?.error || body?.message || `Reconciliation gate thất bại HTTP ${response.status}.`);
+      error.status = response.status;
+      error.code = body?.code || body?.classification || '';
+      return { data: body || null, error };
     }
-    const pointerText = await pointerResponse.text();
-    if (!pointerResponse.ok) {
-      return { data: { ok: false, classification: 'read_failed', pointerPath, expectedReleaseId, expectedContentHash, httpStatus: pointerResponse.status }, error: null };
-    }
-    const pointer = JSON.parse(pointerText);
-    if (!pointer || typeof pointer !== 'object' || Array.isArray(pointer)) {
-      return { data: { ok: false, classification: 'pointer_invalid', pointerPath, expectedReleaseId, expectedContentHash }, error: null };
-    }
-    const releaseId = normalizeReleaseId(pointer.releaseId);
-    const contentPath = normalizePublishedVersionPath(pointer.contentPath);
-    const contentHash = normalizeOptionalText(pointer.contentHash).toLowerCase();
-    if (pointer.schemaVersion !== 1 || !releaseId || !contentPath || !isSha256Text(contentHash)) {
-      return { data: { ok: false, classification: 'pointer_invalid', pointerPath, pointer, releaseId, contentPath, contentHash, expectedReleaseId, expectedContentHash }, error: null };
-    }
-    const releaseUrl = `${CMS_ROLLBACK_GATE_CONFIG.publicStorageBaseUrl}/${contentPath}`;
-    const releaseResponse = await fetch(`${releaseUrl}?v=${Date.now()}`, { cache: 'no-store' });
-    if (releaseResponse.status === 404) {
-      return { data: { ok: false, classification: 'release_missing', pointerPath, pointer, releaseId, contentPath, contentHash, expectedReleaseId, expectedContentHash }, error: null };
-    }
-    const releaseText = await releaseResponse.text();
-    if (!releaseResponse.ok) {
-      return { data: { ok: false, classification: 'read_failed', pointerPath, pointer, releaseId, contentPath, contentHash, expectedReleaseId, expectedContentHash, httpStatus: releaseResponse.status }, error: null };
-    }
-    const releaseHash = await sha256BrowserText(releaseText);
-    if (!releaseHash || releaseHash.toLowerCase() !== contentHash) {
-      return { data: { ok: false, classification: 'hash_mismatch', pointerPath, pointer, releaseId, contentPath, contentHash, releaseHash, expectedReleaseId, expectedContentHash }, error: null };
-    }
-    const expectedMatches = Boolean(expectedReleaseId && releaseId === expectedReleaseId && (!expectedContentHash || expectedContentHash === contentHash));
-    return {
-      data: {
-        ok: true,
-        classification: expectedMatches ? 'active_expected_release' : 'active_other_release',
-        pointerPath,
-        pointer,
-        releaseId,
-        contentPath,
-        contentHash,
-        releaseHash,
-        expectedReleaseId,
-        expectedContentHash,
-      },
-      error: null,
-    };
+    return { data: body, error: null };
   } catch (error) {
-    return { data: { ok: false, classification: 'read_failed', pointerPath, expectedReleaseId, expectedContentHash, error: normalizeErrorLike(error) }, error: null };
+    return { data: null, error };
   }
 }
+
+function getCachedSupabaseClient() {
+  return globalThis.__cmsAdminSupabaseClient || null;
+}
+
+export function setCachedSupabaseClientForApi(client) {
+  globalThis.__cmsAdminSupabaseClient = client || null;
+}
+
 
 function isSha256Text(value = '') {
   return /^[a-f0-9]{64}$/i.test(String(value || '').trim());

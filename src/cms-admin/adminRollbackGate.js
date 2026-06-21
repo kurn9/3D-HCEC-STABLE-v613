@@ -14,6 +14,8 @@ import {
 } from './adminUtils.js';
 import {
   getState,
+  applyReleaseOperationGateFromServer,
+  setReleaseOperationGateState,
   setCmsPublishHistoryItems,
   setCmsPublishHistoryState,
 } from './adminState.js';
@@ -1017,6 +1019,7 @@ async function handlePreviewVersion(sourcePath, handlers = {}) {
       previewResult: null,
     });
   } else {
+    setReleaseOperationGateState({ blocked: true, reconciliationRequired: true, reconciling: false, state: 'pointer_unknown', message: 'Chưa xác định website đang dùng bản nào. Không bấm công khai hoặc khôi phục lại. Hãy kiểm tra trạng thái hiện tại.', lastCheckedAt: new Date().toISOString(), result: data });
     setCmsPublishHistoryState({
       isPreviewing: false,
       previewRequestPath: '',
@@ -1030,7 +1033,14 @@ async function handlePreviewVersion(sourcePath, handlers = {}) {
 async function handleRollbackCmsJson({ sourcePath, dryRun = true, handlers = {} } = {}) {
   const state = getState();
   const historyState = state.publishHistory || {};
+  const gate = state.releaseOperationGate || {};
   const selectedPath = String(historyState.selectedSourcePath || '').trim();
+
+  if (gate.blocked) {
+    setCmsPublishHistoryState({ rollbackError: gate.message || 'Đang có một thao tác công khai hoặc khôi phục chưa hoàn tất. Hãy kiểm tra trạng thái hiện tại trước khi tiếp tục.' });
+    handlers.onRerender?.();
+    return;
+  }
 
   if (historyState.rollbackRequiresReconciliation || historyState.rollbackPointerState === 'unknown') {
     setCmsPublishHistoryState({ rollbackError: 'Chưa xác định website đang dùng bản nào. Không bấm khôi phục lại. Hãy bấm “Kiểm tra trạng thái hiện tại”.' });
@@ -1100,6 +1110,15 @@ async function handleRollbackCmsJson({ sourcePath, dryRun = true, handlers = {} 
     const resultCode = result.error?.code || result.data?.code || '';
     const isPointerUnknown = resultCode === 'POINTER_STATE_UNKNOWN' || result.data?.pointerState === 'unknown';
     if (isPointerUnknown) {
+      applyReleaseOperationGateFromServer({
+        operationId: String(result.data?.operationId || ''),
+        operationType: 'rollback',
+        state: 'pointer_unknown',
+        phase: 'pointer_written',
+        targetReleaseId: String(result.data?.targetReleaseId || ''),
+        contentHash: String(result.data?.targetContentHash || ''),
+        contentPath: String(result.data?.targetContentPath || ''),
+      });
       setCmsPublishHistoryState({
         isRollingBack: false,
         rollbackRequestPath: '',
@@ -1117,6 +1136,12 @@ async function handleRollbackCmsJson({ sourcePath, dryRun = true, handlers = {} 
         rollbackResult: result.data || null,
         rollbackDryRunResult: null,
       });
+      handlers.onRerender?.();
+      return;
+    }
+    if (resultCode === 'RELEASE_OPERATION_BLOCKED') {
+      applyReleaseOperationGateFromServer(result.data || {}, 'Đang có một thao tác công khai hoặc khôi phục chưa hoàn tất. Hãy kiểm tra trạng thái hiện tại trước khi tiếp tục.');
+      setCmsPublishHistoryState({ isRollingBack: false, rollbackRequestPath: '', rollbackError: 'Đang có một thao tác công khai hoặc khôi phục chưa hoàn tất. Hãy kiểm tra trạng thái hiện tại trước khi tiếp tục.', rollbackStatus: '', rollbackResult: result.data || null, rollbackDryRunResult: null });
       handlers.onRerender?.();
       return;
     }
@@ -1179,7 +1204,8 @@ async function handleReconcileRollbackPointer({ handlers = {} } = {}) {
     rollbackReconciliationError: null,
   });
   handlers.onRerender?.();
-  const result = await reconcileCmsReleasePointer({ releaseId: expectedReleaseId, contentHash: expectedContentHash });
+  setReleaseOperationGateState({ reconciling: true, error: null });
+  const result = await reconcileCmsReleasePointer(getState().supabase, { operationId: current.rollbackResult?.operationId || getState().releaseOperationGate?.operationId || '', releaseId: expectedReleaseId, contentHash: expectedContentHash });
   const data = result.data || {};
   if (result.error) {
     setCmsPublishHistoryState({
@@ -1187,11 +1213,13 @@ async function handleReconcileRollbackPointer({ handlers = {} } = {}) {
       rollbackReconciliationError: normalizeErrorMessage(result.error),
       rollbackReconciliationStatus: '',
     });
+    setReleaseOperationGateState({ reconciling: false, error: normalizeErrorMessage(result.error), lastCheckedAt: new Date().toISOString() });
     handlers.onRerender?.();
     return;
   }
   const classification = String(data.classification || 'read_failed');
   if (classification === 'active_expected_release') {
+    setReleaseOperationGateState({ blocked: false, reconciliationRequired: false, reconciling: false, state: 'succeeded', phase: 'resolved', message: '', lastCheckedAt: new Date().toISOString(), result: data });
     setCmsPublishHistoryState({
       isReconcilingRollbackPointer: false,
       rollbackPointerState: 'active_expected_release',
@@ -1205,6 +1233,7 @@ async function handleReconcileRollbackPointer({ handlers = {} } = {}) {
       rollbackReason: '',
     });
   } else if (classification === 'active_other_release') {
+    setReleaseOperationGateState({ blocked: false, reconciliationRequired: false, reconciling: false, state: 'resolved_active_other', message: '', lastCheckedAt: new Date().toISOString(), result: data });
     setCmsPublishHistoryState({
       isReconcilingRollbackPointer: false,
       rollbackPointerState: 'active_other_release',
@@ -1216,6 +1245,7 @@ async function handleReconcileRollbackPointer({ handlers = {} } = {}) {
       rollbackDryRunResult: null,
     });
   } else {
+    setReleaseOperationGateState({ blocked: true, reconciliationRequired: true, reconciling: false, state: 'pointer_unknown', message: 'Chưa xác định website đang dùng bản nào. Không bấm công khai hoặc khôi phục lại. Hãy kiểm tra trạng thái hiện tại.', lastCheckedAt: new Date().toISOString(), result: data });
     setCmsPublishHistoryState({
       isReconcilingRollbackPointer: false,
       rollbackPointerState: 'unknown',

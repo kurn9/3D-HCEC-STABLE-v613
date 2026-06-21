@@ -12,6 +12,7 @@ const initialState = {
   homeEdit: createEmptyHomeEditState(),
   staticCmsDraft: createEmptyStaticCmsDraftState(),
   publishHistory: createEmptyPublishHistoryState(),
+  releaseOperationGate: createEmptyReleaseOperationGateState(),
   storageCleanup: createEmptyStorageCleanupState(),
   data: {
     siteSettings: null,
@@ -129,6 +130,64 @@ export function setSiteSettingsEditState(patch = {}) {
 
 export function resetSiteSettingsEdit() {
   return setState({ siteSettingsEdit: createEmptySiteSettingsEditState() });
+}
+
+export function createEmptyReleaseOperationGateState() {
+  return {
+    loading: false,
+    blocked: false,
+    operationId: '',
+    operationType: '',
+    state: '',
+    phase: '',
+    expectedReleaseId: '',
+    targetReleaseId: '',
+    contentHash: '',
+    contentPath: '',
+    message: '',
+    reconciliationRequired: false,
+    reconciling: false,
+    lastCheckedAt: null,
+    error: null,
+    result: null,
+  };
+}
+
+export function setReleaseOperationGateState(patch = {}) {
+  const current = state.releaseOperationGate || createEmptyReleaseOperationGateState();
+  return setState({
+    releaseOperationGate: {
+      ...current,
+      ...patch,
+    },
+  });
+}
+
+export function clearReleaseOperationGateState() {
+  return setState({ releaseOperationGate: createEmptyReleaseOperationGateState() });
+}
+
+export function applyReleaseOperationGateFromServer(data = {}, fallbackMessage = '') {
+  const stateText = String(data.state || data.operationState || '').trim();
+  const blocked = Boolean(data.operationId) && ['in_progress', 'pointer_unknown'].includes(stateText);
+  return setReleaseOperationGateState({
+    loading: false,
+    blocked,
+    operationId: String(data.operationId || data.id || ''),
+    operationType: String(data.operationType || ''),
+    state: stateText,
+    phase: String(data.phase || ''),
+    expectedReleaseId: String(data.expectedReleaseId || data.releaseId || ''),
+    targetReleaseId: String(data.targetReleaseId || ''),
+    contentHash: String(data.contentHash || ''),
+    contentPath: String(data.contentPath || ''),
+    message: blocked ? (fallbackMessage || 'Đang có một thao tác công khai hoặc khôi phục chưa hoàn tất. Hãy kiểm tra trạng thái hiện tại trước khi tiếp tục.') : '',
+    reconciliationRequired: blocked,
+    reconciling: false,
+    lastCheckedAt: new Date().toISOString(),
+    error: null,
+    result: data || null,
+  });
 }
 
 export function createEmptySiteSettingsEditState() {

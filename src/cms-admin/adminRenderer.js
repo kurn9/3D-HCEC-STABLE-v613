@@ -6,7 +6,7 @@ import {
   signInWithEmailPassword,
   signOut,
 } from './adminAuth.js';
-import { confirmDeleteCmsMedia, fetchDashboardData, prepareDeleteCmsMedia, updateExperienceIndexSectionDraft, updateGateContentDraft, updateGuideIndexSectionDraft, updateIndexSectionDraft, updateSiteSettingsDraft } from './adminApi.js';
+import { confirmDeleteCmsMedia, fetchDashboardData, prepareDeleteCmsMedia, reconcileCmsReleasePointer, setCachedSupabaseClientForApi, updateExperienceIndexSectionDraft, updateGateContentDraft, updateGuideIndexSectionDraft, updateIndexSectionDraft, updateSiteSettingsDraft } from './adminApi.js';
 import {
   appendChildren,
   byId,
@@ -24,6 +24,8 @@ import {
 import {
   getState,
   getActiveEditSession,
+  applyReleaseOperationGateFromServer,
+  clearReleaseOperationGateState,
   getAllActiveEditSessions,
   hasDirtyEditSession,
   invalidateStaticCmsPublishVerification,
@@ -43,6 +45,7 @@ import {
   setHomeEditState,
   setSiteSettingsEditState,
   setState,
+  setReleaseOperationGateState,
   startGateEdit,
   startHomeExperienceEdit,
   startHomeGuideEdit,
@@ -154,6 +157,7 @@ async function boot() {
 
 async function hydrateAuthorizedSession(client) {
   setLoading(true);
+  setCachedSupabaseClientForApi(client);
   const access = await requireAdminAccess(client);
   setLoading(false);
 
@@ -170,15 +174,37 @@ async function hydrateAuthorizedSession(client) {
 
   setState({ session: access.session, profile: access.profile, error: null });
   await loadDashboardData(client);
+  await refreshReleaseOperationGate(client);
   renderAdminShell();
 }
 
 async function loadDashboardData(client) {
+  setCachedSupabaseClientForApi(client);
   setLoading(true);
   setError(null);
   const { data, errors } = await fetchDashboardData(client);
   setNestedData({ ...data, errors });
   setLoading(false);
+}
+
+async function refreshReleaseOperationGate(client) {
+  setReleaseOperationGateState({ loading: true, error: null });
+  const result = await reconcileCmsReleasePointer(client, {});
+  const data = result.data || {};
+  if (result.error) {
+    const code = result.error.code || data.classification || '';
+    if (code === 'operation_not_found' || result.error.status === 404) {
+      clearReleaseOperationGateState();
+      return;
+    }
+    setReleaseOperationGateState({ loading: false, error: normalizeErrorMessage(result.error), lastCheckedAt: new Date().toISOString() });
+    return;
+  }
+  if (data.operationId && ['in_progress', 'pointer_unknown'].includes(String(data.state || data.operationState || ''))) {
+    applyReleaseOperationGateFromServer(data);
+    return;
+  }
+  clearReleaseOperationGateState();
 }
 
 function renderLogin(options = {}) {
@@ -289,6 +315,7 @@ function renderAdminShell() {
   const main = createElement('main', { className: 'cms-admin-main' });
   main.appendChild(renderTopbar(state));
   main.appendChild(renderMobileSafeModeNotice());
+  main.appendChild(renderReleaseOperationGateNotice(state));
   try {
     main.appendChild(renderActiveTab(state));
   } catch (error) {
@@ -299,6 +326,27 @@ function renderAdminShell() {
   root.appendChild(shell);
   focusPendingEditTarget();
   focusPendingReferenceTarget();
+}
+
+
+function renderReleaseOperationGateNotice(state = getState()) {
+  const gate = state.releaseOperationGate || {};
+  if (!gate.blocked && !gate.error) return createElement('div', { className: 'cms-admin-hidden' });
+  const panel = createElement('section', { className: 'cms-admin-panel cms-admin-alert cms-admin-alert-warning', attrs: { role: 'status' } });
+  panel.appendChild(createElement('strong', { text: gate.blocked ? 'Cần kiểm tra trạng thái website hiện tại' : 'Không kiểm tra được trạng thái release' }));
+  panel.appendChild(createElement('p', {
+    className: 'cms-admin-help-text',
+    text: gate.blocked
+      ? (gate.message || 'Đang có một thao tác công khai hoặc khôi phục chưa hoàn tất. Hãy kiểm tra trạng thái hiện tại trước khi tiếp tục.')
+      : normalizeErrorMessage(gate.error),
+  }));
+  if (gate.blocked) {
+    panel.appendChild(createElement('p', {
+      className: 'cms-admin-help-text',
+      text: 'Chưa xác định website đang dùng bản nào. Không bấm công khai hoặc khôi phục lại. Hãy kiểm tra trạng thái hiện tại.',
+    }));
+  }
+  return panel;
 }
 
 function renderRuntimeFallbackPanel(error) {
@@ -7572,7 +7620,7 @@ function renderPublishStatusWorkspacePanel(state = {}) {
       ? 'Website public đọc nội dung từ object latest trong Storage. Đây là bề mặt canonical để đối chiếu nội dung đang chạy.'
       : `Cần kiểm tra canonical public: ${normalizeErrorMessage(data.canonicalError)}`,
     facts: [
-      ['Path canonical', 'cms-public/published/cms_public_content.json'],
+      ['Release hiện tại', 'cms-public/published/current_release.json → published/releases/{releaseId}/cms_public_content.json'],
       ['Trạng thái đọc', canonicalKnown ? 'Chưa ghi nhận lỗi trong dữ liệu đã tải' : normalizeErrorMessage(data.canonicalError)],
     ],
   }));
@@ -7603,7 +7651,7 @@ function renderPublishStatusWorkspacePanel(state = {}) {
   const details = createElement('details', { className: 'cms-admin-details cms-admin-publish-technical-details' });
   details.appendChild(createElement('summary', { text: 'Nguồn dữ liệu và vai trò từng lớp' }));
   details.appendChild(renderKeyValueList([
-    ['Public canonical', 'Storage latest / CMS public JSON — cms-public/published/cms_public_content.json'],
+    ['Release hiện tại', 'Release pointer + immutable release object'],
     ['Version source', 'Storage versions — các object version dùng để đối chiếu/khôi phục theo workflow riêng'],
     ['Operational audit', 'cms_publish_logs — lịch sử vận hành canonical cho publish/rollback'],
     ['DB reference/cache', 'published_bundles — bản ghi tham chiếu/legacy cache, không phải nguồn website public đang chạy'],
@@ -7633,7 +7681,7 @@ function renderPublishCanonicalHeroPanel(state = {}) {
   panel.appendChild(renderCompactNotice('Màn này giúp kiểm tra nguồn public, đọc checklist và mở đúng workflow publish hiện có. Chuyển tab hoặc xem trạng thái không tự ghi dữ liệu.'));
   const facts = createElement('div', { className: 'cms-admin-publish-fact-grid' });
   facts.appendChild(renderInfoTile('Nguồn public canonical', 'Storage latest / CMS public JSON', false));
-  facts.appendChild(renderInfoTile('Path canonical', 'cms-public/published/cms_public_content.json', true));
+  facts.appendChild(renderInfoTile('Path canonical', 'published/current_release.json → published/releases/{releaseId}/cms_public_content.json', true));
   facts.appendChild(renderInfoTile('Trạng thái đọc', canonicalKnown ? 'Chưa ghi nhận lỗi' : normalizeErrorMessage(data.canonicalError), !canonicalKnown));
   facts.appendChild(renderInfoTile('Audit canonical', 'cms_publish_logs', false));
   panel.appendChild(facts);
@@ -7646,7 +7694,7 @@ function renderPublishCanonicalStatusPanel({ canonicalKnown, canonicalError }) {
   panel.appendChild(renderPanelTitle('Trạng thái public canonical', canonicalKnown ? 'PASS' : 'WARNING'));
   panel.appendChild(renderKeyValueList([
     ['Nguồn chính', 'Storage latest / CMS public JSON'],
-    ['Đường dẫn kỹ thuật', 'cms-public/published/cms_public_content.json'],
+    ['Đường dẫn kỹ thuật', 'published/current_release.json → published/releases/{releaseId}/cms_public_content.json'],
     ['Kết luận', canonicalKnown ? 'Không thấy lỗi canonical trong dữ liệu đã tải' : normalizeErrorMessage(canonicalError)],
   ]));
   panel.appendChild(renderCompactNotice('Chỉ nguồn này cùng lịch sử vận hành mới được dùng để kết luận website public đang chạy nội dung nào.'));
@@ -7692,7 +7740,7 @@ function renderPublishCheckWorkspacePanel(state = {}) {
   const list = createElement('div', { className: 'cms-admin-publish-checklist' });
   const rows = [
     buildPublishCheckRow({
-      label: 'Public canonical',
+      label: 'Release hiện tại',
       status: canonicalKnown ? 'ready' : 'warning',
       value: canonicalKnown ? 'Storage latest / CMS public JSON chưa ghi nhận lỗi.' : normalizeErrorMessage(data.canonicalError),
       nextAction: canonicalKnown ? 'Tiếp tục kiểm tra bản nháp và dry-run.' : 'Mở website public hoặc kiểm tra Storage latest trước khi publish.',

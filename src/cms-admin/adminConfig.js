@@ -78,6 +78,10 @@ export const ADMIN_FEATURE_FLAGS = Object.freeze({
 
 export const STATIC_CMS_DRAFT_CONFIG = Object.freeze({
   enabled: true,
+  pointerUrl: 'https://ocmidhgabyrvqbvqgorw.supabase.co/storage/v1/object/public/cms-public/published/current_release.json',
+  legacyLatestUrl: 'https://ocmidhgabyrvqbvqgorw.supabase.co/storage/v1/object/public/cms-public/published/cms_public_content.json',
+  releasePublicBaseUrl: 'https://ocmidhgabyrvqbvqgorw.supabase.co/storage/v1/object/public/cms-public',
+  // Deprecated compatibility only. Do not use as canonical release source.
   remoteUrl: 'https://ocmidhgabyrvqbvqgorw.supabase.co/storage/v1/object/public/cms-public/published/cms_public_content.json',
   fallbackUrl: './data/cms_content_fallback.json',
   localGeneratedUrl: './cms_public_content.generated.json',
@@ -151,18 +155,31 @@ export const CMS_PUBLISH_GATE_CONFIG = Object.freeze({
   edgeFunctionName: 'publish-cms-json',
   endpoint: `${SUPABASE_CONFIG.url}/functions/v1/publish-cms-json`,
   latestBucket: 'cms-public',
-  latestPath: 'published/cms_public_content.json',
+  pointerPath: 'published/current_release.json',
+  latestPath: 'published/current_release.json',
+  legacyLatestPath: 'published/cms_public_content.json',
   adminOnly: true,
 });
 
 
+
+export const CMS_RELEASE_RECONCILE_CONFIG = Object.freeze({
+  enabled: true,
+  edgeFunctionName: 'reconcile-cms-release',
+  endpoint: `${SUPABASE_CONFIG.url}/functions/v1/reconcile-cms-release`,
+  pointerPath: 'published/current_release.json',
+  publicStorageBaseUrl: `${SUPABASE_CONFIG.url}/storage/v1/object/public/cms-public`,
+  adminOnly: true,
+});
 
 export const CMS_ROLLBACK_GATE_CONFIG = Object.freeze({
   enabled: true,
   edgeFunctionName: 'rollback-cms-json',
   endpoint: `${SUPABASE_CONFIG.url}/functions/v1/rollback-cms-json`,
   latestBucket: 'cms-public',
-  latestPath: 'published/cms_public_content.json',
+  pointerPath: 'published/current_release.json',
+  latestPath: 'published/current_release.json',
+  legacyLatestPath: 'published/cms_public_content.json',
   versionPrefix: 'published/versions/',
   publicStorageBaseUrl: `${SUPABASE_CONFIG.url}/storage/v1/object/public/cms-public`,
   adminOnly: true,
