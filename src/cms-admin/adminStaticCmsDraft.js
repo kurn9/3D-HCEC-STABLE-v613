@@ -4052,7 +4052,7 @@ async function handleLoadSavedCmsDrafts(handlers = {}) {
   handlers.onRerender?.();
 }
 
-async function handleSaveStaticCmsDraft({ asNew = false, handlers = {} } = {}) {
+export async function handleSaveStaticCmsDraft({ asNew = false, handlers = {} } = {}) {
   const appState = getState();
   const draftState = appState.staticCmsDraft || {};
   const access = getDraftPersistenceAccess(appState);

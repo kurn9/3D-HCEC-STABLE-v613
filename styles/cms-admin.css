@@ -12212,3 +12212,138 @@ body.cms-admin-page * {
   color: var(--cms-admin-text-muted, #cbd5e1);
   overflow-wrap: anywhere;
 }
+
+/* v6.14.061.002 — Media JSON draft cleanup workflow */
+.cms-admin-workspace[data-cms-workspace="media"] .cms-admin-media-cleanup-workspace,
+.cms-admin-workspace[data-cms-workspace="media"] .cms-admin-media-cleanup-header,
+.cms-admin-workspace[data-cms-workspace="media"] .cms-admin-media-cleanup-grid {
+  min-width: 0;
+}
+
+.cms-admin-media-cleanup-grid {
+  display: grid;
+  grid-template-columns: minmax(240px, 300px) minmax(0, 1fr) minmax(340px, 400px);
+  gap: 1rem;
+  align-items: start;
+}
+
+.cms-admin-media-cleanup-list-card,
+.cms-admin-media-cleanup-inspector,
+.cms-admin-media-cleanup-action-rail {
+  min-width: 0;
+}
+
+.cms-admin-media-cleanup-action-rail {
+  position: sticky;
+  top: 1rem;
+  align-self: start;
+}
+
+.cms-admin-media-cleanup-candidate-list {
+  display: grid;
+  gap: 0.65rem;
+  max-height: 60vh;
+  overflow: auto;
+  padding-right: 0.25rem;
+}
+
+.cms-admin-media-cleanup-candidate {
+  width: 100%;
+  display: grid;
+  gap: 0.35rem;
+  text-align: left;
+  padding: 0.8rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.8rem;
+  background: rgba(255, 255, 255, 0.035);
+  color: inherit;
+  cursor: pointer;
+}
+
+.cms-admin-media-cleanup-candidate:hover,
+.cms-admin-media-cleanup-candidate.is-active {
+  border-color: rgba(230, 181, 71, 0.75);
+  background: rgba(230, 181, 71, 0.12);
+}
+
+.cms-admin-media-cleanup-candidate-badges,
+.cms-admin-media-cleanup-actions,
+.cms-admin-media-cleanup-confirm-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.cms-admin-media-cleanup-detail-grid,
+.cms-admin-media-cleanup-diagnostics .cms-admin-technical-list {
+  margin-top: 0.85rem;
+}
+
+.cms-admin-media-cleanup-preview,
+.cms-admin-media-cleanup-replacement,
+.cms-admin-media-cleanup-result,
+.cms-admin-media-cleanup-diagnostics {
+  margin-top: 1rem;
+}
+
+.cms-admin-media-cleanup-replacement {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.9rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.9rem;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.cms-admin-media-cleanup-replacement-preview {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.cms-admin-media-cleanup-result {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.85rem;
+  border-radius: 0.85rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.cms-admin-media-cleanup-result.is-success {
+  background: rgba(28, 124, 78, 0.16);
+  border-color: rgba(49, 196, 141, 0.35);
+}
+
+.cms-admin-media-cleanup-result.is-error {
+  background: rgba(132, 91, 20, 0.16);
+  border-color: rgba(230, 181, 71, 0.35);
+}
+
+.cms-admin-media-cleanup-save-modal {
+  align-items: center;
+  justify-content: center;
+}
+
+.cms-admin-media-cleanup-save-modal .cms-admin-modal {
+  max-width: 560px;
+}
+
+.cms-admin-media-cleanup-diagnostics {
+  border: 1px dashed rgba(255, 255, 255, 0.1);
+  border-radius: 0.9rem;
+  padding: 0.85rem 1rem;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+@media (max-width: 1180px) {
+  .cms-admin-media-cleanup-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .cms-admin-media-cleanup-action-rail {
+    position: static;
+  }
+
+  .cms-admin-media-cleanup-candidate-list {
+    max-height: none;
+  }
+}

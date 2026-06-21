@@ -58,6 +58,7 @@ import {
   updateHomeHeroItemDraftField,
   updateHomeHeroMediaDraftField,
   updateSiteSettingsDraftField,
+  updateStaticCmsDraftJson,
 } from './adminState.js';
 import {
   ADMIN_COPY,
@@ -70,9 +71,9 @@ import {
   getStatusLabel,
   getVisibleLabel,
 } from './adminCopy.js';
-import { validateGateContentDraft, validateHomeExperienceSectionDraft, validateHomeGuideSectionDraft, validateIndexSectionDraft, validateSiteSettingsDraft } from './adminValidation.js';
+import { validateGateContentDraft, validateHomeExperienceSectionDraft, validateHomeGuideSectionDraft, validateIndexSectionDraft, validateSiteSettingsDraft, validateStaticCmsDraft } from './adminValidation.js';
 import { buildDbFallbackDashboardSummary } from './adminDashboardSummary.js';
-import { renderStaticCmsDraftTab } from './adminStaticCmsDraft.js';
+import { handleSaveStaticCmsDraft, renderStaticCmsDraftTab } from './adminStaticCmsDraft.js';
 import { renderRollbackHistoryTab } from './adminRollbackGate.js';
 import { renderCmsStorageCleanupTab } from './adminCleanupGate.js';
 
@@ -101,6 +102,11 @@ const mediaWorkspaceState = {
   deleteConfirmByAssetId: Object.create(null),
   deleteConfirmTextByAssetId: Object.create(null),
   openDeletePanelByAssetId: Object.create(null),
+  cleanupSelectedCandidateId: '',
+  cleanupSelectedReplacementId: '',
+  cleanupDecisionsByCandidateId: Object.create(null),
+  cleanupApplyResult: null,
+  cleanupSaveConfirmOpen: false,
 };
 
 
@@ -880,6 +886,7 @@ const WORKSPACE_TAB_DEFINITIONS = Object.freeze({
   media: [
     { key: 'library', label: 'Thư viện', summary: 'Xem và lọc ảnh/video đã có.' },
     { key: 'usage', label: 'Đang dùng', summary: 'Xem nơi media đang được tham chiếu trong CMS.' },
+    { key: 'cleanup', label: 'Kiểm tra đường dẫn', summary: 'Review và sửa đường dẫn ảnh/video trong bản nháp CMS.' },
   ],
   publish: [
     { key: 'status', label: 'Trạng thái', summary: 'Xem bản ghi tham chiếu và điều kiện hiện tại.' },
@@ -3068,6 +3075,7 @@ function renderDashboard(state) {
 function renderMediaTab(state, activeKey = 'library') {
   const model = buildMediaWorkspaceModel(state);
   if (activeKey === 'usage') return renderMediaUsageWorkspace(model);
+  if (activeKey === 'cleanup') return renderMediaCleanupWorkspace(model);
   return renderMediaLibraryWorkspace(model);
 }
 
@@ -3368,6 +3376,714 @@ function renderMediaUsageWorkspace(model = {}) {
   panel.appendChild(renderMediaTechnicalReferenceDetails());
   return panel;
 }
+
+function renderMediaCleanupWorkspace(model = {}) {
+  const draftState = model.state?.staticCmsDraft || {};
+  const cleanupModel = buildMediaCleanupWorkspaceModel(model);
+  ensureMediaCleanupSelection(cleanupModel);
+  const selected = getSelectedMediaCleanupCandidate(cleanupModel);
+  const panel = createElement('section', { className: 'cms-admin-media-workspace-tab cms-admin-media-cleanup-workspace' });
+  panel.appendChild(renderMediaCleanupHeader(cleanupModel));
+
+  if (!draftState.draftJson) {
+    const empty = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel' });
+    empty.appendChild(renderEmptyState('Chưa có bản nháp CMS để kiểm tra. Hãy tải hoặc tạo bản nháp trước.'));
+    panel.appendChild(empty);
+    return panel;
+  }
+
+  if (!cleanupModel.candidates.length) {
+    const empty = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel cms-admin-media-cleanup-empty' });
+    empty.appendChild(renderEmptyState('Bản nháp hiện tại chưa có đường dẫn ảnh/video cần xử lý.'));
+    empty.appendChild(renderMediaCleanupDiagnostics(cleanupModel));
+    panel.appendChild(empty);
+    return panel;
+  }
+
+  const workspace = createElement('section', { className: 'cms-admin-media-cleanup-grid' });
+  workspace.appendChild(renderMediaCleanupCandidateList(cleanupModel, selected));
+  workspace.appendChild(renderMediaCleanupInspector(cleanupModel, selected));
+  workspace.appendChild(renderMediaCleanupActionRail(cleanupModel, selected));
+  panel.appendChild(workspace);
+  panel.appendChild(renderMediaCleanupDiagnostics(cleanupModel));
+  if (mediaWorkspaceState.cleanupSaveConfirmOpen) panel.appendChild(renderMediaCleanupSaveConfirmModal(cleanupModel));
+  return panel;
+}
+
+function buildMediaCleanupWorkspaceModel(model = {}) {
+  const draftState = model.state?.staticCmsDraft || {};
+  const draftJson = draftState.draftJson || null;
+  const activeLibraryFiles = safeArray(model.activeUploadAssets)
+    .filter((asset) => asset?.hasUploadLogRecord && !isDeletedMediaAsset(asset) && !isBrokenDeletedMediaReference(asset) && asset.hasSafePublicUrl);
+  const activeIdentityMap = buildMediaCleanupIdentityMap(activeLibraryFiles);
+  const deletedIdentity = getDeletedMediaIdentitySet(model.deletedUploadAssets);
+  const candidates = draftJson
+    ? collectMediaCleanupCandidatesFromDraft(draftJson, { activeIdentityMap, deletedIdentity, activeLibraryFiles })
+    : [];
+  const decisions = mediaWorkspaceState.cleanupDecisionsByCandidateId || Object.create(null);
+  const selectedCount = candidates.filter((candidate) => decisions[candidate.id]).length;
+  const validation = validateStaticCmsDraft(draftJson || {}, STATIC_CMS_DRAFT_CONFIG);
+  const matchedCount = countMatchedMediaReferencesInDraft(draftJson || {}, activeIdentityMap);
+  const summary = {
+    draftReferences: candidates.length + matchedCount,
+    matched: matchedCount,
+    needsReview: candidates.length,
+    needsReplace: candidates.filter((candidate) => candidate.canReplace).length,
+    selectedCount,
+    validationErrors: countValidationMessages(validation?.errors),
+  };
+  return {
+    ...model,
+    draftState,
+    draftJson,
+    activeLibraryFiles,
+    activeIdentityMap,
+    deletedIdentity,
+    candidates,
+    selectedCandidate: null,
+    decisions,
+    summary,
+    validation,
+    applyResult: mediaWorkspaceState.cleanupApplyResult || null,
+  };
+}
+
+function buildMediaCleanupIdentityMap(assets = []) {
+  const map = new Map();
+  safeArray(assets).forEach((asset) => {
+    buildMediaAssetIdentity(asset).strongValues.forEach((value) => {
+      if (value && !map.has(value)) map.set(value, asset);
+    });
+  });
+  return map;
+}
+
+function collectMediaCleanupCandidatesFromDraft(draftJson = {}, context = {}) {
+  const candidates = [];
+  scanMediaCleanupDraftValue(draftJson, [], candidates, context, 0);
+  const seen = new Set();
+  return candidates.filter((candidate) => {
+    const key = `${candidate.jsonPathLabel}|${candidate.normalizedValue || candidate.currentValue}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function scanMediaCleanupDraftValue(value, tokens, candidates, context, depth) {
+  if (depth > 10 || value === null || value === undefined) return;
+  if (typeof value === 'string') {
+    const candidate = createMediaCleanupCandidate(value, tokens, context);
+    if (candidate && candidate.classification !== 'matched_library_file') candidates.push(candidate);
+    return;
+  }
+  if (Array.isArray(value)) {
+    value.slice(0, 300).forEach((entry, index) => scanMediaCleanupDraftValue(entry, [...tokens, index], candidates, context, depth + 1));
+    return;
+  }
+  if (typeof value === 'object') {
+    Object.entries(value).slice(0, 400).forEach(([key, entry]) => {
+      if (!isSafeJsonPathToken(key)) return;
+      scanMediaCleanupDraftValue(entry, [...tokens, key], candidates, context, depth + 1);
+    });
+  }
+}
+
+function createMediaCleanupCandidate(value, tokens = [], context = {}) {
+  const raw = String(value || '').trim();
+  if (!raw || raw.length > 2048 || !tokens.length) return null;
+  const fieldName = String(tokens[tokens.length - 1] || '');
+  const pathLabel = formatJsonPathTokens(tokens);
+  if (!isMediaCleanupFieldCandidate(tokens, raw)) return null;
+  if (isMediaCleanupNonMediaField(tokens, raw)) return null;
+  const normalizedValue = normalizeSafeMediaUrl(raw);
+  const candidates = normalizeMediaReferenceCandidates(raw);
+  const matchedAsset = candidates.map((entry) => context.activeIdentityMap?.get(entry)).find(Boolean) || null;
+  const mediaKind = inferCleanupMediaKind(fieldName, raw);
+  const owner = getMediaCleanupOwner(tokens);
+  const fieldPolicy = getMediaCleanupFieldPolicy(tokens, fieldName);
+  const unsafe = !normalizedValue;
+  const broken = candidates.some((entry) => context.deletedIdentity?.has(entry));
+  let classification = 'orphan_reference';
+  let reason = 'Đường dẫn trong bản nháp chưa khớp file thật trong Thư viện.';
+  if (matchedAsset) {
+    classification = 'matched_library_file';
+    reason = 'Đường dẫn đã khớp file thật trong Thư viện.';
+  } else if (unsafe) {
+    classification = 'unsafe_reference';
+    reason = 'Đường dẫn không đạt kiểm tra an toàn hoặc không thuộc nguồn được phép.';
+  } else if (broken) {
+    classification = 'broken_reference';
+    reason = 'Đường dẫn có dấu hiệu trỏ tới file đã xóa hoặc tham chiếu hỏng.';
+  } else if (isLegacyLocalMediaPath(raw)) {
+    classification = 'legacy_keep_candidate';
+    reason = 'Đường dẫn local/legacy cần review thủ công trước khi thay đổi.';
+  } else if (isExternalOrUnknownMediaPath(raw)) {
+    classification = 'external_or_unknown';
+    reason = 'Đường dẫn ngoài hệ thống hoặc chưa xác minh được bằng bản ghi upload.';
+  }
+  return {
+    id: `cleanup-${hashMediaValue(`${pathLabel}|${raw}`)}`,
+    jsonPathTokens: tokens,
+    jsonPathLabel: pathLabel,
+    currentValue: raw,
+    normalizedValue: normalizedValue || '',
+    ownerType: owner.type,
+    ownerId: owner.id,
+    ownerLabel: owner.label,
+    fieldName,
+    mediaKind,
+    classification,
+    riskLevel: getMediaCleanupRiskLevel(classification, fieldPolicy),
+    canReplace: Boolean(mediaKind !== 'unknown'),
+    canClear: Boolean(fieldPolicy.canClear && classification !== 'matched_library_file'),
+    fieldRequired: Boolean(fieldPolicy.required),
+    reason,
+  };
+}
+
+function isMediaCleanupFieldCandidate(tokens = [], value = '') {
+  const path = tokens.map((token) => String(token)).join('.').toLowerCase();
+  const raw = String(value || '').trim().toLowerCase();
+  const mediaField = MEDIA_VIRTUAL_FIELD_TOKENS.some((token) => path.includes(token));
+  const mediaValue = /\.(png|jpe?g|webp|gif|svg|avif|mp4|webm|mov|m4v)(\?|#|$)/i.test(value)
+    || raw.includes('/assets/')
+    || raw.startsWith('assets/')
+    || raw.startsWith('./assets/')
+    || raw.startsWith('/assets/')
+    || raw.includes('/storage/v1/object/public/')
+    || raw.includes('cms-media')
+    || raw.includes('supabase.co/storage')
+    || raw.includes('r2.dev')
+    || raw.includes('cloudflare');
+  return mediaField && mediaValue;
+}
+
+function isMediaCleanupNonMediaField(tokens = [], value = '') {
+  const last = String(tokens[tokens.length - 1] || '').toLowerCase();
+  const path = tokens.map((token) => String(token)).join('.').toLowerCase();
+  if (['route', 'query', 'href', 'link', 'target', 'action', 'id', 'code', 'slug'].includes(last)) return true;
+  if (path.includes('cta') && !/\.(png|jpe?g|webp|gif|svg|avif|mp4|webm|mov|m4v)(\?|#|$)/i.test(value)) return true;
+  return false;
+}
+
+function getMediaCleanupOwner(tokens = []) {
+  const path = formatJsonPathTokens(tokens);
+  const roomIndex = tokens.indexOf('rooms');
+  if (roomIndex >= 0 && tokens[roomIndex + 1]) {
+    const roomKey = String(tokens[roomIndex + 1]);
+    const itemIndex = tokens.findIndex((token) => token === 'artworks' || token === 'items');
+    return {
+      type: 'room',
+      id: roomKey,
+      label: `${roomKey === 'outdoor' ? 'Phòng ngoài trời' : 'Phòng trong nhà'}${itemIndex >= 0 ? ` / Mục ${Number(tokens[itemIndex + 1]) + 1}` : ''}`,
+    };
+  }
+  if (tokens[0] === 'index' && tokens[1] === 'featuredArtworks') {
+    return { type: 'featured', id: 'index.featuredArtworks', label: 'Tác phẩm tiêu biểu trên Trang chủ' };
+  }
+  if (tokens[0] === 'site_settings' || tokens[0] === 'site') {
+    return { type: 'site', id: String(tokens[0]), label: 'Thông tin website / logo legacy' };
+  }
+  return { type: 'draft', id: path, label: 'Bản nháp CMS' };
+}
+
+function getMediaCleanupFieldPolicy(tokens = [], fieldName = '') {
+  const path = formatJsonPathTokens(tokens);
+  const lower = path.toLowerCase();
+  const requiredPatterns = [
+    'rooms.*.artworks[].imageurl',
+    'rooms.*.artworks[].videourl',
+    'rooms.*.artworks[].posterurl',
+    'index.featuredartworks.items[].imageurl',
+    'index.hero.media.videourl',
+    'site.logourl',
+    'site_settings.logo_url',
+  ];
+  const required = lower.includes('rooms.') && lower.includes('.artworks[') && /(imageurl|videourl|posterurl)$/i.test(fieldName)
+    || lower.includes('index.featuredartworks') && /imageurl$/i.test(fieldName)
+    || lower.includes('index.hero.media') && /videourl$/i.test(fieldName)
+    || lower.endsWith('site.logourl')
+    || lower.endsWith('site_settings.logo_url');
+  return {
+    required,
+    canClear: false,
+    reason: required ? 'Field có thể đang được viewer dùng; không cho xóa trống tự động.' : 'Chưa xác nhận field optional; yêu cầu review thủ công.',
+    requiredPatterns,
+  };
+}
+
+function inferCleanupMediaKind(fieldName = '', value = '') {
+  const rawField = String(fieldName || '').toLowerCase();
+  if (rawField.includes('video')) return 'video';
+  if (rawField.includes('poster') || rawField.includes('thumbnail') || rawField.includes('image') || rawField.includes('logo')) return 'image';
+  return normalizeMediaKind('', fieldName, inferMimeTypeFromPath(value));
+}
+
+function getMediaCleanupRiskLevel(classification = '', fieldPolicy = {}) {
+  if (fieldPolicy.required) return 'Cao';
+  if (classification === 'unsafe_reference' || classification === 'broken_reference') return 'Cao';
+  if (classification === 'external_or_unknown' || classification === 'legacy_keep_candidate') return 'Trung bình';
+  return 'Thấp';
+}
+
+function isLegacyLocalMediaPath(value = '') {
+  const raw = String(value || '').trim().toLowerCase();
+  return raw.startsWith('assets/') || raw.startsWith('./assets/') || raw.startsWith('/assets/');
+}
+
+function isExternalOrUnknownMediaPath(value = '') {
+  const raw = String(value || '').trim().toLowerCase();
+  return raw.startsWith('https://') && !raw.includes('/storage/v1/object/public/');
+}
+
+function countMatchedMediaReferencesInDraft(draftJson = {}, activeIdentityMap = new Map()) {
+  let count = 0;
+  const visit = (value, tokens = [], depth = 0) => {
+    if (depth > 10 || value === null || value === undefined) return;
+    if (typeof value === 'string') {
+      const candidate = createMediaCleanupCandidate(value, tokens, { activeIdentityMap, deletedIdentity: new Set() });
+      if (candidate?.classification === 'matched_library_file') count += 1;
+      return;
+    }
+    if (Array.isArray(value)) {
+      value.slice(0, 300).forEach((entry, index) => visit(entry, [...tokens, index], depth + 1));
+      return;
+    }
+    if (typeof value === 'object') {
+      Object.entries(value).slice(0, 400).forEach(([key, entry]) => {
+        if (isSafeJsonPathToken(key)) visit(entry, [...tokens, key], depth + 1);
+      });
+    }
+  };
+  visit(draftJson, [], 0);
+  return count;
+}
+
+function countValidationMessages(value) {
+  if (!value) return 0;
+  if (Array.isArray(value)) return value.length;
+  if (typeof value === 'object') return Object.values(value).reduce((total, entry) => total + countValidationMessages(entry), 0);
+  return value ? 1 : 0;
+}
+
+function ensureMediaCleanupSelection(cleanupModel = {}) {
+  const list = safeArray(cleanupModel.candidates);
+  if (mediaWorkspaceState.cleanupSelectedCandidateId && !list.some((candidate) => candidate.id === mediaWorkspaceState.cleanupSelectedCandidateId)) {
+    mediaWorkspaceState.cleanupSelectedCandidateId = '';
+    mediaWorkspaceState.cleanupSelectedReplacementId = '';
+  }
+  if (!mediaWorkspaceState.cleanupSelectedCandidateId && list.length) {
+    mediaWorkspaceState.cleanupSelectedCandidateId = list[0].id;
+  }
+}
+
+function getSelectedMediaCleanupCandidate(cleanupModel = {}) {
+  const id = String(mediaWorkspaceState.cleanupSelectedCandidateId || '');
+  return safeArray(cleanupModel.candidates).find((candidate) => candidate.id === id) || safeArray(cleanupModel.candidates)[0] || null;
+}
+
+function renderMediaCleanupHeader(cleanupModel = {}) {
+  const header = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel cms-admin-media-cleanup-header' });
+  const top = createElement('div', { className: 'cms-admin-media-command-top' });
+  const copy = createElement('div');
+  copy.appendChild(createElement('span', { className: 'cms-admin-eyebrow', text: 'ẢNH & VIDEO' }));
+  copy.appendChild(createElement('h3', { className: 'cms-admin-section-title', text: 'Kiểm tra đường dẫn trong bản nháp' }));
+  copy.appendChild(createElement('p', { className: 'cms-admin-help-text', text: 'Chỉ quét và sửa đường dẫn ảnh/video trong bản nháp CMS. Website public, Storage và lịch sử upload không thay đổi.' }));
+  const badges = createElement('div', { className: 'cms-admin-media-command-badges' });
+  badges.appendChild(renderBadge('Bản nháp CMS', 'info'));
+  badges.appendChild(renderBadge('Không xóa file', 'success'));
+  top.appendChild(copy);
+  top.appendChild(badges);
+  header.appendChild(top);
+  const stats = createElement('div', { className: 'cms-admin-media-command-stats' });
+  [
+    ['Đường dẫn trong bản nháp', cleanupModel.summary?.draftReferences || 0],
+    ['Khớp file Thư viện', cleanupModel.summary?.matched || 0],
+    ['Cần kiểm tra', cleanupModel.summary?.needsReview || 0],
+    ['Cần thay thế', cleanupModel.summary?.needsReplace || 0],
+    ['Đã chọn xử lý', cleanupModel.summary?.selectedCount || 0],
+    ['Lỗi kiểm tra', cleanupModel.summary?.validationErrors || 0],
+  ].forEach(([label, value]) => {
+    const tile = createElement('div', { className: 'cms-admin-media-command-stat' });
+    tile.appendChild(createElement('span', { text: label }));
+    tile.appendChild(createElement('strong', { text: formatCount(value) }));
+    stats.appendChild(tile);
+  });
+  header.appendChild(stats);
+  return header;
+}
+
+function renderMediaCleanupCandidateList(cleanupModel = {}, selected = null) {
+  const card = createElement('section', { className: 'cms-admin-panel cms-admin-media-cleanup-list-card' });
+  card.appendChild(renderPanelTitle('Danh sách cần kiểm tra', `${formatCount(cleanupModel.candidates.length)} mục`));
+  card.appendChild(createElement('p', { className: 'cms-admin-help-text', text: 'Chọn từng đường dẫn để xem nơi dùng, mức rủi ro và chọn file thay thế nếu cần.' }));
+  const list = createElement('div', { className: 'cms-admin-media-cleanup-candidate-list' });
+  safeArray(cleanupModel.candidates).forEach((candidate) => {
+    const active = candidate.id === selected?.id;
+    const decision = cleanupModel.decisions?.[candidate.id];
+    const button = createElement('button', {
+      className: `cms-admin-media-cleanup-candidate${active ? ' is-active' : ''}`,
+      type: 'button',
+      attrs: { 'aria-pressed': active ? 'true' : 'false' },
+    });
+    button.appendChild(createElement('strong', { text: candidate.ownerLabel || 'Bản nháp CMS' }));
+    button.appendChild(createElement('span', { text: getMediaCleanupFieldLabel(candidate) }));
+    const badges = createElement('div', { className: 'cms-admin-media-cleanup-candidate-badges' });
+    badges.appendChild(renderBadge(getMediaCleanupClassificationLabel(candidate.classification), getMediaCleanupBadgeTone(candidate.classification)));
+    badges.appendChild(renderBadge(`Rủi ro ${candidate.riskLevel}`, candidate.riskLevel === 'Cao' ? 'warning' : 'default'));
+    if (decision) badges.appendChild(renderBadge(getMediaCleanupDecisionLabel(decision), 'success'));
+    button.appendChild(badges);
+    button.addEventListener('click', () => {
+      mediaWorkspaceState.cleanupSelectedCandidateId = candidate.id;
+      mediaWorkspaceState.cleanupSelectedReplacementId = '';
+      mediaWorkspaceState.cleanupApplyResult = null;
+      renderAdminShell();
+    });
+    list.appendChild(button);
+  });
+  card.appendChild(list);
+  return card;
+}
+
+function renderMediaCleanupInspector(cleanupModel = {}, candidate = null) {
+  const card = createElement('section', { className: 'cms-admin-panel cms-admin-media-cleanup-inspector' });
+  card.appendChild(renderPanelTitle('Chi tiết đường dẫn', candidate ? getMediaCleanupFieldLabel(candidate) : 'Chưa chọn'));
+  if (!candidate) {
+    card.appendChild(renderEmptyState('Chọn một đường dẫn ở danh sách bên trái để xem chi tiết.'));
+    return card;
+  }
+  card.appendChild(createElement('p', { className: 'cms-admin-help-text', text: candidate.reason }));
+  const grid = createElement('dl', { className: 'cms-admin-media-cleanup-detail-grid' });
+  [
+    ['Nơi nội dung đang dùng', candidate.ownerLabel],
+    ['Field trong bản nháp', candidate.jsonPathLabel],
+    ['Trạng thái khớp Thư viện', getMediaCleanupClassificationLabel(candidate.classification)],
+    ['Mức rủi ro', candidate.riskLevel],
+  ].forEach(([label, value]) => appendMediaDetail(grid, label, value || '—'));
+  card.appendChild(grid);
+
+  if (candidate.normalizedValue) {
+    const previewAsset = {
+      id: `cleanup-preview-${candidate.id}`,
+      publicUrl: candidate.normalizedValue,
+      hasSafePublicUrl: true,
+      mediaKind: candidate.mediaKind,
+      fileName: getMediaFileName('', candidate.normalizedValue),
+    };
+    const preview = createElement('div', { className: 'cms-admin-media-cleanup-preview' });
+    preview.appendChild(renderMediaPreview(previewAsset));
+    card.appendChild(preview);
+  } else {
+    card.appendChild(renderCompactNotice('Đường dẫn hiện tại không đủ an toàn để preview.'));
+  }
+
+  card.appendChild(renderMediaCleanupReplacementPicker(cleanupModel, candidate));
+  const tech = createElement('details', { className: 'cms-admin-media-cleanup-technical-details' });
+  tech.appendChild(createElement('summary', { text: 'Thông tin kỹ thuật' }));
+  const techRows = createElement('dl', { className: 'cms-admin-technical-list' });
+  [
+    ['Candidate ID', candidate.id],
+    ['JSON path', candidate.jsonPathLabel],
+    ['Đường dẫn hiện tại', candidate.currentValue],
+    ['Normalized URL', candidate.normalizedValue || 'Không đạt kiểm tra an toàn'],
+    ['Classification code', candidate.classification],
+  ].forEach(([label, value]) => appendMediaDetail(techRows, label, value));
+  tech.appendChild(techRows);
+  card.appendChild(tech);
+  return card;
+}
+
+function renderMediaCleanupReplacementPicker(cleanupModel = {}, candidate = {}) {
+  const wrap = createElement('section', { className: 'cms-admin-media-cleanup-replacement' });
+  wrap.appendChild(createElement('h4', { text: 'Thay bằng file trong Thư viện' }));
+  const compatible = getCompatibleMediaCleanupReplacementAssets(cleanupModel.activeLibraryFiles, candidate);
+  if (!candidate.canReplace) {
+    wrap.appendChild(renderCompactNotice('Field này chưa xác định được loại ảnh/video tương thích nên chưa cho thay tự động.'));
+    return wrap;
+  }
+  if (!compatible.length) {
+    wrap.appendChild(renderCompactNotice('Chưa có file thật trong Thư viện phù hợp loại media của field này.'));
+    return wrap;
+  }
+  const select = createElement('select', { className: 'cms-admin-input', attrs: { 'aria-label': 'Chọn file trong Thư viện để thay thế' } });
+  select.appendChild(createElement('option', { value: '', text: 'Chọn file thay thế' }));
+  compatible.forEach((asset) => {
+    select.appendChild(createElement('option', {
+      value: asset.id,
+      text: `${getMediaDisplayName(asset)} — ${asset.mediaKind === 'video' ? 'Video' : 'Ảnh'}`,
+      attrs: { selected: mediaWorkspaceState.cleanupSelectedReplacementId === asset.id ? 'selected' : null },
+    }));
+  });
+  select.addEventListener('change', (event) => {
+    mediaWorkspaceState.cleanupSelectedReplacementId = event.target.value || '';
+    mediaWorkspaceState.cleanupApplyResult = null;
+    renderAdminShell();
+  });
+  wrap.appendChild(select);
+  const selectedAsset = compatible.find((asset) => asset.id === mediaWorkspaceState.cleanupSelectedReplacementId) || null;
+  if (selectedAsset) {
+    const preview = createElement('div', { className: 'cms-admin-media-cleanup-replacement-preview' });
+    preview.appendChild(renderMediaPreview(selectedAsset));
+    preview.appendChild(createElement('p', { className: 'cms-admin-help-text', text: 'File thật trong Thư viện. Chọn file này chưa ghi dữ liệu; chỉ áp dụng khi bấm xác nhận.' }));
+    wrap.appendChild(preview);
+  }
+  return wrap;
+}
+
+function getCompatibleMediaCleanupReplacementAssets(assets = [], candidate = {}) {
+  return safeArray(assets).filter((asset) => {
+    if (!asset?.hasUploadLogRecord || isDeletedMediaAsset(asset) || isBrokenDeletedMediaReference(asset) || !asset.hasSafePublicUrl) return false;
+    if (candidate.mediaKind === 'video') return asset.mediaKind === 'video';
+    if (candidate.mediaKind === 'image' || candidate.mediaKind === 'poster') return asset.mediaKind === 'image' || asset.mediaKind === 'poster';
+    return asset.mediaKind === 'image' || asset.mediaKind === 'poster' || asset.mediaKind === 'video';
+  });
+}
+
+function renderMediaCleanupActionRail(cleanupModel = {}, candidate = null) {
+  const rail = createElement('aside', { className: 'cms-admin-panel cms-admin-media-cleanup-action-rail' });
+  rail.appendChild(renderPanelTitle('Checklist & thao tác', 'Bản nháp CMS'));
+  const checklist = createElement('div', { className: 'cms-admin-media-checklist' });
+  buildMediaCleanupChecklist(cleanupModel, candidate).forEach((item) => checklist.appendChild(renderMediaChecklistItem(item)));
+  rail.appendChild(checklist);
+
+  if (candidate) {
+    const actions = createElement('div', { className: 'cms-admin-media-cleanup-actions' });
+    const replaceButton = createElement('button', { className: 'cms-admin-button cms-admin-button-primary', text: 'Đánh dấu thay bằng file này', type: 'button' });
+    replaceButton.disabled = !mediaWorkspaceState.cleanupSelectedReplacementId;
+    replaceButton.addEventListener('click', () => setMediaCleanupDecision(candidate.id, { action: 'replace', replacementAssetId: mediaWorkspaceState.cleanupSelectedReplacementId }));
+    const keepButton = createElement('button', { className: 'cms-admin-button', text: 'Giữ nguyên', type: 'button' });
+    keepButton.addEventListener('click', () => setMediaCleanupDecision(candidate.id, { action: 'keep' }));
+    const skipButton = createElement('button', { className: 'cms-admin-button', text: 'Bỏ qua', type: 'button' });
+    skipButton.addEventListener('click', () => setMediaCleanupDecision(candidate.id, { action: 'skip' }));
+    actions.appendChild(replaceButton);
+    actions.appendChild(keepButton);
+    actions.appendChild(skipButton);
+    rail.appendChild(actions);
+  }
+
+  const applyButton = createElement('button', { className: 'cms-admin-button cms-admin-button-primary', text: 'Áp dụng vào bản nháp đang chỉnh', type: 'button' });
+  applyButton.disabled = !hasMediaCleanupPatchDecision(cleanupModel);
+  applyButton.addEventListener('click', () => applyMediaCleanupDraftDecisions(cleanupModel));
+  rail.appendChild(applyButton);
+
+  const resetButton = createElement('button', { className: 'cms-admin-button', text: 'Đặt lại bản nháp', type: 'button' });
+  resetButton.disabled = !cleanupModel.draftState?.dirty;
+  resetButton.addEventListener('click', () => resetMediaCleanupDraft(cleanupModel));
+  rail.appendChild(resetButton);
+
+  const saveButton = createElement('button', { className: 'cms-admin-button cms-admin-button-primary', text: 'Lưu bản nháp', type: 'button' });
+  saveButton.disabled = !cleanupModel.draftState?.dirty || cleanupModel.draftState?.isSavingDraft;
+  saveButton.addEventListener('click', () => {
+    mediaWorkspaceState.cleanupSaveConfirmOpen = true;
+    renderAdminShell();
+  });
+  rail.appendChild(saveButton);
+
+  if (cleanupModel.applyResult) rail.appendChild(renderMediaCleanupApplyResult(cleanupModel.applyResult));
+  rail.appendChild(createElement('p', { className: 'cms-admin-help-text', text: 'Chỉ sửa bản nháp CMS. Website public chưa đổi. Không xóa Storage hoặc lịch sử upload.' }));
+  return rail;
+}
+
+function buildMediaCleanupChecklist(cleanupModel = {}, candidate = null) {
+  const decision = candidate ? cleanupModel.decisions?.[candidate.id] : null;
+  const replacement = decision?.replacementAssetId || mediaWorkspaceState.cleanupSelectedReplacementId;
+  const hasValidReplacement = Boolean(replacement && candidate && getCompatibleMediaCleanupReplacementAssets(cleanupModel.activeLibraryFiles, candidate).some((asset) => asset.id === replacement));
+  return [
+    { label: 'Đã chọn đường dẫn', value: candidate ? 'Có' : 'Chưa chọn', pass: Boolean(candidate), detail: candidate?.ownerLabel || 'Chọn một candidate để xử lý.' },
+    { label: 'Thuộc bản nháp CMS', value: cleanupModel.draftJson ? 'Đúng' : 'Chưa có bản nháp', pass: Boolean(cleanupModel.draftJson), detail: 'Candidate chỉ được tạo từ state.staticCmsDraft.draftJson.' },
+    { label: 'Field có được phép sửa', value: candidate?.canReplace ? 'Có thể thay file' : 'Chỉ review', pass: Boolean(candidate?.canReplace), detail: candidate?.fieldRequired ? 'Field viewer-critical; không cho xóa trống.' : 'Không tự xóa field nếu chưa chắc optional.' },
+    { label: 'Replacement hợp lệ', value: hasValidReplacement ? 'Đạt' : 'Chưa chọn', pass: hasValidReplacement, detail: 'Chỉ dùng file thật active trong Thư viện.' },
+    { label: 'Bản nháp sau patch', value: cleanupModel.applyResult?.validation?.valid ? 'Đạt validator' : 'Chờ áp dụng', pass: Boolean(cleanupModel.applyResult?.validation?.valid), detail: cleanupModel.applyResult?.message || 'Validator sẽ chạy khi áp dụng thay đổi.' },
+    { label: 'Có thay đổi chưa lưu', value: cleanupModel.draftState?.dirty ? 'Có' : 'Không', pass: !cleanupModel.draftState?.dirty, detail: cleanupModel.draftState?.dirty ? 'Cần lưu bản nháp nếu muốn giữ thay đổi.' : 'Chưa có thay đổi local.' },
+    { label: 'Website public', value: 'Chưa đổi', pass: true, detail: 'Không publish trong workflow này.' },
+    { label: 'Storage / upload log', value: 'Không xóa', pass: true, detail: 'Không đụng file Storage hoặc lịch sử upload.' },
+  ];
+}
+
+function setMediaCleanupDecision(candidateId, decision = {}) {
+  if (!candidateId) return;
+  mediaWorkspaceState.cleanupDecisionsByCandidateId = {
+    ...(mediaWorkspaceState.cleanupDecisionsByCandidateId || {}),
+    [candidateId]: decision,
+  };
+  mediaWorkspaceState.cleanupApplyResult = null;
+  renderAdminShell();
+}
+
+function hasMediaCleanupPatchDecision(cleanupModel = {}) {
+  return safeArray(cleanupModel.candidates).some((candidate) => cleanupModel.decisions?.[candidate.id]?.action === 'replace' || cleanupModel.decisions?.[candidate.id]?.action === 'clear');
+}
+
+function applyMediaCleanupDraftDecisions(cleanupModel = {}) {
+  const nextDraft = cloneJsonSafeLocal(cleanupModel.draftJson || {});
+  const changed = [];
+  for (const candidate of safeArray(cleanupModel.candidates)) {
+    const decision = cleanupModel.decisions?.[candidate.id];
+    if (!decision || decision.action === 'keep' || decision.action === 'skip') continue;
+    if (decision.action === 'replace') {
+      const replacement = safeArray(cleanupModel.activeLibraryFiles).find((asset) => asset.id === decision.replacementAssetId);
+      if (!replacement || !replacement.hasSafePublicUrl) continue;
+      if (!setValueAtSafeJsonPath(nextDraft, candidate.jsonPathTokens, replacement.publicUrl)) {
+        mediaWorkspaceState.cleanupApplyResult = { ok: false, message: `Không thể áp dụng vào ${candidate.jsonPathLabel}.` };
+        renderAdminShell();
+        return;
+      }
+      changed.push(candidate);
+    }
+    if (decision.action === 'clear' && candidate.canClear) {
+      if (!setValueAtSafeJsonPath(nextDraft, candidate.jsonPathTokens, '')) {
+        mediaWorkspaceState.cleanupApplyResult = { ok: false, message: `Không thể xóa đường dẫn ở ${candidate.jsonPathLabel}.` };
+        renderAdminShell();
+        return;
+      }
+      changed.push(candidate);
+    }
+  }
+  if (!changed.length) {
+    mediaWorkspaceState.cleanupApplyResult = { ok: false, message: 'Chưa có thay đổi replacement để áp dụng.' };
+    renderAdminShell();
+    return;
+  }
+  const validation = validateStaticCmsDraft(nextDraft, STATIC_CMS_DRAFT_CONFIG);
+  if (!validation.valid) {
+    mediaWorkspaceState.cleanupApplyResult = { ok: false, message: 'Bản nháp sau patch chưa đạt validator. Chưa áp dụng thay đổi.', validation };
+    renderAdminShell();
+    return;
+  }
+  updateStaticCmsDraftJson(nextDraft, validation);
+  mediaWorkspaceState.cleanupApplyResult = { ok: true, message: `Đã áp dụng ${formatCount(changed.length)} thay đổi vào bản nháp local. Website public chưa đổi.`, validation, changedCount: changed.length };
+  renderAdminShell();
+}
+
+function resetMediaCleanupDraft(cleanupModel = {}) {
+  const ok = window.confirm('Đặt lại bản nháp về baseline trước cleanup? Website public không thay đổi.');
+  if (!ok) return;
+  const validation = validateStaticCmsDraft(cleanupModel.draftState?.baselineJson || {}, STATIC_CMS_DRAFT_CONFIG);
+  resetStaticCmsDraftToBaseline(validation);
+  mediaWorkspaceState.cleanupDecisionsByCandidateId = Object.create(null);
+  mediaWorkspaceState.cleanupApplyResult = null;
+  mediaWorkspaceState.cleanupSelectedReplacementId = '';
+  renderAdminShell();
+}
+
+function renderMediaCleanupApplyResult(result = {}) {
+  const box = createElement('div', { className: `cms-admin-media-cleanup-result ${result.ok ? 'is-success' : 'is-error'}` });
+  box.appendChild(renderBadge(result.ok ? 'Đạt' : 'Cần kiểm tra', result.ok ? 'success' : 'warning'));
+  box.appendChild(createElement('p', { text: result.message || '' }));
+  return box;
+}
+
+function renderMediaCleanupSaveConfirmModal(cleanupModel = {}) {
+  const backdrop = createElement('div', { className: 'cms-admin-modal-backdrop cms-admin-media-cleanup-save-modal' });
+  const dialog = createElement('section', { className: 'cms-admin-modal cms-admin-panel', attrs: { role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'cms-media-cleanup-save-title' } });
+  dialog.appendChild(createElement('h3', { id: 'cms-media-cleanup-save-title', text: 'Lưu thay đổi đường dẫn vào bản nháp CMS?' }));
+  const list = createElement('ul', { className: 'cms-admin-media-cleanup-confirm-list' });
+  [
+    'Chỉ sửa bản nháp CMS.',
+    'Website public chưa thay đổi.',
+    'Không xóa file trong Storage.',
+    'Không xóa lịch sử upload.',
+    `${formatCount(cleanupModel.applyResult?.changedCount || 0)} field đã được thay đổi trong bản nháp local.`,
+    `${formatCount(Object.values(cleanupModel.decisions || {}).filter((decision) => decision?.action === 'skip').length)} candidate đã được bỏ qua.`,
+  ].forEach((item) => list.appendChild(createElement('li', { text: item })));
+  dialog.appendChild(list);
+  const actions = createElement('div', { className: 'cms-admin-form-actions' });
+  const cancel = createElement('button', { className: 'cms-admin-button', text: 'Hủy', type: 'button' });
+  cancel.addEventListener('click', () => {
+    mediaWorkspaceState.cleanupSaveConfirmOpen = false;
+    renderAdminShell();
+  });
+  const save = createElement('button', { className: 'cms-admin-button cms-admin-button-primary', text: cleanupModel.draftState?.isSavingDraft ? 'Đang lưu...' : 'Lưu bản nháp', type: 'button' });
+  save.disabled = Boolean(cleanupModel.draftState?.isSavingDraft);
+  save.addEventListener('click', async () => {
+    mediaWorkspaceState.cleanupSaveConfirmOpen = false;
+    await handleSaveStaticCmsDraft({ asNew: !cleanupModel.draftState?.currentDraftId, handlers: { onRerender: renderAdminShell } });
+  });
+  actions.appendChild(cancel);
+  actions.appendChild(save);
+  dialog.appendChild(actions);
+  backdrop.appendChild(dialog);
+  return backdrop;
+}
+
+function renderMediaCleanupDiagnostics(cleanupModel = {}) {
+  const details = createElement('details', { className: 'cms-admin-media-cleanup-diagnostics' });
+  details.appendChild(createElement('summary', { text: 'Thông tin kỹ thuật quét đường dẫn' }));
+  const list = createElement('dl', { className: 'cms-admin-technical-list' });
+  [
+    ['Nguồn quét', 'state.staticCmsDraft.draftJson'],
+    ['Replacement hợp lệ', `${formatCount(cleanupModel.activeLibraryFiles?.length || 0)} file thật trong Thư viện`],
+    ['Candidate cần review', formatCount(cleanupModel.candidates?.length || 0)],
+    ['Không sửa', 'Public JSON, baseline JSON, Storage, upload log'],
+  ].forEach(([label, value]) => appendMediaDetail(list, label, value));
+  details.appendChild(list);
+  return details;
+}
+
+function getMediaCleanupFieldLabel(candidate = {}) {
+  const field = formatMediaFieldName(candidate.fieldName || '');
+  return field ? `${field} — ${candidate.ownerLabel || 'Bản nháp CMS'}` : (candidate.ownerLabel || 'Đường dẫn trong bản nháp');
+}
+
+function getMediaCleanupClassificationLabel(value = '') {
+  return {
+    matched_library_file: 'Khớp file Thư viện',
+    orphan_reference: 'Chưa khớp file Thư viện',
+    broken_reference: 'Cần thay ảnh/video',
+    external_or_unknown: 'Đường dẫn ngoài/chưa xác minh',
+    legacy_keep_candidate: 'Đường dẫn legacy cần review',
+    unsafe_reference: 'Đường dẫn không an toàn',
+    manual_review_required: 'Cần review thủ công',
+  }[value] || 'Cần kiểm tra';
+}
+
+function getMediaCleanupBadgeTone(value = '') {
+  if (value === 'unsafe_reference' || value === 'broken_reference') return 'warning';
+  if (value === 'matched_library_file') return 'success';
+  return 'default';
+}
+
+function getMediaCleanupDecisionLabel(decision = {}) {
+  if (decision.action === 'replace') return 'Đã chọn thay';
+  if (decision.action === 'keep') return 'Giữ nguyên';
+  if (decision.action === 'skip') return 'Bỏ qua';
+  if (decision.action === 'clear') return 'Xóa khỏi bản nháp';
+  return 'Đã chọn';
+}
+
+function formatJsonPathTokens(tokens = []) {
+  return safeArray(tokens).map((token) => typeof token === 'number' ? `[${token}]` : (String(token || '').match(/^[a-zA-Z_$][\w$]*$/) ? (tokens.indexOf(token) === 0 ? token : `.${token}`) : `[${JSON.stringify(String(token))}]`)).join('').replace(/\.\[/g, '[');
+}
+
+function isSafeJsonPathToken(token) {
+  const raw = String(token || '');
+  return raw !== '__proto__' && raw !== 'prototype' && raw !== 'constructor';
+}
+
+function setValueAtSafeJsonPath(target, tokens = [], nextValue) {
+  if (!target || typeof target !== 'object' || !safeArray(tokens).length) return false;
+  let current = target;
+  for (let index = 0; index < tokens.length - 1; index += 1) {
+    const token = tokens[index];
+    if (!isSafeJsonPathToken(token)) return false;
+    if (typeof token === 'number') {
+      if (!Array.isArray(current) || token < 0 || token >= current.length) return false;
+    }
+    current = current[token];
+    if (!current || typeof current !== 'object') return false;
+  }
+  const last = tokens[tokens.length - 1];
+  if (!isSafeJsonPathToken(last)) return false;
+  if (typeof last === 'number' && (!Array.isArray(current) || last < 0 || last >= current.length)) return false;
+  current[last] = nextValue;
+  return true;
+}
+
+function cloneJsonSafeLocal(value) {
+  return JSON.parse(JSON.stringify(value || {}));
+}
+
 
 function renderMediaProfessionalWorkspace(model = {}, options = {}) {
   const assets = safeArray(options.assets);
