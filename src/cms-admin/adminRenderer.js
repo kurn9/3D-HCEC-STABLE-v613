@@ -341,9 +341,12 @@ function renderReleaseOperationGateNotice(state = getState()) {
       : normalizeErrorMessage(gate.error),
   }));
   if (gate.blocked) {
+    const isLineageRepair = Boolean(gate.lineageRepairRequired || gate.repairRequired);
     panel.appendChild(createElement('p', {
       className: 'cms-admin-help-text',
-      text: 'Chưa xác định website đang dùng bản nào. Không bấm công khai hoặc khôi phục lại. Hãy kiểm tra trạng thái hiện tại.',
+      text: isLineageRepair
+        ? 'Bản công khai đã được xác nhận nhưng lịch sử vận hành chưa hoàn tất. Không công khai hoặc khôi phục thêm. Hãy sửa lịch sử vận hành trước.'
+        : 'Chưa xác định website đang dùng bản nào. Không công khai hoặc khôi phục lại. Hãy kiểm tra trạng thái hiện tại.',
     }));
   }
   return panel;

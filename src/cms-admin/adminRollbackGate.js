@@ -1313,14 +1313,52 @@ async function handleRepairReleaseLineage({ handlers = {} } = {}) {
   setCmsPublishHistoryState({ rollbackStatus: 'Đang sửa lịch sử vận hành...', rollbackError: null });
   handlers.onRerender?.();
   const result = await reconcileCmsReleasePointer(getState().supabase, { mode: 'repair-lineage', operationId: gate.operationId });
-  if (result.error) {
-    setReleaseOperationGateState({ reconciling: false, error: normalizeErrorMessage(result.error), lastCheckedAt: new Date().toISOString() });
-    setCmsPublishHistoryState({ rollbackStatus: '', rollbackError: normalizeErrorMessage(result.error) });
+  const repairData = result.data || {};
+  const auditRepair = repairData.auditRepair || {};
+  const auditLogId = repairData.auditLogId || auditRepair.auditLogId || auditRepair.id || '';
+  const repairPersisted = result.error ? false : Boolean(repairData.persisted === true && repairData.auditLogState === 'present' && auditLogId);
+  if (result.error || !repairPersisted) {
+    const message = result.error
+      ? normalizeErrorMessage(result.error)
+      : 'Sửa lịch sử vận hành chưa được lưu xác nhận trên máy chủ. Trạng thái khóa vẫn được giữ.';
+    setReleaseOperationGateState({
+      blocked: true,
+      lineageRepairRequired: true,
+      repairRequired: true,
+      reconciling: false,
+      error: message,
+      result: repairData || null,
+      lastCheckedAt: new Date().toISOString(),
+    });
+    setCmsPublishHistoryState({ rollbackStatus: '', rollbackError: message });
     handlers.onRerender?.();
     return;
   }
-  setReleaseOperationGateState({ blocked: false, lineageRepairRequired: false, repairRequired: false, reconciliationRequired: false, reconciling: false, message: '', state: 'succeeded', phase: 'resolved', result: result.data || null, lastCheckedAt: new Date().toISOString() });
-  setCmsPublishHistoryState({ rollbackStatus: 'Đã sửa lịch sử vận hành. Hãy tải lại lịch sử trước khi thao tác tiếp.', rollbackError: null });
+
+  const statusResult = await reconcileCmsReleasePointer(getState().supabase, { mode: 'status' });
+  const statusData = statusResult.data || {};
+  if (statusResult.error) {
+    setReleaseOperationGateState({
+      blocked: true,
+      lineageRepairRequired: true,
+      repairRequired: true,
+      reconciling: false,
+      error: normalizeErrorMessage(statusResult.error),
+      result: repairData || null,
+      lastCheckedAt: new Date().toISOString(),
+    });
+    setCmsPublishHistoryState({ rollbackStatus: 'Đã gửi yêu cầu sửa lịch sử, nhưng chưa xác nhận được trạng thái máy chủ. Không khôi phục lại.', rollbackError: normalizeErrorMessage(statusResult.error) });
+    handlers.onRerender?.();
+    return;
+  }
+  if (statusData.operationId || statusData.lineageRepairRequired === true || ['in_progress', 'pointer_unknown', 'lineage_repair_required'].includes(String(statusData.classification || statusData.state || ''))) {
+    applyReleaseOperationGateFromServer(statusData);
+    setCmsPublishHistoryState({ rollbackStatus: '', rollbackError: 'Máy chủ vẫn đang khóa thao tác. Hãy xử lý trạng thái được hiển thị trước khi tiếp tục.' });
+    handlers.onRerender?.();
+    return;
+  }
+  setReleaseOperationGateState({ blocked: false, lineageRepairRequired: false, repairRequired: false, reconciliationRequired: false, reconciling: false, message: '', state: 'idle', phase: '', operationId: '', result: statusData || repairData || null, lastCheckedAt: new Date().toISOString() });
+  setCmsPublishHistoryState({ rollbackStatus: 'Đã sửa lịch sử vận hành và máy chủ xác nhận trạng thái an toàn. Hãy tải lại lịch sử trước khi thao tác tiếp.', rollbackError: null });
   await handleLoadPublishHistory({ onRerender: () => {} }, { resetWorkflow: false });
   handlers.onRerender?.();
 }
