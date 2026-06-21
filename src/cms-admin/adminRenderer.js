@@ -1170,7 +1170,7 @@ function handleStaticDraftWorkspaceTabSwitch(tabKey, currentKey) {
     if (draftState.dirty) {
       const shouldLeave = window.confirm(getGlobalLeaveMessage());
       if (!shouldLeave) return false;
-      resetStaticCmsDraftToBaseline();
+      resetStaticCmsDraftToBaseline(validateStaticCmsDraft(draftState.baselineJson || {}, STATIC_CMS_DRAFT_CONFIG));
       syncBeforeUnloadGuard(getState());
     }
   }
@@ -4217,7 +4217,7 @@ function renderMediaCleanupSaveConfirmModal(cleanupModel = {}) {
   save.disabled = Boolean(cleanupModel.draftState?.isSavingDraft);
   save.addEventListener('click', async () => {
     mediaWorkspaceState.cleanupSaveConfirmOpen = false;
-    await handleSaveStaticCmsDraft({ asNew: !cleanupModel.draftState?.currentDraftId, handlers: { onRerender: renderAdminShell } });
+    await handleSaveStaticCmsDraft({ handlers: { onRerender: renderAdminShell } });
   });
   actions.appendChild(cancel);
   actions.appendChild(save);
@@ -7423,10 +7423,10 @@ async function executePublishCommandAction(action = {}) {
       await handleLoadStaticCmsBaseline({ onRerender: renderAdminShell });
       return;
     case 'save-new-draft':
-      await handleSaveStaticCmsDraft({ asNew: true, handlers });
+      await handleSaveStaticCmsDraft({ handlers });
       return;
     case 'save-existing-draft':
-      await handleSaveStaticCmsDraft({ asNew: false, handlers });
+      await handleSaveStaticCmsDraft({ handlers });
       return;
     case 'compose-preparation':
       await handleComposeCmsPreparationDraft({ handlers });

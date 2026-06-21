@@ -31,6 +31,7 @@ import {
   updateStaticCmsDraftMeta,
   updateStaticCmsDraftRoom,
   resetStaticCmsDraftToBaseline,
+  clearStaticCmsDraftSession,
 } from './adminState.js';
 import { validateStaticCmsDraft, validateStaticCmsMediaUrl } from './adminValidation.js';
 import { renderStaticCmsMediaPreview } from './adminMediaPreview.js';
@@ -738,7 +739,7 @@ function renderStaticRoomEditActionBlock(draftState = {}, handlers = {}) {
     if (!draftState.dirty) return;
     const confirmed = globalThis.confirm?.('Hủy các thay đổi chưa lưu trong bản nháp Nội dung phòng 3D?');
     if (!confirmed) return;
-    resetStaticCmsDraftToBaseline();
+    resetStaticCmsDraftToBaseline(validateStaticCmsDraft(draftState.baselineJson || {}, STATIC_CMS_DRAFT_CONFIG));
     handlers.onRerender?.();
   });
 
@@ -753,7 +754,7 @@ function renderStaticRoomEditActionBlock(draftState = {}, handlers = {}) {
     if (!draftState.dirty) return;
     const confirmed = globalThis.confirm?.('Đặt lại toàn bộ thay đổi chưa lưu về baseline đang mở?');
     if (!confirmed) return;
-    resetStaticCmsDraftToBaseline();
+    resetStaticCmsDraftToBaseline(validateStaticCmsDraft(draftState.baselineJson || {}, STATIC_CMS_DRAFT_CONFIG));
     handlers.onRerender?.();
   });
 
@@ -764,7 +765,7 @@ function renderStaticRoomEditActionBlock(draftState = {}, handlers = {}) {
     title: draftState.currentDraftId ? 'Lưu thay đổi vào bản chuẩn bị hiện tại.' : 'Lưu nội dung đang sửa thành bản chuẩn bị.',
   });
   saveButton.disabled = Boolean(draftState.isSavingDraft || !draftState.draftJson || !draftState.validation?.valid);
-  saveButton.addEventListener('click', () => handleSaveStaticCmsDraft({ asNew: !draftState.currentDraftId, handlers }));
+  saveButton.addEventListener('click', () => handleSaveStaticCmsDraft({ handlers }));
 
   appendChildren(actions, [cancelButton, resetButton, saveButton]);
   block.appendChild(actions);
@@ -1242,7 +1243,7 @@ function renderFeaturedEditActionBlock(draftState = {}, handlers = {}) {
     if (!draftState.dirty) return;
     const confirmed = globalThis.confirm?.('Hủy các thay đổi chưa lưu trong bản nháp Tác phẩm tiêu biểu?');
     if (!confirmed) return;
-    resetStaticCmsDraftToBaseline();
+    resetStaticCmsDraftToBaseline(validateStaticCmsDraft(draftState.baselineJson || {}, STATIC_CMS_DRAFT_CONFIG));
     handlers.onRerender?.();
   });
 
@@ -1257,7 +1258,7 @@ function renderFeaturedEditActionBlock(draftState = {}, handlers = {}) {
     if (!draftState.dirty) return;
     const confirmed = globalThis.confirm?.('Đặt lại toàn bộ thay đổi chưa lưu về baseline đang mở?');
     if (!confirmed) return;
-    resetStaticCmsDraftToBaseline();
+    resetStaticCmsDraftToBaseline(validateStaticCmsDraft(draftState.baselineJson || {}, STATIC_CMS_DRAFT_CONFIG));
     handlers.onRerender?.();
   });
 
@@ -1268,7 +1269,7 @@ function renderFeaturedEditActionBlock(draftState = {}, handlers = {}) {
     title: draftState.currentDraftId ? 'Lưu thay đổi vào bản chuẩn bị hiện tại.' : 'Lưu nội dung đang sửa thành bản chuẩn bị.',
   });
   saveButton.disabled = Boolean(draftState.isSavingDraft || !draftState.draftJson || !draftState.validation?.valid);
-  saveButton.addEventListener('click', () => handleSaveStaticCmsDraft({ asNew: !draftState.currentDraftId, handlers }));
+  saveButton.addEventListener('click', () => handleSaveStaticCmsDraft({ handlers }));
 
   appendChildren(actions, [cancelButton, resetButton, saveButton]);
   block.appendChild(actions);
@@ -1300,7 +1301,7 @@ function renderPrimaryOperatorActions(draftState = {}, appState = {}, handlers =
     title: draftState.currentDraftId ? 'Lưu thay đổi vào bản chuẩn bị hiện tại.' : 'Lưu nội dung đang sửa thành bản chuẩn bị.',
   });
   saveButton.disabled = Boolean(draftState.isSavingDraft || !draftState.draftJson || !draftState.validation?.valid);
-  saveButton.addEventListener('click', () => handleSaveStaticCmsDraft({ asNew: !draftState.currentDraftId, handlers }));
+  saveButton.addEventListener('click', () => handleSaveStaticCmsDraft({ handlers }));
   actions.appendChild(saveButton);
   return actions;
 }
@@ -3841,6 +3842,18 @@ function buildDraftContentBackedInclusionItem({ key, label, context = {}, fragme
       technical,
     });
   }
+  if (!hasRequiredDraftBackedFragment(key, context.draftJson || {}) || !hasRequiredDraftBackedFragment(key, context.baselineJson || {})) {
+    return buildPublishInclusionItem({
+      key,
+      label,
+      status: 'unverifiable',
+      reason: `${label} thiếu fragment quan trọng trong bản chuẩn bị đã lưu hoặc bản đang mở.`,
+      draftSavedAt,
+      blocksPublish: true,
+      nextAction: 'Tải lại hoặc lưu lại bản chuẩn bị trước khi kiểm tra.',
+      technical,
+    });
+  }
   const draftFragment = fragmentGetter(context.draftJson || {});
   const persistedFragment = fragmentGetter(context.baselineJson || {});
   if (!normalizedDeepEqual(draftFragment, persistedFragment)) {
@@ -3866,6 +3879,18 @@ function buildDraftContentBackedInclusionItem({ key, label, context = {}, fragme
     nextAction: '',
     technical,
   });
+}
+
+
+function hasRequiredDraftBackedFragment(key = '', cmsJson = {}) {
+  if (key === 'static_rooms') {
+    return Array.isArray(cmsJson?.rooms?.indoor?.artworks) && Array.isArray(cmsJson?.rooms?.outdoor?.artworks);
+  }
+  if (key === 'featured_artworks') {
+    const featured = getRawFeaturedSection(cmsJson);
+    return isPlainObjectValue(featured) && Array.isArray(featured.items);
+  }
+  return true;
 }
 
 function pickRoomsCompositionFragment(cmsJson = {}) {
@@ -4425,7 +4450,9 @@ async function readPersistedCmsDraftSnapshot(client, expectedDraftId = '') {
 export async function verifyPersistedDraftForPublish({ appState = getState(), draftState = null, expectedDraftId = '' } = {}) {
   const currentDraftState = draftState || appState.staticCmsDraft || {};
   const draftId = String(expectedDraftId || currentDraftState.currentDraftId || '').trim();
+  const persistedDraftId = String(currentDraftState.persistedDraftId || '').trim();
   if (!draftId) return { ok: false, code: 'missing_draft_id', reason: 'Cần lưu bản chuẩn bị trước khi kiểm tra hoặc đưa lên website.' };
+  if (persistedDraftId && persistedDraftId !== draftId) return { ok: false, code: 'draft_identity_mismatch', reason: 'Bản đang mở không khớp persisted draft đã đọc lại.' };
   if (currentDraftState.dirty) return { ok: false, code: 'local_dirty', reason: 'Bản chuẩn bị trong trình duyệt có thay đổi chưa lưu.' };
   const readback = await readPersistedCmsDraftSnapshot(appState.supabase, draftId);
   if (!readback.ok) return readback;
@@ -4528,6 +4555,10 @@ export function hasCurrentDryRunPass(draftState = {}) {
   if (!currentVersion || !verifiedVersion || currentVersion !== verifiedVersion) return false;
   const resultVersion = String(result.publishedVersion || result.plan?.publishedVersion || '').trim();
   if (!resultVersion || resultVersion !== currentVersion) return false;
+  if (!isPlainObjectValue(draftState.draftJson) || !isPlainObjectValue(draftState.baselineJson)) return false;
+  const localJson = sanitizeStaticCmsExport(draftState.draftJson, { keepVersion: true });
+  const baselineJson = sanitizeStaticCmsExport(draftState.baselineJson, { keepVersion: true });
+  if (!normalizedDeepEqual(localJson, baselineJson)) return false;
   return true;
 }
 
@@ -4537,6 +4568,9 @@ export function getPublishReadiness(draftState = {}, access = {}, publishInclusi
   if (!draftState.currentDraftId) return { ready: false, reason: 'Cần lưu thay đổi trước khi công khai.' };
   if (draftState.persistedDraftId && String(draftState.persistedDraftId) !== String(draftState.currentDraftId)) {
     return { ready: false, reason: 'Bản đang mở không khớp bản đã lưu trong CMS. Hãy lưu lại bản chuẩn bị.' };
+  }
+  if (!draftState.persistedDraftUpdatedAt || !draftState.persistedDraftVersion) {
+    return { ready: false, reason: 'Bản chuẩn bị thiếu revision đã đọc lại từ server. Hãy lưu lại trước khi kiểm tra hoặc công khai.' };
   }
   if (draftState.dirty) return { ready: false, reason: 'Bản nháp đang có thay đổi chưa lưu. Hãy lưu thay đổi trước khi công khai.' };
   if (draftState.isSavingDraft) return { ready: false, reason: 'Đang lưu thay đổi, vui lòng chờ hoàn tất.' };
@@ -4661,15 +4695,28 @@ export async function handlePublishStaticCmsDraft({ dryRun = true, handlers = {}
     draftId: persistedDraft.id,
     confirmVersion,
     dryRun,
+    expectedDraftUpdatedAt: persistedDraft.updatedAt,
+    expectedDraftVersion: persistedDraft.version,
   });
 
   if (result.error) {
+    const isRevisionConflict = result.error?.code === 'DRAFT_REVISION_CONFLICT'
+      || result.data?.code === 'DRAFT_REVISION_CONFLICT'
+      || result.error?.status === 409;
     setStaticCmsPublishState({
       isPublishingCms: false,
-      publishError: normalizeErrorMessage(result.error),
+      publishError: isRevisionConflict
+        ? 'Bản chuẩn bị đã thay đổi sau lần kiểm tra trước. Website chưa được cập nhật. Hãy tải lại bản chuẩn bị, kiểm tra lại rồi thực hiện lại bước đưa lên website.'
+        : normalizeErrorMessage(result.error),
       publishStatus: '',
       publishResult: dryRun ? draftState.publishResult : (result.data || null),
-      publishDryRunResult: dryRun ? (result.data || null) : draftState.publishDryRunResult,
+      publishDryRunResult: isRevisionConflict ? null : (dryRun ? (result.data || null) : draftState.publishDryRunResult),
+      publishLastVerifiedAt: isRevisionConflict ? null : draftState.publishLastVerifiedAt,
+      publishVerifiedDraftId: isRevisionConflict ? '' : draftState.publishVerifiedDraftId,
+      publishVerifiedDraftUpdatedAt: isRevisionConflict ? null : draftState.publishVerifiedDraftUpdatedAt,
+      publishVerifiedDraftVersion: isRevisionConflict ? '' : draftState.publishVerifiedDraftVersion,
+      publishVerificationInvalidatedAt: isRevisionConflict ? new Date().toISOString() : draftState.publishVerificationInvalidatedAt,
+      publishVerificationInvalidationReason: isRevisionConflict ? 'Server phát hiện revision draft đã thay đổi sau lần kiểm tra.' : draftState.publishVerificationInvalidationReason,
     });
     handlers.onRerender?.();
     return;
@@ -4738,7 +4785,13 @@ function renderDraftPersistencePanel(draftState = {}, appState = {}, handlers = 
     type: 'button',
   });
   saveAsButton.disabled = draftState.isSavingDraft || !draftState.draftJson;
-  saveAsButton.addEventListener('click', () => handleSaveStaticCmsDraft({ asNew: true, handlers }));
+  saveAsButton.addEventListener('click', () => {
+    if (draftState.currentDraftId) {
+      const confirmed = globalThis.confirm?.('Lưu thành bản sao mới tách khỏi bản chuẩn bị đang mở? Thao tác này chỉ nên dùng khi thật sự muốn tạo một draft khác.');
+      if (!confirmed) return;
+    }
+    handleSaveStaticCmsDraft({ asNew: true, explicitCopy: true, handlers });
+  });
 
   const loadListButton = createElement('button', {
     className: 'cms-admin-button cms-admin-button-ghost',
@@ -4866,7 +4919,7 @@ async function handleLoadSavedCmsDrafts(handlers = {}) {
   handlers.onRerender?.();
 }
 
-export async function handleSaveStaticCmsDraft({ asNew = false, handlers = {} } = {}) {
+export async function handleSaveStaticCmsDraft({ asNew = false, explicitCopy = false, handlers = {} } = {}) {
   const appState = getState();
   const draftState = appState.staticCmsDraft || {};
   const access = getDraftPersistenceAccess(appState);
@@ -4876,6 +4929,79 @@ export async function handleSaveStaticCmsDraft({ asNew = false, handlers = {} } 
     return;
   }
   if (!draftState.draftJson) return;
+
+  const currentDraftId = String(draftState.currentDraftId || '').trim();
+  const persistedDraftId = String(draftState.persistedDraftId || '').trim();
+  const saveAsCopy = asNew === true;
+
+  if (persistedDraftId && !currentDraftId) {
+    setStaticCmsDraftPersistenceState({
+      draftPersistenceError: 'Trạng thái bản chuẩn bị không nhất quán: có persisted draft nhưng thiếu current draft ID. Hãy tải lại bản nháp trước khi lưu.',
+      draftSaveStatus: '',
+      publishDryRunResult: null,
+      publishResult: null,
+      publishStatus: '',
+      publishError: null,
+      publishLastVerifiedAt: null,
+      publishVerifiedDraftId: '',
+      publishVerifiedDraftUpdatedAt: null,
+      publishVerifiedDraftVersion: '',
+      publishVerificationInvalidatedAt: new Date().toISOString(),
+      publishVerificationInvalidationReason: 'Trạng thái draft không nhất quán trước khi lưu.',
+    });
+    handlers.onRerender?.();
+    return;
+  }
+
+  if (currentDraftId && persistedDraftId && currentDraftId !== persistedDraftId) {
+    setStaticCmsDraftPersistenceState({
+      draftPersistenceError: 'Bản đang mở không khớp bản đã lưu trong CMS. Không tự tạo bản mới để tránh phân nhánh sai.',
+      draftSaveStatus: '',
+      publishDryRunResult: null,
+      publishResult: null,
+      publishStatus: '',
+      publishError: null,
+      publishLastVerifiedAt: null,
+      publishVerifiedDraftId: '',
+      publishVerifiedDraftUpdatedAt: null,
+      publishVerifiedDraftVersion: '',
+      publishVerificationInvalidatedAt: new Date().toISOString(),
+      publishVerificationInvalidationReason: 'Draft identity mismatch trước khi lưu.',
+    });
+    handlers.onRerender?.();
+    return;
+  }
+
+  if (saveAsCopy && currentDraftId && explicitCopy !== true) {
+    setStaticCmsDraftPersistenceState({
+      draftPersistenceError: 'Không tạo bản sao mới khi đang mở draft hiện tại nếu người dùng chưa xác nhận thao tác “Lưu thành bản sao mới”.',
+      draftSaveStatus: '',
+    });
+    handlers.onRerender?.();
+    return;
+  }
+
+  const shouldCreate = saveAsCopy ? true : !currentDraftId;
+  const expectedUpdatedAt = normalizePublishTimestamp(draftState.persistedDraftUpdatedAt || draftState.draftLastSavedAt || '');
+  if (!shouldCreate && !expectedUpdatedAt) {
+    setStaticCmsDraftPersistenceState({
+      draftPersistenceError: 'Thiếu revision của bản chuẩn bị hiện tại. Hãy tải lại bản nháp rồi lưu lại.',
+      draftSaveStatus: '',
+      dirty: true,
+      publishDryRunResult: null,
+      publishResult: null,
+      publishStatus: '',
+      publishError: null,
+      publishLastVerifiedAt: null,
+      publishVerifiedDraftId: '',
+      publishVerifiedDraftUpdatedAt: null,
+      publishVerifiedDraftVersion: '',
+      publishVerificationInvalidatedAt: new Date().toISOString(),
+      publishVerificationInvalidationReason: 'Thiếu revision khi lưu bản chuẩn bị.',
+    });
+    handlers.onRerender?.();
+    return;
+  }
 
   const exportJson = createStaticCmsExportJson(draftState.draftJson);
   const validation = validateStaticCmsDraft(exportJson, STATIC_CMS_DRAFT_CONFIG);
@@ -4889,7 +5015,7 @@ export async function handleSaveStaticCmsDraft({ asNew = false, handlers = {} } 
   handlers.onRerender?.();
 
   const payload = {
-    title: (asNew && !draftState.draftTitleTouched) ? createOperatorDraftTitle(draftState, { forceTimestamp: true }) : (draftState.draftTitle || createOperatorDraftTitle(draftState)),
+    title: (shouldCreate && !draftState.draftTitleTouched) ? createOperatorDraftTitle(draftState, { forceTimestamp: true }) : (draftState.draftTitle || createOperatorDraftTitle(draftState)),
     status: validation.valid ? 'validated' : 'draft',
     content_json: exportJson,
     validation_json: validation,
@@ -4899,17 +5025,35 @@ export async function handleSaveStaticCmsDraft({ asNew = false, handlers = {} } 
     note: draftState.draftNote || '',
   };
 
-  const result = (!asNew && draftState.currentDraftId)
-    ? await updateCmsDraft(appState.supabase, draftState.currentDraftId, payload, access.userId)
-    : await createCmsDraft(appState.supabase, payload, access.userId);
+  const result = shouldCreate
+    ? await createCmsDraft(appState.supabase, payload, access.userId)
+    : await updateCmsDraft(appState.supabase, currentDraftId, payload, access.userId, { expectedUpdatedAt });
 
   if (result.error) {
-    setStaticCmsDraftPersistenceState({ isSavingDraft: false, draftPersistenceError: normalizeErrorMessage(result.error) });
+    const isConflict = result.conflict === true || result.error?.code === 'DRAFT_SAVE_CONFLICT';
+    setStaticCmsDraftPersistenceState({
+      isSavingDraft: false,
+      draftPersistenceError: isConflict
+        ? 'Bản chuẩn bị này đã được thay đổi ở phiên khác. Nội dung của bạn chưa bị ghi đè. Hãy tải lại bản mới nhất rồi kiểm tra trước khi lưu lại.'
+        : normalizeErrorMessage(result.error),
+      draftSaveStatus: '',
+      dirty: true,
+      publishDryRunResult: null,
+      publishResult: null,
+      publishStatus: '',
+      publishError: null,
+      publishLastVerifiedAt: null,
+      publishVerifiedDraftId: '',
+      publishVerifiedDraftUpdatedAt: null,
+      publishVerifiedDraftVersion: '',
+      publishVerificationInvalidatedAt: new Date().toISOString(),
+      publishVerificationInvalidationReason: isConflict ? 'Save conflict với revision mới hơn trên server.' : 'Lưu bản chuẩn bị chưa thành công.',
+    });
     handlers.onRerender?.();
     return;
   }
 
-  const savedDraftId = result.data?.id || draftState.currentDraftId || '';
+  const savedDraftId = result.data?.id || (shouldCreate ? '' : currentDraftId);
   const readback = await readPersistedCmsDraftSnapshot(appState.supabase, savedDraftId);
   if (!readback.ok) {
     setStaticCmsDraftPersistenceState({
@@ -4933,6 +5077,27 @@ export async function handleSaveStaticCmsDraft({ asNew = false, handlers = {} } 
   }
 
   const persistedDraft = readback.snapshot;
+  if (!shouldCreate && persistedDraft.id !== currentDraftId) {
+    setStaticCmsDraftPersistenceState({
+      isSavingDraft: false,
+      draftPersistenceError: 'Readback trả về draft ID khác bản đang cập nhật. Chưa chuyển sang trạng thái đã lưu.',
+      draftSaveStatus: '',
+      dirty: true,
+      publishDryRunResult: null,
+      publishResult: null,
+      publishStatus: '',
+      publishError: null,
+      publishLastVerifiedAt: null,
+      publishVerifiedDraftId: '',
+      publishVerifiedDraftUpdatedAt: null,
+      publishVerifiedDraftVersion: '',
+      publishVerificationInvalidatedAt: new Date().toISOString(),
+      publishVerificationInvalidationReason: 'Readback draft ID mismatch sau khi lưu.',
+    });
+    handlers.onRerender?.();
+    return;
+  }
+
   const persistedValidation = validateStaticCmsDraft(persistedDraft.contentJson, STATIC_CMS_DRAFT_CONFIG);
   if (!persistedValidation.valid) {
     setStaticCmsDraftPersistenceState({
@@ -4967,8 +5132,8 @@ export async function handleSaveStaticCmsDraft({ asNew = false, handlers = {} } 
     persistedDraftVersion: persistedDraft.version,
     draftLastSavedAt: persistedDraft.updatedAt,
     draftTitle: result.data?.title || payload.title,
-    draftTitleTouched: Boolean(draftState.draftTitleTouched || asNew),
-    draftSaveStatus: 'Đã lưu trong bản chuẩn bị. Website đang hoạt động chưa thay đổi.',
+    draftTitleTouched: Boolean(draftState.draftTitleTouched || shouldCreate),
+    draftSaveStatus: shouldCreate ? 'Đã lưu thành bản chuẩn bị mới. Website đang hoạt động chưa thay đổi.' : 'Đã cập nhật bản chuẩn bị hiện tại. Website đang hoạt động chưa thay đổi.',
     dirty: false,
     validation: persistedValidation,
     baselineJson: cloneJson(persistedDraft.contentJson),
@@ -4982,8 +5147,8 @@ export async function handleSaveStaticCmsDraft({ asNew = false, handlers = {} } 
     publishVerifiedDraftId: '',
     publishVerifiedDraftUpdatedAt: null,
     publishVerifiedDraftVersion: '',
-    publishVerificationInvalidatedAt: null,
-    publishVerificationInvalidationReason: '',
+    publishVerificationInvalidatedAt: new Date().toISOString(),
+    publishVerificationInvalidationReason: 'Bản chuẩn bị vừa được lưu; cần kiểm tra lại trước khi công khai.',
   });
   await handleLoadSavedCmsDrafts({ onRerender: () => {} });
   handlers.onRerender?.();
@@ -5040,6 +5205,14 @@ async function handleDiscardSavedCmsDraft(draftId, handlers = {}) {
     return;
   }
   await handleLoadSavedCmsDrafts({ onRerender: () => {} });
+  if (String(appState.staticCmsDraft?.currentDraftId || '') === String(draftId || '')) {
+    clearStaticCmsDraftSession({
+      status: 'Đã đánh dấu hủy bản nháp hiện tại. Website đang hoạt động chưa thay đổi.',
+      resetTitle: true,
+      resetNote: true,
+      invalidationReason: 'Bản chuẩn bị hiện tại đã được hủy trên server.',
+    });
+  }
   setStaticCmsDraftPersistenceState({ isLoadingDrafts: false, draftSaveStatus: 'Đã đánh dấu hủy bản nháp. Website đang hoạt động chưa thay đổi.' });
   handlers.onRerender?.();
 }

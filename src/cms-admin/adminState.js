@@ -966,11 +966,12 @@ export function updateStaticCmsDraftJson(draftJson, validation = null) {
   });
 }
 
-export function resetStaticCmsDraftToBaseline(validation = null) {
+export function resetStaticCmsDraftToBaseline(validation = null, options = {}) {
   const current = state.staticCmsDraft || createEmptyStaticCmsDraftState();
   const baseline = structuredCloneSafe(current.baselineJson || {});
   const selectedRoom = current.selectedRoom || getFirstStaticCmsRoom(baseline) || 'indoor';
   const selectedItemCode = getFirstStaticCmsItemCode(baseline, selectedRoom);
+  const invalidationReason = options.invalidationReason || 'Working copy đã được phục hồi về baseline; cần kiểm tra lại trước khi công khai.';
   return setStaticCmsDraftState({
     draftJson: baseline,
     selectedRoom,
@@ -979,22 +980,22 @@ export function resetStaticCmsDraftToBaseline(validation = null) {
     validation: validation || current.validation,
     previewField: '',
     exportError: null,
-    exportSuccess: 'Đã reset draft về baseline CMS hiện tại.',
+    exportSuccess: options.successMessage || 'Đã phục hồi nội dung về bản đã lưu/baseline đang mở.',
     lastExportName: '',
-    currentDraftId: '',
-    draftTitle: createDefaultStaticCmsDraftTitle(baseline),
-    draftTitleTouched: false,
-    draftNote: '',
-    draftSaveStatus: '',
-    draftLastSavedAt: null,
-    persistedDraftId: '',
-    persistedDraftUpdatedAt: null,
-    persistedDraftVersion: '',
+    currentDraftId: current.currentDraftId || '',
+    draftTitle: current.draftTitle || createDefaultStaticCmsDraftTitle(baseline),
+    draftTitleTouched: Boolean(current.draftTitleTouched),
+    draftNote: current.draftNote || '',
+    draftSaveStatus: current.currentDraftId ? 'Đã phục hồi working copy. Nếu chỉnh tiếp, hãy lưu lại vào bản chuẩn bị hiện tại.' : '',
+    draftLastSavedAt: current.draftLastSavedAt || null,
+    persistedDraftId: current.persistedDraftId || '',
+    persistedDraftUpdatedAt: current.persistedDraftUpdatedAt || null,
+    persistedDraftVersion: current.persistedDraftVersion || '',
     publishVerifiedDraftId: '',
     publishVerifiedDraftUpdatedAt: null,
     publishVerifiedDraftVersion: '',
-    publishVerificationInvalidatedAt: null,
-    publishVerificationInvalidationReason: '',
+    publishVerificationInvalidatedAt: new Date().toISOString(),
+    publishVerificationInvalidationReason: invalidationReason,
     draftPersistenceError: null,
     mediaUploadStatus: {},
     mediaUploadError: null,
@@ -1007,6 +1008,33 @@ export function resetStaticCmsDraftToBaseline(validation = null) {
     publishLastVerifiedAt: null,
     preparationCompositionStatus: '',
     preparationCompositionError: null,
+    preparationCompositionResult: null,
+  });
+}
+
+export function clearStaticCmsDraftSession(options = {}) {
+  const current = state.staticCmsDraft || createEmptyStaticCmsDraftState();
+  return setStaticCmsDraftState({
+    currentDraftId: '',
+    draftTitle: options.resetTitle ? createDefaultStaticCmsDraftTitle(current.draftJson || {}) : (current.draftTitle || ''),
+    draftTitleTouched: options.resetTitle ? false : Boolean(current.draftTitleTouched),
+    draftNote: options.resetNote ? '' : (current.draftNote || ''),
+    draftSaveStatus: options.status || '',
+    draftLastSavedAt: null,
+    persistedDraftId: '',
+    persistedDraftUpdatedAt: null,
+    persistedDraftVersion: '',
+    draftPersistenceError: null,
+    publishDryRunResult: null,
+    publishResult: null,
+    publishStatus: '',
+    publishError: null,
+    publishLastVerifiedAt: null,
+    publishVerifiedDraftId: '',
+    publishVerifiedDraftUpdatedAt: null,
+    publishVerifiedDraftVersion: '',
+    publishVerificationInvalidatedAt: new Date().toISOString(),
+    publishVerificationInvalidationReason: options.invalidationReason || 'Draft session đã được rời hoặc xóa; cần lưu và kiểm tra lại trước khi công khai.',
   });
 }
 

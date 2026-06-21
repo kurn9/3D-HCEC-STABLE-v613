@@ -736,9 +736,17 @@ export async function publishCmsJson(client, payload = {}) {
     return { data: null, error: new Error('Cần lưu bản nháp server-side trước khi công khai.') };
   }
 
+  const expectedDraftUpdatedAt = normalizeOptionalText(payload.expectedDraftUpdatedAt);
+  const expectedDraftVersion = normalizeOptionalText(payload.expectedDraftVersion);
+  if (!expectedDraftUpdatedAt || !expectedDraftVersion) {
+    return { data: null, error: new Error('Thiếu revision của bản chuẩn bị đã xác minh. Hãy lưu và kiểm tra lại trước khi công khai.') };
+  }
+
   const bodyPayload = {
     draftId,
     dryRun: payload.dryRun === true,
+    expectedDraftUpdatedAt,
+    expectedDraftVersion,
   };
   const confirmVersion = normalizeOptionalText(payload.confirmVersion);
   if (confirmVersion) {
@@ -756,7 +764,10 @@ export async function publishCmsJson(client, payload = {}) {
     });
     const body = await response.json().catch(() => ({}));
     if (!response.ok || body?.ok === false) {
-      return { data: body || null, error: new Error(body?.error || body?.message || `Publish gate thất bại HTTP ${response.status}.`) };
+      const error = new Error(body?.error || body?.message || `Publish gate thất bại HTTP ${response.status}.`);
+      error.status = response.status;
+      error.code = body?.code || body?.errorCode || '';
+      return { data: body || null, error };
     }
     return { data: body, error: null };
   } catch (error) {
@@ -1071,7 +1082,7 @@ export async function createCmsDraft(client, payload = {}, userId = null) {
   return { data: data || null, error };
 }
 
-export async function updateCmsDraft(client, draftId, payload = {}, userId = null) {
+export async function updateCmsDraft(client, draftId, payload = {}, userId = null, options = {}) {
   if (!client) {
     return { data: null, error: new Error('Supabase client chưa sẵn sàng.') };
   }
@@ -1081,7 +1092,15 @@ export async function updateCmsDraft(client, draftId, payload = {}, userId = nul
     return { data: null, error: new Error('Không tìm thấy ID bản nháp CMS cần cập nhật.') };
   }
 
+  const expectedUpdatedAt = normalizeOptionalText(options.expectedUpdatedAt || payload.expectedUpdatedAt);
+  if (!expectedUpdatedAt) {
+    const error = new Error('Thiếu revision của bản chuẩn bị hiện tại. Hãy tải lại bản nháp rồi lưu lại.');
+    error.code = 'DRAFT_SAVE_MISSING_REVISION';
+    return { data: null, error };
+  }
+
   const normalized = buildCmsDraftPayload(payload, userId, { inserting: false });
+  normalized.updated_at = new Date().toISOString();
   const blocker = validateCmsDraftPayloadForWrite(normalized);
   if (blocker) return { data: null, error: blocker };
 
@@ -1089,10 +1108,18 @@ export async function updateCmsDraft(client, draftId, payload = {}, userId = nul
     .from(ADMIN_TABLES.cmsDrafts)
     .update(normalized)
     .eq('id', id)
+    .eq('updated_at', expectedUpdatedAt)
     .select(CMS_DRAFT_COLUMNS)
     .maybeSingle();
 
-  return { data: data || null, error };
+  if (error) return { data: null, error };
+  if (!data) {
+    const conflict = new Error('Bản chuẩn bị này đã được thay đổi ở phiên khác. Nội dung của bạn chưa bị ghi đè. Hãy tải lại bản mới nhất rồi kiểm tra trước khi lưu lại.');
+    conflict.code = 'DRAFT_SAVE_CONFLICT';
+    return { data: null, error: conflict, conflict: true };
+  }
+
+  return { data, error: null };
 }
 
 export async function discardCmsDraft(client, draftId, userId = null) {
