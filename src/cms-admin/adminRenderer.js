@@ -73,7 +73,7 @@ import {
 } from './adminCopy.js';
 import { validateGateContentDraft, validateHomeExperienceSectionDraft, validateHomeGuideSectionDraft, validateIndexSectionDraft, validateSiteSettingsDraft, validateStaticCmsDraft } from './adminValidation.js';
 import { buildDbFallbackDashboardSummary } from './adminDashboardSummary.js';
-import { handleSaveStaticCmsDraft, renderStaticCmsDraftTab } from './adminStaticCmsDraft.js';
+import { handleLoadStaticCmsBaseline, handleSaveStaticCmsDraft, renderStaticCmsDraftTab } from './adminStaticCmsDraft.js';
 import { renderRollbackHistoryTab } from './adminRollbackGate.js';
 import { renderCmsStorageCleanupTab } from './adminCleanupGate.js';
 
@@ -3378,25 +3378,28 @@ function renderMediaUsageWorkspace(model = {}) {
 }
 
 function renderMediaCleanupWorkspace(model = {}) {
-  const draftState = model.state?.staticCmsDraft || {};
   const cleanupModel = buildMediaCleanupWorkspaceModel(model);
   ensureMediaCleanupSelection(cleanupModel);
   const selected = getSelectedMediaCleanupCandidate(cleanupModel);
   const panel = createElement('section', { className: 'cms-admin-media-workspace-tab cms-admin-media-cleanup-workspace' });
   panel.appendChild(renderMediaCleanupHeader(cleanupModel));
 
-  if (!draftState.draftJson) {
-    const empty = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel' });
-    empty.appendChild(renderEmptyState('Chưa có bản nháp CMS để kiểm tra. Hãy tải hoặc tạo bản nháp trước.'));
-    panel.appendChild(empty);
+  if (!cleanupModel.hasDraft) {
+    const workspace = createElement('section', { className: 'cms-admin-media-cleanup-grid cms-admin-media-cleanup-grid-empty' });
+    workspace.appendChild(renderMediaCleanupDraftBootstrapPanel(cleanupModel));
+    workspace.appendChild(renderMediaCleanupActionRail(cleanupModel, null));
+    panel.appendChild(workspace);
+    panel.appendChild(renderMediaCleanupDiagnostics(cleanupModel));
     return panel;
   }
 
   if (!cleanupModel.candidates.length) {
-    const empty = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel cms-admin-media-cleanup-empty' });
-    empty.appendChild(renderEmptyState('Bản nháp hiện tại chưa có đường dẫn ảnh/video cần xử lý.'));
-    empty.appendChild(renderMediaCleanupDiagnostics(cleanupModel));
-    panel.appendChild(empty);
+    const workspace = createElement('section', { className: 'cms-admin-media-cleanup-grid cms-admin-media-cleanup-grid-empty' });
+    workspace.appendChild(renderMediaCleanupNoCandidatePanel(cleanupModel));
+    workspace.appendChild(renderMediaCleanupActionRail(cleanupModel, null));
+    panel.appendChild(workspace);
+    panel.appendChild(renderMediaCleanupDiagnostics(cleanupModel));
+    if (mediaWorkspaceState.cleanupSaveConfirmOpen) panel.appendChild(renderMediaCleanupSaveConfirmModal(cleanupModel));
     return panel;
   }
 
@@ -3413,29 +3416,34 @@ function renderMediaCleanupWorkspace(model = {}) {
 function buildMediaCleanupWorkspaceModel(model = {}) {
   const draftState = model.state?.staticCmsDraft || {};
   const draftJson = draftState.draftJson || null;
+  const hasDraft = Boolean(draftJson);
   const activeLibraryFiles = safeArray(model.activeUploadAssets)
     .filter((asset) => asset?.hasUploadLogRecord && !isDeletedMediaAsset(asset) && !isBrokenDeletedMediaReference(asset) && asset.hasSafePublicUrl);
   const activeIdentityMap = buildMediaCleanupIdentityMap(activeLibraryFiles);
   const deletedIdentity = getDeletedMediaIdentitySet(model.deletedUploadAssets);
-  const candidates = draftJson
+  const candidates = hasDraft
     ? collectMediaCleanupCandidatesFromDraft(draftJson, { activeIdentityMap, deletedIdentity, activeLibraryFiles })
     : [];
   const decisions = mediaWorkspaceState.cleanupDecisionsByCandidateId || Object.create(null);
   const selectedCount = candidates.filter((candidate) => decisions[candidate.id]).length;
-  const validation = validateStaticCmsDraft(draftJson || {}, STATIC_CMS_DRAFT_CONFIG);
-  const matchedCount = countMatchedMediaReferencesInDraft(draftJson || {}, activeIdentityMap);
+  const validation = hasDraft ? validateStaticCmsDraft(draftJson, STATIC_CMS_DRAFT_CONFIG) : null;
+  const validationStatus = !hasDraft ? 'not_run' : validation?.valid ? 'valid' : 'invalid';
+  const validationErrors = hasDraft ? countValidationMessages(validation?.errors) : null;
+  const matchedCount = hasDraft ? countMatchedMediaReferencesInDraft(draftJson, activeIdentityMap) : 0;
   const summary = {
-    draftReferences: candidates.length + matchedCount,
+    draftReferences: hasDraft ? candidates.length + matchedCount : 0,
     matched: matchedCount,
     needsReview: candidates.length,
     needsReplace: candidates.filter((candidate) => candidate.canReplace).length,
     selectedCount,
-    validationErrors: countValidationMessages(validation?.errors),
+    validationErrors,
+    validationStatus,
   };
   return {
     ...model,
     draftState,
     draftJson,
+    hasDraft,
     activeLibraryFiles,
     activeIdentityMap,
     deletedIdentity,
@@ -3444,6 +3452,8 @@ function buildMediaCleanupWorkspaceModel(model = {}) {
     decisions,
     summary,
     validation,
+    validationStatus,
+    validationErrors,
     applyResult: mediaWorkspaceState.cleanupApplyResult || null,
   };
 }
@@ -3691,27 +3701,81 @@ function renderMediaCleanupHeader(cleanupModel = {}) {
   copy.appendChild(createElement('h3', { className: 'cms-admin-section-title', text: 'Kiểm tra đường dẫn trong bản nháp' }));
   copy.appendChild(createElement('p', { className: 'cms-admin-help-text', text: 'Chỉ quét và sửa đường dẫn ảnh/video trong bản nháp CMS. Website public, Storage và lịch sử upload không thay đổi.' }));
   const badges = createElement('div', { className: 'cms-admin-media-command-badges' });
-  badges.appendChild(renderBadge('Bản nháp CMS', 'info'));
+  badges.appendChild(renderBadge(cleanupModel.hasDraft ? 'Bản nháp CMS' : 'Chưa có bản nháp', cleanupModel.hasDraft ? 'info' : 'warning'));
   badges.appendChild(renderBadge('Không xóa file', 'success'));
   top.appendChild(copy);
   top.appendChild(badges);
   header.appendChild(top);
   const stats = createElement('div', { className: 'cms-admin-media-command-stats' });
   [
-    ['Đường dẫn trong bản nháp', cleanupModel.summary?.draftReferences || 0],
-    ['Khớp file Thư viện', cleanupModel.summary?.matched || 0],
-    ['Cần kiểm tra', cleanupModel.summary?.needsReview || 0],
-    ['Cần thay thế', cleanupModel.summary?.needsReplace || 0],
-    ['Đã chọn xử lý', cleanupModel.summary?.selectedCount || 0],
-    ['Lỗi kiểm tra', cleanupModel.summary?.validationErrors || 0],
-  ].forEach(([label, value]) => {
+    ['Đường dẫn trong bản nháp', cleanupModel.summary?.draftReferences ?? 0],
+    ['Khớp file Thư viện', cleanupModel.summary?.matched ?? 0],
+    ['Cần kiểm tra', cleanupModel.summary?.needsReview ?? 0],
+    ['Cần thay thế', cleanupModel.summary?.needsReplace ?? 0],
+    ['Đã chọn xử lý', cleanupModel.summary?.selectedCount ?? 0],
+    ['Lỗi kiểm tra', cleanupModel.summary?.validationStatus === 'not_run' ? '—' : (cleanupModel.summary?.validationErrors ?? 0), cleanupModel.summary?.validationStatus === 'not_run' ? 'Chưa chạy' : 'Đã chạy'],
+  ].forEach(([label, value, note]) => {
     const tile = createElement('div', { className: 'cms-admin-media-command-stat' });
     tile.appendChild(createElement('span', { text: label }));
-    tile.appendChild(createElement('strong', { text: formatCount(value) }));
+    tile.appendChild(createElement('strong', { text: typeof value === 'string' ? value : formatCount(value) }));
+    if (note) tile.appendChild(createElement('small', { text: note }));
     stats.appendChild(tile);
   });
   header.appendChild(stats);
   return header;
+}
+
+function renderMediaCleanupDraftBootstrapPanel(cleanupModel = {}) {
+  const draftState = cleanupModel.draftState || {};
+  const card = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel cms-admin-media-cleanup-empty cms-admin-media-cleanup-bootstrap' });
+  card.appendChild(createElement('span', { className: 'cms-admin-eyebrow', text: 'BẮT ĐẦU KIỂM TRA' }));
+  card.appendChild(createElement('h3', { text: 'Cần tải nội dung trước khi kiểm tra đường dẫn' }));
+  card.appendChild(createElement('p', { text: 'Tải nội dung website hiện tại để tạo bản nháp làm việc trong trình duyệt. Thao tác này chưa tạo bản nháp server và không làm thay đổi website public.' }));
+  if (draftState.loadError) card.appendChild(renderErrorBox(`Không tải được nội dung: ${draftState.loadError}`));
+  const actions = createElement('div', { className: 'cms-admin-media-cleanup-empty-actions' });
+  const loadButton = createElement('button', {
+    className: 'cms-admin-button cms-admin-button-primary',
+    text: draftState.loading ? 'Đang tải nội dung...' : draftState.loadError ? 'Thử tải lại' : 'Tải nội dung đang công khai',
+    type: 'button',
+  });
+  loadButton.disabled = Boolean(draftState.loading);
+  loadButton.addEventListener('click', async () => {
+    resetMediaCleanupTransientState();
+    await handleLoadStaticCmsBaseline({ onRerender: renderAdminShell });
+    resetMediaCleanupTransientState();
+    renderAdminShell();
+  });
+  const openDraftButton = createElement('button', { className: 'cms-admin-button', text: 'Mở Nội dung phòng 3D', type: 'button' });
+  openDraftButton.addEventListener('click', () => {
+    setActiveTab('staticDraft');
+    renderAdminShell();
+  });
+  actions.appendChild(loadButton);
+  actions.appendChild(openDraftButton);
+  card.appendChild(actions);
+  card.appendChild(createElement('p', { className: 'cms-admin-help-text', text: 'Bản nháp server chỉ được tạo khi bạn chọn “Lưu thành bản nháp mới” trong màn Nội dung phòng 3D.' }));
+  return card;
+}
+
+function renderMediaCleanupNoCandidatePanel(cleanupModel = {}) {
+  const card = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel cms-admin-media-cleanup-empty cms-admin-media-cleanup-success-empty' });
+  card.appendChild(renderBadge('Đã quét bản nháp', 'success'));
+  card.appendChild(createElement('h3', { text: 'Bản nháp hiện tại chưa có đường dẫn ảnh/video cần xử lý' }));
+  card.appendChild(createElement('p', { text: 'Các đường dẫn trong bản nháp đã khớp file Thư viện hoặc chưa phát hiện candidate cần review theo rule hiện tại.' }));
+  if (cleanupModel.validationStatus === 'invalid') {
+    card.appendChild(renderCompactNotice(`Cấu trúc bản nháp còn ${formatCount(cleanupModel.validationErrors || 0)} lỗi validator thật. Hãy xử lý ở màn Nội dung phòng 3D trước khi lưu hoặc công khai.`));
+  } else {
+    card.appendChild(renderCompactNotice('Kiểm tra cấu trúc bản nháp đang đạt theo validator hiện có. Website public chưa đổi.'));
+  }
+  return card;
+}
+
+function resetMediaCleanupTransientState() {
+  mediaWorkspaceState.cleanupSelectedCandidateId = '';
+  mediaWorkspaceState.cleanupSelectedReplacementId = '';
+  mediaWorkspaceState.cleanupDecisionsByCandidateId = Object.create(null);
+  mediaWorkspaceState.cleanupApplyResult = null;
+  mediaWorkspaceState.cleanupSaveConfirmOpen = false;
 }
 
 function renderMediaCleanupCandidateList(cleanupModel = {}, selected = null) {
@@ -3842,10 +3906,37 @@ function getCompatibleMediaCleanupReplacementAssets(assets = [], candidate = {})
 
 function renderMediaCleanupActionRail(cleanupModel = {}, candidate = null) {
   const rail = createElement('aside', { className: 'cms-admin-panel cms-admin-media-cleanup-action-rail' });
-  rail.appendChild(renderPanelTitle('Checklist & thao tác', 'Bản nháp CMS'));
+  rail.appendChild(renderPanelTitle('Checklist & thao tác', cleanupModel.hasDraft ? 'Bản nháp CMS' : 'Chưa có bản nháp'));
   const checklist = createElement('div', { className: 'cms-admin-media-checklist' });
   buildMediaCleanupChecklist(cleanupModel, candidate).forEach((item) => checklist.appendChild(renderMediaChecklistItem(item)));
   rail.appendChild(checklist);
+
+  if (!cleanupModel.hasDraft) {
+    const draftState = cleanupModel.draftState || {};
+    const actions = createElement('div', { className: 'cms-admin-media-cleanup-actions' });
+    const loadButton = createElement('button', {
+      className: 'cms-admin-button cms-admin-button-primary',
+      text: draftState.loading ? 'Đang tải nội dung...' : draftState.loadError ? 'Thử tải lại' : 'Tải nội dung đang công khai',
+      type: 'button',
+    });
+    loadButton.disabled = Boolean(draftState.loading);
+    loadButton.addEventListener('click', async () => {
+      resetMediaCleanupTransientState();
+      await handleLoadStaticCmsBaseline({ onRerender: renderAdminShell });
+      resetMediaCleanupTransientState();
+      renderAdminShell();
+    });
+    const openDraftButton = createElement('button', { className: 'cms-admin-button', text: 'Mở Nội dung phòng 3D', type: 'button' });
+    openDraftButton.addEventListener('click', () => {
+      setActiveTab('staticDraft');
+      renderAdminShell();
+    });
+    actions.appendChild(loadButton);
+    actions.appendChild(openDraftButton);
+    rail.appendChild(actions);
+    rail.appendChild(createElement('p', { className: 'cms-admin-help-text', text: 'Tải nội dung là thao tác đọc. Bản nháp server chỉ được tạo khi lưu ở màn Nội dung phòng 3D.' }));
+    return rail;
+  }
 
   if (candidate) {
     const actions = createElement('div', { className: 'cms-admin-media-cleanup-actions' });
@@ -3862,10 +3953,12 @@ function renderMediaCleanupActionRail(cleanupModel = {}, candidate = null) {
     rail.appendChild(actions);
   }
 
-  const applyButton = createElement('button', { className: 'cms-admin-button cms-admin-button-primary', text: 'Áp dụng vào bản nháp đang chỉnh', type: 'button' });
-  applyButton.disabled = !hasMediaCleanupPatchDecision(cleanupModel);
-  applyButton.addEventListener('click', () => applyMediaCleanupDraftDecisions(cleanupModel));
-  rail.appendChild(applyButton);
+  if (cleanupModel.candidates.length) {
+    const applyButton = createElement('button', { className: 'cms-admin-button cms-admin-button-primary', text: 'Áp dụng vào bản nháp đang chỉnh', type: 'button' });
+    applyButton.disabled = !hasMediaCleanupPatchDecision(cleanupModel);
+    applyButton.addEventListener('click', () => applyMediaCleanupDraftDecisions(cleanupModel));
+    rail.appendChild(applyButton);
+  }
 
   const resetButton = createElement('button', { className: 'cms-admin-button', text: 'Đặt lại bản nháp', type: 'button' });
   resetButton.disabled = !cleanupModel.draftState?.dirty;
@@ -3881,11 +3974,34 @@ function renderMediaCleanupActionRail(cleanupModel = {}, candidate = null) {
   rail.appendChild(saveButton);
 
   if (cleanupModel.applyResult) rail.appendChild(renderMediaCleanupApplyResult(cleanupModel.applyResult));
-  rail.appendChild(createElement('p', { className: 'cms-admin-help-text', text: 'Chỉ sửa bản nháp CMS. Website public chưa đổi. Không xóa Storage hoặc lịch sử upload.' }));
+  rail.appendChild(createElement('p', { className: 'cms-admin-help-text', text: cleanupModel.candidates.length ? 'Chỉ sửa bản nháp CMS. Website public chưa đổi. Không xóa Storage hoặc lịch sử upload.' : 'Không có candidate cần xử lý. Website public chưa đổi.' }));
   return rail;
 }
 
 function buildMediaCleanupChecklist(cleanupModel = {}, candidate = null) {
+  if (!cleanupModel.hasDraft) {
+    const loading = Boolean(cleanupModel.draftState?.loading);
+    return [
+      { label: 'Bản nháp CMS', value: loading ? 'Đang tải' : 'Chưa có', tone: 'neutral', detail: loading ? 'Đang đọc nội dung hiện tại để tạo bản nháp làm việc trong trình duyệt.' : 'Cần tải nội dung trước khi quét đường dẫn.' },
+      { label: 'Kiểm tra đường dẫn', value: 'Chưa chạy', tone: 'neutral', detail: 'Chưa có draftJson nên không chạy validator hoặc scan candidate.' },
+      { label: 'Candidate cần xử lý', value: 'Chưa quét', tone: 'neutral', detail: 'Danh sách sẽ xuất hiện sau khi có bản nháp CMS.' },
+      { label: 'Website public', value: 'Chưa đổi', pass: true, detail: 'Mở tab và tải nội dung không công khai website.' },
+      { label: 'Storage', value: 'Không thay đổi', pass: true, detail: 'Không upload, không xóa file.' },
+      { label: 'Lịch sử upload', value: 'Không thay đổi', pass: true, detail: 'Không xóa hoặc chỉnh upload log.' },
+    ];
+  }
+
+  if (!candidate && !cleanupModel.candidates.length) {
+    return [
+      { label: 'Bản nháp CMS', value: 'Đã tải', pass: true, detail: 'Đang kiểm tra state.staticCmsDraft.draftJson.' },
+      { label: 'Quét đường dẫn', value: 'Đã chạy', pass: true, detail: 'Không phát hiện candidate cần xử lý theo rule hiện tại.' },
+      { label: 'Đường dẫn cần xử lý', value: 'Không có', pass: true, detail: 'Không có orphan/broken/unsafe candidate trong bản nháp.' },
+      { label: 'Kiểm tra cấu trúc', value: cleanupModel.validationStatus === 'valid' ? 'Đạt' : `${formatCount(cleanupModel.validationErrors || 0)} lỗi`, pass: cleanupModel.validationStatus === 'valid', detail: cleanupModel.validationStatus === 'valid' ? 'Bản nháp đạt validator hiện có.' : 'Đây là lỗi validator thật của bản nháp đã tải.' },
+      { label: 'Website public', value: 'Chưa đổi', pass: true, detail: 'Chưa publish trong workflow này.' },
+      { label: 'Storage / upload log', value: 'Không thay đổi', pass: true, detail: 'Không upload, không xóa file hoặc log.' },
+    ];
+  }
+
   const decision = candidate ? cleanupModel.decisions?.[candidate.id] : null;
   const replacement = decision?.replacementAssetId || mediaWorkspaceState.cleanupSelectedReplacementId;
   const hasValidReplacement = Boolean(replacement && candidate && getCompatibleMediaCleanupReplacementAssets(cleanupModel.activeLibraryFiles, candidate).some((asset) => asset.id === replacement));
@@ -4529,7 +4645,8 @@ function buildMediaChecklistItems(asset = {}, model = {}) {
 }
 
 function renderMediaChecklistItem(item = {}) {
-  const row = createElement('div', { className: `cms-admin-media-checklist-item ${item.pass ? 'is-pass' : 'is-warning'}` });
+  const toneClass = item.tone === 'neutral' ? 'is-neutral' : item.pass ? 'is-pass' : 'is-warning';
+  const row = createElement('div', { className: `cms-admin-media-checklist-item ${toneClass}` });
   row.appendChild(createElement('span', { className: 'cms-admin-media-checklist-icon', text: item.pass ? '✓' : '•', attrs: { 'aria-hidden': 'true' } }));
   const body = createElement('div');
   body.appendChild(createElement('strong', { text: item.label || 'Kiểm tra' }));

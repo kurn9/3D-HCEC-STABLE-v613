@@ -12347,3 +12347,46 @@ body.cms-admin-page * {
     max-height: none;
   }
 }
+
+/* v6.14.061.003 — Media cleanup empty-state and validation-status recovery */
+.cms-admin-media-cleanup-grid.cms-admin-media-cleanup-grid-empty {
+  grid-template-columns: minmax(0, 1fr) minmax(340px, 400px);
+}
+
+.cms-admin-media-cleanup-bootstrap,
+.cms-admin-media-cleanup-success-empty {
+  display: grid;
+  gap: 0.85rem;
+  min-width: 0;
+}
+
+.cms-admin-media-cleanup-empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  align-items: center;
+}
+
+.cms-admin-media-command-stat small {
+  display: block;
+  margin-top: 0.18rem;
+  color: var(--cms-admin-muted-soft, #94a3b8);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.cms-admin-media-checklist-item.is-neutral {
+  border-color: rgba(148, 163, 184, 0.2);
+  background: rgba(51, 65, 85, 0.12);
+}
+
+.cms-admin-media-checklist-item.is-neutral .cms-admin-media-checklist-icon {
+  background: rgba(148, 163, 184, 0.14);
+  color: var(--cms-admin-text-muted, #cbd5e1);
+}
+
+@media (max-width: 1180px) {
+  .cms-admin-media-cleanup-grid.cms-admin-media-cleanup-grid-empty {
+    grid-template-columns: 1fr;
+  }
+}

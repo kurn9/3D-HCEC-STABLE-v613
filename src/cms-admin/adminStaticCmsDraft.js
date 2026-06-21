@@ -4327,7 +4327,7 @@ async function handleUploadStaticCmsMedia({ input, target = {}, handlers = {} } 
   handlers.onRerender?.();
 }
 
-async function handleLoadStaticCmsBaseline(handlers = {}) {
+export async function handleLoadStaticCmsBaseline(handlers = {}) {
   if (!ADMIN_FEATURE_FLAGS.allowStaticCmsDraftEdit) return;
   setStaticCmsDraftState({ loading: true, loadError: null, exportError: null, exportSuccess: null });
   handlers.onRerender?.();
