@@ -850,7 +850,9 @@ function renderActiveTab(state) {
       });
     case 'publish':
       return renderWorkspaceShell('publish', null, state, {
-        renderContent: ({ activeKey }) => renderPublishWorkspaceContent(state, activeKey),
+        hideTabs: true,
+        hideRail: true,
+        renderContent: () => renderPublishWorkspaceContent(state),
       });
     case 'history':
       return renderWorkspaceShell('history', renderRollbackHistoryTab(state, { onRerender: renderAdminShell }), state, { hideTabs: true, hideRail: true });
@@ -889,10 +891,7 @@ const WORKSPACE_TAB_DEFINITIONS = Object.freeze({
     { key: 'cleanup', label: 'Kiểm tra đường dẫn', summary: 'Review và sửa đường dẫn ảnh/video trong bản nháp CMS.' },
   ],
   publish: [
-    { key: 'status', label: 'Trạng thái', summary: 'Xem bản ghi tham chiếu và điều kiện hiện tại.' },
-    { key: 'check', label: 'Kiểm tra', summary: 'Xem checklist trước khi công khai.' },
-    { key: 'publish', label: 'Công khai', summary: 'Hiểu rõ nơi thao tác công khai thật đang được khóa.' },
-    { key: 'history', label: 'Lịch sử liên quan', summary: 'Chuyển sang lịch sử nếu cần kiểm tra hoặc khôi phục.' },
+    { key: 'workspace', label: 'Chuẩn bị công khai', summary: 'Tổng hợp trạng thái, checklist và bước tiếp theo trước khi công khai website.' },
   ],
   history: [
     { key: 'workspace', label: 'Luồng khôi phục', summary: 'Chọn phiên bản, preview, dry-run, nhập lý do và khôi phục có kiểm soát trong cùng workspace.' },
@@ -921,6 +920,12 @@ const WORKSPACE_LEGACY_TAB_FALLBACKS = Object.freeze({
     edit: 'indoor',
     media: 'indoor',
     check: 'indoor',
+  },
+  publish: {
+    status: 'workspace',
+    check: 'workspace',
+    publish: 'workspace',
+    history: 'workspace',
   },
 });
 
@@ -6692,18 +6697,458 @@ async function copyMediaUrl(button, url) {
 }
 
 
-function renderPublishWorkspaceContent(state, activeKey = 'status') {
-  switch (activeKey) {
-    case 'check':
-      return renderPublishCheckWorkspacePanel(state);
-    case 'publish':
-      return renderPublishActionWorkspacePanel(state);
-    case 'history':
-      return renderPublishHistoryWorkspacePanel(state);
-    case 'status':
-    default:
-      return renderPublishStatusWorkspacePanel(state);
+function renderPublishWorkspaceContent(state) {
+  return renderPublishSingleCommandCenter(state);
+}
+
+function renderPublishSingleCommandCenter(state = {}) {
+  const model = buildPublishCommandCenterModel(state);
+  const wrap = createElement('section', {
+    className: 'cms-admin-publish-command-center',
+    attrs: { 'aria-label': 'Chuẩn bị công khai website' },
+  });
+  wrap.appendChild(renderPublishCommandHeader(model));
+  wrap.appendChild(renderPublishCommandStepper(model));
+
+  const workspace = createElement('div', { className: 'cms-admin-publish-command-grid' });
+  workspace.appendChild(renderPublishCommandMain(model));
+  workspace.appendChild(renderPublishCommandRail(model));
+  wrap.appendChild(workspace);
+  wrap.appendChild(renderPublishCommandTechnicalDetails(model));
+  return wrap;
+}
+
+function buildPublishCommandCenterModel(state = {}) {
+  const context = getPublishContext(state);
+  const { data, draftState, bundle, canonicalKnown, validation, dryRun } = context;
+  const access = getPublishGateAccess(state);
+  const readiness = getPublishReadiness(draftState, access);
+  const dryRunReady = hasCurrentDryRunPass(draftState);
+  const publishResult = draftState.publishResult || null;
+  const publishSucceeded = publishResult?.ok === true && publishResult?.dryRun !== true;
+  const publishFailed = Boolean(draftState.publishError) || (publishResult && publishResult.ok === false && publishResult.dryRun !== true);
+  const currentDraftId = draftState.currentDraftId || '';
+  const hasDraftJson = Boolean(draftState.draftJson);
+  const hasSavedDraft = Boolean(currentDraftId);
+  const hasDirtyDraft = Boolean(draftState.dirty);
+  const validationKnown = Boolean(validation);
+  const validationOk = validation?.valid === true;
+  const validationIssueCount = validationKnown ? Object.keys(validation.errors || {}).length + Object.keys(validation.warnings || {}).length : null;
+  const publicVersion = bundle?.version || data.publicVersion || data.currentVersion || '';
+  const draftVersion = draftState.draftJson?.version || draftState.draftMeta?.version || '';
+  const latestPublishedVersion = publishResult?.publishedVersion || publishResult?.plan?.publishedVersion || publicVersion || '—';
+  const nextAction = getPublishCommandNextAction({
+    access,
+    canonicalKnown,
+    dryRunReady,
+    hasDraftJson,
+    hasSavedDraft,
+    hasDirtyDraft,
+    validationKnown,
+    validationOk,
+    publishSucceeded,
+    publishFailed,
+    publishError: draftState.publishError,
+  });
+  return {
+    state,
+    data,
+    draftState,
+    bundle,
+    canonicalKnown,
+    canonicalError: data.canonicalError,
+    validation,
+    validationKnown,
+    validationOk,
+    validationIssueCount,
+    dryRun,
+    dryRunReady,
+    access,
+    readiness,
+    publishResult,
+    publishSucceeded,
+    publishFailed,
+    publishStatus: draftState.publishStatus || '',
+    publishError: draftState.publishError || null,
+    publishLastVerifiedAt: draftState.publishLastVerifiedAt || '',
+    hasDraftJson,
+    hasSavedDraft,
+    hasDirtyDraft,
+    currentDraftId,
+    publicVersion,
+    draftVersion,
+    latestPublishedVersion,
+    nextAction,
+  };
+}
+
+function getPublishCommandNextAction(model = {}) {
+  if (model.publishSucceeded) {
+    return {
+      state: 'verify',
+      label: 'Mở website kiểm tra',
+      note: 'Website đã được công khai trong phiên hiện tại. Hãy mở website để kiểm tra nội dung hiển thị.',
+      kind: 'public-link',
+    };
   }
+  if (model.publishFailed) {
+    return {
+      state: 'publish-error',
+      label: 'Mở bước công khai để kiểm tra lỗi',
+      note: 'Bạn sẽ được chuyển sang Nội dung phòng 3D để xem lỗi và xử lý trong cổng công khai hiện hữu.',
+      kind: 'publish-gate',
+    };
+  }
+  if (!model.hasDraftJson || !model.hasSavedDraft) {
+    return {
+      state: 'no-draft',
+      label: 'Mở Nội dung phòng 3D để tạo bản nháp',
+      note: 'Cần có bản nháp CMS đã lưu trước khi kiểm tra an toàn và công khai.',
+      kind: 'publish-gate',
+    };
+  }
+  if (model.hasDirtyDraft) {
+    return {
+      state: 'dirty-draft',
+      label: 'Mở bản nháp để lưu thay đổi',
+      note: 'Bản nháp đang có thay đổi chưa lưu. Hãy lưu trước khi kiểm tra hoặc công khai.',
+      kind: 'publish-gate',
+    };
+  }
+  if (!model.validationOk) {
+    return {
+      state: 'content-check',
+      label: 'Mở bản nháp để sửa nội dung',
+      note: model.validationKnown ? 'Nội dung còn lỗi hoặc cảnh báo cần xử lý trước khi công khai.' : 'Chưa có kết quả kiểm tra nội dung trong trạng thái hiện tại.',
+      kind: 'publish-gate',
+    };
+  }
+  if (!model.dryRunReady) {
+    return {
+      state: 'safety-check',
+      label: 'Mở bước kiểm tra an toàn',
+      note: 'Kiểm tra an toàn chạy trong cổng công khai hiện hữu và chưa làm website thay đổi.',
+      kind: 'publish-gate',
+    };
+  }
+  if (model.access && model.access.allowed === false) {
+    return {
+      state: 'no-permission',
+      label: 'Mở bước công khai để xem điều kiện',
+      note: model.access.reason || 'Tài khoản hiện tại chưa đủ quyền công khai.',
+      kind: 'publish-gate',
+    };
+  }
+  return {
+    state: 'ready-to-publish',
+    label: 'Mở bước xác nhận công khai',
+    note: 'Bạn sẽ được chuyển sang Nội dung phòng 3D, nơi có kiểm tra an toàn và xác nhận công khai thật.',
+    kind: 'publish-gate',
+  };
+}
+
+function renderPublishCommandHeader(model = {}) {
+  const header = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel cms-admin-publish-command-header' });
+  const copy = createElement('div', { className: 'cms-admin-publish-command-header-copy' });
+  copy.appendChild(createElement('span', { className: 'cms-admin-eyebrow', text: 'CÔNG KHAI WEBSITE' }));
+  copy.appendChild(createElement('h2', { text: 'Chuẩn bị công khai website' }));
+  copy.appendChild(createElement('p', {
+    className: 'cms-admin-compact-copy',
+    text: 'Kiểm tra bản nháp đã lưu, chạy bước kiểm tra an toàn và mở bước công khai khi mọi điều kiện đã sẵn sàng.',
+  }));
+  const badges = createElement('div', { className: 'cms-admin-publish-command-badges' });
+  badges.appendChild(renderBadge(model.canonicalKnown ? 'Website đã đọc' : 'Cần kiểm tra website', model.canonicalKnown ? 'success' : 'warning'));
+  badges.appendChild(renderBadge(model.hasSavedDraft ? 'Có bản nháp CMS' : 'Chưa có bản nháp', model.hasSavedDraft ? 'success' : 'warning'));
+  header.appendChild(copy);
+  header.appendChild(badges);
+  return header;
+}
+
+function renderPublishCommandStepper(model = {}) {
+  const steps = getPublishCommandSteps(model);
+  const section = createElement('section', { className: 'cms-admin-publish-command-stepper-panel', attrs: { 'aria-label': 'Tiến trình công khai website' } });
+  const list = createElement('ol', { className: 'cms-admin-publish-command-stepper' });
+  steps.forEach((step, index) => {
+    const item = createElement('li', { className: `cms-admin-publish-step is-${step.status}` });
+    item.appendChild(createElement('span', { className: 'cms-admin-publish-step-number', text: String(index + 1) }));
+    const body = createElement('span', { className: 'cms-admin-publish-step-body' });
+    body.appendChild(createElement('strong', { text: step.label }));
+    body.appendChild(createElement('small', { text: step.value }));
+    item.appendChild(body);
+    list.appendChild(item);
+  });
+  section.appendChild(list);
+  return section;
+}
+
+function getPublishCommandSteps(model = {}) {
+  const draftSaved = model.hasSavedDraft && !model.hasDirtyDraft;
+  const contentOk = draftSaved && model.validationOk;
+  const safetyOk = contentOk && model.dryRunReady;
+  const published = model.publishSucceeded;
+  return [
+    {
+      label: 'Lưu bản nháp',
+      status: draftSaved ? 'done' : 'current',
+      value: draftSaved ? 'Đã có bản nháp CMS đã lưu.' : model.hasDirtyDraft ? 'Cần lưu thay đổi trước.' : 'Cần tạo hoặc lưu bản nháp.',
+    },
+    {
+      label: 'Kiểm tra nội dung',
+      status: !draftSaved ? 'upcoming' : contentOk ? 'done' : 'current',
+      value: !draftSaved ? 'Chưa đến bước.' : model.validationOk ? 'Nội dung đang đạt.' : model.validationKnown ? 'Cần xử lý lỗi/cảnh báo.' : 'Chưa có kết quả kiểm tra.',
+    },
+    {
+      label: 'Kiểm tra an toàn',
+      status: !contentOk ? 'upcoming' : safetyOk ? 'done' : 'current',
+      value: !contentOk ? 'Chưa đến bước.' : safetyOk ? 'Đã đạt cho phiên bản hiện tại.' : 'Cần chạy ở bước công khai.',
+    },
+    {
+      label: 'Công khai',
+      status: published ? 'done' : safetyOk ? 'current' : model.publishFailed ? 'current' : 'upcoming',
+      value: published ? 'Đã công khai trong phiên này.' : model.publishFailed ? 'Cần kiểm tra lỗi.' : safetyOk ? 'Sẵn sàng mở bước xác nhận.' : 'Chưa đến bước.',
+    },
+    {
+      label: 'Kiểm tra website',
+      status: published ? 'current' : 'upcoming',
+      value: published ? 'Mở website để kiểm tra nội dung.' : 'Thực hiện sau khi công khai.',
+    },
+  ];
+}
+
+function renderPublishCommandMain(model = {}) {
+  const main = createElement('section', { className: 'cms-admin-publish-command-main' });
+  main.appendChild(renderPublishLiveWebsiteCard(model));
+  main.appendChild(renderPublishDraftCard(model));
+  main.appendChild(renderPublishSafetyCheckCard(model));
+  main.appendChild(renderPublishLatestResultCard(model));
+  return main;
+}
+
+function renderPublishLiveWebsiteCard(model = {}) {
+  const card = createElement('article', { className: 'cms-admin-panel cms-admin-view-panel cms-admin-publish-command-card' });
+  card.appendChild(renderPanelTitle('Nội dung website đang chạy', model.canonicalKnown ? 'Đã đọc' : 'Cần kiểm tra'));
+  card.appendChild(createElement('p', {
+    className: 'cms-admin-compact-copy',
+    text: model.canonicalKnown
+      ? 'Website đang có nội dung công khai để đối chiếu trước và sau khi công khai bản mới.'
+      : `Chưa đọc được nội dung website đang chạy: ${normalizeErrorMessage(model.canonicalError)}`,
+  }));
+  const facts = createElement('div', { className: 'cms-admin-publish-command-facts' });
+  facts.appendChild(renderInfoTile('Trạng thái đọc', model.canonicalKnown ? 'Đọc được' : 'Có cảnh báo'));
+  facts.appendChild(renderInfoTile('Phiên bản đang ghi nhận', model.publicVersion || 'Chưa rõ'));
+  facts.appendChild(renderInfoTile('Bước sau công khai', 'Mở website để kiểm tra'));
+  card.appendChild(facts);
+  return card;
+}
+
+function renderPublishDraftCard(model = {}) {
+  const card = createElement('article', { className: 'cms-admin-panel cms-admin-view-panel cms-admin-publish-command-card' });
+  card.appendChild(renderPanelTitle('Bản nháp CMS', model.hasSavedDraft ? 'Đã lưu' : 'Cần xử lý'));
+  card.appendChild(createElement('p', {
+    className: 'cms-admin-compact-copy',
+    text: model.hasSavedDraft
+      ? 'Bản nháp đã lưu là nguồn được dùng ở bước kiểm tra an toàn và công khai thật trong Nội dung phòng 3D.'
+      : 'Cần tạo hoặc lưu bản nháp CMS trước khi công khai website.',
+  }));
+  const facts = createElement('div', { className: 'cms-admin-publish-command-facts' });
+  facts.appendChild(renderInfoTile('Bản nháp đã lưu', model.currentDraftId ? 'Có' : 'Chưa có'));
+  facts.appendChild(renderInfoTile('Thay đổi chưa lưu', model.hasDirtyDraft ? 'Có' : 'Không'));
+  facts.appendChild(renderInfoTile('Phiên bản bản nháp', model.draftVersion || 'Chưa rõ'));
+  facts.appendChild(renderInfoTile('Kiểm tra nội dung', getPublishValidationSummary(model)));
+  card.appendChild(facts);
+  return card;
+}
+
+function getPublishValidationSummary(model = {}) {
+  if (!model.validationKnown) return 'Chưa kiểm tra';
+  if (model.validationOk) return 'Không thấy lỗi';
+  const count = model.validationIssueCount;
+  return Number.isFinite(count) && count > 0 ? `${count} lỗi/cảnh báo` : 'Cần xử lý';
+}
+
+function renderPublishSafetyCheckCard(model = {}) {
+  const card = createElement('article', { className: 'cms-admin-panel cms-admin-view-panel cms-admin-publish-command-card' });
+  card.appendChild(renderPanelTitle('Kiểm tra an toàn trước khi công khai', model.dryRunReady ? 'Đạt' : 'Chưa đạt'));
+  card.appendChild(createElement('p', {
+    className: 'cms-admin-compact-copy',
+    text: 'Kiểm tra an toàn không làm thay đổi website. Bước công khai thật vẫn được thực hiện ở màn Nội dung phòng 3D.',
+  }));
+  const facts = createElement('div', { className: 'cms-admin-publish-command-facts' });
+  facts.appendChild(renderInfoTile('Trạng thái', model.dryRunReady ? 'Đạt cho phiên bản hiện tại' : 'Chưa có kết quả đạt'));
+  facts.appendChild(renderInfoTile('Đang xử lý', model.draftState.isPublishingCms ? 'Có' : 'Không'));
+  facts.appendChild(renderInfoTile('Thời điểm ghi nhận', model.publishLastVerifiedAt ? formatDateTime(model.publishLastVerifiedAt) : '—'));
+  card.appendChild(facts);
+  return card;
+}
+
+function renderPublishLatestResultCard(model = {}) {
+  const card = createElement('article', { className: 'cms-admin-panel cms-admin-view-panel cms-admin-publish-command-card' });
+  const status = model.publishSucceeded ? 'Thành công' : model.publishFailed ? 'Có lỗi' : 'Chưa có trong phiên này';
+  card.appendChild(renderPanelTitle('Kết quả công khai gần nhất', status));
+  if (model.publishStatus) card.appendChild(renderNoticeBox(model.publishStatus, model.publishFailed ? 'error' : 'success'));
+  if (model.publishError) card.appendChild(renderNoticeBox(normalizeErrorMessage(model.publishError), 'error'));
+  card.appendChild(createElement('p', {
+    className: 'cms-admin-compact-copy',
+    text: model.publishSucceeded
+      ? 'Sau khi công khai, hãy mở website và kiểm tra lịch sử để xác nhận nội dung mới đã hiển thị đúng.'
+      : model.publishFailed
+        ? 'Cần mở bước công khai hiện hữu để kiểm tra lỗi và thử lại khi đủ điều kiện.'
+        : 'Chưa có kết quả công khai trong phiên làm việc hiện tại.',
+  }));
+  const facts = createElement('div', { className: 'cms-admin-publish-command-facts' });
+  facts.appendChild(renderInfoTile('Phiên bản ghi nhận', model.latestPublishedVersion || '—'));
+  facts.appendChild(renderInfoTile('Website đang chạy', model.canonicalKnown ? 'Đọc được' : 'Chưa xác nhận lại'));
+  card.appendChild(facts);
+  return card;
+}
+
+function renderPublishCommandRail(model = {}) {
+  const rail = createElement('aside', { className: 'cms-admin-panel cms-admin-view-panel cms-admin-publish-command-rail', attrs: { 'aria-label': 'Checklist và thao tác công khai' } });
+  rail.appendChild(renderPanelTitle('Checklist & thao tác', 'Bước tiếp theo'));
+  rail.appendChild(renderPublishCommandChecklist(model));
+  rail.appendChild(renderPublishCommandPrimaryAction(model));
+  rail.appendChild(renderPublishCommandSecondaryActions(model));
+  rail.appendChild(createElement('p', {
+    className: 'cms-admin-publish-command-boundary-note',
+    text: 'Màn này chỉ tổng hợp trạng thái và điều hướng. Website chỉ thay đổi sau khi xác nhận công khai thật ở Nội dung phòng 3D.',
+  }));
+  return rail;
+}
+
+function renderPublishCommandChecklist(model = {}) {
+  const list = createElement('div', { className: 'cms-admin-publish-command-checklist' });
+  buildPublishCommandChecklistItems(model).forEach((item) => list.appendChild(renderPublishCommandChecklistItem(item)));
+  return list;
+}
+
+function buildPublishCommandChecklistItems(model = {}) {
+  const rightsStatus = model.access?.allowed ? 'Đạt' : 'Không đủ quyền';
+  const dryRunStatus = model.dryRunReady ? 'Đạt' : model.validationOk ? 'Chưa kiểm tra' : 'Cần xử lý trước';
+  return [
+    {
+      label: 'Bản nháp CMS đã lưu',
+      value: model.hasSavedDraft ? 'Đạt' : 'Cần xử lý',
+      tone: model.hasSavedDraft ? 'success' : 'warning',
+      detail: model.hasSavedDraft ? 'Có bản nháp đã lưu để kiểm tra.' : 'Cần tạo hoặc lưu bản nháp trước.',
+    },
+    {
+      label: 'Không còn thay đổi chưa lưu',
+      value: model.hasDirtyDraft ? 'Cần xử lý' : 'Đạt',
+      tone: model.hasDirtyDraft ? 'warning' : 'success',
+      detail: model.hasDirtyDraft ? 'Lưu hoặc hủy thay đổi trước khi công khai.' : 'Không ghi nhận thay đổi local chưa lưu.',
+    },
+    {
+      label: 'Nội dung đã kiểm tra',
+      value: model.validationOk ? 'Đạt' : model.validationKnown ? 'Cần xử lý' : 'Chưa kiểm tra',
+      tone: model.validationOk ? 'success' : 'warning',
+      detail: model.validationOk ? 'Không thấy lỗi nội dung.' : 'Mở bản nháp để kiểm tra và xử lý.',
+    },
+    {
+      label: 'Kiểm tra an toàn còn hiệu lực',
+      value: dryRunStatus,
+      tone: model.dryRunReady ? 'success' : 'warning',
+      detail: model.dryRunReady ? 'Kết quả kiểm tra đang khớp phiên bản hiện tại.' : 'Cần chạy kiểm tra an toàn ở bước công khai.',
+    },
+    {
+      label: 'Có quyền thực hiện bước công khai',
+      value: rightsStatus,
+      tone: model.access?.allowed ? 'success' : 'warning',
+      detail: model.access?.allowed ? 'Tài khoản đủ điều kiện theo state hiện tại.' : (model.access?.reason || 'Chưa đủ điều kiện công khai.'),
+    },
+    {
+      label: 'Phiên bản cần công khai đã xác định',
+      value: model.draftVersion ? 'Đạt' : 'Chưa rõ',
+      tone: model.draftVersion ? 'success' : 'warning',
+      detail: model.draftVersion ? `Phiên bản bản nháp: ${model.draftVersion}` : 'Cần kiểm tra phiên bản trong bản nháp.',
+    },
+    {
+      label: 'Đọc được website đang chạy',
+      value: model.canonicalKnown ? 'Đạt' : 'Cần kiểm tra',
+      tone: model.canonicalKnown ? 'success' : 'warning',
+      detail: model.canonicalKnown ? 'Có dữ liệu website đang chạy để đối chiếu.' : normalizeErrorMessage(model.canonicalError),
+    },
+    {
+      label: 'Sẵn sàng chuyển sang bước công khai',
+      value: model.dryRunReady && model.access?.allowed ? 'Đạt' : 'Chưa sẵn sàng',
+      tone: model.dryRunReady && model.access?.allowed ? 'success' : 'warning',
+      detail: model.nextAction?.note || 'Làm theo bước tiếp theo bên dưới.',
+    },
+  ];
+}
+
+function renderPublishCommandChecklistItem(item = {}) {
+  const row = createElement('article', { className: `cms-admin-publish-command-check-item is-${item.tone || 'default'}` });
+  const head = createElement('div', { className: 'cms-admin-publish-command-check-head' });
+  head.appendChild(createElement('strong', { text: item.label }));
+  head.appendChild(renderBadge(item.value || '—', item.tone === 'success' ? 'success' : item.tone === 'warning' ? 'warning' : 'default'));
+  row.appendChild(head);
+  if (item.detail) row.appendChild(createElement('p', { text: item.detail }));
+  return row;
+}
+
+function renderPublishCommandPrimaryAction(model = {}) {
+  const action = model.nextAction || {};
+  const block = createElement('section', { className: 'cms-admin-publish-command-next-action' });
+  block.appendChild(createElement('strong', { text: 'Bước tiếp theo' }));
+  if (action.note) block.appendChild(createElement('p', { text: action.note }));
+  if (action.kind === 'public-link') {
+    block.appendChild(createElement('a', {
+      className: 'cms-admin-button cms-admin-button-primary cms-admin-publish-command-primary-action',
+      text: action.label || 'Mở website kiểm tra',
+      href: './index.html',
+      attrs: { target: '_blank', rel: 'noopener', 'aria-label': 'Mở website đang công khai trong tab mới để kiểm tra' },
+    }));
+    return block;
+  }
+  const button = createElement('button', {
+    className: 'cms-admin-button cms-admin-button-primary cms-admin-publish-command-primary-action',
+    type: 'button',
+    text: action.label || 'Mở Nội dung phòng 3D',
+    attrs: { 'aria-label': action.label || 'Mở Nội dung phòng 3D để tiếp tục' },
+  });
+  button.addEventListener('click', openStaticDraftPublishGateFromPublishScreen);
+  block.appendChild(button);
+  return block;
+}
+
+function renderPublishCommandSecondaryActions(model = {}) {
+  const wrap = createElement('div', { className: 'cms-admin-publish-command-secondary-actions' });
+  const historyButton = createElement('button', {
+    className: 'cms-admin-button cms-admin-button-ghost',
+    type: 'button',
+    text: 'Mở Lịch sử phiên bản',
+    attrs: { 'aria-label': 'Mở Lịch sử phiên bản để xem lịch sử hoặc khôi phục có kiểm soát' },
+  });
+  historyButton.addEventListener('click', () => switchAdminTab('history'));
+  const websiteLink = createElement('a', {
+    className: 'cms-admin-button cms-admin-button-ghost',
+    href: './index.html',
+    text: 'Mở website đang chạy',
+    attrs: { target: '_blank', rel: 'noopener' },
+  });
+  wrap.appendChild(historyButton);
+  wrap.appendChild(websiteLink);
+  return wrap;
+}
+
+function renderPublishCommandTechnicalDetails(model = {}) {
+  const details = createElement('details', { className: 'cms-admin-publish-command-technical-details cms-admin-technical-details' });
+  details.appendChild(createElement('summary', { text: 'Thông tin kỹ thuật & dữ liệu tham chiếu' }));
+  details.appendChild(createElement('p', {
+    className: 'cms-admin-compact-copy',
+    text: 'Nội dung website đang chạy là nguồn chính để đối chiếu. Bản ghi tham chiếu kỹ thuật chỉ dùng để kiểm tra thêm, không phải điều kiện sẵn sàng công khai.',
+  }));
+  details.appendChild(renderKeyValueList([
+    ['Storage latest / CMS public JSON', 'cms-public/published/cms_public_content.json'],
+    ['Lịch sử công khai', 'cms_publish_logs'],
+    ['Bản ghi tham chiếu kỹ thuật', model.bundle?.version ? `published_bundles · ${model.bundle.version}` : 'published_bundles · chưa có record'],
+    ['Bản nháp CMS', model.currentDraftId || 'Chưa có'],
+    ['Phiên bản bản nháp', model.draftVersion || '—'],
+    ['Phiên bản website đang ghi nhận', model.publicVersion || '—'],
+    ['Kiểm tra an toàn raw', model.dryRun?.ok === true ? 'ok' : 'not-ready'],
+    ['Kết quả công khai raw', model.publishResult ? JSON.stringify({ ok: model.publishResult.ok, dryRun: model.publishResult.dryRun, publishedVersion: model.publishResult.publishedVersion || model.publishResult.plan?.publishedVersion || '' }) : '—'],
+  ]));
+  return details;
 }
 
 function getPublishContext(state = {}) {
