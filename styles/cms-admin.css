@@ -12138,3 +12138,77 @@ body.cms-admin-page * {
   border-color: rgba(148, 163, 184, 0.18);
   background: rgba(15, 23, 42, 0.4);
 }
+
+/* v6.14.060.006 — Media usage main list shows only real library files; unmatched references stay diagnostic-only */
+.cms-admin-workspace[data-cms-workspace="media"] .cms-admin-media-reference-diagnostic-panel {
+  margin-top: 0.85rem;
+}
+
+.cms-admin-workspace[data-cms-workspace="media"] .cms-admin-media-diagnostic-group {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.75rem 0.9rem 0.9rem;
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.cms-admin-workspace[data-cms-workspace="media"] .cms-admin-media-diagnostic-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  color: var(--cms-admin-muted);
+  font-size: 0.82rem;
+}
+
+.cms-admin-workspace[data-cms-workspace="media"] .cms-admin-media-diagnostic-row-list {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.cms-admin-workspace[data-cms-workspace="media"] .cms-admin-media-diagnostic-row {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.62rem 0.68rem;
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  border-radius: var(--cms-admin-radius-md);
+  background: rgba(15, 23, 42, 0.34);
+}
+
+.cms-admin-workspace[data-cms-workspace="media"] .cms-admin-media-diagnostic-row-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.cms-admin-workspace[data-cms-workspace="media"] .cms-admin-media-diagnostic-row-heading strong {
+  min-width: 0;
+  color: var(--cms-admin-text);
+  font-size: 0.86rem;
+  overflow-wrap: anywhere;
+}
+
+.cms-admin-workspace[data-cms-workspace="media"] .cms-admin-media-diagnostic-details {
+  display: grid;
+  grid-template-columns: minmax(110px, 0.32fr) minmax(0, 1fr);
+  gap: 0.28rem 0.65rem;
+  margin: 0;
+  color: var(--cms-admin-muted);
+  font-size: 0.78rem;
+}
+
+.cms-admin-workspace[data-cms-workspace="media"] .cms-admin-media-diagnostic-details dt,
+.cms-admin-workspace[data-cms-workspace="media"] .cms-admin-media-diagnostic-details dd {
+  margin: 0;
+  min-width: 0;
+}
+
+.cms-admin-workspace[data-cms-workspace="media"] .cms-admin-media-diagnostic-details dt {
+  color: var(--cms-admin-muted-soft, #64748b);
+  font-weight: 700;
+}
+
+.cms-admin-workspace[data-cms-workspace="media"] .cms-admin-media-diagnostic-details dd {
+  color: var(--cms-admin-text-muted, #cbd5e1);
+  overflow-wrap: anywhere;
+}
