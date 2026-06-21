@@ -736,7 +736,7 @@ export async function publishCmsJson(client, payload = {}) {
     return { data: null, error: new Error('Cần lưu bản nháp server-side trước khi công khai.') };
   }
 
-  const expectedDraftUpdatedAt = normalizeOptionalText(payload.expectedDraftUpdatedAt);
+  const expectedDraftUpdatedAt = normalizeDraftRevisionToken(payload.expectedDraftUpdatedAt);
   const expectedDraftVersion = normalizeOptionalText(payload.expectedDraftVersion);
   if (!expectedDraftUpdatedAt || !expectedDraftVersion) {
     return { data: null, error: new Error('Thiếu revision của bản chuẩn bị đã xác minh. Hãy lưu và kiểm tra lại trước khi công khai.') };
@@ -1092,7 +1092,7 @@ export async function updateCmsDraft(client, draftId, payload = {}, userId = nul
     return { data: null, error: new Error('Không tìm thấy ID bản nháp CMS cần cập nhật.') };
   }
 
-  const expectedUpdatedAt = normalizeOptionalText(options.expectedUpdatedAt || payload.expectedUpdatedAt);
+  const expectedUpdatedAt = normalizeDraftRevisionToken(options.expectedUpdatedAt || payload.expectedUpdatedAt);
   if (!expectedUpdatedAt) {
     const error = new Error('Thiếu revision của bản chuẩn bị hiện tại. Hãy tải lại bản nháp rồi lưu lại.');
     error.code = 'DRAFT_SAVE_MISSING_REVISION';
@@ -1100,7 +1100,6 @@ export async function updateCmsDraft(client, draftId, payload = {}, userId = nul
   }
 
   const normalized = buildCmsDraftPayload(payload, userId, { inserting: false });
-  normalized.updated_at = new Date().toISOString();
   const blocker = validateCmsDraftPayloadForWrite(normalized);
   if (blocker) return { data: null, error: blocker };
 
@@ -1114,9 +1113,21 @@ export async function updateCmsDraft(client, draftId, payload = {}, userId = nul
 
   if (error) return { data: null, error };
   if (!data) {
-    const conflict = new Error('Bản chuẩn bị này đã được thay đổi ở phiên khác. Nội dung của bạn chưa bị ghi đè. Hãy tải lại bản mới nhất rồi kiểm tra trước khi lưu lại.');
+    const { data: currentRow, error: readError } = await client
+      .from(ADMIN_TABLES.cmsDrafts)
+      .select('id,updated_at')
+      .eq('id', id)
+      .maybeSingle();
+    if (readError) return { data: null, error: readError };
+    const currentUpdatedAt = normalizeDraftRevisionToken(currentRow?.updated_at);
+    if (currentUpdatedAt && isSameMillisecondDifferentRevisionToken(currentUpdatedAt, expectedUpdatedAt)) {
+      const mismatch = new Error('Không xác minh được phiên bản đã lưu của bản chuẩn bị. Website chưa thay đổi. Hãy tải lại bản chuẩn bị rồi thử lại.');
+      mismatch.code = 'DRAFT_SAVE_REVISION_CONTRACT_MISMATCH';
+      return { data: null, error: mismatch, conflict: false, revisionContractMismatch: true, currentUpdatedAt, expectedUpdatedAt };
+    }
+    const conflict = new Error('Bản chuẩn bị đã được thay đổi ở phiên khác. Nội dung của bạn chưa bị ghi đè. Hãy tải lại bản mới nhất trước khi lưu lại.');
     conflict.code = 'DRAFT_SAVE_CONFLICT';
-    return { data: null, error: conflict, conflict: true };
+    return { data: null, error: conflict, conflict: true, currentUpdatedAt: currentUpdatedAt || null, expectedUpdatedAt };
   }
 
   return { data, error: null };
@@ -1199,6 +1210,26 @@ function normalizeDraftTitle(value) {
 function normalizeOptionalText(value) {
   const text = String(value || '').replace(/\s+/g, ' ').trim();
   return text ? text.slice(0, 1000) : null;
+}
+
+function normalizeDraftRevisionToken(value) {
+  const text = String(value || '').trim();
+  if (!text) return '';
+  return Number.isFinite(Date.parse(text)) ? text : '';
+}
+
+function toComparableTimestampMs(value) {
+  const time = Date.parse(String(value || '').trim());
+  return Number.isFinite(time) ? time : null;
+}
+
+function isSameMillisecondDifferentRevisionToken(left, right) {
+  const leftToken = normalizeDraftRevisionToken(left);
+  const rightToken = normalizeDraftRevisionToken(right);
+  if (!leftToken || !rightToken || leftToken === rightToken) return false;
+  const leftMs = toComparableTimestampMs(leftToken);
+  const rightMs = toComparableTimestampMs(rightToken);
+  return leftMs !== null && rightMs !== null && leftMs === rightMs;
 }
 
 function normalizeDraftStatus(value) {

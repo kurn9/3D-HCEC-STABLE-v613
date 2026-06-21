@@ -4399,17 +4399,32 @@ function getLatestUpdatedAt(records = []) {
 }
 
 function normalizePublishTimestamp(value = '') {
-  const text = String(value || '').trim();
-  if (!text) return '';
-  const time = Date.parse(text);
-  if (!Number.isFinite(time)) return '';
+  const time = toComparableTimestampMs(value);
+  if (time === null) return '';
   return new Date(time).toISOString();
 }
 
+function normalizeDraftRevisionToken(value = '') {
+  const text = String(value || '').trim();
+  if (!text) return '';
+  return Number.isFinite(Date.parse(text)) ? text : '';
+}
+
+function toComparableTimestampMs(value = '') {
+  const time = Date.parse(String(value || '').trim());
+  return Number.isFinite(time) ? time : null;
+}
+
+function areDraftRevisionTokensEqual(left = '', right = '') {
+  const leftToken = normalizeDraftRevisionToken(left);
+  const rightToken = normalizeDraftRevisionToken(right);
+  return Boolean(leftToken && rightToken && leftToken === rightToken);
+}
+
 function isPublishTimestampAfter(left = '', right = '') {
-  const leftTime = Date.parse(left);
-  const rightTime = Date.parse(right);
-  return Number.isFinite(leftTime) && Number.isFinite(rightTime) && leftTime > rightTime;
+  const leftTime = toComparableTimestampMs(left);
+  const rightTime = toComparableTimestampMs(right);
+  return leftTime !== null && rightTime !== null && leftTime > rightTime;
 }
 
 
@@ -4423,13 +4438,17 @@ export function normalizePersistedCmsDraftSnapshot(row = {}, expectedDraftId = '
   const contentJson = sanitizeStaticCmsExport(rawContent, { keepVersion: true });
   const version = String(contentJson?.version || row?.source_version || row?.sourceVersion || '').trim();
   if (!version) return { ok: false, code: 'missing_version', reason: 'Bản chuẩn bị đã lưu thiếu phiên bản dữ liệu.' };
-  const updatedAt = normalizePublishTimestamp(row?.updated_at || row?.updatedAt || '');
-  if (!updatedAt) return { ok: false, code: 'missing_updated_at', reason: 'Bản chuẩn bị đã lưu thiếu thời điểm cập nhật.' };
+  const updatedAtRaw = normalizeDraftRevisionToken(row?.updated_at || row?.updatedAt || '');
+  if (!updatedAtRaw) return { ok: false, code: 'missing_updated_at', reason: 'Bản chuẩn bị đã lưu thiếu revision cập nhật hợp lệ.' };
+  const updatedAtMs = toComparableTimestampMs(updatedAtRaw);
+  if (updatedAtMs === null) return { ok: false, code: 'invalid_updated_at', reason: 'Revision cập nhật của bản chuẩn bị không hợp lệ.' };
   return {
     ok: true,
     snapshot: {
       id,
-      updatedAt,
+      updatedAt: updatedAtRaw,
+      updatedAtRaw,
+      updatedAtMs,
       version,
       contentJson,
       title: row?.title || '',
@@ -4547,9 +4566,9 @@ export function hasCurrentDryRunPass(draftState = {}) {
   const persistedId = String(draftState.persistedDraftId || currentDraftId || '').trim();
   const verifiedId = String(draftState.publishVerifiedDraftId || '').trim();
   if (!currentDraftId || !persistedId || !verifiedId || currentDraftId !== persistedId || verifiedId !== currentDraftId) return false;
-  const currentUpdatedAt = normalizePublishTimestamp(draftState.persistedDraftUpdatedAt || draftState.draftLastSavedAt || '');
-  const verifiedUpdatedAt = normalizePublishTimestamp(draftState.publishVerifiedDraftUpdatedAt || '');
-  if (!currentUpdatedAt || !verifiedUpdatedAt || currentUpdatedAt !== verifiedUpdatedAt) return false;
+  const currentUpdatedAt = normalizeDraftRevisionToken(draftState.persistedDraftUpdatedAt || draftState.draftLastSavedAt || '');
+  const verifiedUpdatedAt = normalizeDraftRevisionToken(draftState.publishVerifiedDraftUpdatedAt || '');
+  if (!areDraftRevisionTokensEqual(currentUpdatedAt, verifiedUpdatedAt)) return false;
   const currentVersion = String(draftState.persistedDraftVersion || draftState.draftJson?.version || '').trim();
   const verifiedVersion = String(draftState.publishVerifiedDraftVersion || '').trim();
   if (!currentVersion || !verifiedVersion || currentVersion !== verifiedVersion) return false;
@@ -4643,9 +4662,9 @@ export async function handlePublishStaticCmsDraft({ dryRun = true, handlers = {}
 
   if (!dryRun) {
     const verifiedId = String(draftState.publishVerifiedDraftId || '').trim();
-    const verifiedUpdatedAt = normalizePublishTimestamp(draftState.publishVerifiedDraftUpdatedAt || '');
+    const verifiedUpdatedAt = normalizeDraftRevisionToken(draftState.publishVerifiedDraftUpdatedAt || '');
     const verifiedVersion = String(draftState.publishVerifiedDraftVersion || '').trim();
-    if (verifiedId !== persistedDraft.id || verifiedUpdatedAt !== persistedDraft.updatedAt || verifiedVersion !== persistedDraft.version) {
+    if (verifiedId !== persistedDraft.id || !areDraftRevisionTokensEqual(verifiedUpdatedAt, persistedDraft.updatedAt) || verifiedVersion !== persistedDraft.version) {
       setStaticCmsPublishState({
         isPublishingCms: false,
         publishError: 'Bản chuẩn bị đã thay đổi sau lần kiểm tra. Hãy lưu và kiểm tra lại trước khi đưa lên website.',
@@ -4982,7 +5001,7 @@ export async function handleSaveStaticCmsDraft({ asNew = false, explicitCopy = f
   }
 
   const shouldCreate = saveAsCopy ? true : !currentDraftId;
-  const expectedUpdatedAt = normalizePublishTimestamp(draftState.persistedDraftUpdatedAt || draftState.draftLastSavedAt || '');
+  const expectedUpdatedAt = normalizeDraftRevisionToken(draftState.persistedDraftUpdatedAt || draftState.draftLastSavedAt || '');
   if (!shouldCreate && !expectedUpdatedAt) {
     setStaticCmsDraftPersistenceState({
       draftPersistenceError: 'Thiếu revision của bản chuẩn bị hiện tại. Hãy tải lại bản nháp rồi lưu lại.',
@@ -5031,11 +5050,14 @@ export async function handleSaveStaticCmsDraft({ asNew = false, explicitCopy = f
 
   if (result.error) {
     const isConflict = result.conflict === true || result.error?.code === 'DRAFT_SAVE_CONFLICT';
+    const isRevisionContractMismatch = result.error?.code === 'DRAFT_SAVE_REVISION_CONTRACT_MISMATCH';
     setStaticCmsDraftPersistenceState({
       isSavingDraft: false,
-      draftPersistenceError: isConflict
-        ? 'Bản chuẩn bị này đã được thay đổi ở phiên khác. Nội dung của bạn chưa bị ghi đè. Hãy tải lại bản mới nhất rồi kiểm tra trước khi lưu lại.'
-        : normalizeErrorMessage(result.error),
+      draftPersistenceError: isRevisionContractMismatch
+        ? 'Không xác minh được phiên bản đã lưu của bản chuẩn bị. Website chưa thay đổi. Hãy tải lại bản chuẩn bị rồi thử lại.'
+        : isConflict
+          ? 'Bản chuẩn bị đã được thay đổi ở phiên khác. Nội dung của bạn chưa bị ghi đè. Hãy tải lại bản mới nhất trước khi lưu lại.'
+          : normalizeErrorMessage(result.error),
       draftSaveStatus: '',
       dirty: true,
       publishDryRunResult: null,
@@ -5047,7 +5069,9 @@ export async function handleSaveStaticCmsDraft({ asNew = false, explicitCopy = f
       publishVerifiedDraftUpdatedAt: null,
       publishVerifiedDraftVersion: '',
       publishVerificationInvalidatedAt: new Date().toISOString(),
-      publishVerificationInvalidationReason: isConflict ? 'Save conflict với revision mới hơn trên server.' : 'Lưu bản chuẩn bị chưa thành công.',
+      publishVerificationInvalidationReason: isRevisionContractMismatch
+        ? 'Revision token bị biến dạng trước khi gửi update.'
+        : isConflict ? 'Save conflict với revision mới hơn trên server.' : 'Lưu bản chuẩn bị chưa thành công.',
     });
     handlers.onRerender?.();
     return;
