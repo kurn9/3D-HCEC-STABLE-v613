@@ -7,6 +7,7 @@
     enabled: true,
     remoteEnabled: false,
     remoteUrl: '',
+    pointerUrl: '',
     fallbackUrl: './data/cms_content_fallback.json',
     timeoutMs: 1200,
     galleryTimeoutMs: 1600,
@@ -167,6 +168,107 @@
     }
   }
 
+  async function fetchTextWithTimeout(url, timeoutMs, config, label = 'remote') {
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timer = controller ? global.setTimeout(() => controller.abort(), Math.max(250, Number(timeoutMs || 1200))) : 0;
+    try {
+      const response = await fetch(url, { cache: 'no-store', signal: controller?.signal });
+      if (!response.ok) {
+        const error = new Error(`HTTP ${response.status}`);
+        error.status = response.status;
+        throw error;
+      }
+      return await response.text();
+    } catch (error) {
+      logCms(`${label} load failed`, { url, error: error?.message || String(error) }, 'warn', config);
+      throw error;
+    } finally {
+      if (timer) global.clearTimeout(timer);
+    }
+  }
+
+  function getRemoteStorageBaseUrl(remoteUrl = '') {
+    const text = sanitizeText(remoteUrl);
+    const marker = '/published/';
+    const index = text.indexOf(marker);
+    return index >= 0 ? text.slice(0, index) : text.replace(/\/?$/, '');
+  }
+
+  function getPointerUrl(config = getCmsConfig()) {
+    const configured = sanitizeText(config.pointerUrl);
+    if (configured) return configured;
+    const remoteUrl = sanitizeText(config.remoteUrl);
+    if (!remoteUrl) return '';
+    if (/\/published\/cms_public_content\.json(?:$|[?#])/.test(remoteUrl)) {
+      return remoteUrl.replace(/\/published\/cms_public_content\.json(?:[?#].*)?$/, '/published/current_release.json');
+    }
+    return `${getRemoteStorageBaseUrl(remoteUrl)}/published/current_release.json`;
+  }
+
+  function resolveReleaseContentUrl(contentPath = '', config = getCmsConfig()) {
+    const path = sanitizeText(contentPath);
+    if (!path || path.includes('..') || path.includes('\\') || path.includes('//')) return '';
+    if (/^https?:\/\//i.test(path)) return path;
+    const base = getRemoteStorageBaseUrl(config.remoteUrl);
+    return base ? `${base}/${path.replace(/^\/+/, '')}` : '';
+  }
+
+  function isReleasePointerMissing(error) {
+    return error?.status === 404 || /HTTP 404|not found|does not exist/i.test(error?.message || String(error || ''));
+  }
+
+  function isValidReleasePointer(pointer = {}) {
+    return isPlainObject(pointer)
+      && pointer.schemaVersion === 1
+      && /^[0-9a-f-]{36}$/i.test(sanitizeText(pointer.releaseId))
+      && /^published\/releases\/[0-9a-f-]{36}\/cms_public_content\.json$/i.test(sanitizeText(pointer.contentPath))
+      && /^[a-f0-9]{64}$/i.test(sanitizeText(pointer.contentHash).toLowerCase());
+  }
+
+  async function sha256BrowserText(text = '') {
+    const bytes = new TextEncoder().encode(String(text || ''));
+    if (!global.crypto?.subtle) return '';
+    const digest = await global.crypto.subtle.digest('SHA-256', bytes);
+    return Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, '0')).join('');
+  }
+
+  async function loadRemoteContentWithPointer(config, timeout) {
+    const pointerUrl = getPointerUrl(config);
+    if (!pointerUrl) return { handled: false, content: null, status: 'missing-pointer-url', validation: null, pointer: null };
+    let pointerText = '';
+    try {
+      pointerText = await fetchTextWithTimeout(pointerUrl, timeout, config, 'release-pointer');
+    } catch (error) {
+      if (isReleasePointerMissing(error)) return { handled: false, content: null, status: 'pointer-missing', validation: null, pointer: null };
+      return { handled: true, content: null, status: 'pointer-load-failed', validation: { valid: false, errors: [error?.message || 'Pointer load failed.'], warnings: [] }, pointer: null };
+    }
+    let pointer = null;
+    try { pointer = JSON.parse(pointerText); } catch { pointer = null; }
+    if (!isValidReleasePointer(pointer)) {
+      return { handled: true, content: null, status: 'pointer-invalid', validation: { valid: false, errors: ['Invalid release pointer.'], warnings: [] }, pointer };
+    }
+    const releaseUrl = resolveReleaseContentUrl(pointer.contentPath, config);
+    if (!releaseUrl) {
+      return { handled: true, content: null, status: 'release-url-invalid', validation: { valid: false, errors: ['Invalid release content path.'], warnings: [] }, pointer };
+    }
+    let releaseText = '';
+    try {
+      releaseText = await fetchTextWithTimeout(releaseUrl, timeout, config, 'release-content');
+    } catch (error) {
+      return { handled: true, content: null, status: 'release-load-failed', validation: { valid: false, errors: [error?.message || 'Release load failed.'], warnings: [] }, pointer };
+    }
+    const hash = await sha256BrowserText(releaseText);
+    if (hash && hash !== sanitizeText(pointer.contentHash).toLowerCase()) {
+      return { handled: true, content: null, status: 'release-hash-mismatch', validation: { valid: false, errors: ['Release hash mismatch.'], warnings: [] }, pointer };
+    }
+    let content = null;
+    try { content = JSON.parse(releaseText); } catch { content = null; }
+    const validation = getContentValidation(content, config);
+    logContentValidation(validation, config, 'release');
+    if (validation.valid !== true) return { handled: true, content: null, status: 'release-invalid', validation, pointer };
+    return { handled: true, content, status: 'release-loaded', validation, pointer };
+  }
+
   function getContentValidation(content, config) {
     const validator = getValidator();
     return validator.validateCmsContent
@@ -206,17 +308,32 @@
 
       if (config.remoteEnabled === true && sanitizeText(config.remoteUrl)) {
         try {
-          logCms('loading remote', { url: config.remoteUrl }, 'debug', config);
-          const remote = await fetchJsonWithTimeout(config.remoteUrl, timeout, config, 'remote');
-          if (validateContent(remote, config, 'remote')) {
+          const releaseResult = await loadRemoteContentWithPointer(config, timeout);
+          if (releaseResult.handled) {
+            if (releaseResult.content) {
+              cachedContent = releaseResult.content;
+              cachedSource = 'release-pointer';
+              cachedValidation = releaseResult.validation;
+              logCms('loaded release pointer', { releaseId: releaseResult.pointer?.releaseId || '', version: cachedContent.version || '' }, 'debug', config);
+              return cachedContent;
+            }
+            cachedValidation = releaseResult.validation || { valid: false, errors: [releaseResult.status], warnings: [] };
+            cachedSource = 'release-error';
+            if (cachedContent) return cachedContent;
+            logCms('release pointer invalid; refusing silent legacy fallback', { status: releaseResult.status }, 'warn', config);
+            return null;
+          }
+          logCms('loading legacy remote latest', { url: config.remoteUrl }, 'debug', config);
+          const remote = await fetchJsonWithTimeout(config.remoteUrl, timeout, config, 'remote-legacy-latest');
+          if (validateContent(remote, config, 'remote-legacy-latest')) {
             cachedContent = remote;
-            cachedSource = 'remote';
-            logCms('loaded remote', { version: remote.version || '', schemaVersion: remote.schemaVersion }, 'debug', config);
+            cachedSource = 'remote-legacy-latest';
+            logCms('loaded legacy remote latest', { version: remote.version || '', schemaVersion: remote.schemaVersion }, 'debug', config);
             return cachedContent;
           }
           logCms('remote schema invalid; trying fallback', {}, 'warn', config);
         } catch (_) {
-          // fallback below
+          // fallback below only when pointer is unavailable or legacy latest failed before a pointer was accepted.
         }
       } else {
         logCms('remote disabled', {}, 'debug', config);
@@ -287,6 +404,10 @@
           return { content: null, status: enabled ? 'missing-url' : 'disabled', validation: null };
         }
         try {
+          if (label === 'remote') {
+            const releaseResult = await loadRemoteContentWithPointer(config, timeout);
+            if (releaseResult.handled) return { content: releaseResult.content, status: releaseResult.status, validation: releaseResult.validation, pointer: releaseResult.pointer };
+          }
           logCms(`loading ${label}`, { url: cleanUrl }, 'debug', config);
           const content = await fetchJsonWithTimeout(cleanUrl, timeout, config, label);
           const validation = getContentValidation(content, config);
@@ -303,13 +424,14 @@
         loadSource('remote', config.remoteEnabled === true, config.remoteUrl)
       ]);
 
-      const selectedContent = remoteResult.content || fallbackResult.content || null;
-      const source = remoteResult.content ? 'remote' : (fallbackResult.content ? 'fallback' : 'legacy');
+      const remotePointerHandled = String(remoteResult.status || '').startsWith('release-') && remoteResult.status !== 'release-loaded';
+      const selectedContent = remoteResult.content || (remotePointerHandled ? null : fallbackResult.content) || null;
+      const source = remoteResult.content ? (remoteResult.status === 'release-loaded' ? 'release-pointer' : 'remote') : (fallbackResult.content && !remotePointerHandled ? 'fallback' : (remotePointerHandled ? 'release-error' : 'legacy'));
       cachedContent = selectedContent;
       cachedSource = source;
       cachedValidation = remoteResult.content
         ? remoteResult.validation
-        : (fallbackResult.content ? fallbackResult.validation : { valid: true, errors: [], warnings: ['Using legacy content.'] });
+        : (remotePointerHandled ? (remoteResult.validation || { valid: false, errors: [remoteResult.status], warnings: [] }) : (fallbackResult.content ? fallbackResult.validation : { valid: true, errors: [], warnings: ['Using legacy content.'] }));
 
       const result = {
         remoteContent: remoteResult.content,
@@ -607,8 +729,8 @@
     });
 
     cmsMap.forEach((_, code) => { if (!used.has(code)) stats.cmsOnly += 1; });
-    const shouldWarn = stats.cmsFieldsSkippedUnsafe || stats.cmsLayoutFieldsIgnored;
-    logCms('merged legacy scene items', stats, shouldWarn ? 'warn' : 'debug', config);
+    const shouldWarn = stats.cmsFieldsSkippedUnsafe || stats.cmsLayoutFieldsIgnored || stats.cmsItemsUnmatched || stats.cmsOnly;
+    logCms('merged release CMS metadata into scene items', stats, shouldWarn ? 'warn' : 'debug', config);
     return merged;
   }
 
@@ -626,6 +748,7 @@
     isDebugCms,
     getCmsConfig,
     getCmsMediaValidationOptions,
+    getPointerUrl,
     normalizeCmsContentDocument: (...args) => getValidator().normalizeCmsContentDocument?.(...args),
     sanitizeText,
     isSafeMediaUrl,

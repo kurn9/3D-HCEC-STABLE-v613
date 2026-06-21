@@ -7498,14 +7498,15 @@ function renderPublishCommandTechnicalDetails(model = {}) {
     text: 'Phần này giữ thông tin đối chiếu kỹ thuật. Người vận hành thông thường chỉ cần làm theo bước tiếp theo và checklist bên trên.',
   }));
   details.appendChild(renderKeyValueList([
-    ['CMS public JSON', 'cms-public/published/cms_public_content.json'],
+    ['CMS release pointer', 'cms-public/published/current_release.json'],
+    ['Immutable release JSON', model.publishResult?.contentPath || model.dryRun?.plan?.contentPath || 'published/releases/{releaseId}/cms_public_content.json'],
     ['Lịch sử công khai', 'cms_publish_logs'],
     ['Bản ghi tham chiếu kỹ thuật', model.bundle?.version ? `published_bundles · ${model.bundle.version}` : 'published_bundles · chưa có record'],
     ['Draft ID', model.currentDraftId || 'Chưa có'],
     ['Draft version', model.draftVersion || '—'],
     ['Published version', model.publicVersion || '—'],
-    ['Dry-run raw', model.dryRun?.ok === true ? JSON.stringify({ ok: model.dryRun.ok, dryRun: model.dryRun.dryRun, version: model.dryRun.publishedVersion || model.dryRun.plan?.publishedVersion || '' }) : 'not-ready'],
-    ['Publish result raw', model.publishResult ? JSON.stringify({ ok: model.publishResult.ok, dryRun: model.publishResult.dryRun, publishedVersion: model.publishResult.publishedVersion || model.publishResult.plan?.publishedVersion || '' }) : '—'],
+    ['Dry-run raw', model.dryRun?.ok === true ? JSON.stringify({ ok: model.dryRun.ok, dryRun: model.dryRun.dryRun, version: model.dryRun.publishedVersion || model.dryRun.plan?.publishedVersion || '', candidateHash: model.dryRun.candidateHash || model.dryRun.contentHash || '' }) : 'not-ready'],
+    ['Publish result raw', model.publishResult ? JSON.stringify({ ok: model.publishResult.ok, dryRun: model.publishResult.dryRun, releaseId: model.publishResult.releaseId || '', contentHash: model.publishResult.contentHash || '', publishedVersion: model.publishResult.publishedVersion || model.publishResult.plan?.publishedVersion || '' }) : '—'],
     ['Publish inclusion status', JSON.stringify({ blocksPublish: Boolean(model.publishInclusion?.blocksPublish), statuses: safeArray(model.publishInclusion?.items).map((item) => ({ key: item.key, status: item.status, blocksPublish: item.blocksPublish })) })],
   ]));
   return details;

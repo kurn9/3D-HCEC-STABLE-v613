@@ -4421,6 +4421,11 @@ function areDraftRevisionTokensEqual(left = '', right = '') {
   return Boolean(leftToken && rightToken && leftToken === rightToken);
 }
 
+function normalizeSha256Hash(value = '') {
+  const text = String(value || '').trim().toLowerCase();
+  return /^[a-f0-9]{64}$/.test(text) ? text : '';
+}
+
 function isPublishTimestampAfter(left = '', right = '') {
   const leftTime = toComparableTimestampMs(left);
   const rightTime = toComparableTimestampMs(right);
@@ -4574,6 +4579,9 @@ export function hasCurrentDryRunPass(draftState = {}) {
   if (!currentVersion || !verifiedVersion || currentVersion !== verifiedVersion) return false;
   const resultVersion = String(result.publishedVersion || result.plan?.publishedVersion || '').trim();
   if (!resultVersion || resultVersion !== currentVersion) return false;
+  const resultCandidateHash = normalizeSha256Hash(result.candidateHash || result.contentHash || result.plan?.contentHash || '');
+  const verifiedCandidateHash = normalizeSha256Hash(draftState.publishVerifiedCandidateHash || '');
+  if (!resultCandidateHash || !verifiedCandidateHash || resultCandidateHash !== verifiedCandidateHash) return false;
   if (!isPlainObjectValue(draftState.draftJson) || !isPlainObjectValue(draftState.baselineJson)) return false;
   const localJson = sanitizeStaticCmsExport(draftState.draftJson, { keepVersion: true });
   const baselineJson = sanitizeStaticCmsExport(draftState.baselineJson, { keepVersion: true });
@@ -4639,6 +4647,7 @@ export async function handlePublishStaticCmsDraft({ dryRun = true, handlers = {}
       publishVerifiedDraftId: '',
       publishVerifiedDraftUpdatedAt: null,
       publishVerifiedDraftVersion: '',
+      publishVerifiedCandidateHash: '',
       publishVerificationInvalidatedAt: new Date().toISOString(),
       publishVerificationInvalidationReason: preflight.reason || 'Bản chuẩn bị chưa qua bước xác minh.',
     });
@@ -4664,7 +4673,8 @@ export async function handlePublishStaticCmsDraft({ dryRun = true, handlers = {}
     const verifiedId = String(draftState.publishVerifiedDraftId || '').trim();
     const verifiedUpdatedAt = normalizeDraftRevisionToken(draftState.publishVerifiedDraftUpdatedAt || '');
     const verifiedVersion = String(draftState.publishVerifiedDraftVersion || '').trim();
-    if (verifiedId !== persistedDraft.id || !areDraftRevisionTokensEqual(verifiedUpdatedAt, persistedDraft.updatedAt) || verifiedVersion !== persistedDraft.version) {
+    const verifiedCandidateHash = normalizeSha256Hash(draftState.publishVerifiedCandidateHash || draftState.publishDryRunResult?.candidateHash || draftState.publishDryRunResult?.contentHash || '');
+    if (verifiedId !== persistedDraft.id || !areDraftRevisionTokensEqual(verifiedUpdatedAt, persistedDraft.updatedAt) || verifiedVersion !== persistedDraft.version || !verifiedCandidateHash) {
       setStaticCmsPublishState({
         isPublishingCms: false,
         publishError: 'Bản chuẩn bị đã thay đổi sau lần kiểm tra. Hãy lưu và kiểm tra lại trước khi đưa lên website.',
@@ -4675,6 +4685,7 @@ export async function handlePublishStaticCmsDraft({ dryRun = true, handlers = {}
         publishVerifiedDraftId: '',
         publishVerifiedDraftUpdatedAt: null,
         publishVerifiedDraftVersion: '',
+        publishVerifiedCandidateHash: '',
         publishVerificationInvalidatedAt: new Date().toISOString(),
         publishVerificationInvalidationReason: 'Bản chuẩn bị đã thay đổi sau lần kiểm tra.',
       });
@@ -4716,17 +4727,22 @@ export async function handlePublishStaticCmsDraft({ dryRun = true, handlers = {}
     dryRun,
     expectedDraftUpdatedAt: persistedDraft.updatedAt,
     expectedDraftVersion: persistedDraft.version,
+    expectedCandidateHash: dryRun ? '' : normalizeSha256Hash(draftState.publishVerifiedCandidateHash || draftState.publishDryRunResult?.candidateHash || draftState.publishDryRunResult?.contentHash || ''),
   });
 
   if (result.error) {
-    const isRevisionConflict = result.error?.code === 'DRAFT_REVISION_CONFLICT'
-      || result.data?.code === 'DRAFT_REVISION_CONFLICT'
+    const resultCode = result.error?.code || result.data?.code || '';
+    const isCandidateHashMismatch = resultCode === 'CANDIDATE_HASH_MISMATCH';
+    const isRevisionConflict = resultCode === 'DRAFT_REVISION_CONFLICT'
+      || isCandidateHashMismatch
       || result.error?.status === 409;
     setStaticCmsPublishState({
       isPublishingCms: false,
-      publishError: isRevisionConflict
-        ? 'Bản chuẩn bị đã thay đổi sau lần kiểm tra trước. Website chưa được cập nhật. Hãy tải lại bản chuẩn bị, kiểm tra lại rồi thực hiện lại bước đưa lên website.'
-        : normalizeErrorMessage(result.error),
+      publishError: isCandidateHashMismatch
+        ? 'Nội dung bản chuẩn bị đã khác với lần kiểm tra trước. Website chưa được cập nhật. Hãy kiểm tra lại trước khi đưa lên website.'
+        : (isRevisionConflict
+          ? 'Bản chuẩn bị đã thay đổi sau lần kiểm tra trước. Website chưa được cập nhật. Hãy tải lại bản chuẩn bị, kiểm tra lại rồi thực hiện lại bước đưa lên website.'
+          : normalizeErrorMessage(result.error)),
       publishStatus: '',
       publishResult: dryRun ? draftState.publishResult : (result.data || null),
       publishDryRunResult: isRevisionConflict ? null : (dryRun ? (result.data || null) : draftState.publishDryRunResult),
@@ -4734,6 +4750,7 @@ export async function handlePublishStaticCmsDraft({ dryRun = true, handlers = {}
       publishVerifiedDraftId: isRevisionConflict ? '' : draftState.publishVerifiedDraftId,
       publishVerifiedDraftUpdatedAt: isRevisionConflict ? null : draftState.publishVerifiedDraftUpdatedAt,
       publishVerifiedDraftVersion: isRevisionConflict ? '' : draftState.publishVerifiedDraftVersion,
+      publishVerifiedCandidateHash: isRevisionConflict ? '' : draftState.publishVerifiedCandidateHash,
       publishVerificationInvalidatedAt: isRevisionConflict ? new Date().toISOString() : draftState.publishVerificationInvalidatedAt,
       publishVerificationInvalidationReason: isRevisionConflict ? 'Server phát hiện revision draft đã thay đổi sau lần kiểm tra.' : draftState.publishVerificationInvalidationReason,
     });
@@ -4751,6 +4768,7 @@ export async function handlePublishStaticCmsDraft({ dryRun = true, handlers = {}
     publishVerifiedDraftId: dryRun ? persistedDraft.id : draftState.publishVerifiedDraftId,
     publishVerifiedDraftUpdatedAt: dryRun ? persistedDraft.updatedAt : draftState.publishVerifiedDraftUpdatedAt,
     publishVerifiedDraftVersion: dryRun ? persistedDraft.version : draftState.publishVerifiedDraftVersion,
+    publishVerifiedCandidateHash: dryRun ? normalizeSha256Hash(result.data?.candidateHash || result.data?.contentHash || result.data?.plan?.contentHash || '') : draftState.publishVerifiedCandidateHash,
     publishVerificationInvalidatedAt: null,
     publishVerificationInvalidationReason: '',
   });
@@ -4965,6 +4983,7 @@ export async function handleSaveStaticCmsDraft({ asNew = false, explicitCopy = f
       publishVerifiedDraftId: '',
       publishVerifiedDraftUpdatedAt: null,
       publishVerifiedDraftVersion: '',
+      publishVerifiedCandidateHash: '',
       publishVerificationInvalidatedAt: new Date().toISOString(),
       publishVerificationInvalidationReason: 'Trạng thái draft không nhất quán trước khi lưu.',
     });
@@ -4984,6 +5003,7 @@ export async function handleSaveStaticCmsDraft({ asNew = false, explicitCopy = f
       publishVerifiedDraftId: '',
       publishVerifiedDraftUpdatedAt: null,
       publishVerifiedDraftVersion: '',
+      publishVerifiedCandidateHash: '',
       publishVerificationInvalidatedAt: new Date().toISOString(),
       publishVerificationInvalidationReason: 'Draft identity mismatch trước khi lưu.',
     });
@@ -5015,6 +5035,7 @@ export async function handleSaveStaticCmsDraft({ asNew = false, explicitCopy = f
       publishVerifiedDraftId: '',
       publishVerifiedDraftUpdatedAt: null,
       publishVerifiedDraftVersion: '',
+      publishVerifiedCandidateHash: '',
       publishVerificationInvalidatedAt: new Date().toISOString(),
       publishVerificationInvalidationReason: 'Thiếu revision khi lưu bản chuẩn bị.',
     });
@@ -5068,6 +5089,7 @@ export async function handleSaveStaticCmsDraft({ asNew = false, explicitCopy = f
       publishVerifiedDraftId: '',
       publishVerifiedDraftUpdatedAt: null,
       publishVerifiedDraftVersion: '',
+      publishVerifiedCandidateHash: '',
       publishVerificationInvalidatedAt: new Date().toISOString(),
       publishVerificationInvalidationReason: isRevisionContractMismatch
         ? 'Revision token bị biến dạng trước khi gửi update.'
@@ -5093,6 +5115,7 @@ export async function handleSaveStaticCmsDraft({ asNew = false, explicitCopy = f
       publishVerifiedDraftId: '',
       publishVerifiedDraftUpdatedAt: null,
       publishVerifiedDraftVersion: '',
+      publishVerifiedCandidateHash: '',
       publishVerificationInvalidatedAt: new Date().toISOString(),
       publishVerificationInvalidationReason: 'Không đọc lại được bản chuẩn bị đã lưu.',
     });
@@ -5115,6 +5138,7 @@ export async function handleSaveStaticCmsDraft({ asNew = false, explicitCopy = f
       publishVerifiedDraftId: '',
       publishVerifiedDraftUpdatedAt: null,
       publishVerifiedDraftVersion: '',
+      publishVerifiedCandidateHash: '',
       publishVerificationInvalidatedAt: new Date().toISOString(),
       publishVerificationInvalidationReason: 'Readback draft ID mismatch sau khi lưu.',
     });
@@ -5141,6 +5165,7 @@ export async function handleSaveStaticCmsDraft({ asNew = false, explicitCopy = f
       publishVerifiedDraftId: '',
       publishVerifiedDraftUpdatedAt: null,
       publishVerifiedDraftVersion: '',
+      publishVerifiedCandidateHash: '',
       publishVerificationInvalidatedAt: new Date().toISOString(),
       publishVerificationInvalidationReason: 'Bản chuẩn bị đọc lại chưa đạt kiểm tra cấu trúc.',
     });

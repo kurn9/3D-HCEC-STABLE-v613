@@ -748,6 +748,8 @@ export async function publishCmsJson(client, payload = {}) {
     expectedDraftUpdatedAt,
     expectedDraftVersion,
   };
+  const expectedCandidateHash = normalizeOptionalText(payload.expectedCandidateHash).toLowerCase();
+  if (expectedCandidateHash) bodyPayload.expectedCandidateHash = expectedCandidateHash;
   const confirmVersion = normalizeOptionalText(payload.confirmVersion);
   if (confirmVersion) {
     bodyPayload.confirmVersion = confirmVersion;
@@ -842,16 +844,21 @@ export async function rollbackCmsJson(client, payload = {}) {
   }
 
   const sourcePath = normalizePublishedVersionPath(payload.sourcePath);
-  if (!sourcePath) {
-    return { data: null, error: new Error('sourcePath rollback không hợp lệ.') };
+  const targetReleaseId = normalizeReleaseId(payload.targetReleaseId) || extractReleaseIdFromPublishedPath(sourcePath);
+  if (!sourcePath && !targetReleaseId) {
+    return { data: null, error: new Error('sourcePath/targetReleaseId rollback không hợp lệ.') };
   }
 
   const bodyPayload = {
-    sourcePath,
+    ...(sourcePath ? { sourcePath } : {}),
+    ...(targetReleaseId ? { targetReleaseId } : {}),
     dryRun: payload.dryRun === true,
   };
-  const confirmHash = normalizeOptionalText(payload.confirmHash).toLowerCase();
-  if (confirmHash) bodyPayload.confirmHash = confirmHash;
+  const confirmHash = normalizeOptionalText(payload.confirmHash || payload.targetContentHash).toLowerCase();
+  if (confirmHash) {
+    bodyPayload.confirmHash = confirmHash;
+    bodyPayload.targetContentHash = confirmHash;
+  }
   const reason = normalizeOptionalText(payload.reason);
   if (reason) bodyPayload.reason = reason;
 
@@ -883,9 +890,22 @@ function normalizePublishLogLimit(value) {
 function normalizePublishedVersionPath(value) {
   const text = String(value || '').trim();
   if (!text || text.includes('..') || text.includes('\\') || text.includes('//')) return '';
+  if (/^published\/releases\/[0-9a-f-]{36}\/cms_public_content\.json$/i.test(text)) return text;
   if (!text.startsWith(`${CMS_ROLLBACK_GATE_CONFIG.versionPrefix}`)) return '';
   if (!/^published\/versions\/cms_public_content_[A-Za-z0-9._-]+\.json$/.test(text)) return '';
   return text;
+}
+
+function normalizeReleaseId(value) {
+  const text = String(value || '').trim();
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(text) ? text : '';
+}
+
+function extractReleaseIdFromPublishedPath(path = '') {
+  const text = String(path || '').trim();
+  const releaseMatch = text.match(/^published\/releases\/([0-9a-f-]{36})\/cms_public_content\.json$/i);
+  const aliasMatch = text.match(/^published\/versions\/cms_public_content_([0-9a-f-]{36})\.json$/i);
+  return normalizeReleaseId(releaseMatch?.[1] || aliasMatch?.[1] || '');
 }
 
 async function sha256BrowserText(text) {
