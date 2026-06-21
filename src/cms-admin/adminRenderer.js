@@ -80,6 +80,7 @@ import {
   handleLoadStaticCmsBaseline,
   handleSaveStaticCmsDraft,
   handlePublishStaticCmsDraft,
+  handleReconcileStaticCmsPublishPointer,
   handleComposeCmsPreparationDraft,
   buildCmsPublishInclusionStatus,
   hasCurrentDryRunPass,
@@ -6765,6 +6766,7 @@ function buildPublishCommandCenterModel(state = {}) {
   const publishResult = draftState.publishResult || null;
   const publishSucceeded = publishResult?.ok === true && publishResult?.dryRun !== true;
   const publishFailed = Boolean(draftState.publishError) || (publishResult && publishResult.ok === false && publishResult.dryRun !== true);
+  const publishRequiresReconciliation = Boolean(draftState.publishRequiresReconciliation || draftState.publishPointerState === 'unknown');
   const currentDraftId = draftState.currentDraftId || '';
   const hasDraftJson = Boolean(draftState.draftJson);
   const hasSavedDraft = Boolean(currentDraftId);
@@ -6793,6 +6795,7 @@ function buildPublishCommandCenterModel(state = {}) {
     validationOk,
     publishSucceeded,
     publishFailed,
+    publishRequiresReconciliation,
     publishError: draftState.publishError,
     publishInclusion,
     isLoadingDraft,
@@ -6820,6 +6823,12 @@ function buildPublishCommandCenterModel(state = {}) {
     publishResult,
     publishSucceeded,
     publishFailed,
+    publishRequiresReconciliation,
+    publishPointerState: draftState.publishPointerState || '',
+    publishReconciliationStatus: draftState.publishReconciliationStatus || '',
+    publishReconciliationError: draftState.publishReconciliationError || null,
+    publishReconciliationResult: draftState.publishReconciliationResult || null,
+    isReconcilingPublishPointer: Boolean(draftState.isReconcilingPublishPointer),
     publishStatus: draftState.publishStatus || '',
     publishError: draftState.publishError || null,
     publishLastVerifiedAt: draftState.publishLastVerifiedAt || '',
@@ -6875,6 +6884,23 @@ function getPublishCommandNextAction(model = {}) {
       note: 'Đang kiểm tra hoặc đưa nội dung lên website. Vui lòng chờ kết quả từ luồng hiện hữu.',
       kind: 'disabled',
       disabledReason: 'Đang xử lý, không thể gửi thêm thao tác.',
+    };
+  }
+  if (model.isReconcilingPublishPointer) {
+    return {
+      state: 'reconciling-pointer',
+      label: 'Đang kiểm tra trạng thái...',
+      note: 'Đang đọc pointer và release đang active. Đây là thao tác chỉ đọc.',
+      kind: 'disabled',
+      disabledReason: 'Đang kiểm tra trạng thái hiện tại.',
+    };
+  }
+  if (model.publishRequiresReconciliation) {
+    return {
+      state: 'pointer-unknown',
+      label: 'Kiểm tra trạng thái hiện tại',
+      note: 'Chưa xác định website đang dùng bản nào. Không bấm lại thao tác nguy hiểm. Hãy kiểm tra trạng thái hiện tại bằng thao tác chỉ đọc.',
+      kind: 'reconcile-publish-pointer',
     };
   }
   if (model.publishSucceeded) {
@@ -7281,6 +7307,11 @@ function renderPublishLatestResultCard(model = {}) {
   card.appendChild(renderPanelTitle('Kết quả đưa lên website gần nhất', status));
   if (model.publishStatus) card.appendChild(renderNoticeBox(model.publishStatus, model.publishFailed ? 'error' : 'success'));
   if (model.publishError) card.appendChild(renderNoticeBox(normalizeErrorMessage(model.publishError), 'error'));
+  if (model.publishRequiresReconciliation) {
+    card.appendChild(renderNoticeBox('Chưa xác định website đang dùng bản nào. Không bấm công khai lại. Bấm “Kiểm tra trạng thái hiện tại”.', 'warning'));
+  }
+  if (model.publishReconciliationStatus) card.appendChild(renderNoticeBox(model.publishReconciliationStatus, model.publishRequiresReconciliation ? 'warning' : 'success'));
+  if (model.publishReconciliationError) card.appendChild(renderNoticeBox(normalizeErrorMessage(model.publishReconciliationError), 'error'));
   card.appendChild(createElement('p', {
     className: 'cms-admin-compact-copy',
     text: model.publishSucceeded
@@ -7444,6 +7475,10 @@ async function executePublishCommandAction(action = {}) {
         return;
       }
       await handlePublishStaticCmsDraft({ dryRun: true, handlers });
+      return;
+    }
+    case 'reconcile-publish-pointer': {
+      await handleReconcileStaticCmsPublishPointer({ handlers });
       return;
     }
     case 'publish-live': {

@@ -873,7 +873,10 @@ export async function rollbackCmsJson(client, payload = {}) {
     });
     const body = await response.json().catch(() => ({}));
     if (!response.ok || body?.ok === false) {
-      return { data: body || null, error: new Error(body?.error || body?.message || `Rollback gate thất bại HTTP ${response.status}.`) };
+      const error = new Error(body?.error || body?.message || `Rollback gate thất bại HTTP ${response.status}.`);
+      error.status = response.status;
+      error.code = body?.code || body?.errorCode || '';
+      return { data: body || null, error };
     }
     return { data: body, error: null };
   } catch (error) {
@@ -915,6 +918,74 @@ async function sha256BrowserText(text) {
     return Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, '0')).join('');
   }
   return '';
+}
+
+
+export async function reconcileCmsReleasePointer(expected = {}) {
+  const pointerPath = 'published/current_release.json';
+  const pointerUrl = `${CMS_ROLLBACK_GATE_CONFIG.publicStorageBaseUrl}/${pointerPath}`;
+  const expectedReleaseId = normalizeReleaseId(expected.releaseId || expected.expectedReleaseId);
+  const expectedContentHash = normalizeOptionalText(expected.contentHash || expected.expectedContentHash).toLowerCase();
+  try {
+    const pointerResponse = await fetch(`${pointerUrl}?v=${Date.now()}`, { cache: 'no-store' });
+    if (pointerResponse.status === 404) {
+      return { data: { ok: false, classification: 'pointer_missing', pointerPath, expectedReleaseId, expectedContentHash }, error: null };
+    }
+    const pointerText = await pointerResponse.text();
+    if (!pointerResponse.ok) {
+      return { data: { ok: false, classification: 'read_failed', pointerPath, expectedReleaseId, expectedContentHash, httpStatus: pointerResponse.status }, error: null };
+    }
+    const pointer = JSON.parse(pointerText);
+    if (!pointer || typeof pointer !== 'object' || Array.isArray(pointer)) {
+      return { data: { ok: false, classification: 'pointer_invalid', pointerPath, expectedReleaseId, expectedContentHash }, error: null };
+    }
+    const releaseId = normalizeReleaseId(pointer.releaseId);
+    const contentPath = normalizePublishedVersionPath(pointer.contentPath);
+    const contentHash = normalizeOptionalText(pointer.contentHash).toLowerCase();
+    if (pointer.schemaVersion !== 1 || !releaseId || !contentPath || !isSha256Text(contentHash)) {
+      return { data: { ok: false, classification: 'pointer_invalid', pointerPath, pointer, releaseId, contentPath, contentHash, expectedReleaseId, expectedContentHash }, error: null };
+    }
+    const releaseUrl = `${CMS_ROLLBACK_GATE_CONFIG.publicStorageBaseUrl}/${contentPath}`;
+    const releaseResponse = await fetch(`${releaseUrl}?v=${Date.now()}`, { cache: 'no-store' });
+    if (releaseResponse.status === 404) {
+      return { data: { ok: false, classification: 'release_missing', pointerPath, pointer, releaseId, contentPath, contentHash, expectedReleaseId, expectedContentHash }, error: null };
+    }
+    const releaseText = await releaseResponse.text();
+    if (!releaseResponse.ok) {
+      return { data: { ok: false, classification: 'read_failed', pointerPath, pointer, releaseId, contentPath, contentHash, expectedReleaseId, expectedContentHash, httpStatus: releaseResponse.status }, error: null };
+    }
+    const releaseHash = await sha256BrowserText(releaseText);
+    if (!releaseHash || releaseHash.toLowerCase() !== contentHash) {
+      return { data: { ok: false, classification: 'hash_mismatch', pointerPath, pointer, releaseId, contentPath, contentHash, releaseHash, expectedReleaseId, expectedContentHash }, error: null };
+    }
+    const expectedMatches = Boolean(expectedReleaseId && releaseId === expectedReleaseId && (!expectedContentHash || expectedContentHash === contentHash));
+    return {
+      data: {
+        ok: true,
+        classification: expectedMatches ? 'active_expected_release' : 'active_other_release',
+        pointerPath,
+        pointer,
+        releaseId,
+        contentPath,
+        contentHash,
+        releaseHash,
+        expectedReleaseId,
+        expectedContentHash,
+      },
+      error: null,
+    };
+  } catch (error) {
+    return { data: { ok: false, classification: 'read_failed', pointerPath, expectedReleaseId, expectedContentHash, error: normalizeErrorLike(error) }, error: null };
+  }
+}
+
+function isSha256Text(value = '') {
+  return /^[a-f0-9]{64}$/i.test(String(value || '').trim());
+}
+
+function normalizeErrorLike(error) {
+  if (error instanceof Error) return error.message;
+  return String(error || 'Không rõ lỗi.');
 }
 
 

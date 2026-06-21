@@ -1,6 +1,6 @@
 import { ADMIN_FEATURE_FLAGS, CMS_ROLLBACK_GATE_CONFIG } from './adminConfig.js';
 import { ADMIN_COPY } from './adminCopy.js';
-import { listCmsPublishLogs, previewCmsPublishedVersion, rollbackCmsJson } from './adminApi.js';
+import { listCmsPublishLogs, previewCmsPublishedVersion, reconcileCmsReleasePointer, rollbackCmsJson } from './adminApi.js';
 import {
   appendChildren,
   createElement,
@@ -605,7 +605,8 @@ function renderRollbackPanel(state = {}, historyState = {}, handlers = {}) {
   const previewMatches = Boolean(selectedPath && historyState.previewResult?.sourcePath === selectedPath);
   const dryRunMatches = hasValidDryRunForSource(historyState, selectedPath);
   const hasReason = hasValidRollbackReason(historyState.rollbackReason);
-  const ready = canDoRealRollback(historyState, selectedPath);
+  const needsReconciliation = Boolean(historyState.rollbackRequiresReconciliation || historyState.rollbackPointerState === 'unknown');
+  const ready = !needsReconciliation && canDoRealRollback(historyState, selectedPath);
 
   const title = createElement('div', { className: 'cms-admin-panel-title-row' });
   const heading = createElement('div', { className: 'cms-admin-cell-stack' });
@@ -634,10 +635,24 @@ function renderRollbackPanel(state = {}, historyState = {}, handlers = {}) {
     title: getDryRunDisabledReason(state, historyState, selectedPath) || ROLLBACK_COPY.actions?.dryRun || 'Kiểm tra khôi phục cho bản đã chọn.',
     ariaLabel: getDryRunDisabledReason(state, historyState, selectedPath) || ROLLBACK_COPY.actions?.dryRun || 'Kiểm tra khôi phục cho bản đã chọn.',
   });
-  dryRunButton.disabled = !isRollbackAdmin(state) || !selectedPath || historyState.isRollingBack;
+  dryRunButton.disabled = !isRollbackAdmin(state) || !selectedPath || historyState.isRollingBack || needsReconciliation;
   dryRunButton.addEventListener('click', () => handleRollbackCmsJson({ sourcePath: selectedPath, dryRun: true, handlers }));
   dryRunActions.appendChild(dryRunButton);
   panel.appendChild(dryRunActions);
+  if (needsReconciliation) {
+    panel.appendChild(createElement('div', {
+      className: 'cms-admin-alert cms-admin-alert-warning',
+      text: 'Chưa xác định website đang dùng bản nào. Không bấm khôi phục lại. Bấm “Kiểm tra trạng thái hiện tại”.',
+    }));
+    const reconcileButton = createElement('button', {
+      className: 'cms-admin-button cms-admin-button-secondary',
+      type: 'button',
+      text: historyState.isReconcilingRollbackPointer ? 'Đang kiểm tra trạng thái...' : 'Kiểm tra trạng thái hiện tại',
+    });
+    reconcileButton.disabled = Boolean(historyState.isReconcilingRollbackPointer);
+    reconcileButton.addEventListener('click', () => handleReconcileRollbackPointer({ handlers }));
+    panel.appendChild(reconcileButton);
+  }
 
   const reasonInput = createElement('textarea', {
     className: 'cms-admin-input cms-admin-rollback-reason-input',
@@ -646,7 +661,7 @@ function renderRollbackPanel(state = {}, historyState = {}, handlers = {}) {
     ariaLabel: ROLLBACK_COPY.actions?.reason || 'Lý do khôi phục',
     attrs: { rows: '3', placeholder: 'Nhập lý do vận hành, ví dụ: Khôi phục bản sạch sau khi kiểm tra UAT.' },
   });
-  reasonInput.disabled = !selectedPath || historyState.isRollingBack;
+  reasonInput.disabled = !selectedPath || historyState.isRollingBack || needsReconciliation;
   panel.appendChild(labeledControl('Lý do khôi phục bắt buộc', reasonInput));
   panel.appendChild(createElement('p', {
     className: 'cms-admin-help-text cms-admin-rollback-reason-help',
@@ -686,6 +701,12 @@ function renderRollbackPanel(state = {}, historyState = {}, handlers = {}) {
   if (!isRollbackAdmin(state)) {
     panel.appendChild(createElement('div', { className: 'cms-admin-alert cms-admin-alert-warning', text: 'Chỉ quản trị viên đang hoạt động được khôi phục.' }));
   }
+  if (historyState.rollbackReconciliationStatus) {
+    panel.appendChild(createElement('div', { className: needsReconciliation ? 'cms-admin-alert cms-admin-alert-warning' : 'cms-admin-alert cms-admin-alert-success', text: historyState.rollbackReconciliationStatus }));
+  }
+  if (historyState.rollbackReconciliationError) {
+    panel.appendChild(renderErrorBox(historyState.rollbackReconciliationError, 'Kiểm tra trạng thái chưa thành công'));
+  }
   if (historyState.rollbackStatus) {
     panel.appendChild(createElement('div', {
       className: historyState.rollbackError ? 'cms-admin-alert cms-admin-alert-error' : 'cms-admin-alert cms-admin-alert-success',
@@ -698,7 +719,7 @@ function renderRollbackPanel(state = {}, historyState = {}, handlers = {}) {
   panel.appendChild(renderRollbackResult(historyState.rollbackResult || historyState.rollbackDryRunResult));
   panel.appendChild(createElement('div', {
     className: 'cms-admin-alert cms-admin-alert-warning cms-admin-version-danger-note',
-    text: 'Rollback thật sẽ ghi lại bản public. Hệ thống vẫn sao lưu latest hiện tại, xác minh sau ghi và tự phục hồi bản trước nếu xác minh thất bại.',
+    text: 'Rollback thật chỉ đổi release pointer sau khi server xác minh target. Nếu trạng thái pointer chưa xác định, hệ thống khóa thao tác để kiểm tra lại; không tự phục hồi hoặc ghi đè JSON.',
   }));
   return panel;
 }
@@ -946,6 +967,15 @@ async function handleSelectRestorePoint(point, handlers = {}, options = {}) {
     rollbackDryRunResult: null,
     rollbackResult: null,
     rollbackError: null,
+    rollbackPointerState: '',
+    rollbackRequiresReconciliation: false,
+    rollbackPendingTargetReleaseId: '',
+    rollbackPendingContentPath: '',
+    rollbackPendingContentHash: '',
+    rollbackReconciliationStatus: '',
+    rollbackReconciliationError: null,
+    rollbackReconciliationResult: null,
+    isReconcilingRollbackPointer: false,
     rollbackStatus: 'Bạn đã chọn bản sẽ khôi phục. Hãy xem trước và bấm “Kiểm tra khôi phục”.',
     rollbackReason: '',
   });
@@ -1001,6 +1031,12 @@ async function handleRollbackCmsJson({ sourcePath, dryRun = true, handlers = {} 
   const state = getState();
   const historyState = state.publishHistory || {};
   const selectedPath = String(historyState.selectedSourcePath || '').trim();
+
+  if (historyState.rollbackRequiresReconciliation || historyState.rollbackPointerState === 'unknown') {
+    setCmsPublishHistoryState({ rollbackError: 'Chưa xác định website đang dùng bản nào. Không bấm khôi phục lại. Hãy bấm “Kiểm tra trạng thái hiện tại”.' });
+    handlers.onRerender?.();
+    return;
+  }
 
   if (!isRollbackAdmin(state)) {
     setCmsPublishHistoryState({ rollbackError: 'Chỉ quản trị viên đang hoạt động được khôi phục.' });
@@ -1061,6 +1097,29 @@ async function handleRollbackCmsJson({ sourcePath, dryRun = true, handlers = {} 
   }
 
   if (result.error) {
+    const resultCode = result.error?.code || result.data?.code || '';
+    const isPointerUnknown = resultCode === 'POINTER_STATE_UNKNOWN' || result.data?.pointerState === 'unknown';
+    if (isPointerUnknown) {
+      setCmsPublishHistoryState({
+        isRollingBack: false,
+        rollbackRequestPath: '',
+        rollbackPointerState: 'unknown',
+        rollbackRequiresReconciliation: true,
+        rollbackPendingTargetReleaseId: String(result.data?.targetReleaseId || ''),
+        rollbackPendingContentPath: String(result.data?.targetContentPath || ''),
+        rollbackPendingContentHash: String(result.data?.targetContentHash || ''),
+        rollbackReconciliationStatus: '',
+        rollbackReconciliationError: null,
+        rollbackReconciliationResult: null,
+        isReconcilingRollbackPointer: false,
+        rollbackError: 'Chưa xác định website đang dùng bản nào. Không bấm khôi phục lại. Hãy bấm “Kiểm tra trạng thái hiện tại”.',
+        rollbackStatus: '',
+        rollbackResult: result.data || null,
+        rollbackDryRunResult: null,
+      });
+      handlers.onRerender?.();
+      return;
+    }
     setCmsPublishHistoryState({
       isRollingBack: false,
       rollbackRequestPath: '',
@@ -1091,12 +1150,83 @@ async function handleRollbackCmsJson({ sourcePath, dryRun = true, handlers = {} 
     isRollingBack: false,
     rollbackRequestPath: '',
     rollbackError: null,
+    rollbackPointerState: '',
+    rollbackRequiresReconciliation: false,
+    rollbackPendingTargetReleaseId: '',
+    rollbackPendingContentPath: '',
+    rollbackPendingContentHash: '',
+    rollbackReconciliationStatus: '',
+    rollbackReconciliationError: null,
+    rollbackReconciliationResult: null,
+    isReconcilingRollbackPointer: false,
     rollbackStatus: 'Khôi phục thành công. Bản đang công khai đã được xác minh. Hãy kiểm tra website.',
     rollbackDryRunResult: null,
     rollbackResult: result.data,
     rollbackReason: '',
   });
   await handleLoadPublishHistory({ onRerender: () => {} }, { resetWorkflow: false });
+  handlers.onRerender?.();
+}
+
+
+async function handleReconcileRollbackPointer({ handlers = {} } = {}) {
+  const current = getState().publishHistory || {};
+  const expectedReleaseId = String(current.rollbackPendingTargetReleaseId || current.rollbackResult?.targetReleaseId || current.rollbackResult?.toReleaseId || '').trim();
+  const expectedContentHash = String(current.rollbackPendingContentHash || current.rollbackResult?.targetContentHash || current.rollbackResult?.hashAfter || '').trim();
+  setCmsPublishHistoryState({
+    isReconcilingRollbackPointer: true,
+    rollbackReconciliationStatus: 'Đang kiểm tra trạng thái hiện tại...',
+    rollbackReconciliationError: null,
+  });
+  handlers.onRerender?.();
+  const result = await reconcileCmsReleasePointer({ releaseId: expectedReleaseId, contentHash: expectedContentHash });
+  const data = result.data || {};
+  if (result.error) {
+    setCmsPublishHistoryState({
+      isReconcilingRollbackPointer: false,
+      rollbackReconciliationError: normalizeErrorMessage(result.error),
+      rollbackReconciliationStatus: '',
+    });
+    handlers.onRerender?.();
+    return;
+  }
+  const classification = String(data.classification || 'read_failed');
+  if (classification === 'active_expected_release') {
+    setCmsPublishHistoryState({
+      isReconcilingRollbackPointer: false,
+      rollbackPointerState: 'active_expected_release',
+      rollbackRequiresReconciliation: false,
+      rollbackReconciliationResult: data,
+      rollbackReconciliationError: null,
+      rollbackReconciliationStatus: 'Đã kiểm tra: website đang dùng bản khôi phục vừa thao tác. Không bấm khôi phục lại.',
+      rollbackError: null,
+      rollbackStatus: 'Website đang dùng bản khôi phục vừa thao tác. Hãy mở website để kiểm tra.',
+      rollbackDryRunResult: null,
+      rollbackReason: '',
+    });
+  } else if (classification === 'active_other_release') {
+    setCmsPublishHistoryState({
+      isReconcilingRollbackPointer: false,
+      rollbackPointerState: 'active_other_release',
+      rollbackRequiresReconciliation: true,
+      rollbackReconciliationResult: data,
+      rollbackReconciliationError: null,
+      rollbackReconciliationStatus: 'Đã kiểm tra: website đang dùng một bản khác. Hãy tải lại lịch sử và kiểm tra lại trước khi thao tác tiếp.',
+      rollbackError: 'Website đang dùng một bản khác với bản vừa khôi phục. Không bấm khôi phục lại bằng confirmation cũ.',
+      rollbackDryRunResult: null,
+    });
+  } else {
+    setCmsPublishHistoryState({
+      isReconcilingRollbackPointer: false,
+      rollbackPointerState: 'unknown',
+      rollbackRequiresReconciliation: true,
+      rollbackReconciliationResult: data,
+      rollbackReconciliationError: null,
+      rollbackReconciliationStatus: 'Vẫn chưa xác định website đang dùng bản nào. Không bấm khôi phục lại. Có thể thử kiểm tra trạng thái lại hoặc tải lại lịch sử.',
+      rollbackError: 'Chưa xác định website đang dùng bản nào. Không bấm khôi phục lại.',
+      rollbackDryRunResult: null,
+    });
+  }
   handlers.onRerender?.();
 }
 
@@ -1134,6 +1264,15 @@ function createWorkflowResetPatch() {
     rollbackDryRunResult: null,
     rollbackResult: null,
     rollbackError: null,
+    rollbackPointerState: '',
+    rollbackRequiresReconciliation: false,
+    rollbackPendingTargetReleaseId: '',
+    rollbackPendingContentPath: '',
+    rollbackPendingContentHash: '',
+    rollbackReconciliationStatus: '',
+    rollbackReconciliationError: null,
+    rollbackReconciliationResult: null,
+    isReconcilingRollbackPointer: false,
     rollbackStatus: '',
     rollbackReason: '',
     rollbackRequestPath: '',
@@ -1148,6 +1287,7 @@ function findRestorePointByPath(items = [], sourcePath = '') {
 }
 
 function hasValidDryRunForSource(historyState = {}, sourcePath = '') {
+  if (historyState.rollbackRequiresReconciliation || historyState.rollbackPointerState === 'unknown') return false;
   const dryRun = historyState.rollbackDryRunResult;
   return Boolean(
     sourcePath

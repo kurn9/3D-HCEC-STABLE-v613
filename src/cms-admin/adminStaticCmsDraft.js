@@ -1,5 +1,5 @@
 import { ADMIN_COPY } from './adminCopy.js';
-import { createCmsDraft, discardCmsDraft, fetchDashboardData, getCmsDraft, listCmsDrafts, publishCmsJson, updateCmsDraft, uploadCmsMedia } from './adminApi.js';
+import { createCmsDraft, discardCmsDraft, fetchDashboardData, getCmsDraft, listCmsDrafts, publishCmsJson, reconcileCmsReleasePointer, updateCmsDraft, uploadCmsMedia } from './adminApi.js';
 import { ADMIN_FEATURE_FLAGS, CMS_MEDIA_UPLOAD_CONFIG, CMS_PUBLISH_GATE_CONFIG, STATIC_CMS_DRAFT_CONFIG } from './adminConfig.js';
 import {
   appendChildren,
@@ -4565,6 +4565,7 @@ export function getPublishGateAccess(appState = {}) {
 export function hasCurrentDryRunPass(draftState = {}) {
   const result = draftState.publishDryRunResult || null;
   if (!result || result.ok !== true || result.dryRun !== true) return false;
+  if (draftState.publishRequiresReconciliation || draftState.publishPointerState === 'unknown') return false;
   if (draftState.dirty) return false;
   if (draftState.publishVerificationInvalidatedAt) return false;
   const currentDraftId = String(draftState.currentDraftId || '').trim();
@@ -4591,6 +4592,9 @@ export function hasCurrentDryRunPass(draftState = {}) {
 
 export function getPublishReadiness(draftState = {}, access = {}, publishInclusionStatus = null) {
   if (!access.allowed) return { ready: false, reason: access.reason || 'Không đủ quyền công khai.' };
+  if (draftState.publishRequiresReconciliation || draftState.publishPointerState === 'unknown') {
+    return { ready: false, reason: 'Chưa xác định website đang dùng bản nào. Không bấm công khai lại; hãy kiểm tra trạng thái hiện tại.' };
+  }
   if (!draftState.draftJson) return { ready: false, reason: 'Chưa tải bản nháp.' };
   if (!draftState.currentDraftId) return { ready: false, reason: 'Cần lưu thay đổi trước khi công khai.' };
   if (draftState.persistedDraftId && String(draftState.persistedDraftId) !== String(draftState.currentDraftId)) {
@@ -4612,6 +4616,14 @@ export function getPublishReadiness(draftState = {}, access = {}, publishInclusi
 export async function handlePublishStaticCmsDraft({ dryRun = true, handlers = {} } = {}) {
   const appState = getState();
   const draftState = appState.staticCmsDraft || {};
+  if (draftState.publishRequiresReconciliation || draftState.publishPointerState === 'unknown') {
+    setStaticCmsPublishState({
+      publishError: 'Không xác định được website đang dùng bản cũ hay bản mới. Không bấm công khai lại. Hãy bấm “Kiểm tra trạng thái hiện tại”.',
+      publishStatus: '',
+    });
+    handlers.onRerender?.();
+    return;
+  }
   const access = getPublishGateAccess(appState);
   const publishInclusionStatus = buildCmsPublishInclusionStatus({ data: appState.data || {}, draftState });
   const readiness = getPublishReadiness(draftState, access, publishInclusionStatus);
@@ -4732,6 +4744,35 @@ export async function handlePublishStaticCmsDraft({ dryRun = true, handlers = {}
 
   if (result.error) {
     const resultCode = result.error?.code || result.data?.code || '';
+    const isPointerUnknown = resultCode === 'POINTER_STATE_UNKNOWN' || result.data?.pointerState === 'unknown';
+    if (isPointerUnknown) {
+      setStaticCmsPublishState({
+        isPublishingCms: false,
+        publishPointerState: 'unknown',
+        publishRequiresReconciliation: true,
+        publishPendingReleaseId: String(result.data?.releaseId || ''),
+        publishPendingContentPath: String(result.data?.contentPath || ''),
+        publishPendingContentHash: normalizeSha256Hash(result.data?.contentHash || ''),
+        publishPendingCandidateHash: normalizeSha256Hash(result.data?.candidateHash || ''),
+        publishReconciliationStatus: '',
+        publishReconciliationError: null,
+        publishReconciliationResult: null,
+        isReconcilingPublishPointer: false,
+        publishError: 'Không xác định được website đang dùng bản cũ hay bản mới. Không bấm công khai lại. Hãy bấm “Kiểm tra trạng thái hiện tại”.',
+        publishStatus: '',
+        publishResult: result.data || null,
+        publishDryRunResult: null,
+        publishLastVerifiedAt: null,
+        publishVerifiedDraftId: '',
+        publishVerifiedDraftUpdatedAt: null,
+        publishVerifiedDraftVersion: '',
+        publishVerifiedCandidateHash: '',
+        publishVerificationInvalidatedAt: new Date().toISOString(),
+        publishVerificationInvalidationReason: 'Pointer công khai chưa xác định sau khi server ghi pointer.',
+      });
+      handlers.onRerender?.();
+      return;
+    }
     const isCandidateHashMismatch = resultCode === 'CANDIDATE_HASH_MISMATCH';
     const isRevisionConflict = resultCode === 'DRAFT_REVISION_CONFLICT'
       || isCandidateHashMismatch
@@ -4764,6 +4805,16 @@ export async function handlePublishStaticCmsDraft({ dryRun = true, handlers = {}
     publishStatus: dryRun ? 'Đã kiểm tra xong. Website chưa thay đổi.' : 'Đã đưa bản này lên website.',
     publishDryRunResult: dryRun ? result.data : draftState.publishDryRunResult,
     publishResult: dryRun ? draftState.publishResult : result.data,
+    publishPointerState: '',
+    publishRequiresReconciliation: false,
+    publishPendingReleaseId: '',
+    publishPendingContentPath: '',
+    publishPendingContentHash: '',
+    publishPendingCandidateHash: '',
+    publishReconciliationStatus: '',
+    publishReconciliationError: null,
+    publishReconciliationResult: null,
+    isReconcilingPublishPointer: false,
     publishLastVerifiedAt: new Date().toISOString(),
     publishVerifiedDraftId: dryRun ? persistedDraft.id : draftState.publishVerifiedDraftId,
     publishVerifiedDraftUpdatedAt: dryRun ? persistedDraft.updatedAt : draftState.publishVerifiedDraftUpdatedAt,
@@ -4772,6 +4823,84 @@ export async function handlePublishStaticCmsDraft({ dryRun = true, handlers = {}
     publishVerificationInvalidatedAt: null,
     publishVerificationInvalidationReason: '',
   });
+  handlers.onRerender?.();
+}
+
+
+export async function handleReconcileStaticCmsPublishPointer({ handlers = {} } = {}) {
+  const current = getState().staticCmsDraft || {};
+  const expectedReleaseId = String(current.publishPendingReleaseId || current.publishResult?.releaseId || '').trim();
+  const expectedContentHash = normalizeSha256Hash(current.publishPendingContentHash || current.publishResult?.contentHash || '');
+  setStaticCmsPublishState({
+    isReconcilingPublishPointer: true,
+    publishReconciliationStatus: 'Đang kiểm tra trạng thái hiện tại...',
+    publishReconciliationError: null,
+  });
+  handlers.onRerender?.();
+  const result = await reconcileCmsReleasePointer({ releaseId: expectedReleaseId, contentHash: expectedContentHash });
+  const data = result.data || {};
+  if (result.error) {
+    setStaticCmsPublishState({
+      isReconcilingPublishPointer: false,
+      publishReconciliationError: normalizeErrorMessage(result.error),
+      publishReconciliationStatus: '',
+    });
+    handlers.onRerender?.();
+    return;
+  }
+  const classification = String(data.classification || 'read_failed');
+  if (classification === 'active_expected_release') {
+    setStaticCmsPublishState({
+      isReconcilingPublishPointer: false,
+      publishPointerState: 'active_expected_release',
+      publishRequiresReconciliation: false,
+      publishReconciliationResult: data,
+      publishReconciliationError: null,
+      publishReconciliationStatus: 'Đã kiểm tra: website đang dùng bản vừa thao tác. Không bấm công khai lại.',
+      publishError: null,
+      publishStatus: 'Website đang dùng bản vừa thao tác. Hãy mở website để kiểm tra hiển thị.',
+      publishResult: {
+        ...(current.publishResult || {}),
+        ok: true,
+        dryRun: false,
+        releaseId: data.releaseId || expectedReleaseId,
+        contentPath: data.contentPath || current.publishPendingContentPath || '',
+        contentHash: data.contentHash || expectedContentHash,
+        verifyStatus: 'pass',
+        reconciled: true,
+      },
+    });
+  } else if (classification === 'active_other_release') {
+    setStaticCmsPublishState({
+      isReconcilingPublishPointer: false,
+      publishPointerState: 'active_other_release',
+      publishRequiresReconciliation: true,
+      publishReconciliationResult: data,
+      publishReconciliationError: null,
+      publishReconciliationStatus: 'Đã kiểm tra: website đang dùng một bản khác. Hãy tải lại bản chuẩn bị và kiểm tra lại trước khi thao tác tiếp.',
+      publishError: 'Website đang dùng một bản khác với bản vừa thao tác. Không bấm công khai lại bằng kết quả cũ.',
+      publishDryRunResult: null,
+      publishVerifiedDraftId: '',
+      publishVerifiedDraftUpdatedAt: null,
+      publishVerifiedDraftVersion: '',
+      publishVerifiedCandidateHash: '',
+    });
+  } else {
+    setStaticCmsPublishState({
+      isReconcilingPublishPointer: false,
+      publishPointerState: 'unknown',
+      publishRequiresReconciliation: true,
+      publishReconciliationResult: data,
+      publishReconciliationError: null,
+      publishReconciliationStatus: 'Vẫn chưa xác định website đang dùng bản nào. Không bấm công khai lại. Có thể thử kiểm tra trạng thái lại hoặc mở lịch sử phiên bản.',
+      publishError: 'Chưa xác định website đang dùng bản nào. Không bấm công khai lại.',
+      publishDryRunResult: null,
+      publishVerifiedDraftId: '',
+      publishVerifiedDraftUpdatedAt: null,
+      publishVerifiedDraftVersion: '',
+      publishVerifiedCandidateHash: '',
+    });
+  }
   handlers.onRerender?.();
 }
 
