@@ -196,21 +196,46 @@ export function clearReleaseOperationGateFromExactIdle(result = null) {
   });
 }
 
+function hasOwnNonEmptyValue(source, key) {
+  if (!Object.prototype.hasOwnProperty.call(source, key)) return false;
+  const value = source[key];
+  if (value === null || value === undefined) return false;
+  return String(value).trim() !== '';
+}
+
+function hasAnyOperationIdentityField(source) {
+  return [
+    'operationId',
+    'id',
+    'operationType',
+    'phase',
+    'expectedReleaseId',
+    'targetReleaseId',
+    'contentHash',
+    'contentPath',
+  ].some((key) => hasOwnNonEmptyValue(source, key));
+}
+
 export function isExactIdleReleaseStatusPayload(data = {}) {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return false;
   const classification = String(data.classification || '').trim();
   const stateText = String(data.state || data.operationState || '').trim();
+  const hasErrorPayload = hasOwnNonEmptyValue(data, 'error');
   return Boolean(
-    data && typeof data === 'object'
-    && data.ok === true
+    data.ok === true
     && String(data.mode || '').trim() === 'status'
     && classification === 'idle'
     && stateText === 'idle'
-    && !String(data.operationId || data.id || '').trim()
+    && data.blocked !== true
+    && !hasErrorPayload
+    && data.operationResolved !== true
+    && data.reconciliationRequired !== true
+    && data.reconciling !== true
     && data.lineageRepairRequired !== true
     && data.repairRequired !== true
-    && data.reconciliationRequired !== true
     && data.terminalAuditIdentityInvalid !== true
     && data.terminalAuditConflict !== true
+    && !hasAnyOperationIdentityField(data)
     && !data.operation
     && !data.activeOperation
   );

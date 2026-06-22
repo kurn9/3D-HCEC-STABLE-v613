@@ -1,0 +1,15 @@
+[
+  {"id":"S001","rpc":"acquire","observedState":"actual013","expectedAction":"recreate_target"},
+  {"id":"S002","rpc":"acquire","observedState":"target","expectedAction":"noop_target"},
+  {"id":"S003","rpc":"acquire","observedState":"absent","expectedAction":"raise_absent"},
+  {"id":"S004","rpc":"acquire","observedState":"unknown","expectedAction":"raise_unknown"},
+  {"id":"S005","rpc":"audit","observedState":"actual013","expectedAction":"recreate_target"},
+  {"id":"S006","rpc":"audit","observedState":"target","expectedAction":"noop_target"},
+  {"id":"S007","rpc":"audit","observedState":"absent","expectedAction":"raise_absent"},
+  {"id":"S008","rpc":"audit","observedState":"unknown","expectedAction":"raise_unknown"},
+  {"id":"S009","rpc":"bridge","observedState":"bridgeBody","expectedAction":"bridge_body_fail_closed"},
+  {"id":"S010","rpc":"ordering","observedState":"migrationOrder","expectedAction":"ordering_valid"},
+  {"id":"S011","rpc":"bridge","observedState":"dropCascade","expectedAction":"no_drop_cascade"},
+  {"id":"S012","rpc":"acquire","observedState":"targetAligns014","expectedAction":"target_signature_aligns_014"},
+  {"id":"S013","rpc":"ordering","observedState":"017bAfter015","expectedAction":"017b_after_015"}
+]
