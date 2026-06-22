@@ -1,0 +1,716 @@
+[
+  {
+    "id": "E001",
+    "name": "minimal canonical idle",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle"
+    },
+    "expectedExactIdle": true,
+    "expectedBlocked": false
+  },
+  {
+    "id": "E002",
+    "name": "idle with approved false flags",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "blocked": false,
+      "repairable": false,
+      "operationResolved": false,
+      "reconciliationRequired": false,
+      "reconciling": false,
+      "lineageRepairRequired": false,
+      "repairRequired": false,
+      "terminalAuditIdentityInvalid": false,
+      "terminalAuditConflict": false
+    },
+    "expectedExactIdle": true,
+    "expectedBlocked": false
+  },
+  {
+    "id": "E003",
+    "name": "idle with approved null optional",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "error": null,
+      "code": null,
+      "operation": null,
+      "activeOperation": null,
+      "operationId": null,
+      "releaseId": null
+    },
+    "expectedExactIdle": true,
+    "expectedBlocked": false
+  },
+  {
+    "id": "E004",
+    "name": "idle operationState only",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "operationState": "idle"
+    },
+    "expectedExactIdle": true,
+    "expectedBlocked": false
+  },
+  {
+    "id": "E005",
+    "name": "idle state and operationState",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "operationState": "idle"
+    },
+    "expectedExactIdle": true,
+    "expectedBlocked": false
+  },
+  {
+    "id": "E006",
+    "name": "repairable true",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "repairable": true
+    },
+    "expectedExactIdle": false,
+    "expectedBlocked": true
+  },
+  {
+    "id": "E007",
+    "name": "blocking code",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "code": "RELEASE_OPERATION_BLOCKED"
+    },
+    "expectedExactIdle": false,
+    "expectedBlocked": true
+  },
+  {
+    "id": "E008",
+    "name": "lineage code",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "code": "RELEASE_LINEAGE_REPAIR_REQUIRED"
+    },
+    "expectedExactIdle": false,
+    "expectedBlocked": true
+  },
+  {
+    "id": "E009",
+    "name": "pointer code",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "code": "POINTER_STATE_UNKNOWN"
+    },
+    "expectedExactIdle": false,
+    "expectedBlocked": true
+  },
+  {
+    "id": "E010",
+    "name": "unknown code",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "code": "SOMETHING"
+    },
+    "expectedExactIdle": false,
+    "expectedBlocked": true
+  },
+  {
+    "id": "E011",
+    "name": "release id",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "releaseId": "r1"
+    },
+    "expectedExactIdle": false,
+    "expectedBlocked": true
+  },
+  {
+    "id": "E012",
+    "name": "snake operation id",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "operation_id": "op1"
+    },
+    "expectedExactIdle": false,
+    "expectedBlocked": true
+  },
+  {
+    "id": "E013",
+    "name": "snake release id",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "release_id": "r1"
+    },
+    "expectedExactIdle": false,
+    "expectedBlocked": true
+  },
+  {
+    "id": "E014",
+    "name": "snake content hash",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "content_hash": "abc"
+    },
+    "expectedExactIdle": false,
+    "expectedBlocked": true
+  },
+  {
+    "id": "E015",
+    "name": "lock key",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "lock_key": "cms-public-current-release"
+    },
+    "expectedExactIdle": false,
+    "expectedBlocked": true
+  },
+  {
+    "id": "E016",
+    "name": "actor id",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "actor_id": "actor"
+    },
+    "expectedExactIdle": false,
+    "expectedBlocked": true
+  },
+  {
+    "id": "E017",
+    "name": "nested reconciliation",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "reconciliation": {}
+    },
+    "expectedExactIdle": false,
+    "expectedBlocked": true
+  },
+  {
+    "id": "E018",
+    "name": "nested repair",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "repair": {}
+    },
+    "expectedExactIdle": false,
+    "expectedBlocked": true
+  },
+  {
+    "id": "E019",
+    "name": "nested conflict",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "conflict": {}
+    },
+    "expectedExactIdle": false,
+    "expectedBlocked": true
+  },
+  {
+    "id": "E020",
+    "name": "unknown dangerous blocked",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "dangerousOperationBlocked": true
+    },
+    "expectedExactIdle": false,
+    "expectedBlocked": true
+  },
+  {
+    "id": "E021",
+    "name": "unknown key NoneType",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "unexpected": null
+    },
+    "expectedExactIdle": false,
+    "expectedBlocked": true
+  },
+  {
+    "id": "E022",
+    "name": "unknown key bool",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "unexpected": false
+    },
+    "expectedExactIdle": false,
+    "expectedBlocked": true
+  },
+  {
+    "id": "E023",
+    "name": "unknown key str",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "unexpected": ""
+    },
+    "expectedExactIdle": false,
+    "expectedBlocked": true
+  },
+  {
+    "id": "E024",
+    "name": "unknown key dict",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "unexpected": {}
+    },
+    "expectedExactIdle": false,
+    "expectedBlocked": true
+  },
+  {
+    "id": "E025",
+    "name": "unknown key list",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "unexpected": []
+    },
+    "expectedExactIdle": false,
+    "expectedBlocked": true
+  },
+  {
+    "id": "E026",
+    "name": "unknown key int",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "unexpected": 0
+    },
+    "expectedExactIdle": false,
+    "expectedBlocked": true
+  },
+  {
+    "id": "E027",
+    "name": "unknown key bool",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "unexpected": true
+    },
+    "expectedExactIdle": false,
+    "expectedBlocked": true
+  },
+  {
+    "id": "E028",
+    "name": "two unknown keys",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "foo": null,
+      "bar": false
+    },
+    "expectedExactIdle": false,
+    "expectedBlocked": true
+  },
+  {
+    "id": "E029",
+    "name": "repairable wrong type",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "repairable": "false"
+    },
+    "expectedExactIdle": false,
+    "expectedBlocked": true
+  },
+  {
+    "id": "E030",
+    "name": "repairable wrong type",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "repairable": 0
+    },
+    "expectedExactIdle": false,
+    "expectedBlocked": true
+  },
+  {
+    "id": "E031",
+    "name": "code wrong type",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "code": []
+    },
+    "expectedExactIdle": false,
+    "expectedBlocked": true
+  },
+  {
+    "id": "E032",
+    "name": "releaseId wrong type",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "releaseId": []
+    },
+    "expectedExactIdle": false,
+    "expectedBlocked": true
+  },
+  {
+    "id": "E033",
+    "name": "reconciliation wrong type",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "reconciliation": false
+    },
+    "expectedExactIdle": false,
+    "expectedBlocked": true
+  },
+  {
+    "id": "E034",
+    "name": "operation_id wrong type",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "operation_id": []
+    },
+    "expectedExactIdle": false,
+    "expectedBlocked": true
+  },
+  {
+    "id": "E035",
+    "name": "blocked wrong type",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "blocked": "false"
+    },
+    "expectedExactIdle": false,
+    "expectedBlocked": true
+  },
+  {
+    "id": "E036",
+    "name": "blocked wrong type",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "blocked": 0
+    },
+    "expectedExactIdle": false,
+    "expectedBlocked": true
+  },
+  {
+    "id": "E037",
+    "name": "error wrong type",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "error": ""
+    },
+    "expectedExactIdle": false,
+    "expectedBlocked": true
+  },
+  {
+    "id": "E038",
+    "name": "error wrong type",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "error": {}
+    },
+    "expectedExactIdle": false,
+    "expectedBlocked": true
+  },
+  {
+    "id": "E039",
+    "name": "operation wrong type",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "operation": false
+    },
+    "expectedExactIdle": false,
+    "expectedBlocked": true
+  },
+  {
+    "id": "E040",
+    "name": "activeOperation wrong type",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "activeOperation": 0
+    },
+    "expectedExactIdle": false,
+    "expectedBlocked": true
+  },
+  {
+    "id": "E041",
+    "name": "operationId wrong type",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "operationId": []
+    },
+    "expectedExactIdle": false,
+    "expectedBlocked": true
+  },
+  {
+    "id": "E042",
+    "name": "operationType wrong type",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "operationType": {}
+    },
+    "expectedExactIdle": false,
+    "expectedBlocked": true
+  },
+  {
+    "id": "E043",
+    "name": "lineageRepairRequired wrong type",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "lineageRepairRequired": "false"
+    },
+    "expectedExactIdle": false,
+    "expectedBlocked": true
+  },
+  {
+    "id": "E044",
+    "name": "terminalAuditConflict wrong type",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "terminalAuditConflict": 0
+    },
+    "expectedExactIdle": false,
+    "expectedBlocked": true
+  },
+  {
+    "id": "E045",
+    "name": "conflicting state aliases",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "operationState": "in_progress"
+    },
+    "expectedExactIdle": false,
+    "expectedBlocked": true
+  },
+  {
+    "id": "E046",
+    "name": "wrapper error canonical body",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle"
+    },
+    "expectedExactIdle": true,
+    "expectedBlocked": true,
+    "wrapperError": "network fail"
+  },
+  {
+    "id": "E047",
+    "name": "wrapper object error canonical body",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle"
+    },
+    "expectedExactIdle": true,
+    "expectedBlocked": true,
+    "wrapperError": {
+      "message": "offline"
+    }
+  },
+  {
+    "id": "E048",
+    "name": "malformed null body",
+    "payload": null,
+    "expectedExactIdle": false,
+    "expectedBlocked": true
+  },
+  {
+    "id": "E049",
+    "name": "malformed array body",
+    "payload": [],
+    "expectedExactIdle": false,
+    "expectedBlocked": true
+  },
+  {
+    "id": "E050",
+    "name": "classification clean",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "clean",
+      "state": "idle"
+    },
+    "expectedExactIdle": false,
+    "expectedBlocked": true
+  },
+  {
+    "id": "E051",
+    "name": "missing mode",
+    "payload": {
+      "ok": true,
+      "classification": "idle",
+      "state": "idle"
+    },
+    "expectedExactIdle": false,
+    "expectedBlocked": true
+  },
+  {
+    "id": "E052",
+    "name": "wrong ok type",
+    "payload": {
+      "ok": "true",
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle"
+    },
+    "expectedExactIdle": false,
+    "expectedBlocked": true
+  },
+  {
+    "id": "E053",
+    "name": "mode array",
+    "payload": {
+      "ok": true,
+      "mode": [
+        "status"
+      ],
+      "classification": "idle",
+      "state": "idle"
+    },
+    "expectedExactIdle": false,
+    "expectedBlocked": true
+  },
+  {
+    "id": "E054",
+    "name": "state array",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": [
+        "idle"
+      ]
+    },
+    "expectedExactIdle": false,
+    "expectedBlocked": true
+  },
+  {
+    "id": "E055",
+    "name": "whitespace state",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": " idle "
+    },
+    "expectedExactIdle": false,
+    "expectedBlocked": true
+  }
+]

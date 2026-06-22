@@ -202,8 +202,44 @@ function isPlainRecord(value) {
   return prototype === Object.prototype || prototype === null;
 }
 
+const EXACT_IDLE_ALLOWED_KEYS = new Set([
+  'ok',
+  'mode',
+  'classification',
+  'state',
+  'operationState',
+  'blocked',
+  'repairable',
+  'error',
+  'code',
+  'operationResolved',
+  'reconciliationRequired',
+  'reconciling',
+  'lineageRepairRequired',
+  'repairRequired',
+  'terminalAuditIdentityInvalid',
+  'terminalAuditConflict',
+  'operation',
+  'activeOperation',
+  'operationId',
+  'id',
+  'operationType',
+  'phase',
+  'expectedReleaseId',
+  'targetReleaseId',
+  'releaseId',
+  'contentHash',
+  'contentPath',
+]);
+
 function hasOwnReleaseGateField(source, key) {
   return Object.prototype.hasOwnProperty.call(source, key);
+}
+
+function hasOnlyExactIdleAllowedKeys(source) {
+  const stringKeys = Object.keys(source);
+  if (!stringKeys.every((key) => EXACT_IDLE_ALLOWED_KEYS.has(key))) return false;
+  return Object.getOwnPropertySymbols(source).length === 0;
 }
 
 function isAbsentOrNull(source, key) {
@@ -211,15 +247,15 @@ function isAbsentOrNull(source, key) {
   return source[key] === null;
 }
 
-function isAbsentOrFalseBoolean(source, key) {
-  if (!hasOwnReleaseGateField(source, key)) return true;
-  return source[key] === false;
-}
-
 function isAbsentNullOrEmptyString(source, key) {
   if (!hasOwnReleaseGateField(source, key)) return true;
   const value = source[key];
   return value === null || value === '';
+}
+
+function isAbsentOrFalseBoolean(source, key) {
+  if (!hasOwnReleaseGateField(source, key)) return true;
+  return source[key] === false;
 }
 
 function hasNoOperationIdentityFields(source) {
@@ -230,9 +266,14 @@ function hasNoOperationIdentityFields(source) {
     'phase',
     'expectedReleaseId',
     'targetReleaseId',
+    'releaseId',
     'contentHash',
     'contentPath',
   ].every((key) => isAbsentNullOrEmptyString(source, key));
+}
+
+function hasNoNestedOperationMetadata(source) {
+  return ['operation', 'activeOperation'].every((key) => isAbsentOrNull(source, key));
 }
 
 function hasExactIdleStateFields(source) {
@@ -244,25 +285,33 @@ function hasExactIdleStateFields(source) {
   return true;
 }
 
+function hasSafeExactIdleFlags(source) {
+  return [
+    'blocked',
+    'repairable',
+    'operationResolved',
+    'reconciliationRequired',
+    'reconciling',
+    'lineageRepairRequired',
+    'repairRequired',
+    'terminalAuditIdentityInvalid',
+    'terminalAuditConflict',
+  ].every((key) => isAbsentOrFalseBoolean(source, key));
+}
+
 export function isExactIdleReleaseStatusPayload(data = {}) {
   if (!isPlainRecord(data)) return false;
   return Boolean(
-    data.ok === true
+    hasOnlyExactIdleAllowedKeys(data)
+    && data.ok === true
     && data.mode === 'status'
     && data.classification === 'idle'
     && hasExactIdleStateFields(data)
-    && isAbsentOrFalseBoolean(data, 'blocked')
+    && hasSafeExactIdleFlags(data)
     && isAbsentOrNull(data, 'error')
-    && isAbsentOrFalseBoolean(data, 'operationResolved')
-    && isAbsentOrFalseBoolean(data, 'reconciliationRequired')
-    && isAbsentOrFalseBoolean(data, 'reconciling')
-    && isAbsentOrFalseBoolean(data, 'lineageRepairRequired')
-    && isAbsentOrFalseBoolean(data, 'repairRequired')
-    && isAbsentOrFalseBoolean(data, 'terminalAuditIdentityInvalid')
-    && isAbsentOrFalseBoolean(data, 'terminalAuditConflict')
+    && isAbsentNullOrEmptyString(data, 'code')
     && hasNoOperationIdentityFields(data)
-    && isAbsentOrNull(data, 'operation')
-    && isAbsentOrNull(data, 'activeOperation')
+    && hasNoNestedOperationMetadata(data)
   );
 }
 

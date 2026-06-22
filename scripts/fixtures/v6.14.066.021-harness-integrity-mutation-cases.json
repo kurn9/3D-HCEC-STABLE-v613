@@ -1,0 +1,52 @@
+[
+  {
+    "id": "H001",
+    "name": "import-original-tree",
+    "expected": "harness integrity mutant must fail"
+  },
+  {
+    "id": "H002",
+    "name": "remove-admin-hash-check",
+    "expected": "harness integrity mutant must fail"
+  },
+  {
+    "id": "H003",
+    "name": "remove-gate-hash-check",
+    "expected": "harness integrity mutant must fail"
+  },
+  {
+    "id": "H004",
+    "name": "hardcode-hash-assertion",
+    "expected": "harness integrity mutant must fail"
+  },
+  {
+    "id": "H005",
+    "name": "reuse-module-cache",
+    "expected": "harness integrity mutant must fail"
+  },
+  {
+    "id": "H006",
+    "name": "skip-cleanup",
+    "expected": "harness integrity mutant must fail"
+  },
+  {
+    "id": "H007",
+    "name": "fake-cleanup",
+    "expected": "harness integrity mutant must fail"
+  },
+  {
+    "id": "H008",
+    "name": "ignore-remaining-temp-roots",
+    "expected": "harness integrity mutant must fail"
+  },
+  {
+    "id": "H009",
+    "name": "ignore-unexpected-failures",
+    "expected": "harness integrity mutant must fail"
+  },
+  {
+    "id": "H010",
+    "name": "zero-replacement-pass",
+    "expected": "harness integrity mutant must fail"
+  }
+]
