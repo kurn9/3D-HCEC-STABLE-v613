@@ -1236,6 +1236,44 @@ async function handleRollbackCmsJson({ sourcePath, dryRun = true, handlers = {} 
 }
 
 
+
+async function refreshReleaseGateAfterPotentialResolution({ handlers = {}, blockedMessage = 'Máy chủ vẫn đang khóa thao tác. Hãy xử lý trạng thái được hiển thị trước khi tiếp tục.', successResult = null } = {}) {
+  const statusResult = await reconcileCmsReleasePointer(getState().supabase, { mode: 'status' });
+  const statusData = statusResult.data || {};
+  if (statusResult.error) {
+    setReleaseOperationGateState({
+      blocked: true,
+      reconciling: false,
+      error: normalizeErrorMessage(statusResult.error),
+      result: successResult || statusData || null,
+      lastCheckedAt: new Date().toISOString(),
+    });
+    setCmsPublishHistoryState({ rollbackError: normalizeErrorMessage(statusResult.error) || blockedMessage });
+    handlers.onRerender?.();
+    return false;
+  }
+  if (statusData.operationId || statusData.lineageRepairRequired === true || ['in_progress', 'pointer_unknown', 'lineage_repair_required'].includes(String(statusData.classification || statusData.state || ''))) {
+    applyReleaseOperationGateFromServer(statusData, blockedMessage);
+    setCmsPublishHistoryState({ rollbackError: blockedMessage });
+    handlers.onRerender?.();
+    return false;
+  }
+  setReleaseOperationGateState({
+    blocked: false,
+    lineageRepairRequired: false,
+    repairRequired: false,
+    reconciliationRequired: false,
+    reconciling: false,
+    message: '',
+    state: 'idle',
+    phase: '',
+    operationId: '',
+    result: statusData || successResult || null,
+    lastCheckedAt: new Date().toISOString(),
+  });
+  return true;
+}
+
 async function handleReconcileRollbackPointer({ handlers = {} } = {}) {
   const current = getState().publishHistory || {};
   const expectedReleaseId = String(current.rollbackPendingTargetReleaseId || current.rollbackResult?.targetReleaseId || current.rollbackResult?.toReleaseId || '').trim();
@@ -1250,40 +1288,57 @@ async function handleReconcileRollbackPointer({ handlers = {} } = {}) {
   const result = await reconcileCmsReleasePointer(getState().supabase, { mode: 'reconcile', operationId: current.rollbackResult?.operationId || getState().releaseOperationGate?.operationId || '', releaseId: expectedReleaseId, contentHash: expectedContentHash });
   const data = result.data || {};
   if (result.error) {
+    const errorMessage = normalizeErrorMessage(result.error);
+    if (data.lineageRepairRequired === true || data.classification === 'lineage_repair_required' || result.error.code === 'LINEAGE_REPAIR_PERSIST_FAILED') {
+      applyReleaseOperationGateFromServer({ ...data, lineageRepairRequired: true }, 'Bản công khai đã được xác nhận nhưng lịch sử vận hành chưa hoàn tất. Hãy sửa lịch sử vận hành trước khi tiếp tục.');
+    } else if (data.operationId || data.state === 'pointer_unknown') {
+      applyReleaseOperationGateFromServer(data, 'Chưa xác định website đang dùng bản nào. Không khôi phục lại. Hãy kiểm tra trạng thái hiện tại.');
+    } else {
+      setReleaseOperationGateState({ reconciling: false, error: errorMessage, lastCheckedAt: new Date().toISOString() });
+    }
     setCmsPublishHistoryState({
       isReconcilingRollbackPointer: false,
-      rollbackReconciliationError: normalizeErrorMessage(result.error),
+      rollbackReconciliationError: errorMessage,
       rollbackReconciliationStatus: '',
     });
-    setReleaseOperationGateState({ reconciling: false, error: normalizeErrorMessage(result.error), lastCheckedAt: new Date().toISOString() });
     handlers.onRerender?.();
     return;
   }
   const classification = String(data.classification || 'read_failed');
   if (classification === 'active_expected_release') {
-    setReleaseOperationGateState({ blocked: false, reconciliationRequired: false, reconciling: false, state: 'succeeded', phase: 'resolved', message: '', lastCheckedAt: new Date().toISOString(), result: data });
+    const gateIdle = await refreshReleaseGateAfterPotentialResolution({
+      handlers,
+      successResult: data,
+      blockedMessage: 'Máy chủ vẫn đang khóa thao tác sau khi kiểm tra. Không khôi phục lại.',
+    });
     setCmsPublishHistoryState({
       isReconcilingRollbackPointer: false,
       rollbackPointerState: 'active_expected_release',
-      rollbackRequiresReconciliation: false,
+      rollbackRequiresReconciliation: !gateIdle,
       rollbackReconciliationResult: data,
       rollbackReconciliationError: null,
-      rollbackReconciliationStatus: 'Đã kiểm tra: website đang dùng bản khôi phục vừa thao tác. Không bấm khôi phục lại.',
-      rollbackError: null,
-      rollbackStatus: 'Website đang dùng bản khôi phục vừa thao tác. Hãy mở website để kiểm tra.',
+      rollbackReconciliationStatus: gateIdle
+        ? 'Đã kiểm tra: website đang dùng bản khôi phục vừa thao tác. Không bấm khôi phục lại.'
+        : 'Website đã được kiểm tra nhưng máy chủ vẫn chưa xác nhận mở khóa thao tác.',
+      rollbackError: gateIdle ? null : 'Máy chủ vẫn đang khóa thao tác. Không khôi phục lại.',
+      rollbackStatus: gateIdle ? 'Website đang dùng bản khôi phục vừa thao tác. Hãy mở website để kiểm tra.' : '',
       rollbackDryRunResult: null,
       rollbackReason: '',
     });
   } else if (classification === 'active_other_release') {
-    setReleaseOperationGateState({ blocked: false, reconciliationRequired: false, reconciling: false, state: 'resolved_active_other', message: '', lastCheckedAt: new Date().toISOString(), result: data });
+    const gateIdle = await refreshReleaseGateAfterPotentialResolution({
+      handlers,
+      successResult: data,
+      blockedMessage: 'Máy chủ vẫn đang khóa thao tác sau khi phát hiện release khác đang active.',
+    });
     setCmsPublishHistoryState({
       isReconcilingRollbackPointer: false,
       rollbackPointerState: 'active_other_release',
-      rollbackRequiresReconciliation: true,
+      rollbackRequiresReconciliation: !gateIdle,
       rollbackReconciliationResult: data,
       rollbackReconciliationError: null,
       rollbackReconciliationStatus: 'Đã kiểm tra: website đang dùng một bản khác. Hãy tải lại lịch sử và kiểm tra lại trước khi thao tác tiếp.',
-      rollbackError: 'Website đang dùng một bản khác với bản vừa khôi phục. Không bấm khôi phục lại bằng confirmation cũ.',
+      rollbackError: gateIdle ? 'Website đang dùng một bản khác với bản vừa khôi phục. Không bấm khôi phục lại bằng confirmation cũ.' : 'Máy chủ vẫn đang khóa thao tác. Không khôi phục lại.',
       rollbackDryRunResult: null,
     });
   } else {
