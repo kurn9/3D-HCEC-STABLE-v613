@@ -173,6 +173,29 @@ export function clearReleaseOperationGateState() {
   return setState({ releaseOperationGate: createEmptyReleaseOperationGateState() });
 }
 
+export function clearReleaseOperationGateFromExactIdle(result = null) {
+  return setReleaseOperationGateState({
+    ...createEmptyReleaseOperationGateState(),
+    blocked: false,
+    lineageRepairRequired: false,
+    repairRequired: false,
+    terminalAuditIdentityInvalid: false,
+    terminalAuditConflict: false,
+    reconciliationRequired: false,
+    reconciling: false,
+    operationId: '',
+    operationType: '',
+    state: 'idle',
+    phase: '',
+    code: '',
+    classification: 'idle',
+    message: '',
+    error: null,
+    result: result || null,
+    lastCheckedAt: new Date().toISOString(),
+  });
+}
+
 export function isExactIdleReleaseStatusPayload(data = {}) {
   const classification = String(data.classification || '').trim();
   const stateText = String(data.state || data.operationState || '').trim();
@@ -195,19 +218,15 @@ export function isExactIdleReleaseStatusPayload(data = {}) {
 
 export function applyReleaseOperationGateFromServer(data = {}, fallbackMessage = '') {
   if (isExactIdleReleaseStatusPayload(data)) {
-    return setReleaseOperationGateState({
-      ...createEmptyReleaseOperationGateState(),
-      result: data || null,
-      lastCheckedAt: new Date().toISOString(),
-    });
+    return clearReleaseOperationGateFromExactIdle(data || null);
   }
   const stateText = String(data.state || data.operationState || '').trim();
   const rawClassification = String(data.classification || '').trim();
   const rawCode = String(data.code || '').trim();
   const classification = rawClassification || rawCode || 'unknown';
-  const lineageRepairRequired = Boolean(data.lineageRepairRequired === true || data.repairable === true || classification === 'lineage_repair_required' || rawCode === 'RELEASE_LINEAGE_REPAIR_REQUIRED');
   const identityInvalid = Boolean(data.terminalAuditIdentityInvalid === true || classification === 'terminal_audit_identity_invalid' || rawCode === 'TERMINAL_AUDIT_IDENTITY_INVALID' || rawCode === 'TERMINAL_AUDIT_ORIGINAL_ACTOR_MISSING');
   const auditConflict = Boolean(data.terminalAuditConflict === true || classification === 'terminal_audit_conflict' || rawCode === 'TERMINAL_AUDIT_CONFLICT');
+  const lineageRepairRequired = !identityInvalid && !auditConflict && Boolean(data.lineageRepairRequired === true || data.repairable === true || classification === 'lineage_repair_required' || rawCode === 'RELEASE_LINEAGE_REPAIR_REQUIRED');
   const pointerUnknown = Boolean(data.reconciliationRequired === true || classification === 'pointer_unknown' || stateText === 'pointer_unknown' || rawCode === 'POINTER_STATE_UNKNOWN');
   const activeBlocked = ['in_progress', 'pointer_unknown'].includes(stateText) || classification === 'release_operation_blocked' || rawCode === 'RELEASE_OPERATION_BLOCKED';
   const malformedOrUnknown = !['idle', 'clean', 'lineage_repair_required', 'terminal_audit_identity_invalid', 'terminal_audit_conflict', 'release_operation_blocked', 'pointer_unknown', 'in_progress'].includes(classification);

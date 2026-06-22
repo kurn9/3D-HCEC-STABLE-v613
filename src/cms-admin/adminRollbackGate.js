@@ -15,6 +15,7 @@ import {
 import {
   getState,
   applyReleaseOperationGateFromServer,
+  clearReleaseOperationGateFromExactIdle,
   setReleaseOperationGateState,
   setCmsPublishHistoryItems,
   setCmsPublishHistoryState,
@@ -1285,6 +1286,18 @@ function keepReleaseGateBlockedFromStatusFailure({ statusResult = {}, statusData
 }
 
 
+function isResolvedCapableReleaseResponse(data = {}) {
+  if (!data || typeof data !== 'object') return false;
+  const classification = String(data.classification || '').trim();
+  const operationState = String(data.state || data.operationState || data.operation?.state || '').trim();
+  return Boolean(
+    data.operationResolved === true
+    || ['active_expected_release', 'active_other_release', 'operation_already_resolved', 'operation_already_resolved_non_success', 'lineage_repaired', 'failed_before_pointer', 'resolved_active_other'].includes(classification)
+    || ['succeeded', 'resolved_active_other', 'failed_before_pointer', 'failed'].includes(operationState)
+  );
+}
+
+
 async function refreshReleaseGateAfterPotentialResolution({ handlers = {}, blockedMessage = 'Máy chủ vẫn đang khóa thao tác. Hãy xử lý trạng thái được hiển thị trước khi tiếp tục.', successResult = null } = {}) {
   const statusResult = await reconcileCmsReleasePointer(getState().supabase, { mode: 'status' });
   const statusData = statusResult.data || {};
@@ -1294,24 +1307,7 @@ async function refreshReleaseGateAfterPotentialResolution({ handlers = {}, block
     handlers.onRerender?.();
     return false;
   }
-  setReleaseOperationGateState({
-    blocked: false,
-    lineageRepairRequired: false,
-    repairRequired: false,
-    terminalAuditIdentityInvalid: false,
-    terminalAuditConflict: false,
-    reconciliationRequired: false,
-    reconciling: false,
-    message: '',
-    state: 'idle',
-    phase: '',
-    code: '',
-    classification: 'idle',
-    operationId: '',
-    error: null,
-    result: statusData || successResult || null,
-    lastCheckedAt: new Date().toISOString(),
-  });
+  clearReleaseOperationGateFromExactIdle(statusData || successResult || null);
   return true;
 }
 
@@ -1330,6 +1326,23 @@ async function handleReconcileRollbackPointer({ handlers = {} } = {}) {
   const data = result.data || {};
   if (result.error) {
     const errorMessage = normalizeErrorMessage(result.error);
+    if (isResolvedCapableReleaseResponse(data)) {
+      const gateIdle = await refreshReleaseGateAfterPotentialResolution({
+        handlers,
+        successResult: data,
+        blockedMessage: 'Máy chủ chưa xác nhận trạng thái idle sau phản hồi lỗi đã resolve. Không thao tác tiếp.',
+      });
+      setCmsPublishHistoryState({
+        isReconcilingRollbackPointer: false,
+        rollbackReconciliationError: gateIdle ? null : errorMessage,
+        rollbackReconciliationStatus: gateIdle
+          ? 'Operation đã resolve và máy chủ xác nhận trạng thái an toàn.'
+          : 'Operation có thể đã resolve nhưng máy chủ vẫn chưa xác nhận trạng thái idle. Không thao tác tiếp.',
+        rollbackError: gateIdle ? null : 'Máy chủ vẫn đang khóa thao tác. Không khôi phục lại.',
+      });
+      handlers.onRerender?.();
+      return;
+    }
     if (data.lineageRepairRequired === true || data.classification === 'lineage_repair_required' || data.classification === 'terminal_audit_identity_invalid' || data.classification === 'terminal_audit_conflict' || result.error.code === 'LINEAGE_REPAIR_PERSIST_FAILED' || result.error.code === 'TERMINAL_AUDIT_IDENTITY_INVALID' || result.error.code === 'TERMINAL_AUDIT_CONFLICT') {
       applyReleaseOperationGateFromServer(data, data.classification === 'terminal_audit_conflict'
         ? 'Lịch sử vận hành có bản ghi terminal mâu thuẫn. Cần kiểm tra forensic trước khi tiếp tục.'
@@ -1465,7 +1478,7 @@ async function handleRepairReleaseLineage({ handlers = {} } = {}) {
     handlers.onRerender?.();
     return;
   }
-  setReleaseOperationGateState({ blocked: false, lineageRepairRequired: false, repairRequired: false, reconciliationRequired: false, reconciling: false, message: '', state: 'idle', phase: '', operationId: '', result: statusData || repairData || null, lastCheckedAt: new Date().toISOString() });
+  clearReleaseOperationGateFromExactIdle(statusData || repairData || null);
   setCmsPublishHistoryState({ rollbackStatus: 'Đã sửa lịch sử vận hành và máy chủ xác nhận trạng thái an toàn. Hãy tải lại lịch sử trước khi thao tác tiếp.', rollbackError: null });
   await handleLoadPublishHistory({ onRerender: () => {} }, { resetWorkflow: false });
   handlers.onRerender?.();
