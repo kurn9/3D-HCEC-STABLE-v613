@@ -1,0 +1,242 @@
+[
+  {
+    "id": "P001",
+    "category": "product",
+    "description": "Allow repairable=true by removing repairable from exact-idle safety flags.",
+    "target": "src/cms-admin/adminState.js",
+    "search": "    'blocked',\n    'repairable',\n    'operationResolved',",
+    "replacement": "    'blocked',\n    'operationResolved',",
+    "requiredReplacementCount": 1,
+    "expectedFailedAssertions": [
+      "E006",
+      "E006_GATE"
+    ],
+    "allowedAdditionalFailures": [
+      "E029",
+      "E029_GATE",
+      "E030",
+      "E030_GATE"
+    ]
+  },
+  {
+    "id": "P002",
+    "category": "product",
+    "description": "Allow non-empty code to clear exact idle.",
+    "target": "src/cms-admin/adminState.js",
+    "search": "    && isAbsentNullOrEmptyString(data, 'code')\n",
+    "replacement": "    && true\n",
+    "requiredReplacementCount": 1,
+    "expectedFailedAssertions": [
+      "E007",
+      "E007_GATE",
+      "E008",
+      "E008_GATE",
+      "E009",
+      "E009_GATE",
+      "E010",
+      "E010_GATE"
+    ],
+    "allowedAdditionalFailures": [
+      "E031",
+      "E031_GATE"
+    ]
+  },
+  {
+    "id": "P003",
+    "category": "product",
+    "description": "Allow releaseId operation identity.",
+    "target": "src/cms-admin/adminState.js",
+    "search": "    'targetReleaseId',\n    'releaseId',\n    'contentHash',",
+    "replacement": "    'targetReleaseId',\n    'contentHash',",
+    "requiredReplacementCount": 1,
+    "expectedFailedAssertions": [
+      "E011",
+      "E011_GATE"
+    ],
+    "allowedAdditionalFailures": [
+      "E032",
+      "E032_GATE"
+    ]
+  },
+  {
+    "id": "P004",
+    "category": "product",
+    "description": "Allow snake_case operation identity by adding operation_id to closed schema.",
+    "target": "src/cms-admin/adminState.js",
+    "search": "  'operationId',\n  'id',",
+    "replacement": "  'operationId',\n  'operation_id',\n  'id',",
+    "requiredReplacementCount": 1,
+    "expectedFailedAssertions": [
+      "E012",
+      "E012_GATE"
+    ],
+    "allowedAdditionalFailures": [
+      "E034",
+      "E034_GATE"
+    ]
+  },
+  {
+    "id": "P005",
+    "category": "product",
+    "description": "Allow nested reconciliation object by adding key to closed schema without validation.",
+    "target": "src/cms-admin/adminState.js",
+    "search": "  'activeOperation',\n  'operationId',",
+    "replacement": "  'activeOperation',\n  'reconciliation',\n  'operationId',",
+    "requiredReplacementCount": 1,
+    "expectedFailedAssertions": [
+      "E017",
+      "E017_GATE"
+    ],
+    "allowedAdditionalFailures": [
+      "E033",
+      "E033_GATE"
+    ]
+  },
+  {
+    "id": "P006",
+    "category": "product",
+    "description": "Remove unknown-key guard.",
+    "target": "src/cms-admin/adminState.js",
+    "search": "    hasOnlyExactIdleAllowedKeys(data)\n    && data.ok === true",
+    "replacement": "    true\n    && data.ok === true",
+    "requiredReplacementCount": 1,
+    "expectedFailedAssertions": [
+      "E020",
+      "E020_GATE",
+      "E021",
+      "E021_GATE",
+      "E022",
+      "E022_GATE",
+      "E024",
+      "E024_GATE"
+    ],
+    "allowedAdditionalFailures": [
+      "E012",
+      "E012_GATE",
+      "E013",
+      "E013_GATE",
+      "E014",
+      "E014_GATE",
+      "E015",
+      "E015_GATE",
+      "E016",
+      "E016_GATE",
+      "E017",
+      "E017_GATE",
+      "E018",
+      "E018_GATE",
+      "E019",
+      "E019_GATE",
+      "E023",
+      "E023_GATE",
+      "E025",
+      "E025_GATE",
+      "E026",
+      "E026_GATE",
+      "E027",
+      "E027_GATE",
+      "E028",
+      "E028_GATE",
+      "E033",
+      "E033_GATE",
+      "E034",
+      "E034_GATE"
+    ]
+  },
+  {
+    "id": "P007",
+    "category": "product",
+    "description": "Treat classification clean as exact idle.",
+    "target": "src/cms-admin/adminState.js",
+    "search": "    && data.classification === 'idle'\n",
+    "replacement": "    && (data.classification === 'idle' || data.classification === 'clean')\n",
+    "requiredReplacementCount": 1,
+    "expectedFailedAssertions": [
+      "E050",
+      "E050_GATE"
+    ]
+  },
+  {
+    "id": "P008",
+    "category": "product",
+    "description": "Hide state/operationState consistency violation.",
+    "target": "src/cms-admin/adminState.js",
+    "search": "  if (hasOperationState && source.operationState !== 'idle') return false;",
+    "replacement": "  if (false && hasOperationState && source.operationState !== 'idle') return false;",
+    "requiredReplacementCount": 1,
+    "expectedFailedAssertions": [
+      "E045",
+      "E045_GATE"
+    ]
+  },
+  {
+    "id": "P009",
+    "category": "product",
+    "description": "Allow non-null error fields to pass exact idle.",
+    "target": "src/cms-admin/adminState.js",
+    "search": "    && isAbsentOrNull(data, 'error')\n",
+    "replacement": "    && true\n",
+    "requiredReplacementCount": 1,
+    "expectedFailedAssertions": [
+      "E037",
+      "E037_GATE",
+      "E038",
+      "E038_GATE"
+    ]
+  },
+  {
+    "id": "P010",
+    "category": "product",
+    "description": "Allow wrapper error body to reach exact-idle clear.",
+    "target": "src/cms-admin/adminReleaseOperationGate.js",
+    "search": "  if (result?.error) {",
+    "replacement": "  if (false && result?.error) {",
+    "requiredReplacementCount": 1,
+    "expectedFailedAssertions": [
+      "E046_GATE",
+      "E047_GATE"
+    ]
+  },
+  {
+    "id": "C001",
+    "category": "oracle-control",
+    "description": "Harmless comment mutation with fake expected failure must be rejected.",
+    "target": "src/cms-admin/adminState.js",
+    "search": "  // Fail-closed contract: this function is only reached after exact-idle was rejected.",
+    "replacement": "  // Fail-closed contract: non-exact-idle remains blocked after exact-idle rejection.",
+    "requiredReplacementCount": 1,
+    "expectedFailedAssertions": [
+      "E006"
+    ],
+    "expectAccepted": false,
+    "expectedRejectReason": "EXPECTED_FAILURE_NOT_OBSERVED"
+  },
+  {
+    "id": "C002",
+    "category": "oracle-control",
+    "description": "Zero replacement must be rejected.",
+    "target": "src/cms-admin/adminState.js",
+    "search": "THIS_SEARCH_STRING_DOES_NOT_EXIST_066022",
+    "replacement": "NOOP",
+    "requiredReplacementCount": 1,
+    "expectedFailedAssertions": [
+      "E006"
+    ],
+    "expectAccepted": false,
+    "expectedRejectReason": "REPLACEMENT_COUNT_MISMATCH"
+  },
+  {
+    "id": "C003",
+    "category": "oracle-control",
+    "description": "Unexpected failure control must be rejected.",
+    "target": "src/cms-admin/adminState.js",
+    "search": "    && data.classification === 'idle'\n",
+    "replacement": "    && (data.classification === 'idle' || data.classification === 'clean')\n",
+    "requiredReplacementCount": 1,
+    "expectedFailedAssertions": [
+      "E006"
+    ],
+    "expectAccepted": false,
+    "expectedRejectReason": "EXPECTED_FAILURE_NOT_OBSERVED"
+  }
+]

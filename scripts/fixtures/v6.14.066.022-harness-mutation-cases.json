@@ -1,0 +1,187 @@
+[
+  {
+    "id": "H001",
+    "category": "harness",
+    "description": "Bypass admin source hash equality.",
+    "target": "scripts/verify-v6.14.066.022-cms-harness-child-runner.mjs",
+    "search": "  // 066022_MARKER_ADMIN_HASH_CHECK_ACTIVE\n",
+    "replacement": "  // marker removed by H001\n",
+    "requiredReplacementCount": 1,
+    "expectedFailedAssertions": [
+      "H_ADMIN_HASH_CHECK_ACTIVE"
+    ]
+  },
+  {
+    "id": "H002",
+    "category": "harness",
+    "description": "Bypass gate source hash equality.",
+    "target": "scripts/verify-v6.14.066.022-cms-harness-child-runner.mjs",
+    "search": "  // 066022_MARKER_GATE_HASH_CHECK_ACTIVE\n",
+    "replacement": "  // marker removed by H002\n",
+    "requiredReplacementCount": 1,
+    "expectedFailedAssertions": [
+      "H_GATE_HASH_CHECK_ACTIVE"
+    ]
+  },
+  {
+    "id": "H003",
+    "category": "harness",
+    "description": "Import original working tree instead of target root.",
+    "target": "scripts/verify-v6.14.066.022-cms-harness-child-runner.mjs",
+    "search": "  // 066022_MARKER_IMPORT_FROM_TARGET_ROOT\n",
+    "replacement": "  // marker removed by H003\n",
+    "requiredReplacementCount": 1,
+    "expectedFailedAssertions": [
+      "H_IMPORT_FROM_TARGET_ROOT"
+    ]
+  },
+  {
+    "id": "H004",
+    "category": "harness",
+    "description": "Disable unique import isolation.",
+    "target": "scripts/verify-v6.14.066.022-cms-harness-child-runner.mjs",
+    "search": "  // 066022_MARKER_IMPORT_ISOLATION_ACTIVE\n",
+    "replacement": "  // marker removed by H004\n",
+    "requiredReplacementCount": 1,
+    "expectedFailedAssertions": [
+      "H_IMPORT_ISOLATION_ACTIVE"
+    ]
+  },
+  {
+    "id": "H005",
+    "category": "harness",
+    "description": "Remove required fixture enforcement marker.",
+    "target": "scripts/verify-v6.14.066.022-cms-harness-child-runner.mjs",
+    "search": "  // 066022_MARKER_REQUIRED_FIXTURE_ENFORCEMENT_ACTIVE\n",
+    "replacement": "  // marker removed by H005\n",
+    "requiredReplacementCount": 1,
+    "expectedFailedAssertions": [
+      "H_REQUIRED_FIXTURE_ENFORCEMENT_ACTIVE"
+    ]
+  },
+  {
+    "id": "H006",
+    "category": "harness",
+    "description": "Remove migration required fixture enforcement marker.",
+    "target": "scripts/verify-v6.14.066.022-cms-harness-child-runner.mjs",
+    "search": "  // 066022_MARKER_REQUIRED_FIXTURE_ENFORCEMENT_ACTIVE\n",
+    "replacement": "  // marker removed by H006\n",
+    "requiredReplacementCount": 1,
+    "expectedFailedAssertions": [
+      "H_REQUIRED_FIXTURE_ENFORCEMENT_ACTIVE"
+    ]
+  },
+  {
+    "id": "H007",
+    "category": "harness",
+    "description": "Disable cleanup filesystem proof.",
+    "target": "scripts/verify-v6.14.066.022-cms-harness-child-runner.mjs",
+    "search": "  // 066022_MARKER_CLEANUP_FILESYSTEM_ACTIVE\n",
+    "replacement": "  // marker removed by H007\n",
+    "requiredReplacementCount": 1,
+    "expectedFailedAssertions": [
+      "H_CLEANUP_FILESYSTEM_ACTIVE"
+    ]
+  },
+  {
+    "id": "H008",
+    "category": "harness",
+    "description": "Break structured protocol version marker.",
+    "target": "scripts/verify-v6.14.066.022-cms-harness-child-runner.mjs",
+    "search": "  // 066022_MARKER_STRUCTURED_PROTOCOL_ACTIVE\n",
+    "replacement": "  // marker removed by H008\n",
+    "requiredReplacementCount": 1,
+    "expectedFailedAssertions": [
+      "H_STRUCTURED_PROTOCOL_ACTIVE"
+    ]
+  },
+  {
+    "id": "H009",
+    "category": "harness",
+    "description": "Skip child-owned cleanup.",
+    "target": "scripts/verify-v6.14.066.022-cms-harness-child-runner.mjs",
+    "search": "  fs.rmSync(childOwnedRoot, { recursive: true, force: true });",
+    "replacement": "  // mutation: skip child cleanup",
+    "requiredReplacementCount": 1,
+    "expectedFailedAssertions": [
+      "CHILD_CLEANUP_ZERO_LEAK",
+      "CHILD_REMAINING_OWNED_ROOTS_ZERO"
+    ],
+    "allowCleanupFailure": true
+  },
+  {
+    "id": "H010",
+    "category": "harness",
+    "description": "Empty frontend fixtures must fail.",
+    "target": "scripts/verify-v6.14.066.022-cms-harness-child-runner.mjs",
+    "search": "  const exactCases = readJson(FIXTURE_ROOT, EXACT_FIXTURE_REL);",
+    "replacement": "  const exactCases = [];",
+    "requiredReplacementCount": 1,
+    "expectedFailedAssertions": [
+      "FRONTEND_FIXTURE_NON_EMPTY",
+      "REQUIRED_FRONTEND_CASES_PRESENT"
+    ],
+    "allowedAdditionalFailures": [
+      "REQUIRED_FRONTEND_EXECUTED_E001",
+      "REQUIRED_FRONTEND_EXECUTED_E006",
+      "REQUIRED_FRONTEND_EXECUTED_E007",
+      "REQUIRED_FRONTEND_EXECUTED_E011",
+      "REQUIRED_FRONTEND_EXECUTED_E012",
+      "REQUIRED_FRONTEND_EXECUTED_E017",
+      "REQUIRED_FRONTEND_EXECUTED_E020",
+      "REQUIRED_FRONTEND_EXECUTED_E021",
+      "REQUIRED_FRONTEND_EXECUTED_E029",
+      "REQUIRED_FRONTEND_EXECUTED_E035",
+      "REQUIRED_FRONTEND_EXECUTED_E045",
+      "REQUIRED_FRONTEND_EXECUTED_E046",
+      "REQUIRED_FRONTEND_EXECUTED_E047",
+      "REQUIRED_FRONTEND_EXECUTED_E050"
+    ]
+  },
+  {
+    "id": "H011",
+    "category": "harness",
+    "description": "Empty migration fixtures must fail.",
+    "target": "scripts/verify-v6.14.066.022-cms-harness-child-runner.mjs",
+    "search": "  const migrationCases = readJson(ROOT, MIGRATION_FIXTURE_REL);",
+    "replacement": "  const migrationCases = [];",
+    "requiredReplacementCount": 1,
+    "expectedFailedAssertions": [
+      "MIGRATION_FIXTURE_NON_EMPTY",
+      "REQUIRED_MIGRATION_CASES_PRESENT"
+    ],
+    "allowedAdditionalFailures": [
+      "REQUIRED_MIGRATION_EXECUTED_S001",
+      "REQUIRED_MIGRATION_EXECUTED_S002",
+      "REQUIRED_MIGRATION_EXECUTED_S003",
+      "REQUIRED_MIGRATION_EXECUTED_S004",
+      "REQUIRED_MIGRATION_EXECUTED_S005",
+      "REQUIRED_MIGRATION_EXECUTED_S006",
+      "REQUIRED_MIGRATION_EXECUTED_S007",
+      "REQUIRED_MIGRATION_EXECUTED_S008",
+      "REQUIRED_MIGRATION_EXECUTED_S009",
+      "REQUIRED_MIGRATION_EXECUTED_S010",
+      "REQUIRED_MIGRATION_EXECUTED_S011",
+      "REQUIRED_MIGRATION_EXECUTED_S012",
+      "REQUIRED_MIGRATION_EXECUTED_S013",
+      "REQUIRED_MIGRATION_EXECUTED_S014",
+      "REQUIRED_MIGRATION_EXECUTED_S015",
+      "REQUIRED_MIGRATION_EXECUTED_S016",
+      "REQUIRED_MIGRATION_EXECUTED_S017"
+    ]
+  },
+  {
+    "id": "H012",
+    "category": "oracle-control",
+    "description": "Zero replacement in harness manifest must be rejected.",
+    "target": "scripts/verify-v6.14.066.022-cms-harness-child-runner.mjs",
+    "search": "THIS_HARNESS_SEARCH_DOES_NOT_EXIST_066022",
+    "replacement": "NOOP",
+    "requiredReplacementCount": 1,
+    "expectedFailedAssertions": [
+      "H_STRUCTURED_PROTOCOL_ACTIVE"
+    ],
+    "expectAccepted": false,
+    "expectedRejectReason": "REPLACEMENT_COUNT_MISMATCH"
+  }
+]
