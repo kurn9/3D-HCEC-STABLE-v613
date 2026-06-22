@@ -609,7 +609,7 @@ function renderRollbackPanel(state = {}, historyState = {}, handlers = {}) {
   const dryRunMatches = hasValidDryRunForSource(historyState, selectedPath);
   const hasReason = hasValidRollbackReason(historyState.rollbackReason);
   const gate = state.releaseOperationGate || {};
-  const serverGateBlocked = Boolean(gate.blocked || gate.lineageRepairRequired || gate.repairRequired);
+  const serverGateBlocked = Boolean(gate.blocked || gate.lineageRepairRequired || gate.repairRequired || gate.terminalAuditIdentityInvalid || gate.terminalAuditConflict);
   const needsReconciliation = Boolean(historyState.rollbackRequiresReconciliation || historyState.rollbackPointerState === 'unknown' || gate.reconciliationRequired);
   const ready = !serverGateBlocked && !needsReconciliation && canDoRealRollback(historyState, selectedPath);
 
@@ -654,7 +654,15 @@ function renderRollbackPanel(state = {}, historyState = {}, handlers = {}) {
     repairButton.addEventListener('click', () => handleRepairReleaseLineage({ handlers }));
     panel.appendChild(repairButton);
   }
-  if (needsReconciliation && !(gate.lineageRepairRequired || gate.repairRequired)) {
+  if (serverGateBlocked && (gate.terminalAuditIdentityInvalid || gate.terminalAuditConflict)) {
+    panel.appendChild(createElement('div', {
+      className: 'cms-admin-alert cms-admin-alert-warning',
+      text: gate.terminalAuditConflict
+        ? 'Lịch sử vận hành có bản ghi mâu thuẫn. Không công khai hoặc khôi phục thêm; cần kiểm tra forensic.'
+        : 'Lịch sử vận hành thiếu hoặc mâu thuẫn thông tin định danh. Không công khai hoặc khôi phục thêm; cần kiểm tra dữ liệu vận hành.',
+    }));
+  }
+  if (needsReconciliation && !(gate.lineageRepairRequired || gate.repairRequired || gate.terminalAuditIdentityInvalid || gate.terminalAuditConflict)) {
     panel.appendChild(createElement('div', {
       className: 'cms-admin-alert cms-admin-alert-warning',
       text: 'Chưa xác định website đang dùng bản nào. Không bấm khôi phục lại. Bấm “Kiểm tra trạng thái hiện tại”.',
@@ -1261,7 +1269,7 @@ function keepReleaseGateBlockedFromStatusFailure({ statusResult = {}, statusData
     ? normalizeErrorMessage(statusResult.error)
     : (fallbackMessage || 'Máy chủ chưa xác nhận trạng thái an toàn. Không công khai hoặc khôi phục thêm.');
   const body = statusData && typeof statusData === 'object' ? statusData : {};
-  if (body.operationId || body.lineageRepairRequired === true || body.repairRequired === true || body.reconciliationRequired === true || ['in_progress', 'pointer_unknown', 'lineage_repair_required'].includes(String(body.classification || body.state || ''))) {
+  if (body.operationId || body.lineageRepairRequired === true || body.repairRequired === true || body.reconciliationRequired === true || ['in_progress', 'pointer_unknown', 'lineage_repair_required', 'terminal_audit_identity_invalid', 'terminal_audit_conflict'].includes(String(body.classification || body.state || ''))) {
     applyReleaseOperationGateFromServer(body, message);
     return;
   }
@@ -1315,7 +1323,7 @@ async function handleReconcileRollbackPointer({ handlers = {} } = {}) {
   const data = result.data || {};
   if (result.error) {
     const errorMessage = normalizeErrorMessage(result.error);
-    if (data.lineageRepairRequired === true || data.classification === 'lineage_repair_required' || result.error.code === 'LINEAGE_REPAIR_PERSIST_FAILED') {
+    if (data.lineageRepairRequired === true || data.classification === 'lineage_repair_required' || data.classification === 'terminal_audit_identity_invalid' || data.classification === 'terminal_audit_conflict' || result.error.code === 'LINEAGE_REPAIR_PERSIST_FAILED' || result.error.code === 'TERMINAL_AUDIT_IDENTITY_INVALID' || result.error.code === 'TERMINAL_AUDIT_CONFLICT') {
       applyReleaseOperationGateFromServer({ ...data, lineageRepairRequired: true }, 'Bản công khai đã được xác nhận nhưng lịch sử vận hành chưa hoàn tất. Hãy sửa lịch sử vận hành trước khi tiếp tục.');
     } else if (data.operationId || data.state === 'pointer_unknown') {
       applyReleaseOperationGateFromServer(data, 'Chưa xác định website đang dùng bản nào. Không khôi phục lại. Hãy kiểm tra trạng thái hiện tại.');
@@ -1365,6 +1373,24 @@ async function handleReconcileRollbackPointer({ handlers = {} } = {}) {
       rollbackReconciliationError: null,
       rollbackReconciliationStatus: 'Đã kiểm tra: website đang dùng một bản khác. Hãy tải lại lịch sử và kiểm tra lại trước khi thao tác tiếp.',
       rollbackError: gateIdle ? 'Website đang dùng một bản khác với bản vừa khôi phục. Không bấm khôi phục lại bằng confirmation cũ.' : 'Máy chủ vẫn đang khóa thao tác. Không khôi phục lại.',
+      rollbackDryRunResult: null,
+    });
+  } else if (['operation_already_resolved', 'operation_already_resolved_non_success', 'lineage_repaired'].includes(classification) || data.operationResolved === true) {
+    const gateIdle = await refreshReleaseGateAfterPotentialResolution({
+      handlers,
+      successResult: data,
+      blockedMessage: 'Máy chủ vẫn chưa xác nhận trạng thái idle sau khi operation đã được resolve.',
+    });
+    setCmsPublishHistoryState({
+      isReconcilingRollbackPointer: false,
+      rollbackPointerState: gateIdle ? 'resolved' : 'unknown',
+      rollbackRequiresReconciliation: !gateIdle,
+      rollbackReconciliationResult: data,
+      rollbackReconciliationError: null,
+      rollbackReconciliationStatus: gateIdle
+        ? 'Máy chủ xác nhận operation đã resolve và trạng thái hiện tại đã an toàn.'
+        : 'Operation có thể đã resolve nhưng máy chủ chưa trả trạng thái idle. Không thao tác tiếp.',
+      rollbackError: gateIdle ? null : 'Máy chủ vẫn đang khóa thao tác. Không khôi phục lại.',
       rollbackDryRunResult: null,
     });
   } else {

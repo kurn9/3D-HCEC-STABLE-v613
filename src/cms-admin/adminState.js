@@ -173,7 +173,14 @@ export function applyReleaseOperationGateFromServer(data = {}, fallbackMessage =
   const stateText = String(data.state || data.operationState || '').trim();
   const classification = String(data.classification || data.code || '').trim();
   const lineageRepairRequired = Boolean(data.lineageRepairRequired || classification === 'lineage_repair_required' || classification === 'RELEASE_LINEAGE_REPAIR_REQUIRED' || data.code === 'RELEASE_LINEAGE_REPAIR_REQUIRED');
-  const blocked = Boolean(data.operationId) && (['in_progress', 'pointer_unknown'].includes(stateText) || lineageRepairRequired);
+  const identityInvalid = classification === 'terminal_audit_identity_invalid' || data.code === 'TERMINAL_AUDIT_IDENTITY_INVALID';
+  const auditConflict = classification === 'terminal_audit_conflict' || data.code === 'TERMINAL_AUDIT_CONFLICT';
+  const blocked = Boolean(data.operationId || identityInvalid || auditConflict) && (['in_progress', 'pointer_unknown'].includes(stateText) || lineageRepairRequired || identityInvalid || auditConflict || data.blocked === true);
+  const blockedMessage = identityInvalid
+    ? 'Lịch sử vận hành của bản công khai thiếu hoặc mâu thuẫn thông tin định danh. Cần kiểm tra dữ liệu vận hành trước khi tiếp tục.'
+    : auditConflict
+      ? 'Lịch sử vận hành có bản ghi terminal mâu thuẫn. Cần kiểm tra forensic trước khi tiếp tục.'
+      : (fallbackMessage || (lineageRepairRequired ? 'Bản công khai đã được xác nhận nhưng lịch sử vận hành chưa hoàn tất. Hãy sửa lịch sử vận hành trước khi tiếp tục.' : 'Đang có một thao tác công khai hoặc khôi phục chưa hoàn tất. Hãy kiểm tra trạng thái hiện tại trước khi tiếp tục.'));
   return setReleaseOperationGateState({
     loading: false,
     blocked,
@@ -185,10 +192,12 @@ export function applyReleaseOperationGateFromServer(data = {}, fallbackMessage =
     targetReleaseId: String(data.targetReleaseId || ''),
     contentHash: String(data.contentHash || ''),
     contentPath: String(data.contentPath || ''),
-    message: blocked ? (fallbackMessage || (lineageRepairRequired ? 'Bản công khai đã được xác nhận nhưng lịch sử vận hành chưa hoàn tất. Hãy sửa lịch sử vận hành trước khi tiếp tục.' : 'Đang có một thao tác công khai hoặc khôi phục chưa hoàn tất. Hãy kiểm tra trạng thái hiện tại trước khi tiếp tục.')) : '',
+    message: blocked ? blockedMessage : '',
     reconciliationRequired: blocked && !lineageRepairRequired,
     lineageRepairRequired,
     repairRequired: lineageRepairRequired,
+    terminalAuditIdentityInvalid: identityInvalid,
+    terminalAuditConflict: auditConflict,
     reconciling: false,
     lastCheckedAt: new Date().toISOString(),
     error: null,
