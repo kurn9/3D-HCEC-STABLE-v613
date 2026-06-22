@@ -1,0 +1,1595 @@
+[
+  {
+    "id": "E001",
+    "name": "pure canonical idle",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle"
+    },
+    "wrapperError": null,
+    "expectedExactIdle": true,
+    "expectedGateBlocked": false
+  },
+  {
+    "id": "E002",
+    "name": "canonical idle with false flags",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "blocked": false,
+      "operationResolved": false,
+      "reconciliationRequired": false,
+      "reconciling": false,
+      "lineageRepairRequired": false,
+      "repairRequired": false,
+      "terminalAuditIdentityInvalid": false,
+      "terminalAuditConflict": false
+    },
+    "wrapperError": null,
+    "expectedExactIdle": true,
+    "expectedGateBlocked": false
+  },
+  {
+    "id": "E003",
+    "name": "canonical idle with nullable optional fields",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "blocked": false,
+      "operationResolved": false,
+      "reconciliationRequired": false,
+      "reconciling": false,
+      "lineageRepairRequired": false,
+      "repairRequired": false,
+      "terminalAuditIdentityInvalid": false,
+      "terminalAuditConflict": false,
+      "error": null,
+      "operation": null,
+      "activeOperation": null,
+      "operationId": null,
+      "operationType": null,
+      "phase": null,
+      "expectedReleaseId": null,
+      "targetReleaseId": null,
+      "contentHash": null,
+      "contentPath": null
+    },
+    "wrapperError": null,
+    "expectedExactIdle": true,
+    "expectedGateBlocked": false
+  },
+  {
+    "id": "E004",
+    "name": "canonical idle with approved empty identity strings",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "blocked": false,
+      "operationResolved": false,
+      "reconciliationRequired": false,
+      "reconciling": false,
+      "lineageRepairRequired": false,
+      "repairRequired": false,
+      "terminalAuditIdentityInvalid": false,
+      "terminalAuditConflict": false,
+      "operationId": "",
+      "id": "",
+      "operationType": "",
+      "phase": "",
+      "expectedReleaseId": "",
+      "targetReleaseId": "",
+      "contentHash": "",
+      "contentPath": ""
+    },
+    "wrapperError": null,
+    "expectedExactIdle": true,
+    "expectedGateBlocked": false
+  },
+  {
+    "id": "E005",
+    "name": "error failure rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "error": "failure"
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E006",
+    "name": "error object rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "error": {}
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E007",
+    "name": "error array rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "error": []
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E008",
+    "name": "error false rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "error": false
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E009",
+    "name": "error zero rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "error": 0
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E010",
+    "name": "blocked True rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "blocked": true
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E011",
+    "name": "blocked 'true' rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "blocked": "true"
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E012",
+    "name": "blocked 'false' rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "blocked": "false"
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E013",
+    "name": "blocked 1 rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "blocked": 1
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E014",
+    "name": "blocked 0 rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "blocked": 0
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E015",
+    "name": "blocked None rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "blocked": null
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E016",
+    "name": "blocked [] rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "blocked": []
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E017",
+    "name": "blocked {} rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "blocked": {}
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E018",
+    "name": "operation {} rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "operation": {}
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E019",
+    "name": "operation [] rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "operation": []
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E020",
+    "name": "operation False rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "operation": false
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E021",
+    "name": "operation 0 rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "operation": 0
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E022",
+    "name": "activeOperation {} rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "activeOperation": {}
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E023",
+    "name": "activeOperation [] rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "activeOperation": []
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E024",
+    "name": "activeOperation False rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "activeOperation": false
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E025",
+    "name": "activeOperation 0 rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "activeOperation": 0
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E026",
+    "name": "operationId list rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "operationId": []
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E027",
+    "name": "operationId dict rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "operationId": {}
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E028",
+    "name": "operationId bool rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "operationId": false
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E029",
+    "name": "operationId int rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "operationId": 0
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E030",
+    "name": "operationId str rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "operationId": "   "
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E031",
+    "name": "operationType list rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "operationType": []
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E032",
+    "name": "operationType dict rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "operationType": {}
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E033",
+    "name": "operationType bool rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "operationType": false
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E034",
+    "name": "operationType int rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "operationType": 0
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E035",
+    "name": "phase list rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "phase": []
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E036",
+    "name": "phase dict rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "phase": {}
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E037",
+    "name": "phase bool rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "phase": false
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E038",
+    "name": "phase int rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "phase": 0
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E039",
+    "name": "expectedReleaseId list rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "expectedReleaseId": []
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E040",
+    "name": "expectedReleaseId dict rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "expectedReleaseId": {}
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E041",
+    "name": "expectedReleaseId bool rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "expectedReleaseId": false
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E042",
+    "name": "expectedReleaseId int rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "expectedReleaseId": 0
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E043",
+    "name": "targetReleaseId list rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "targetReleaseId": []
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E044",
+    "name": "targetReleaseId dict rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "targetReleaseId": {}
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E045",
+    "name": "targetReleaseId bool rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "targetReleaseId": false
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E046",
+    "name": "targetReleaseId int rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "targetReleaseId": 0
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E047",
+    "name": "contentHash list rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "contentHash": []
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E048",
+    "name": "contentHash dict rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "contentHash": {}
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E049",
+    "name": "contentHash bool rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "contentHash": false
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E050",
+    "name": "contentHash int rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "contentHash": 0
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E051",
+    "name": "contentPath list rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "contentPath": []
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E052",
+    "name": "contentPath dict rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "contentPath": {}
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E053",
+    "name": "contentPath bool rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "contentPath": false
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E054",
+    "name": "contentPath int rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "contentPath": 0
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E055",
+    "name": "operationResolved 'false' rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "operationResolved": "false"
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E056",
+    "name": "operationResolved 0 rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "operationResolved": 0
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E057",
+    "name": "operationResolved None rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "operationResolved": null
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E058",
+    "name": "operationResolved [] rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "operationResolved": []
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E059",
+    "name": "operationResolved {} rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "operationResolved": {}
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E060",
+    "name": "operationResolved True rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "operationResolved": true
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E061",
+    "name": "reconciliationRequired 'false' rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "reconciliationRequired": "false"
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E062",
+    "name": "reconciliationRequired 0 rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "reconciliationRequired": 0
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E063",
+    "name": "reconciliationRequired None rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "reconciliationRequired": null
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E064",
+    "name": "reconciliationRequired [] rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "reconciliationRequired": []
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E065",
+    "name": "reconciliationRequired {} rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "reconciliationRequired": {}
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E066",
+    "name": "reconciliationRequired True rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "reconciliationRequired": true
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E067",
+    "name": "reconciling 'false' rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "reconciling": "false"
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E068",
+    "name": "reconciling 0 rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "reconciling": 0
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E069",
+    "name": "reconciling None rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "reconciling": null
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E070",
+    "name": "reconciling [] rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "reconciling": []
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E071",
+    "name": "reconciling {} rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "reconciling": {}
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E072",
+    "name": "reconciling True rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "reconciling": true
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E073",
+    "name": "lineageRepairRequired 'false' rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "lineageRepairRequired": "false"
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E074",
+    "name": "lineageRepairRequired 0 rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "lineageRepairRequired": 0
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E075",
+    "name": "lineageRepairRequired None rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "lineageRepairRequired": null
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E076",
+    "name": "lineageRepairRequired [] rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "lineageRepairRequired": []
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E077",
+    "name": "lineageRepairRequired {} rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "lineageRepairRequired": {}
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E078",
+    "name": "lineageRepairRequired True rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "lineageRepairRequired": true
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E079",
+    "name": "repairRequired 'false' rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "repairRequired": "false"
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E080",
+    "name": "repairRequired 0 rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "repairRequired": 0
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E081",
+    "name": "repairRequired None rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "repairRequired": null
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E082",
+    "name": "repairRequired [] rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "repairRequired": []
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E083",
+    "name": "repairRequired {} rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "repairRequired": {}
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E084",
+    "name": "repairRequired True rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "repairRequired": true
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E085",
+    "name": "terminalAuditIdentityInvalid 'false' rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "terminalAuditIdentityInvalid": "false"
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E086",
+    "name": "terminalAuditIdentityInvalid 0 rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "terminalAuditIdentityInvalid": 0
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E087",
+    "name": "terminalAuditIdentityInvalid None rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "terminalAuditIdentityInvalid": null
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E088",
+    "name": "terminalAuditIdentityInvalid [] rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "terminalAuditIdentityInvalid": []
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E089",
+    "name": "terminalAuditIdentityInvalid {} rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "terminalAuditIdentityInvalid": {}
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E090",
+    "name": "terminalAuditIdentityInvalid True rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "terminalAuditIdentityInvalid": true
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E091",
+    "name": "terminalAuditConflict 'false' rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "terminalAuditConflict": "false"
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E092",
+    "name": "terminalAuditConflict 0 rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "terminalAuditConflict": 0
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E093",
+    "name": "terminalAuditConflict None rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "terminalAuditConflict": null
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E094",
+    "name": "terminalAuditConflict [] rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "terminalAuditConflict": []
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E095",
+    "name": "terminalAuditConflict {} rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "terminalAuditConflict": {}
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E096",
+    "name": "terminalAuditConflict True rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "terminalAuditConflict": true
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E097",
+    "name": "ok string rejects",
+    "payload": {
+      "ok": "true",
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle"
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E098",
+    "name": "mode array rejects",
+    "payload": {
+      "ok": true,
+      "mode": [
+        "status"
+      ],
+      "classification": "idle",
+      "state": "idle"
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E099",
+    "name": "classification array rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": [
+        "idle"
+      ],
+      "state": "idle"
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E100",
+    "name": "state array rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": [
+        "idle"
+      ]
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E101",
+    "name": "state idle opstate in_progress rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "operationState": "in_progress"
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E102",
+    "name": "state conflict rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "in_progress",
+      "operationState": "idle"
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E103",
+    "name": "classification clean rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "clean",
+      "state": "idle"
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E104",
+    "name": "missing mode rejects",
+    "payload": {
+      "ok": true,
+      "classification": "idle",
+      "state": "idle"
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E105",
+    "name": "missing classification rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "state": "idle"
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E106",
+    "name": "missing state rejects",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle"
+    },
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E107",
+    "name": "string payload rejects",
+    "payload": "not object",
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E108",
+    "name": "null payload rejects",
+    "payload": null,
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E109",
+    "name": "array payload rejects",
+    "payload": [
+      {
+        "ok": true,
+        "mode": "status",
+        "classification": "idle",
+        "state": "idle"
+      }
+    ],
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E110",
+    "name": "boolean payload rejects",
+    "payload": false,
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E111",
+    "name": "number payload rejects",
+    "payload": 0,
+    "wrapperError": null,
+    "expectedExactIdle": false,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E112",
+    "name": "wrapper string error with idle body blocks",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle"
+    },
+    "wrapperError": "network",
+    "expectedExactIdle": true,
+    "expectedGateBlocked": true
+  },
+  {
+    "id": "E113",
+    "name": "wrapper object error with blocked=false body blocks",
+    "payload": {
+      "ok": true,
+      "mode": "status",
+      "classification": "idle",
+      "state": "idle",
+      "blocked": false
+    },
+    "wrapperError": {
+      "message": "network"
+    },
+    "expectedExactIdle": true,
+    "expectedGateBlocked": true
+  }
+]

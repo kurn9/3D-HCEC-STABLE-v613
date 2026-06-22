@@ -24,11 +24,7 @@ export function isExactIdleReleaseStatusResult(result = {}, data = {}) {
 }
 
 export function applyReleaseOperationGateStatusResult(result = {}, data = {}, fallbackMessage = '') {
-  const body = data && typeof data === 'object' ? data : {};
-  if (isExactIdleReleaseStatusResult(result, body)) {
-    clearReleaseOperationGateFromExactIdle(body);
-    return true;
-  }
+  const body = data && typeof data === 'object' && !Array.isArray(data) ? data : {};
   if (result?.error) {
     const errorMessage = normalizeErrorMessage(result.error) || fallbackMessage || 'Không xác nhận được trạng thái máy chủ. Không công khai hoặc khôi phục thêm.';
     const structured = {
@@ -42,6 +38,10 @@ export function applyReleaseOperationGateStatusResult(result = {}, data = {}, fa
     };
     applyReleaseOperationGateFromServer(structured, errorMessage);
     return false;
+  }
+  if (isExactIdleReleaseStatusResult(result, body)) {
+    clearReleaseOperationGateFromExactIdle(body);
+    return true;
   }
   applyReleaseOperationGateFromServer(body && Object.keys(body).length ? body : {
     ok: false,

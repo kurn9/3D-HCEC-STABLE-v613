@@ -1,0 +1,104 @@
+[
+  {
+    "id": "S001",
+    "rpc": "acquire",
+    "observed": "actual013",
+    "expectedAction": "recreate_target"
+  },
+  {
+    "id": "S002",
+    "rpc": "acquire",
+    "observed": "target014",
+    "expectedAction": "noop_target"
+  },
+  {
+    "id": "S003",
+    "rpc": "acquire",
+    "observed": "absent",
+    "expectedAction": "raise_absent"
+  },
+  {
+    "id": "S004",
+    "rpc": "acquire",
+    "observed": "unknown",
+    "expectedAction": "raise_unknown"
+  },
+  {
+    "id": "S005",
+    "rpc": "audit",
+    "observed": "actual013",
+    "expectedAction": "recreate_target"
+  },
+  {
+    "id": "S006",
+    "rpc": "audit",
+    "observed": "target014",
+    "expectedAction": "noop_target"
+  },
+  {
+    "id": "S007",
+    "rpc": "audit",
+    "observed": "absent",
+    "expectedAction": "raise_absent"
+  },
+  {
+    "id": "S008",
+    "rpc": "audit",
+    "observed": "unknown",
+    "expectedAction": "raise_unknown"
+  },
+  {
+    "id": "S009",
+    "rpc": "acquire",
+    "observed": "targetAligns014",
+    "expectedAction": "target_signature_aligns_014"
+  },
+  {
+    "id": "S010",
+    "rpc": "audit",
+    "observed": "targetAligns014",
+    "expectedAction": "target_signature_aligns_014"
+  },
+  {
+    "id": "S011",
+    "rpc": "acquire",
+    "observed": "bridgeBody",
+    "expectedAction": "bridge_body_fail_closed"
+  },
+  {
+    "id": "S012",
+    "rpc": "audit",
+    "observed": "bridgeBody",
+    "expectedAction": "bridge_body_fail_closed"
+  },
+  {
+    "id": "S013",
+    "rpc": "both",
+    "observed": "migrationOrder",
+    "expectedAction": "ordering_valid"
+  },
+  {
+    "id": "S014",
+    "rpc": "both",
+    "observed": "dropCascade",
+    "expectedAction": "no_drop_cascade"
+  },
+  {
+    "id": "S015",
+    "rpc": "both",
+    "observed": "017bAfter015",
+    "expectedAction": "017b_after_015"
+  },
+  {
+    "id": "S016",
+    "rpc": "acquire",
+    "observed": "unknownColumnOrder",
+    "expectedAction": "raise_unknown"
+  },
+  {
+    "id": "S017",
+    "rpc": "audit",
+    "observed": "unknownOutputType",
+    "expectedAction": "raise_unknown"
+  }
+]

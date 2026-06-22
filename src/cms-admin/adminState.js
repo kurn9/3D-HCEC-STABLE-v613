@@ -196,14 +196,33 @@ export function clearReleaseOperationGateFromExactIdle(result = null) {
   });
 }
 
-function hasOwnNonEmptyValue(source, key) {
-  if (!Object.prototype.hasOwnProperty.call(source, key)) return false;
-  const value = source[key];
-  if (value === null || value === undefined) return false;
-  return String(value).trim() !== '';
+function isPlainRecord(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
 }
 
-function hasAnyOperationIdentityField(source) {
+function hasOwnReleaseGateField(source, key) {
+  return Object.prototype.hasOwnProperty.call(source, key);
+}
+
+function isAbsentOrNull(source, key) {
+  if (!hasOwnReleaseGateField(source, key)) return true;
+  return source[key] === null;
+}
+
+function isAbsentOrFalseBoolean(source, key) {
+  if (!hasOwnReleaseGateField(source, key)) return true;
+  return source[key] === false;
+}
+
+function isAbsentNullOrEmptyString(source, key) {
+  if (!hasOwnReleaseGateField(source, key)) return true;
+  const value = source[key];
+  return value === null || value === '';
+}
+
+function hasNoOperationIdentityFields(source) {
   return [
     'operationId',
     'id',
@@ -213,31 +232,37 @@ function hasAnyOperationIdentityField(source) {
     'targetReleaseId',
     'contentHash',
     'contentPath',
-  ].some((key) => hasOwnNonEmptyValue(source, key));
+  ].every((key) => isAbsentNullOrEmptyString(source, key));
+}
+
+function hasExactIdleStateFields(source) {
+  const hasState = hasOwnReleaseGateField(source, 'state');
+  const hasOperationState = hasOwnReleaseGateField(source, 'operationState');
+  if (!hasState && !hasOperationState) return false;
+  if (hasState && source.state !== 'idle') return false;
+  if (hasOperationState && source.operationState !== 'idle') return false;
+  return true;
 }
 
 export function isExactIdleReleaseStatusPayload(data = {}) {
-  if (!data || typeof data !== 'object' || Array.isArray(data)) return false;
-  const classification = String(data.classification || '').trim();
-  const stateText = String(data.state || data.operationState || '').trim();
-  const hasErrorPayload = hasOwnNonEmptyValue(data, 'error');
+  if (!isPlainRecord(data)) return false;
   return Boolean(
     data.ok === true
-    && String(data.mode || '').trim() === 'status'
-    && classification === 'idle'
-    && stateText === 'idle'
-    && data.blocked !== true
-    && !hasErrorPayload
-    && data.operationResolved !== true
-    && data.reconciliationRequired !== true
-    && data.reconciling !== true
-    && data.lineageRepairRequired !== true
-    && data.repairRequired !== true
-    && data.terminalAuditIdentityInvalid !== true
-    && data.terminalAuditConflict !== true
-    && !hasAnyOperationIdentityField(data)
-    && !data.operation
-    && !data.activeOperation
+    && data.mode === 'status'
+    && data.classification === 'idle'
+    && hasExactIdleStateFields(data)
+    && isAbsentOrFalseBoolean(data, 'blocked')
+    && isAbsentOrNull(data, 'error')
+    && isAbsentOrFalseBoolean(data, 'operationResolved')
+    && isAbsentOrFalseBoolean(data, 'reconciliationRequired')
+    && isAbsentOrFalseBoolean(data, 'reconciling')
+    && isAbsentOrFalseBoolean(data, 'lineageRepairRequired')
+    && isAbsentOrFalseBoolean(data, 'repairRequired')
+    && isAbsentOrFalseBoolean(data, 'terminalAuditIdentityInvalid')
+    && isAbsentOrFalseBoolean(data, 'terminalAuditConflict')
+    && hasNoOperationIdentityFields(data)
+    && isAbsentOrNull(data, 'operation')
+    && isAbsentOrNull(data, 'activeOperation')
   );
 }
 
@@ -245,19 +270,19 @@ export function applyReleaseOperationGateFromServer(data = {}, fallbackMessage =
   if (isExactIdleReleaseStatusPayload(data)) {
     return clearReleaseOperationGateFromExactIdle(data || null);
   }
-  const stateText = String(data.state || data.operationState || '').trim();
-  const rawClassification = String(data.classification || '').trim();
-  const rawCode = String(data.code || '').trim();
+  const source = isPlainRecord(data) ? data : {};
+  const stateText = typeof source.state === 'string'
+    ? source.state.trim()
+    : (typeof source.operationState === 'string' ? source.operationState.trim() : '');
+  const rawClassification = typeof source.classification === 'string' ? source.classification.trim() : '';
+  const rawCode = typeof source.code === 'string' ? source.code.trim() : '';
   const classification = rawClassification || rawCode || 'unknown';
-  const identityInvalid = Boolean(data.terminalAuditIdentityInvalid === true || classification === 'terminal_audit_identity_invalid' || rawCode === 'TERMINAL_AUDIT_IDENTITY_INVALID' || rawCode === 'TERMINAL_AUDIT_ORIGINAL_ACTOR_MISSING');
-  const auditConflict = Boolean(data.terminalAuditConflict === true || classification === 'terminal_audit_conflict' || rawCode === 'TERMINAL_AUDIT_CONFLICT');
-  const lineageRepairRequired = !identityInvalid && !auditConflict && Boolean(data.lineageRepairRequired === true || data.repairable === true || classification === 'lineage_repair_required' || rawCode === 'RELEASE_LINEAGE_REPAIR_REQUIRED');
-  const pointerUnknown = Boolean(data.reconciliationRequired === true || classification === 'pointer_unknown' || stateText === 'pointer_unknown' || rawCode === 'POINTER_STATE_UNKNOWN');
-  const activeBlocked = ['in_progress', 'pointer_unknown'].includes(stateText) || classification === 'release_operation_blocked' || rawCode === 'RELEASE_OPERATION_BLOCKED';
-  const malformedOrUnknown = !['idle', 'clean', 'lineage_repair_required', 'terminal_audit_identity_invalid', 'terminal_audit_conflict', 'release_operation_blocked', 'pointer_unknown', 'in_progress'].includes(classification);
+  const identityInvalid = Boolean(source.terminalAuditIdentityInvalid === true || classification === 'terminal_audit_identity_invalid' || rawCode === 'TERMINAL_AUDIT_IDENTITY_INVALID' || rawCode === 'TERMINAL_AUDIT_ORIGINAL_ACTOR_MISSING');
+  const auditConflict = Boolean(source.terminalAuditConflict === true || classification === 'terminal_audit_conflict' || rawCode === 'TERMINAL_AUDIT_CONFLICT');
+  const lineageRepairRequired = !identityInvalid && !auditConflict && Boolean(source.lineageRepairRequired === true || source.repairable === true || classification === 'lineage_repair_required' || rawCode === 'RELEASE_LINEAGE_REPAIR_REQUIRED');
+  const pointerUnknown = Boolean(source.reconciliationRequired === true || classification === 'pointer_unknown' || stateText === 'pointer_unknown' || rawCode === 'POINTER_STATE_UNKNOWN');
   // Fail-closed contract: this function is only reached after exact-idle was rejected.
   // Therefore every non-exact-idle, including classification='clean', remains blocked.
-  const blocked = true;
   const blockedMessage = identityInvalid
     ? 'Lịch sử vận hành của bản công khai thiếu hoặc mâu thuẫn thông tin định danh. Cần kiểm tra dữ liệu vận hành trước khi tiếp tục.'
     : auditConflict
@@ -269,27 +294,27 @@ export function applyReleaseOperationGateFromServer(data = {}, fallbackMessage =
           : (fallbackMessage || 'Máy chủ chưa xác nhận trạng thái an toàn. Không công khai hoặc khôi phục thêm.');
   return setReleaseOperationGateState({
     loading: false,
-    blocked,
-    operationId: String(data.operationId || data.id || ''),
-    operationType: String(data.operationType || ''),
-    state: stateText || (blocked ? 'blocked' : 'idle'),
-    phase: String(data.phase || ''),
+    blocked: true,
+    operationId: String(source.operationId || source.id || ''),
+    operationType: String(source.operationType || ''),
+    state: stateText || 'blocked',
+    phase: String(source.phase || ''),
     code: rawCode,
     classification,
-    expectedReleaseId: String(data.expectedReleaseId || data.releaseId || ''),
-    targetReleaseId: String(data.targetReleaseId || ''),
-    contentHash: String(data.contentHash || ''),
-    contentPath: String(data.contentPath || ''),
-    message: blocked ? blockedMessage : '',
-    reconciliationRequired: blocked && pointerUnknown,
-    lineageRepairRequired: blocked && lineageRepairRequired,
-    repairRequired: blocked && lineageRepairRequired,
-    terminalAuditIdentityInvalid: blocked && identityInvalid,
-    terminalAuditConflict: blocked && auditConflict,
+    expectedReleaseId: String(source.expectedReleaseId || source.releaseId || ''),
+    targetReleaseId: String(source.targetReleaseId || ''),
+    contentHash: String(source.contentHash || ''),
+    contentPath: String(source.contentPath || ''),
+    message: blockedMessage,
+    reconciliationRequired: pointerUnknown,
+    lineageRepairRequired,
+    repairRequired: lineageRepairRequired,
+    terminalAuditIdentityInvalid: identityInvalid,
+    terminalAuditConflict: auditConflict,
     reconciling: false,
     lastCheckedAt: new Date().toISOString(),
-    error: blocked ? (data.error || fallbackMessage || null) : null,
-    result: data || null,
+    error: source.error || fallbackMessage || null,
+    result: isPlainRecord(data) ? data : null,
   });
 }
 
