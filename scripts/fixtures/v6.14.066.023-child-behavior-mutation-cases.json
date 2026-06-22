@@ -1,0 +1,151 @@
+[
+  {
+    "id": "C001",
+    "category": "child",
+    "target": "scripts/verify-v6.14.066.023-cms-harness-child-runner.mjs",
+    "search": "targetAdminSha256: sha256File(targetAdminPath),\n    importedAdminSha256: sha256File(importedAdminPath),",
+    "replacement": "targetAdminSha256: sha256File(targetAdminPath),\n    importedAdminSha256: sha256File(targetAdminPath),",
+    "expectedFailedAssertions": [
+      "CHILD_IMPORT_HASH_CHECK_ACTIVE"
+    ],
+    "allowedAdditionalFailures": [],
+    "requiredReplacementCount": 1
+  },
+  {
+    "id": "C002",
+    "category": "child",
+    "target": "scripts/verify-v6.14.066.023-cms-harness-child-runner.mjs",
+    "search": "targetGateSha256: sha256File(targetGatePath),\n    importedGateSha256: sha256File(importedGatePath),",
+    "replacement": "targetGateSha256: sha256File(targetGatePath),\n    importedGateSha256: sha256File(targetGatePath),",
+    "expectedFailedAssertions": [
+      "CHILD_GATE_IMPORT_HASH_CHECK_ACTIVE"
+    ],
+    "allowedAdditionalFailures": [],
+    "requiredReplacementCount": 1
+  },
+  {
+    "id": "C003",
+    "category": "child",
+    "target": "scripts/verify-v6.14.066.023-cms-harness-child-runner.mjs",
+    "search": "const importDir = path.join(importRoot, 'src/cms-admin');",
+    "replacement": "const importDir = path.join(root, 'src/cms-admin'); // MUTANT C003 original target import",
+    "expectedFailedAssertions": [
+      "CHILD_IMPORT_ISOLATION_ACTIVE"
+    ],
+    "allowedAdditionalFailures": [],
+    "requiredReplacementCount": 1
+  },
+  {
+    "id": "C004",
+    "category": "child",
+    "target": "scripts/verify-v6.14.066.023-cms-harness-child-runner.mjs",
+    "search": "add(assertions, 'CHILD_IMPORT_CACHE_BUST_ACTIVE', true, 'unique import URL used');",
+    "replacement": "add(assertions, 'CHILD_IMPORT_CACHE_BUST_ACTIVE', false, 'MUTANT C004 disables import isolation assertion');",
+    "expectedFailedAssertions": [
+      "CHILD_IMPORT_CACHE_BUST_ACTIVE"
+    ],
+    "allowedAdditionalFailures": [],
+    "requiredReplacementCount": 1
+  },
+  {
+    "id": "C005",
+    "category": "child",
+    "target": "scripts/verify-v6.14.066.023-cms-harness-child-runner.mjs",
+    "search": "assertRequiredCases(frontendCases, migrationCases, required, assertions);",
+    "replacement": "// MUTANT C005: required fixture enforcement removed",
+    "expectedFailedAssertions": [
+      "REQUIRED_FRONTEND_CASES_EXECUTED",
+      "REQUIRED_MIGRATION_CASES_EXECUTED"
+    ],
+    "allowedAdditionalFailures": [],
+    "requiredReplacementCount": 1
+  },
+  {
+    "id": "C006",
+    "category": "child",
+    "target": "scripts/verify-v6.14.066.023-cms-harness-child-runner.mjs",
+    "search": "migrationCases = readJson(fixtureRoot, MIGRATION_FIXTURE_REL);",
+    "replacement": "const migrationCases = []; // MUTANT C006",
+    "expectedFailedAssertions": [
+      "MIGRATION_FIXTURE_NON_EMPTY",
+      "REQUIRED_MIGRATION_CASES_PRESENT",
+      "REQUIRED_MIGRATION_CASES_EXECUTED"
+    ],
+    "allowedAdditionalFailures": [],
+    "requiredReplacementCount": 1
+  },
+  {
+    "id": "C007",
+    "category": "child",
+    "target": "scripts/verify-v6.14.066.023-cms-harness-child-runner.mjs",
+    "search": "cleanupOwnedPaths(ownedPathsCreated, ownedPathsRemoved);",
+    "replacement": "// MUTANT C007: complete cleanup skipped",
+    "expectedFailedAssertions": [
+      "CHILD_CLEANUP_COMPLETE"
+    ],
+    "allowedAdditionalFailures": [],
+    "requiredReplacementCount": 1
+  },
+  {
+    "id": "C008",
+    "category": "child",
+    "target": "scripts/verify-v6.14.066.023-cms-harness-child-runner.mjs",
+    "search": "const remainingOwnedPaths = ownedPathsCreated.filter((p) => fs.existsSync(p));",
+    "replacement": "const remainingOwnedPaths = []; // MUTANT C008 hides remaining paths",
+    "expectedFailedAssertions": [
+      "CHILD_CLEANUP_ENUMERATION_ACTIVE"
+    ],
+    "allowedAdditionalFailures": [],
+    "requiredReplacementCount": 1
+  },
+  {
+    "id": "C009",
+    "category": "child",
+    "target": "scripts/verify-v6.14.066.023-cms-harness-child-runner.mjs",
+    "search": "protocolVersion: CHILD_PROTOCOL_VERSION,",
+    "replacement": "protocolVersion: 'mutated-protocol',",
+    "expectedFailedAssertions": [
+      "CHILD_PROTOCOL_VALID"
+    ],
+    "allowedAdditionalFailures": [],
+    "requiredReplacementCount": 1
+  },
+  {
+    "id": "C010",
+    "category": "child",
+    "target": "scripts/verify-v6.14.066.023-cms-harness-child-runner.mjs",
+    "search": "runId,",
+    "replacement": "runId: `${runId}-wrong`,",
+    "expectedFailedAssertions": [
+      "CHILD_RUN_ID_VALID"
+    ],
+    "allowedAdditionalFailures": [],
+    "requiredReplacementCount": 1
+  },
+  {
+    "id": "C011",
+    "category": "child",
+    "target": "scripts/verify-v6.14.066.023-cms-harness-child-runner.mjs",
+    "search": "frontendCases = readJson(fixtureRoot, EXACT_FIXTURE_REL);",
+    "replacement": "const frontendCases = []; // MUTANT C011",
+    "expectedFailedAssertions": [
+      "FRONTEND_FIXTURE_NON_EMPTY",
+      "REQUIRED_FRONTEND_CASES_PRESENT",
+      "REQUIRED_FRONTEND_CASES_EXECUTED"
+    ],
+    "allowedAdditionalFailures": [],
+    "requiredReplacementCount": 1
+  },
+  {
+    "id": "C012",
+    "category": "child",
+    "target": "scripts/verify-v6.14.066.023-cms-harness-child-runner.mjs",
+    "search": "add(assertions, 'MIGRATION_STATIC_REGRESSION_PASS', migrationPass, 'migration static regression');",
+    "replacement": "add(assertions, 'MIGRATION_STATIC_REGRESSION_PASS', true, 'migration static regression bypassed');",
+    "expectedFailedAssertions": [
+      "MIGRATION_STATIC_REGRESSION_PASS"
+    ],
+    "allowedAdditionalFailures": [],
+    "requiredReplacementCount": 1
+  }
+]

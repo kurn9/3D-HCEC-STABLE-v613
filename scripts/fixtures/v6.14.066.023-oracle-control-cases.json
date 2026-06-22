@@ -1,0 +1,56 @@
+[
+  {
+    "id": "O001",
+    "category": "oracle-control",
+    "controlType": "harmless",
+    "target": "scripts/verify-v6.14.066.023-cms-harness-child-runner.mjs",
+    "search": "const CHILD_PROTOCOL_VERSION = 'v6.14.066.023-child';",
+    "replacement": "const CHILD_PROTOCOL_VERSION = 'v6.14.066.023-child'; // harmless control",
+    "expectedFailedAssertions": [
+      "E006_PREDICATE"
+    ],
+    "requiredReplacementCount": 1,
+    "expectedRejectReason": "ABNORMAL_CHILD_EXIT"
+  },
+  {
+    "id": "O002",
+    "category": "oracle-control",
+    "controlType": "zero-replacement",
+    "target": "scripts/verify-v6.14.066.023-cms-harness-child-runner.mjs",
+    "search": "THIS_SEARCH_STRING_DOES_NOT_EXIST_066023",
+    "replacement": "noop",
+    "expectedFailedAssertions": [
+      "E006_PREDICATE"
+    ],
+    "requiredReplacementCount": 1,
+    "expectedRejectReason": "REPLACEMENT_COUNT_MISMATCH"
+  },
+  {
+    "id": "O003",
+    "category": "oracle-control",
+    "controlType": "unexpected-failure",
+    "target": "src/cms-admin/adminState.js",
+    "search": "'repairable',",
+    "replacement": "// O003 removes repairable and creates expected plus extra failures\n  ",
+    "expectedFailedAssertions": [
+      "E007_PREDICATE",
+      "E007_GATE"
+    ],
+    "allowedAdditionalFailures": [],
+    "requiredReplacementCount": 1,
+    "expectedRejectReason": "REPLACEMENT_COUNT_MISMATCH"
+  },
+  {
+    "id": "O004",
+    "category": "oracle-control",
+    "controlType": "abnormal-exit",
+    "target": "scripts/verify-v6.14.066.023-cms-harness-child-runner.mjs",
+    "search": "process.exit(result.failCount > 0 ? 1 : 0);",
+    "replacement": "process.exit(result.failCount > 0 ? 2 : 0);",
+    "expectedFailedAssertions": [
+      "E006_PREDICATE"
+    ],
+    "requiredReplacementCount": 1,
+    "expectedRejectReason": "ABNORMAL_CHILD_EXIT"
+  }
+]

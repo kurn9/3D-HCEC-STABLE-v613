@@ -1,0 +1,168 @@
+[
+  {
+    "id": "P001",
+    "category": "product",
+    "target": "src/cms-admin/adminState.js",
+    "search": "if (!stringKeys.every((key) => EXACT_IDLE_ALLOWED_KEYS.has(key))) return false;",
+    "replacement": "// MUTANT P001: unknown-key guard removed\n  // if (!stringKeys.every((key) => EXACT_IDLE_ALLOWED_KEYS.has(key))) return false;",
+    "expectedFailedAssertions": [
+      "E012_PREDICATE",
+      "E012_GATE",
+      "E013_PREDICATE",
+      "E013_GATE",
+      "E014_PREDICATE",
+      "E014_GATE",
+      "E015_PREDICATE",
+      "E015_GATE",
+      "E016_PREDICATE",
+      "E016_GATE",
+      "E017_PREDICATE",
+      "E017_GATE",
+      "E018_PREDICATE",
+      "E018_GATE",
+      "E019_PREDICATE",
+      "E019_GATE",
+      "E020_PREDICATE",
+      "E020_GATE",
+      "E021_PREDICATE",
+      "E021_GATE",
+      "E022_PREDICATE",
+      "E022_GATE",
+      "E023_PREDICATE",
+      "E023_GATE",
+      "E024_PREDICATE",
+      "E024_GATE",
+      "E025_PREDICATE",
+      "E025_GATE",
+      "E026_PREDICATE",
+      "E026_GATE",
+      "E027_PREDICATE",
+      "E027_GATE",
+      "E028_PREDICATE",
+      "E028_GATE",
+      "E033_PREDICATE",
+      "E033_GATE",
+      "E034_PREDICATE",
+      "E034_GATE"
+    ],
+    "allowedAdditionalFailures": [],
+    "requiredReplacementCount": 1
+  },
+  {
+    "id": "P002",
+    "category": "product",
+    "target": "src/cms-admin/adminState.js",
+    "search": "'repairable',",
+    "replacement": "// MUTANT P002: repairable removed from typed flag validation\n  ",
+    "expectedFailedAssertions": [
+      "E002_PREDICATE",
+      "E002_GATE"
+    ],
+    "allowedAdditionalFailures": [],
+    "requiredReplacementCount": 2
+  },
+  {
+    "id": "P003",
+    "category": "product",
+    "target": "src/cms-admin/adminState.js",
+    "search": "&& isAbsentNullOrEmptyString(data, 'code')",
+    "replacement": "// MUTANT P003: code guard removed",
+    "expectedFailedAssertions": [
+      "E007_PREDICATE",
+      "E007_GATE",
+      "E008_PREDICATE",
+      "E008_GATE",
+      "E009_PREDICATE",
+      "E009_GATE",
+      "E010_PREDICATE",
+      "E010_GATE",
+      "E031_PREDICATE",
+      "E031_GATE"
+    ],
+    "allowedAdditionalFailures": [],
+    "requiredReplacementCount": 1
+  },
+  {
+    "id": "P004",
+    "category": "product",
+    "target": "src/cms-admin/adminState.js",
+    "search": "'releaseId',",
+    "replacement": "// MUTANT P004: releaseId removed from identity guard\n  ",
+    "expectedFailedAssertions": [
+      "E003_PREDICATE",
+      "E003_GATE"
+    ],
+    "allowedAdditionalFailures": [],
+    "requiredReplacementCount": 2
+  },
+  {
+    "id": "P006",
+    "category": "product",
+    "target": "src/cms-admin/adminState.js",
+    "search": "  'activeOperation',",
+    "replacement": "  'activeOperation',\n  'reconciliation',",
+    "expectedFailedAssertions": [
+      "E017_PREDICATE",
+      "E017_GATE"
+    ],
+    "allowedAdditionalFailures": [
+      "E033_PREDICATE",
+      "E033_GATE"
+    ],
+    "requiredReplacementCount": 1
+  },
+  {
+    "id": "P007",
+    "category": "product",
+    "target": "src/cms-admin/adminState.js",
+    "search": "&& data.classification === 'idle'",
+    "replacement": "&& (data.classification === 'idle' || data.classification === 'clean')",
+    "expectedFailedAssertions": [
+      "E050_PREDICATE",
+      "E050_GATE"
+    ],
+    "allowedAdditionalFailures": [],
+    "requiredReplacementCount": 1
+  },
+  {
+    "id": "P008",
+    "category": "product",
+    "target": "src/cms-admin/adminState.js",
+    "search": "if (hasOperationState && source.operationState !== 'idle') return false;",
+    "replacement": "// MUTANT P008: operationState conflict hidden\n  // if (hasOperationState && source.operationState !== 'idle') return false;",
+    "expectedFailedAssertions": [
+      "E045_PREDICATE",
+      "E045_GATE"
+    ],
+    "allowedAdditionalFailures": [],
+    "requiredReplacementCount": 1
+  },
+  {
+    "id": "P009",
+    "category": "product",
+    "target": "src/cms-admin/adminState.js",
+    "search": "&& isAbsentOrNull(data, 'error')",
+    "replacement": "// MUTANT P009: error guard removed",
+    "expectedFailedAssertions": [
+      "E037_PREDICATE",
+      "E037_GATE",
+      "E038_PREDICATE",
+      "E038_GATE"
+    ],
+    "allowedAdditionalFailures": [],
+    "requiredReplacementCount": 1
+  },
+  {
+    "id": "P010",
+    "category": "product",
+    "target": "src/cms-admin/adminReleaseOperationGate.js",
+    "search": "if (result?.error) {",
+    "replacement": "if (false && result?.error) {",
+    "expectedFailedAssertions": [
+      "E046_WRAPPER",
+      "E047_WRAPPER"
+    ],
+    "allowedAdditionalFailures": [],
+    "requiredReplacementCount": 1
+  }
+]
