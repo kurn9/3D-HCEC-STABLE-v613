@@ -1246,27 +1246,6 @@ async function handleRollbackCmsJson({ sourcePath, dryRun = true, handlers = {} 
 
 
 
-function isExactIdleReleaseStatusResponse(result = {}, data = {}) {
-  if (result?.error) return false;
-  const body = data && typeof data === 'object' ? data : {};
-  const classification = String(body.classification || '').trim();
-  const stateText = String(body.state || '').trim();
-  return Boolean(
-    body.ok === true
-    && String(body.mode || '').trim() === 'status'
-    && classification === 'idle'
-    && stateText === 'idle'
-    && !String(body.operationId || body.id || '').trim()
-    && body.lineageRepairRequired !== true
-    && body.repairRequired !== true
-    && body.reconciliationRequired !== true
-    && body.terminalAuditIdentityInvalid !== true
-    && body.terminalAuditConflict !== true
-    && !body.operation
-    && !body.activeOperation
-  );
-}
-
 function keepReleaseGateBlockedFromStatusFailure({ statusResult = {}, statusData = {}, fallbackMessage = '', successResult = null } = {}) {
   const message = statusResult?.error
     ? normalizeErrorMessage(statusResult.error)

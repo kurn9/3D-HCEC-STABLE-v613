@@ -1,11 +1,15 @@
 {
-  "version": "v6.14.066.017",
+  "version": "v6.14.066.018",
   "migrationStates": [
     { "id": "S001", "rpc": "acquire", "state": "013_signature", "expected": "bridge_recreate_target_fail_closed" },
     { "id": "S002", "rpc": "acquire", "state": "014_015_target_signature", "expected": "bridge_noop" },
-    { "id": "S003", "rpc": "acquire", "state": "unknown_signature", "expected": "fail_closed_raise" },
-    { "id": "S004", "rpc": "audit", "state": "013_signature", "expected": "bridge_recreate_target_fail_closed" },
-    { "id": "S005", "rpc": "audit", "state": "014_015_target_signature", "expected": "bridge_noop" },
-    { "id": "S006", "rpc": "audit", "state": "unknown_signature", "expected": "fail_closed_raise" }
+    { "id": "S003", "rpc": "acquire", "state": "absent_after_013", "expected": "fail_closed_raise" },
+    { "id": "S004", "rpc": "acquire", "state": "unknown_signature", "expected": "fail_closed_raise" },
+    { "id": "S005", "rpc": "audit", "state": "013_signature", "expected": "bridge_recreate_target_fail_closed" },
+    { "id": "S006", "rpc": "audit", "state": "014_015_target_signature", "expected": "bridge_noop" },
+    { "id": "S007", "rpc": "audit", "state": "absent_after_013", "expected": "fail_closed_raise" },
+    { "id": "S008", "rpc": "audit", "state": "unknown_signature", "expected": "fail_closed_raise" },
+    { "id": "S009", "rpc": "bridge", "state": "body_called_before_canonical", "expected": "fail_closed_raise" },
+    { "id": "S010", "rpc": "ordering", "state": "017a_before_014_and_017b_after_015", "expected": "ordered" }
   ]
 }

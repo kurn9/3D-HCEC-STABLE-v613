@@ -230,7 +230,9 @@ export function applyReleaseOperationGateFromServer(data = {}, fallbackMessage =
   const pointerUnknown = Boolean(data.reconciliationRequired === true || classification === 'pointer_unknown' || stateText === 'pointer_unknown' || rawCode === 'POINTER_STATE_UNKNOWN');
   const activeBlocked = ['in_progress', 'pointer_unknown'].includes(stateText) || classification === 'release_operation_blocked' || rawCode === 'RELEASE_OPERATION_BLOCKED';
   const malformedOrUnknown = !['idle', 'clean', 'lineage_repair_required', 'terminal_audit_identity_invalid', 'terminal_audit_conflict', 'release_operation_blocked', 'pointer_unknown', 'in_progress'].includes(classification);
-  const blocked = Boolean(data.blocked === true || data.operationId || activeBlocked || pointerUnknown || lineageRepairRequired || identityInvalid || auditConflict || malformedOrUnknown);
+  // Fail-closed contract: this function is only reached after exact-idle was rejected.
+  // Therefore every non-exact-idle, including classification='clean', remains blocked.
+  const blocked = true;
   const blockedMessage = identityInvalid
     ? 'Lịch sử vận hành của bản công khai thiếu hoặc mâu thuẫn thông tin định danh. Cần kiểm tra dữ liệu vận hành trước khi tiếp tục.'
     : auditConflict

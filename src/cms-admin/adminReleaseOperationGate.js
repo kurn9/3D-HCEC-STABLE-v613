@@ -31,7 +31,8 @@ export function applyReleaseOperationGateStatusResult(result = {}, data = {}, fa
   }
   if (result?.error) {
     const errorMessage = normalizeErrorMessage(result.error) || fallbackMessage || 'Không xác nhận được trạng thái máy chủ. Không công khai hoặc khôi phục thêm.';
-    const structured = body && Object.keys(body).length ? body : {
+    const structured = {
+      ...(body && typeof body === 'object' ? body : {}),
       ok: false,
       mode: 'status',
       classification: 'status_read_failed',
