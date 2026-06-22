@@ -138,8 +138,10 @@ export function createEmptyReleaseOperationGateState() {
     blocked: false,
     operationId: '',
     operationType: '',
-    state: '',
+    state: 'idle',
     phase: '',
+    code: '',
+    classification: 'idle',
     expectedReleaseId: '',
     targetReleaseId: '',
     contentHash: '',
@@ -151,6 +153,8 @@ export function createEmptyReleaseOperationGateState() {
     error: null,
     lineageRepairRequired: false,
     repairRequired: false,
+    terminalAuditIdentityInvalid: false,
+    terminalAuditConflict: false,
     result: null,
   };
 }
@@ -169,38 +173,76 @@ export function clearReleaseOperationGateState() {
   return setState({ releaseOperationGate: createEmptyReleaseOperationGateState() });
 }
 
-export function applyReleaseOperationGateFromServer(data = {}, fallbackMessage = '') {
+export function isExactIdleReleaseStatusPayload(data = {}) {
+  const classification = String(data.classification || '').trim();
   const stateText = String(data.state || data.operationState || '').trim();
-  const classification = String(data.classification || data.code || '').trim();
-  const lineageRepairRequired = Boolean(data.lineageRepairRequired || classification === 'lineage_repair_required' || classification === 'RELEASE_LINEAGE_REPAIR_REQUIRED' || data.code === 'RELEASE_LINEAGE_REPAIR_REQUIRED');
-  const identityInvalid = classification === 'terminal_audit_identity_invalid' || data.code === 'TERMINAL_AUDIT_IDENTITY_INVALID';
-  const auditConflict = classification === 'terminal_audit_conflict' || data.code === 'TERMINAL_AUDIT_CONFLICT';
-  const blocked = Boolean(data.operationId || identityInvalid || auditConflict) && (['in_progress', 'pointer_unknown'].includes(stateText) || lineageRepairRequired || identityInvalid || auditConflict || data.blocked === true);
+  return Boolean(
+    data && typeof data === 'object'
+    && data.ok === true
+    && String(data.mode || '').trim() === 'status'
+    && classification === 'idle'
+    && stateText === 'idle'
+    && !String(data.operationId || data.id || '').trim()
+    && data.lineageRepairRequired !== true
+    && data.repairRequired !== true
+    && data.reconciliationRequired !== true
+    && data.terminalAuditIdentityInvalid !== true
+    && data.terminalAuditConflict !== true
+    && !data.operation
+    && !data.activeOperation
+  );
+}
+
+export function applyReleaseOperationGateFromServer(data = {}, fallbackMessage = '') {
+  if (isExactIdleReleaseStatusPayload(data)) {
+    return setReleaseOperationGateState({
+      ...createEmptyReleaseOperationGateState(),
+      result: data || null,
+      lastCheckedAt: new Date().toISOString(),
+    });
+  }
+  const stateText = String(data.state || data.operationState || '').trim();
+  const rawClassification = String(data.classification || '').trim();
+  const rawCode = String(data.code || '').trim();
+  const classification = rawClassification || rawCode || 'unknown';
+  const lineageRepairRequired = Boolean(data.lineageRepairRequired === true || data.repairable === true || classification === 'lineage_repair_required' || rawCode === 'RELEASE_LINEAGE_REPAIR_REQUIRED');
+  const identityInvalid = Boolean(data.terminalAuditIdentityInvalid === true || classification === 'terminal_audit_identity_invalid' || rawCode === 'TERMINAL_AUDIT_IDENTITY_INVALID' || rawCode === 'TERMINAL_AUDIT_ORIGINAL_ACTOR_MISSING');
+  const auditConflict = Boolean(data.terminalAuditConflict === true || classification === 'terminal_audit_conflict' || rawCode === 'TERMINAL_AUDIT_CONFLICT');
+  const pointerUnknown = Boolean(data.reconciliationRequired === true || classification === 'pointer_unknown' || stateText === 'pointer_unknown' || rawCode === 'POINTER_STATE_UNKNOWN');
+  const activeBlocked = ['in_progress', 'pointer_unknown'].includes(stateText) || classification === 'release_operation_blocked' || rawCode === 'RELEASE_OPERATION_BLOCKED';
+  const malformedOrUnknown = !['idle', 'clean', 'lineage_repair_required', 'terminal_audit_identity_invalid', 'terminal_audit_conflict', 'release_operation_blocked', 'pointer_unknown', 'in_progress'].includes(classification);
+  const blocked = Boolean(data.blocked === true || data.operationId || activeBlocked || pointerUnknown || lineageRepairRequired || identityInvalid || auditConflict || malformedOrUnknown);
   const blockedMessage = identityInvalid
     ? 'Lịch sử vận hành của bản công khai thiếu hoặc mâu thuẫn thông tin định danh. Cần kiểm tra dữ liệu vận hành trước khi tiếp tục.'
     : auditConflict
       ? 'Lịch sử vận hành có bản ghi terminal mâu thuẫn. Cần kiểm tra forensic trước khi tiếp tục.'
-      : (fallbackMessage || (lineageRepairRequired ? 'Bản công khai đã được xác nhận nhưng lịch sử vận hành chưa hoàn tất. Hãy sửa lịch sử vận hành trước khi tiếp tục.' : 'Đang có một thao tác công khai hoặc khôi phục chưa hoàn tất. Hãy kiểm tra trạng thái hiện tại trước khi tiếp tục.'));
+      : lineageRepairRequired
+        ? 'Bản công khai đã được xác nhận nhưng lịch sử vận hành chưa hoàn tất. Hãy sửa lịch sử vận hành trước khi tiếp tục.'
+        : pointerUnknown
+          ? 'Chưa xác định website đang dùng bản nào. Không công khai hoặc khôi phục lại. Hãy kiểm tra trạng thái hiện tại.'
+          : (fallbackMessage || 'Máy chủ chưa xác nhận trạng thái an toàn. Không công khai hoặc khôi phục thêm.');
   return setReleaseOperationGateState({
     loading: false,
     blocked,
     operationId: String(data.operationId || data.id || ''),
     operationType: String(data.operationType || ''),
-    state: stateText,
+    state: stateText || (blocked ? 'blocked' : 'idle'),
     phase: String(data.phase || ''),
+    code: rawCode,
+    classification,
     expectedReleaseId: String(data.expectedReleaseId || data.releaseId || ''),
     targetReleaseId: String(data.targetReleaseId || ''),
     contentHash: String(data.contentHash || ''),
     contentPath: String(data.contentPath || ''),
     message: blocked ? blockedMessage : '',
-    reconciliationRequired: blocked && !lineageRepairRequired,
-    lineageRepairRequired,
-    repairRequired: lineageRepairRequired,
-    terminalAuditIdentityInvalid: identityInvalid,
-    terminalAuditConflict: auditConflict,
+    reconciliationRequired: blocked && pointerUnknown,
+    lineageRepairRequired: blocked && lineageRepairRequired,
+    repairRequired: blocked && lineageRepairRequired,
+    terminalAuditIdentityInvalid: blocked && identityInvalid,
+    terminalAuditConflict: blocked && auditConflict,
     reconciling: false,
     lastCheckedAt: new Date().toISOString(),
-    error: null,
+    error: blocked ? (data.error || fallbackMessage || null) : null,
     result: data || null,
   });
 }

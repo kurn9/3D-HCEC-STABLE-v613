@@ -1259,6 +1259,8 @@ function isExactIdleReleaseStatusResponse(result = {}, data = {}) {
     && body.lineageRepairRequired !== true
     && body.repairRequired !== true
     && body.reconciliationRequired !== true
+    && body.terminalAuditIdentityInvalid !== true
+    && body.terminalAuditConflict !== true
     && !body.operation
     && !body.activeOperation
   );
@@ -1269,7 +1271,7 @@ function keepReleaseGateBlockedFromStatusFailure({ statusResult = {}, statusData
     ? normalizeErrorMessage(statusResult.error)
     : (fallbackMessage || 'Máy chủ chưa xác nhận trạng thái an toàn. Không công khai hoặc khôi phục thêm.');
   const body = statusData && typeof statusData === 'object' ? statusData : {};
-  if (body.operationId || body.lineageRepairRequired === true || body.repairRequired === true || body.reconciliationRequired === true || ['in_progress', 'pointer_unknown', 'lineage_repair_required', 'terminal_audit_identity_invalid', 'terminal_audit_conflict'].includes(String(body.classification || body.state || ''))) {
+  if (body.operationId || body.lineageRepairRequired === true || body.repairRequired === true || body.reconciliationRequired === true || ['in_progress', 'pointer_unknown', 'lineage_repair_required', 'terminal_audit_identity_invalid', 'terminal_audit_conflict', 'release_operation_blocked'].includes(String(body.classification || body.state || ''))) {
     applyReleaseOperationGateFromServer(body, message);
     return;
   }
@@ -1296,12 +1298,17 @@ async function refreshReleaseGateAfterPotentialResolution({ handlers = {}, block
     blocked: false,
     lineageRepairRequired: false,
     repairRequired: false,
+    terminalAuditIdentityInvalid: false,
+    terminalAuditConflict: false,
     reconciliationRequired: false,
     reconciling: false,
     message: '',
     state: 'idle',
     phase: '',
+    code: '',
+    classification: 'idle',
     operationId: '',
+    error: null,
     result: statusData || successResult || null,
     lastCheckedAt: new Date().toISOString(),
   });
@@ -1324,7 +1331,11 @@ async function handleReconcileRollbackPointer({ handlers = {} } = {}) {
   if (result.error) {
     const errorMessage = normalizeErrorMessage(result.error);
     if (data.lineageRepairRequired === true || data.classification === 'lineage_repair_required' || data.classification === 'terminal_audit_identity_invalid' || data.classification === 'terminal_audit_conflict' || result.error.code === 'LINEAGE_REPAIR_PERSIST_FAILED' || result.error.code === 'TERMINAL_AUDIT_IDENTITY_INVALID' || result.error.code === 'TERMINAL_AUDIT_CONFLICT') {
-      applyReleaseOperationGateFromServer({ ...data, lineageRepairRequired: true }, 'Bản công khai đã được xác nhận nhưng lịch sử vận hành chưa hoàn tất. Hãy sửa lịch sử vận hành trước khi tiếp tục.');
+      applyReleaseOperationGateFromServer(data, data.classification === 'terminal_audit_conflict'
+        ? 'Lịch sử vận hành có bản ghi terminal mâu thuẫn. Cần kiểm tra forensic trước khi tiếp tục.'
+        : data.classification === 'terminal_audit_identity_invalid'
+          ? 'Lịch sử vận hành của bản công khai thiếu hoặc mâu thuẫn thông tin định danh. Cần kiểm tra dữ liệu vận hành trước khi tiếp tục.'
+          : 'Bản công khai đã được xác nhận nhưng lịch sử vận hành chưa hoàn tất. Hãy sửa lịch sử vận hành trước khi tiếp tục.');
     } else if (data.operationId || data.state === 'pointer_unknown') {
       applyReleaseOperationGateFromServer(data, 'Chưa xác định website đang dùng bản nào. Không khôi phục lại. Hãy kiểm tra trạng thái hiện tại.');
     } else {
@@ -1428,15 +1439,16 @@ async function handleRepairReleaseLineage({ handlers = {} } = {}) {
     const message = result.error
       ? normalizeErrorMessage(result.error)
       : 'Sửa lịch sử vận hành chưa được lưu xác nhận trên máy chủ. Trạng thái khóa vẫn được giữ.';
-    setReleaseOperationGateState({
-      blocked: true,
+    applyReleaseOperationGateFromServer(repairData && Object.keys(repairData).length ? repairData : {
+      classification: 'lineage_repair_required',
+      code: 'LINEAGE_REPAIR_PERSIST_FAILED',
       lineageRepairRequired: true,
-      repairRequired: true,
-      reconciling: false,
+      repairable: true,
+      operationId: gate.operationId,
+      operationType: gate.operationType,
+      blocked: true,
       error: message,
-      result: repairData || null,
-      lastCheckedAt: new Date().toISOString(),
-    });
+    }, message);
     setCmsPublishHistoryState({ rollbackStatus: '', rollbackError: message });
     handlers.onRerender?.();
     return;
