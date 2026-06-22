@@ -1237,24 +1237,50 @@ async function handleRollbackCmsJson({ sourcePath, dryRun = true, handlers = {} 
 
 
 
+function isExactIdleReleaseStatusResponse(result = {}, data = {}) {
+  if (result?.error) return false;
+  const body = data && typeof data === 'object' ? data : {};
+  const classification = String(body.classification || '').trim();
+  const stateText = String(body.state || '').trim();
+  return Boolean(
+    body.ok === true
+    && String(body.mode || '').trim() === 'status'
+    && classification === 'idle'
+    && stateText === 'idle'
+    && !String(body.operationId || body.id || '').trim()
+    && body.lineageRepairRequired !== true
+    && body.repairRequired !== true
+    && body.reconciliationRequired !== true
+    && !body.operation
+    && !body.activeOperation
+  );
+}
+
+function keepReleaseGateBlockedFromStatusFailure({ statusResult = {}, statusData = {}, fallbackMessage = '', successResult = null } = {}) {
+  const message = statusResult?.error
+    ? normalizeErrorMessage(statusResult.error)
+    : (fallbackMessage || 'Máy chủ chưa xác nhận trạng thái an toàn. Không công khai hoặc khôi phục thêm.');
+  const body = statusData && typeof statusData === 'object' ? statusData : {};
+  if (body.operationId || body.lineageRepairRequired === true || body.repairRequired === true || body.reconciliationRequired === true || ['in_progress', 'pointer_unknown', 'lineage_repair_required'].includes(String(body.classification || body.state || ''))) {
+    applyReleaseOperationGateFromServer(body, message);
+    return;
+  }
+  setReleaseOperationGateState({
+    blocked: true,
+    reconciling: false,
+    error: message,
+    result: successResult || body || null,
+    lastCheckedAt: new Date().toISOString(),
+  });
+}
+
+
 async function refreshReleaseGateAfterPotentialResolution({ handlers = {}, blockedMessage = 'Máy chủ vẫn đang khóa thao tác. Hãy xử lý trạng thái được hiển thị trước khi tiếp tục.', successResult = null } = {}) {
   const statusResult = await reconcileCmsReleasePointer(getState().supabase, { mode: 'status' });
   const statusData = statusResult.data || {};
-  if (statusResult.error) {
-    setReleaseOperationGateState({
-      blocked: true,
-      reconciling: false,
-      error: normalizeErrorMessage(statusResult.error),
-      result: successResult || statusData || null,
-      lastCheckedAt: new Date().toISOString(),
-    });
-    setCmsPublishHistoryState({ rollbackError: normalizeErrorMessage(statusResult.error) || blockedMessage });
-    handlers.onRerender?.();
-    return false;
-  }
-  if (statusData.operationId || statusData.lineageRepairRequired === true || ['in_progress', 'pointer_unknown', 'lineage_repair_required'].includes(String(statusData.classification || statusData.state || ''))) {
-    applyReleaseOperationGateFromServer(statusData, blockedMessage);
-    setCmsPublishHistoryState({ rollbackError: blockedMessage });
+  if (!isExactIdleReleaseStatusResponse(statusResult, statusData)) {
+    keepReleaseGateBlockedFromStatusFailure({ statusResult, statusData, fallbackMessage: blockedMessage, successResult });
+    setCmsPublishHistoryState({ rollbackError: statusResult.error ? normalizeErrorMessage(statusResult.error) : blockedMessage });
     handlers.onRerender?.();
     return false;
   }
@@ -1392,23 +1418,12 @@ async function handleRepairReleaseLineage({ handlers = {} } = {}) {
 
   const statusResult = await reconcileCmsReleasePointer(getState().supabase, { mode: 'status' });
   const statusData = statusResult.data || {};
-  if (statusResult.error) {
-    setReleaseOperationGateState({
-      blocked: true,
-      lineageRepairRequired: true,
-      repairRequired: true,
-      reconciling: false,
-      error: normalizeErrorMessage(statusResult.error),
-      result: repairData || null,
-      lastCheckedAt: new Date().toISOString(),
-    });
-    setCmsPublishHistoryState({ rollbackStatus: 'Đã gửi yêu cầu sửa lịch sử, nhưng chưa xác nhận được trạng thái máy chủ. Không khôi phục lại.', rollbackError: normalizeErrorMessage(statusResult.error) });
-    handlers.onRerender?.();
-    return;
-  }
-  if (statusData.operationId || statusData.lineageRepairRequired === true || ['in_progress', 'pointer_unknown', 'lineage_repair_required'].includes(String(statusData.classification || statusData.state || ''))) {
-    applyReleaseOperationGateFromServer(statusData);
-    setCmsPublishHistoryState({ rollbackStatus: '', rollbackError: 'Máy chủ vẫn đang khóa thao tác. Hãy xử lý trạng thái được hiển thị trước khi tiếp tục.' });
+  if (!isExactIdleReleaseStatusResponse(statusResult, statusData)) {
+    const message = statusResult.error
+      ? normalizeErrorMessage(statusResult.error)
+      : 'Máy chủ vẫn đang khóa thao tác. Hãy xử lý trạng thái được hiển thị trước khi tiếp tục.';
+    keepReleaseGateBlockedFromStatusFailure({ statusResult, statusData, fallbackMessage: message, successResult: repairData });
+    setCmsPublishHistoryState({ rollbackStatus: statusResult.error ? 'Đã gửi yêu cầu sửa lịch sử, nhưng chưa xác nhận được trạng thái máy chủ. Không khôi phục lại.' : '', rollbackError: message });
     handlers.onRerender?.();
     return;
   }
