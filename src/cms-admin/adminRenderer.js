@@ -25,7 +25,6 @@ import {
   getState,
   getActiveEditSession,
   applyReleaseOperationGateFromServer,
-  clearReleaseOperationGateState,
   getAllActiveEditSessions,
   hasDirtyEditSession,
   invalidateStaticCmsPublishVerification,
@@ -90,6 +89,7 @@ import {
   renderStaticCmsDraftTab,
 } from './adminStaticCmsDraft.js';
 import { renderRollbackHistoryTab } from './adminRollbackGate.js';
+import { refreshAndApplyReleaseOperationGateStatus } from './adminReleaseOperationGate.js';
 import { renderCmsStorageCleanupTab } from './adminCleanupGate.js';
 
 const NAV_GROUPS = ADMIN_COPY.navGroups || [{ key: 'main', items: ADMIN_COPY.nav }];
@@ -188,23 +188,10 @@ async function loadDashboardData(client) {
 }
 
 async function refreshReleaseOperationGate(client) {
-  setReleaseOperationGateState({ loading: true, error: null });
-  const result = await reconcileCmsReleasePointer(client, { mode: 'status' });
-  const data = result.data || {};
-  if (result.error) {
-    const code = result.error.code || data.classification || '';
-    if (code === 'operation_not_found' || result.error.status === 404) {
-      clearReleaseOperationGateState();
-      return;
-    }
-    setReleaseOperationGateState({ loading: false, error: normalizeErrorMessage(result.error), lastCheckedAt: new Date().toISOString() });
-    return;
-  }
-  if (data.operationId && (['in_progress', 'pointer_unknown'].includes(String(data.state || data.operationState || '')) || data.classification === 'lineage_repair_required' || data.lineageRepairRequired === true)) {
-    applyReleaseOperationGateFromServer(data);
-    return;
-  }
-  clearReleaseOperationGateState();
+  await refreshAndApplyReleaseOperationGateStatus({
+    client,
+    fallbackMessage: 'Không xác nhận được trạng thái release-operation. Gate vẫn khóa cho đến khi máy chủ trả exact idle.',
+  });
 }
 
 function renderLogin(options = {}) {

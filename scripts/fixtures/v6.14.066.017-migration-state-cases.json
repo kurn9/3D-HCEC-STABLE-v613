@@ -1,0 +1,11 @@
+{
+  "version": "v6.14.066.017",
+  "migrationStates": [
+    { "id": "S001", "rpc": "acquire", "state": "013_signature", "expected": "bridge_recreate_target_fail_closed" },
+    { "id": "S002", "rpc": "acquire", "state": "014_015_target_signature", "expected": "bridge_noop" },
+    { "id": "S003", "rpc": "acquire", "state": "unknown_signature", "expected": "fail_closed_raise" },
+    { "id": "S004", "rpc": "audit", "state": "013_signature", "expected": "bridge_recreate_target_fail_closed" },
+    { "id": "S005", "rpc": "audit", "state": "014_015_target_signature", "expected": "bridge_noop" },
+    { "id": "S006", "rpc": "audit", "state": "unknown_signature", "expected": "fail_closed_raise" }
+  ]
+}

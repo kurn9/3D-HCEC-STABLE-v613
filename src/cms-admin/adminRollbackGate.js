@@ -15,11 +15,11 @@ import {
 import {
   getState,
   applyReleaseOperationGateFromServer,
-  clearReleaseOperationGateFromExactIdle,
   setReleaseOperationGateState,
   setCmsPublishHistoryItems,
   setCmsPublishHistoryState,
 } from './adminState.js';
+import { isResolvedCapableReleaseResponse as isResolvedCapableReleaseResponseCanonical, refreshAndApplyReleaseOperationGateStatus } from './adminReleaseOperationGate.js';
 
 let historyLoadQueued = false;
 
@@ -1287,29 +1287,21 @@ function keepReleaseGateBlockedFromStatusFailure({ statusResult = {}, statusData
 
 
 function isResolvedCapableReleaseResponse(data = {}) {
-  if (!data || typeof data !== 'object') return false;
-  const classification = String(data.classification || '').trim();
-  const operationState = String(data.state || data.operationState || data.operation?.state || '').trim();
-  return Boolean(
-    data.operationResolved === true
-    || ['active_expected_release', 'active_other_release', 'operation_already_resolved', 'operation_already_resolved_non_success', 'lineage_repaired', 'failed_before_pointer', 'resolved_active_other'].includes(classification)
-    || ['succeeded', 'resolved_active_other', 'failed_before_pointer', 'failed'].includes(operationState)
-  );
+  return isResolvedCapableReleaseResponseCanonical(data);
 }
+
 
 
 async function refreshReleaseGateAfterPotentialResolution({ handlers = {}, blockedMessage = 'Máy chủ vẫn đang khóa thao tác. Hãy xử lý trạng thái được hiển thị trước khi tiếp tục.', successResult = null } = {}) {
-  const statusResult = await reconcileCmsReleasePointer(getState().supabase, { mode: 'status' });
-  const statusData = statusResult.data || {};
-  if (!isExactIdleReleaseStatusResponse(statusResult, statusData)) {
-    keepReleaseGateBlockedFromStatusFailure({ statusResult, statusData, fallbackMessage: blockedMessage, successResult });
-    setCmsPublishHistoryState({ rollbackError: statusResult.error ? normalizeErrorMessage(statusResult.error) : blockedMessage });
+  const { idle } = await refreshAndApplyReleaseOperationGateStatus({ fallbackMessage: blockedMessage, successResult });
+  if (!idle) {
+    setCmsPublishHistoryState({ rollbackError: blockedMessage });
     handlers.onRerender?.();
     return false;
   }
-  clearReleaseOperationGateFromExactIdle(statusData || successResult || null);
   return true;
 }
+
 
 async function handleReconcileRollbackPointer({ handlers = {} } = {}) {
   const current = getState().publishHistory || {};
@@ -1467,18 +1459,12 @@ async function handleRepairReleaseLineage({ handlers = {} } = {}) {
     return;
   }
 
-  const statusResult = await reconcileCmsReleasePointer(getState().supabase, { mode: 'status' });
-  const statusData = statusResult.data || {};
-  if (!isExactIdleReleaseStatusResponse(statusResult, statusData)) {
-    const message = statusResult.error
-      ? normalizeErrorMessage(statusResult.error)
-      : 'Máy chủ vẫn đang khóa thao tác. Hãy xử lý trạng thái được hiển thị trước khi tiếp tục.';
-    keepReleaseGateBlockedFromStatusFailure({ statusResult, statusData, fallbackMessage: message, successResult: repairData });
-    setCmsPublishHistoryState({ rollbackStatus: statusResult.error ? 'Đã gửi yêu cầu sửa lịch sử, nhưng chưa xác nhận được trạng thái máy chủ. Không khôi phục lại.' : '', rollbackError: message });
+  const { idle } = await refreshAndApplyReleaseOperationGateStatus({ successResult: repairData, fallbackMessage: 'Đã gửi yêu cầu sửa lịch sử, nhưng máy chủ chưa xác nhận exact idle.' });
+  if (!idle) {
+    setCmsPublishHistoryState({ rollbackStatus: 'Đã gửi yêu cầu sửa lịch sử, nhưng chưa xác nhận được trạng thái máy chủ. Không khôi phục lại.', rollbackError: 'Máy chủ vẫn đang khóa thao tác. Hãy xử lý trạng thái được hiển thị trước khi tiếp tục.' });
     handlers.onRerender?.();
     return;
   }
-  clearReleaseOperationGateFromExactIdle(statusData || repairData || null);
   setCmsPublishHistoryState({ rollbackStatus: 'Đã sửa lịch sử vận hành và máy chủ xác nhận trạng thái an toàn. Hãy tải lại lịch sử trước khi thao tác tiếp.', rollbackError: null });
   await handleLoadPublishHistory({ onRerender: () => {} }, { resetWorkflow: false });
   handlers.onRerender?.();

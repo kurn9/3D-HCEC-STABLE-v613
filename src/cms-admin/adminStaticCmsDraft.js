@@ -48,6 +48,7 @@ import {
   validateFeaturedImageFile,
 } from './adminMediaUpload.js';
 
+import { isResolvedCapableReleaseResponse, refreshAndApplyReleaseOperationGateStatus } from './adminReleaseOperationGate.js';
 const ROOM_KEYS = ['indoor', 'outdoor'];
 const TEXT_FIELDS = ['title', 'description', 'content', 'author', 'artist', 'year', 'material', 'realSize', 'real_size', 'note'];
 const MEDIA_FIELDS = [
@@ -4872,7 +4873,11 @@ export async function handleReconcileStaticCmsPublishPointer({ handlers = {} } =
   });
   const data = result.data || {};
   if (result.error) {
-    setReleaseOperationGateState({ reconciling: false, error: normalizeErrorMessage(result.error), lastCheckedAt: new Date().toISOString() });
+    if (isResolvedCapableReleaseResponse(data)) {
+      await refreshAndApplyReleaseOperationGateStatus({ successResult: data, fallbackMessage: 'Response lỗi có thể đã resolve operation; cần kiểm tra trạng thái máy chủ.' });
+    } else {
+      setReleaseOperationGateState({ reconciling: false, error: normalizeErrorMessage(result.error), lastCheckedAt: new Date().toISOString() });
+    }
     setStaticCmsPublishState({
       isReconcilingPublishPointer: false,
       publishReconciliationError: normalizeErrorMessage(result.error),
@@ -4883,7 +4888,7 @@ export async function handleReconcileStaticCmsPublishPointer({ handlers = {} } =
   }
   const classification = String(data.classification || 'read_failed');
   if (classification === 'active_expected_release') {
-    setReleaseOperationGateState({ blocked: false, reconciliationRequired: false, reconciling: false, state: 'succeeded', phase: 'resolved', message: '', lastCheckedAt: new Date().toISOString(), result: data });
+    await refreshAndApplyReleaseOperationGateStatus({ successResult: data, fallbackMessage: 'Operation đã resolve nhưng máy chủ chưa xác nhận exact idle.' });
     setStaticCmsPublishState({
       isReconcilingPublishPointer: false,
       publishPointerState: 'active_expected_release',
@@ -4906,7 +4911,7 @@ export async function handleReconcileStaticCmsPublishPointer({ handlers = {} } =
       },
     });
   } else if (classification === 'active_other_release') {
-    setReleaseOperationGateState({ blocked: false, reconciliationRequired: false, reconciling: false, state: 'resolved_active_other', message: '', lastCheckedAt: new Date().toISOString(), result: data });
+    await refreshAndApplyReleaseOperationGateStatus({ successResult: data, fallbackMessage: 'Operation active_other_release đã resolve nhưng máy chủ chưa xác nhận exact idle.' });
     setStaticCmsPublishState({
       isReconcilingPublishPointer: false,
       publishPointerState: 'active_other_release',
