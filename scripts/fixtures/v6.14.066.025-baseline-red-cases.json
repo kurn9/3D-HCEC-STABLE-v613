@@ -1,0 +1,32 @@
+[
+  {
+    "id": "B024_HARDCODED_MIGRATION_MAP",
+    "expectedRed": true,
+    "evidence": ".024 child migration evaluator maps fixture observed to expected action without reading SQL."
+  },
+  {
+    "id": "B024_NO_MIGRATION_SQL_READ",
+    "expectedRed": true,
+    "evidence": ".024 result protocol lacks migrationSourceFilesRead/hash authority."
+  },
+  {
+    "id": "B024_ENFORCE_FLAGS",
+    "expectedRed": true,
+    "evidence": ".024 child runner contains ENFORCE_* self-attestation flags."
+  },
+  {
+    "id": "B024_PARENT_BYPASS_SLOTS",
+    "expectedRed": true,
+    "evidence": ".024 parent uses PARENT_BYPASS_SLOT_* and isParentBypassActive()."
+  },
+  {
+    "id": "B024_META_PROTOCOL_ALWAYS_TRUE",
+    "expectedRed": true,
+    "evidence": ".024 meta protocol gate accepted parent processes through non-zero-compatible branch."
+  },
+  {
+    "id": "B024_NORMAL_ONLY_NOT_TRUE",
+    "expectedRed": true,
+    "evidence": ".024 meta normal-only still invoked parent with mutations/scenarios."
+  }
+]

@@ -1,0 +1,236 @@
+[
+  {
+    "id": "G001_NORMAL_EXIT_GATE",
+    "category": "parent-direct-guard",
+    "target": "scripts/verify-v6.14.066.025-cms-mutation-parent-orchestrator.mjs",
+    "search": "if (record.status !== 0) v.push('PARENT_ACCEPTED_ABNORMAL_NORMAL_CHILD');",
+    "replacement": "if (false && record.status !== 0) v.push('PARENT_ACCEPTED_ABNORMAL_NORMAL_CHILD');",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_PARENT_REJECTION",
+    "expectedMetaViolationIds": [
+      "PARENT_ACCEPTED_ABNORMAL_NORMAL_CHILD"
+    ],
+    "scenario": "exit-2-after-result"
+  },
+  {
+    "id": "G002_EXIT2_GATE",
+    "category": "parent-direct-guard",
+    "target": "scripts/verify-v6.14.066.025-cms-mutation-parent-orchestrator.mjs",
+    "search": "if (Number(record.status) >= 2) v.push('PARENT_ACCEPTED_EXIT_2_CHILD');",
+    "replacement": "if (false && Number(record.status) >= 2) v.push('PARENT_ACCEPTED_EXIT_2_CHILD');",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_PARENT_REJECTION",
+    "expectedMetaViolationIds": [
+      "PARENT_ACCEPTED_EXIT_2_CHILD"
+    ],
+    "scenario": "exit-2-after-result"
+  },
+  {
+    "id": "G003_SIGNAL_GATE",
+    "category": "parent-direct-guard",
+    "target": "scripts/verify-v6.14.066.025-cms-mutation-parent-orchestrator.mjs",
+    "search": "if (record.signal) v.push('PARENT_ACCEPTED_SIGNAL_CHILD');",
+    "replacement": "if (false && record.signal) v.push('PARENT_ACCEPTED_SIGNAL_CHILD');",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_PARENT_REJECTION",
+    "expectedMetaViolationIds": [
+      "PARENT_ACCEPTED_SIGNAL_CHILD"
+    ],
+    "scenario": "signal-after-result"
+  },
+  {
+    "id": "G004_TIMEOUT_GATE",
+    "category": "parent-direct-guard",
+    "target": "scripts/verify-v6.14.066.025-cms-mutation-parent-orchestrator.mjs",
+    "search": "if (record.timedOut) v.push('PARENT_ACCEPTED_TIMEOUT_CHILD');",
+    "replacement": "if (false && record.timedOut) v.push('PARENT_ACCEPTED_TIMEOUT_CHILD');",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_PARENT_REJECTION",
+    "expectedMetaViolationIds": [
+      "PARENT_ACCEPTED_TIMEOUT_CHILD"
+    ],
+    "scenario": "timeout"
+  },
+  {
+    "id": "G005_SPAWN_ERROR_GATE",
+    "category": "parent-direct-guard",
+    "target": "scripts/verify-v6.14.066.025-cms-mutation-parent-orchestrator.mjs",
+    "search": "if (record.spawnError && !record.timedOut) v.push('PARENT_ACCEPTED_SPAWN_ERROR_CHILD');",
+    "replacement": "if (false && record.spawnError && !record.timedOut) v.push('PARENT_ACCEPTED_SPAWN_ERROR_CHILD');",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_PARENT_REJECTION",
+    "expectedMetaViolationIds": [
+      "PARENT_ACCEPTED_SPAWN_ERROR_CHILD"
+    ],
+    "scenario": "spawn-error"
+  },
+  {
+    "id": "G006_PARSE_ERROR_GATE",
+    "category": "parent-direct-guard",
+    "target": "scripts/verify-v6.14.066.025-cms-mutation-parent-orchestrator.mjs",
+    "search": "if (record.parseError) v.push('PARENT_ACCEPTED_PARSE_ERROR_CHILD');",
+    "replacement": "if (false && record.parseError) v.push('PARENT_ACCEPTED_PARSE_ERROR_CHILD');",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_PARENT_REJECTION",
+    "expectedMetaViolationIds": [
+      "PARENT_ACCEPTED_PARSE_ERROR_CHILD"
+    ],
+    "scenario": "malformed-result"
+  },
+  {
+    "id": "G007_PROTOCOL_ERROR_GATE",
+    "category": "parent-direct-guard",
+    "target": "scripts/verify-v6.14.066.025-cms-mutation-parent-orchestrator.mjs",
+    "search": "if (record.protocolErrors.length !== 0) v.push('PARENT_ACCEPTED_PROTOCOL_ERROR_CHILD');",
+    "replacement": "if (false && record.protocolErrors.length !== 0) v.push('PARENT_ACCEPTED_PROTOCOL_ERROR_CHILD');",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_PARENT_REJECTION",
+    "expectedMetaViolationIds": [
+      "PARENT_ACCEPTED_PROTOCOL_ERROR_CHILD"
+    ],
+    "scenario": "wrong-root"
+  },
+  {
+    "id": "G008_WRONG_ROOT_GATE",
+    "category": "parent-direct-guard",
+    "target": "scripts/verify-v6.14.066.025-cms-mutation-parent-orchestrator.mjs",
+    "search": "if (record.protocolErrors.includes('ROOT')) v.push('PARENT_ACCEPTED_WRONG_ROOT_CHILD');",
+    "replacement": "if (false && record.protocolErrors.includes('ROOT')) v.push('PARENT_ACCEPTED_WRONG_ROOT_CHILD');",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_PARENT_REJECTION",
+    "expectedMetaViolationIds": [
+      "PARENT_ACCEPTED_WRONG_ROOT_CHILD"
+    ],
+    "scenario": "wrong-root"
+  },
+  {
+    "id": "G009_WRONG_RUN_ID_GATE",
+    "category": "parent-direct-guard",
+    "target": "scripts/verify-v6.14.066.025-cms-mutation-parent-orchestrator.mjs",
+    "search": "if (record.protocolErrors.includes('RUN_ID')) v.push('PARENT_ACCEPTED_WRONG_RUN_ID_CHILD');",
+    "replacement": "if (false && record.protocolErrors.includes('RUN_ID')) v.push('PARENT_ACCEPTED_WRONG_RUN_ID_CHILD');",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_PARENT_REJECTION",
+    "expectedMetaViolationIds": [
+      "PARENT_ACCEPTED_WRONG_RUN_ID_CHILD"
+    ],
+    "scenario": "wrong-run-id"
+  },
+  {
+    "id": "G010_WRONG_EXECUTABLE_GATE",
+    "category": "parent-direct-guard",
+    "target": "scripts/verify-v6.14.066.025-cms-mutation-parent-orchestrator.mjs",
+    "search": "if (record.protocolErrors.includes('EXECUTABLE_PATH')) v.push('PARENT_ACCEPTED_WRONG_EXECUTABLE_CHILD');",
+    "replacement": "if (false && record.protocolErrors.includes('EXECUTABLE_PATH')) v.push('PARENT_ACCEPTED_WRONG_EXECUTABLE_CHILD');",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_PARENT_REJECTION",
+    "expectedMetaViolationIds": [
+      "PARENT_ACCEPTED_WRONG_EXECUTABLE_CHILD"
+    ],
+    "scenario": "wrong-executable"
+  },
+  {
+    "id": "G011_UNEXPECTED_FAILURE_GATE",
+    "category": "parent-direct-guard",
+    "target": "scripts/verify-v6.14.066.025-cms-mutation-parent-orchestrator.mjs",
+    "search": "if (record.failedAssertionIds.includes('UNEXPECTED_CONTROL_FAILURE')) v.push('PARENT_ACCEPTED_UNEXPECTED_FAILURES');",
+    "replacement": "if (false && record.failedAssertionIds.includes('UNEXPECTED_CONTROL_FAILURE')) v.push('PARENT_ACCEPTED_UNEXPECTED_FAILURES');",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_PARENT_REJECTION",
+    "expectedMetaViolationIds": [
+      "PARENT_ACCEPTED_UNEXPECTED_FAILURES"
+    ],
+    "scenario": "unexpected-failure"
+  },
+  {
+    "id": "G012_CLEANUP_GATE",
+    "category": "parent-direct-guard",
+    "target": "scripts/verify-v6.14.066.025-cms-mutation-parent-orchestrator.mjs",
+    "search": "if (record.remainingOwnedPaths.length !== 0 || record.filesystemRemainingOwnedPaths.length !== 0) v.push('PARENT_ACCEPTED_CLEANUP_LEAK_CHILD');",
+    "replacement": "if (false && (record.remainingOwnedPaths.length !== 0 || record.filesystemRemainingOwnedPaths.length !== 0)) v.push('PARENT_ACCEPTED_CLEANUP_LEAK_CHILD');",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_PARENT_REJECTION",
+    "expectedMetaViolationIds": [
+      "PARENT_ACCEPTED_CLEANUP_LEAK_CHILD"
+    ],
+    "scenario": "cleanup-leak"
+  },
+  {
+    "id": "G013_HIDDEN_CLEANUP_GATE",
+    "category": "parent-direct-guard",
+    "target": "scripts/verify-v6.14.066.025-cms-mutation-parent-orchestrator.mjs",
+    "search": "if (record.remainingOwnedPaths.length !== record.filesystemRemainingOwnedPaths.length) v.push('PARENT_ACCEPTED_HIDDEN_CLEANUP_LEAK_CHILD');",
+    "replacement": "if (false && record.remainingOwnedPaths.length !== record.filesystemRemainingOwnedPaths.length) v.push('PARENT_ACCEPTED_HIDDEN_CLEANUP_LEAK_CHILD');",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_PARENT_REJECTION",
+    "expectedMetaViolationIds": [
+      "PARENT_ACCEPTED_HIDDEN_CLEANUP_LEAK_CHILD"
+    ],
+    "scenario": "hidden-cleanup-leak"
+  },
+  {
+    "id": "G014_RAW_EVIDENCE_GATE",
+    "category": "parent-direct-guard",
+    "target": "scripts/verify-v6.14.066.025-cms-mutation-parent-orchestrator.mjs",
+    "search": "if (!record.resultPresent) v.push('PARENT_TRUSTED_SUMMARY_WITHOUT_RAW_EVIDENCE');",
+    "replacement": "if (false && !record.resultPresent) v.push('PARENT_TRUSTED_SUMMARY_WITHOUT_RAW_EVIDENCE');",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_PARENT_REJECTION",
+    "expectedMetaViolationIds": [
+      "PARENT_TRUSTED_SUMMARY_WITHOUT_RAW_EVIDENCE"
+    ],
+    "scenario": "malformed-result"
+  },
+  {
+    "id": "G015_MUTANT_EXIT_CONTRACT",
+    "category": "parent-direct-guard",
+    "target": "scripts/verify-v6.14.066.025-cms-mutation-parent-orchestrator.mjs",
+    "search": "if (mutationRecord.expectedOutcome === 'EXPECTED_TEST_FAILURE' && record.status !== 1) v.push('PARENT_ACCEPTED_BAD_KILLED_MUTANT_EXIT_CONTRACT');",
+    "replacement": "if (false && mutationRecord.expectedOutcome === 'EXPECTED_TEST_FAILURE' && record.status !== 1) v.push('PARENT_ACCEPTED_BAD_KILLED_MUTANT_EXIT_CONTRACT');",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_PARENT_REJECTION",
+    "expectedMetaViolationIds": [
+      "PARENT_ACCEPTED_BAD_KILLED_MUTANT_EXIT_CONTRACT"
+    ],
+    "scenario": "exit-2-after-result"
+  },
+  {
+    "id": "G016_AGGREGATE_PROTOCOL_ZERO",
+    "category": "parent-direct-guard",
+    "target": "scripts/verify-v6.14.066.025-cms-mutation-parent-orchestrator.mjs",
+    "search": "processSummary.UNEXPECTED_PROTOCOL_ERRORS===0",
+    "replacement": "true",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_PARENT_REJECTION",
+    "expectedMetaViolationIds": [
+      "PARENT_AGGREGATE_PROTOCOL_GATE_DISABLED"
+    ],
+    "scenario": "wrong-root"
+  },
+  {
+    "id": "G017_AGGREGATE_TIMEOUT_ZERO",
+    "category": "parent-direct-guard",
+    "target": "scripts/verify-v6.14.066.025-cms-mutation-parent-orchestrator.mjs",
+    "search": "processSummary.UNEXPECTED_ABNORMAL_EXITS===0",
+    "replacement": "true",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_PARENT_REJECTION",
+    "expectedMetaViolationIds": [
+      "PARENT_AGGREGATE_ABNORMAL_EXIT_GATE_DISABLED"
+    ],
+    "scenario": "exit-2-after-result"
+  },
+  {
+    "id": "G018_SCENARIO_OUTCOME_GATE",
+    "category": "parent-direct-guard",
+    "target": "scripts/verify-v6.14.066.025-cms-mutation-parent-orchestrator.mjs",
+    "search": "processSummary.UNEXPECTED_SCENARIO_OUTCOMES===0",
+    "replacement": "true",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_PARENT_REJECTION",
+    "expectedMetaViolationIds": [
+      "PARENT_AGGREGATE_SCENARIO_GATE_DISABLED"
+    ],
+    "scenario": "wrong-root"
+  }
+]

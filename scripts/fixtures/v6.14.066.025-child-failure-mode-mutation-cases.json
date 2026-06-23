@@ -1,0 +1,139 @@
+[
+  {
+    "id": "C001_ADMIN_HASH_MISMATCH",
+    "category": "child-failure",
+    "target": "scripts/verify-v6.14.066.025-cms-source-and-migration-child-runner.mjs",
+    "search": "if (scenario === 'admin-hash-mismatch') fs.appendFileSync(path.join(importRoot,'src/cms-admin/adminState.js'), '\\n// corrupt imported admin\\n');",
+    "replacement": "if (true) fs.appendFileSync(path.join(importRoot,'src/cms-admin/adminState.js'), '\\n// corrupt imported admin\\n');",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_TEST_FAILURE",
+    "expectedFailedAssertions": [
+      "HASH_ADMIN_SOURCE_MATCH",
+      "IMPORT_SOURCE_MATCHES_MUTANT_TREE"
+    ],
+    "scenario": "normal"
+  },
+  {
+    "id": "C002_GATE_HASH_MISMATCH",
+    "category": "child-failure",
+    "target": "scripts/verify-v6.14.066.025-cms-source-and-migration-child-runner.mjs",
+    "search": "if (scenario === 'gate-hash-mismatch') fs.appendFileSync(path.join(importRoot,'src/cms-admin/adminReleaseOperationGate.js'), '\\n// corrupt imported gate\\n');",
+    "replacement": "if (true) fs.appendFileSync(path.join(importRoot,'src/cms-admin/adminReleaseOperationGate.js'), '\\n// corrupt imported gate\\n');",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_TEST_FAILURE",
+    "expectedFailedAssertions": [
+      "HASH_GATE_SOURCE_MATCH",
+      "IMPORT_SOURCE_MATCHES_MUTANT_TREE"
+    ],
+    "scenario": "normal"
+  },
+  {
+    "id": "C003_ORIGINAL_TREE_IMPORT",
+    "category": "child-failure",
+    "target": "scripts/verify-v6.14.066.025-cms-source-and-migration-child-runner.mjs",
+    "search": "if (scenario === 'import-source-mismatch') {",
+    "replacement": "if (true) {",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_TEST_FAILURE",
+    "expectedFailedAssertions": [
+      "HASH_ADMIN_SOURCE_MATCH",
+      "IMPORT_SOURCE_MATCHES_MUTANT_TREE"
+    ],
+    "scenario": "normal"
+  },
+  {
+    "id": "C004_IMPORT_CACHE_ISOLATION",
+    "category": "child-failure",
+    "target": "scripts/verify-v6.14.066.025-cms-source-and-migration-child-runner.mjs",
+    "search": "add(assertions,'IMPORT_CACHE_ISOLATION', scenario !== 'cache-isolation-failure', scenario);",
+    "replacement": "add(assertions,'IMPORT_CACHE_ISOLATION', false, scenario);",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_TEST_FAILURE",
+    "expectedFailedAssertions": [
+      "IMPORT_CACHE_ISOLATION"
+    ],
+    "scenario": "normal"
+  },
+  {
+    "id": "C005_EMPTY_FRONTEND_FIXTURE",
+    "category": "child-failure",
+    "target": "scripts/verify-v6.14.066.025-cms-source-and-migration-child-runner.mjs",
+    "search": "if (scenario === 'empty-frontend-fixture') exactCases = [];",
+    "replacement": "if (true) exactCases = [];",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_TEST_FAILURE",
+    "expectedFailedAssertions": [
+      "FRONTEND_FIXTURE_NON_EMPTY",
+      "REQUIRED_FRONTEND_CASES_PRESENT",
+      "REQUIRED_FRONTEND_CASES_EXECUTED"
+    ],
+    "scenario": "normal",
+    "allowedAdditionalFailures": [
+      "WRAPPER_ERROR_FAILS_CLOSED"
+    ]
+  },
+  {
+    "id": "C006_EMPTY_MIGRATION_FIXTURE",
+    "category": "child-failure",
+    "target": "scripts/verify-v6.14.066.025-cms-source-and-migration-child-runner.mjs",
+    "search": "if (scenario === 'empty-migration-fixture') migrationCases = [];",
+    "replacement": "if (true) migrationCases = [];",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_TEST_FAILURE",
+    "expectedFailedAssertions": [
+      "MIGRATION_FIXTURE_NON_EMPTY",
+      "REQUIRED_MIGRATION_CASES_PRESENT",
+      "REQUIRED_MIGRATION_CASES_EXECUTED"
+    ],
+    "scenario": "normal"
+  },
+  {
+    "id": "C007_MISSING_MIGRATION_REQUIRED_CASE",
+    "category": "child-failure",
+    "target": "scripts/verify-v6.14.066.025-cms-source-and-migration-child-runner.mjs",
+    "search": "if (scenario === 'missing-migration-required-case') migrationCases = migrationCases.filter(c=>c.id !== 'S011');",
+    "replacement": "if (true) migrationCases = migrationCases.filter(c=>c.id !== 'S011');",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_TEST_FAILURE",
+    "expectedFailedAssertions": [
+      "REQUIRED_MIGRATION_CASES_PRESENT",
+      "REQUIRED_MIGRATION_CASES_EXECUTED"
+    ],
+    "scenario": "normal"
+  },
+  {
+    "id": "C008_CLEANUP_SKIP",
+    "category": "child-failure",
+    "target": "scripts/verify-v6.14.066.025-cms-source-and-migration-child-runner.mjs",
+    "search": "if (scenario !== 'cleanup-leak' && scenario !== 'hidden-cleanup-leak') { rm(importRoot); ownedPathsRemoved.push(importRoot); }",
+    "replacement": "if (false) { rm(importRoot); ownedPathsRemoved.push(importRoot); }",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_TEST_FAILURE",
+    "expectedFailedAssertions": [
+      "CLEANUP_REMAINING_ZERO"
+    ],
+    "scenario": "normal"
+  },
+  {
+    "id": "C009_HIDDEN_CLEANUP_REPORT",
+    "category": "child-failure",
+    "target": "scripts/verify-v6.14.066.025-cms-source-and-migration-child-runner.mjs",
+    "search": "const reportedRemaining = scenario === 'hidden-cleanup-leak' ? [] : remainingOwnedPaths;",
+    "replacement": "const reportedRemaining = [];",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_EXECUTION_INVALID",
+    "expectedInvalidReason": "CLEANUP_FAILED",
+    "scenario": "hidden-cleanup-leak"
+  },
+  {
+    "id": "C010_MALFORMED_PROTOCOL",
+    "category": "child-failure",
+    "target": "scripts/verify-v6.14.066.025-cms-source-and-migration-child-runner.mjs",
+    "search": "if (scenario === 'malformed-result') fs.writeFileSync(resultFile, '{not-json'); else writeJson(resultFile, result);",
+    "replacement": "if (true) fs.writeFileSync(resultFile, '{not-json'); else writeJson(resultFile, result);",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_EXECUTION_INVALID",
+    "expectedInvalidReason": "PROTOCOL_INVALID",
+    "scenario": "normal"
+  }
+]

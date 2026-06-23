@@ -1,0 +1,212 @@
+[
+  {
+    "id": "SQL001_ACQUIRE_LEGACY_SIGNATURE_CHANGED",
+    "category": "migration",
+    "target": "supabase/migrations/20260621235500_v6_14_066_017a_cms_rpc_signature_bridge_pre_014.sql",
+    "search": "v_acquire_013 text := 'TABLE(classification text, id uuid",
+    "replacement": "v_acquire_013 text := 'TABLE(classification text, broken_id uuid",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_TEST_FAILURE",
+    "expectedFailedAssertions": [
+      "BRIDGE_ACQUIRE_LEGACY_SIGNATURE_MATCH"
+    ],
+    "scenario": "normal",
+    "allowedAdditionalFailures": [
+      "S001",
+      "S002"
+    ]
+  },
+  {
+    "id": "SQL002_AUDIT_LEGACY_SIGNATURE_CHANGED",
+    "category": "migration",
+    "target": "supabase/migrations/20260621235500_v6_14_066_017a_cms_rpc_signature_bridge_pre_014.sql",
+    "search": "v_audit_013 text := 'TABLE(log_id uuid, operation_id uuid",
+    "replacement": "v_audit_013 text := 'TABLE(log_id uuid, broken_operation_id uuid",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_TEST_FAILURE",
+    "expectedFailedAssertions": [
+      "BRIDGE_AUDIT_LEGACY_SIGNATURE_MATCH"
+    ],
+    "scenario": "normal",
+    "allowedAdditionalFailures": [
+      "S005",
+      "S006"
+    ]
+  },
+  {
+    "id": "SQL003_ACQUIRE_TARGET_SIGNATURE_CHANGED",
+    "category": "migration",
+    "target": "supabase/migrations/20260621235500_v6_14_066_017a_cms_rpc_signature_bridge_pre_014.sql",
+    "search": "v_acquire_target text := 'TABLE(classification text, code text",
+    "replacement": "v_acquire_target text := 'TABLE(classification text, broken_code text",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_TEST_FAILURE",
+    "expectedFailedAssertions": [
+      "BRIDGE_ACQUIRE_TARGET_MATCHES_014"
+    ],
+    "scenario": "normal",
+    "allowedAdditionalFailures": [
+      "S001",
+      "S002",
+      "S009"
+    ]
+  },
+  {
+    "id": "SQL004_AUDIT_TARGET_SIGNATURE_CHANGED",
+    "category": "migration",
+    "target": "supabase/migrations/20260621235500_v6_14_066_017a_cms_rpc_signature_bridge_pre_014.sql",
+    "search": "v_audit_target text := 'TABLE(log_id uuid, reused boolean",
+    "replacement": "v_audit_target text := 'TABLE(log_id uuid, broken_reused boolean",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_TEST_FAILURE",
+    "expectedFailedAssertions": [
+      "BRIDGE_AUDIT_TARGET_MATCHES_014"
+    ],
+    "scenario": "normal",
+    "allowedAdditionalFailures": [
+      "S005",
+      "S006",
+      "S010"
+    ]
+  },
+  {
+    "id": "SQL005_ACQUIRE_ABSENT_RAISE_REMOVED",
+    "category": "migration",
+    "target": "supabase/migrations/20260621235500_v6_14_066_017a_cms_rpc_signature_bridge_pre_014.sql",
+    "search": "CMS_RELEASE_RPC_BRIDGE_UNKNOWN_STATE: acquire_cms_release_operation(jsonb) absent after .013; Project Control review required.",
+    "replacement": "CMS_RELEASE_RPC_BRIDGE_DISABLED: acquire absent silently ignored.",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_TEST_FAILURE",
+    "expectedFailedAssertions": [
+      "ACQUIRE_ABSENT_FAIL_CLOSED",
+      "S003"
+    ],
+    "scenario": "normal"
+  },
+  {
+    "id": "SQL006_AUDIT_ABSENT_RAISE_REMOVED",
+    "category": "migration",
+    "target": "supabase/migrations/20260621235500_v6_14_066_017a_cms_rpc_signature_bridge_pre_014.sql",
+    "search": "CMS_RELEASE_RPC_BRIDGE_UNKNOWN_STATE: ensure_cms_terminal_operation_audit(uuid,text,jsonb,jsonb) absent after .013; Project Control review required.",
+    "replacement": "CMS_RELEASE_RPC_BRIDGE_DISABLED: audit absent silently ignored.",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_TEST_FAILURE",
+    "expectedFailedAssertions": [
+      "AUDIT_ABSENT_FAIL_CLOSED",
+      "S007"
+    ],
+    "scenario": "normal"
+  },
+  {
+    "id": "SQL007_ACQUIRE_UNKNOWN_RAISE_REMOVED",
+    "category": "migration",
+    "target": "supabase/migrations/20260621235500_v6_14_066_017a_cms_rpc_signature_bridge_pre_014.sql",
+    "search": "CMS_RELEASE_RPC_BRIDGE_UNKNOWN_STATE: acquire_cms_release_operation(jsonb) observed %, expected % or %",
+    "replacement": "CMS_RELEASE_RPC_BRIDGE_DISABLED: acquire unknown silently ignored % % %",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_TEST_FAILURE",
+    "expectedFailedAssertions": [
+      "ACQUIRE_UNKNOWN_FAIL_CLOSED",
+      "S004"
+    ],
+    "scenario": "normal",
+    "allowedAdditionalFailures": [
+      "S016"
+    ]
+  },
+  {
+    "id": "SQL008_AUDIT_UNKNOWN_RAISE_REMOVED",
+    "category": "migration",
+    "target": "supabase/migrations/20260621235500_v6_14_066_017a_cms_rpc_signature_bridge_pre_014.sql",
+    "search": "CMS_RELEASE_RPC_BRIDGE_UNKNOWN_STATE: ensure_cms_terminal_operation_audit(uuid,text,jsonb,jsonb) observed %, expected % or %",
+    "replacement": "CMS_RELEASE_RPC_BRIDGE_DISABLED: audit unknown silently ignored % % %",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_TEST_FAILURE",
+    "expectedFailedAssertions": [
+      "AUDIT_UNKNOWN_FAIL_CLOSED",
+      "S008"
+    ],
+    "scenario": "normal",
+    "allowedAdditionalFailures": [
+      "S017"
+    ]
+  },
+  {
+    "id": "SQL009_FAIL_CLOSED_BRIDGE_BODY_REMOVED",
+    "category": "migration",
+    "target": "supabase/migrations/20260621235500_v6_14_066_017a_cms_rpc_signature_bridge_pre_014.sql",
+    "search": "CMS_RELEASE_RPC_BRIDGE_PENDING_CANONICAL_MIGRATION: acquire bridge body must not be called before .014/.017b completes.",
+    "replacement": "CMS_RELEASE_RPC_BRIDGE_PENDING_CANONICAL_MIGRATION: acquire bridge body accidentally returns.",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_TEST_FAILURE",
+    "expectedFailedAssertions": [
+      "ACQUIRE_BRIDGE_BODY_FAIL_CLOSED",
+      "S011"
+    ],
+    "scenario": "normal",
+    "allowedAdditionalFailures": [
+      "S001",
+      "S002"
+    ]
+  },
+  {
+    "id": "SQL010_DROP_CASCADE_INTRODUCED",
+    "category": "migration",
+    "target": "supabase/migrations/20260621235500_v6_14_066_017a_cms_rpc_signature_bridge_pre_014.sql",
+    "search": "drop function public.acquire_cms_release_operation(jsonb);",
+    "replacement": "drop function public.acquire_cms_release_operation(jsonb) cascade;",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_TEST_FAILURE",
+    "expectedFailedAssertions": [
+      "NO_DROP_CASCADE"
+    ],
+    "scenario": "normal",
+    "allowedAdditionalFailures": [
+      "S001",
+      "S002",
+      "S005",
+      "S006",
+      "S014"
+    ]
+  },
+  {
+    "id": "SQL011_MIGRATION_ORDER_BROKEN",
+    "category": "migration",
+    "target": "supabase/migrations/20260621234500_v6_14_066_013_cms_invalid_succeeded_operation_gate_unified_lineage_classification.sql",
+    "search": "create or replace function public.acquire_cms_release_operation(p_operation jsonb)",
+    "replacement": "create or replace function public.broken_cms_release_operation(p_operation jsonb)",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_TEST_FAILURE",
+    "expectedRejectReason": "REPLACEMENT_COUNT_MISMATCH",
+    "scenario": "normal",
+    "expectedFailedAssertions": [
+      "ACQUIRE_013_SIGNATURE_PARSED"
+    ],
+    "allowedAdditionalFailures": [
+      "BRIDGE_ACQUIRE_LEGACY_SIGNATURE_MATCH",
+      "S001",
+      "S002",
+      "S009"
+    ]
+  },
+  {
+    "id": "SQL012_017B_AFTER_015_CONTRACT_BROKEN",
+    "category": "migration",
+    "target": "supabase/migrations/20260622003000_v6_14_066_017b_cms_release_lineage_canonical_migration_recovery.sql",
+    "search": "create or replace function public.acquire_cms_release_operation_v2(p_operation jsonb)",
+    "replacement": "create or replace function public.acquire_cms_release_operation_broken_v2(p_operation jsonb)",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_TEST_FAILURE",
+    "expectedFailedAssertions": [
+      "MIGRATION_017B_AFTER_015"
+    ],
+    "scenario": "normal",
+    "allowedAdditionalFailures": [
+      "S001",
+      "S002",
+      "S005",
+      "S006",
+      "S015"
+    ]
+  }
+]

@@ -1,0 +1,210 @@
+[
+  {
+    "id": "P001_REPAIRABLE_TRUE_FAIL_OPEN",
+    "category": "product",
+    "target": "src/cms-admin/adminState.js",
+    "search": "&& hasSafeExactIdleFlags(data)",
+    "replacement": "&& true",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_TEST_FAILURE",
+    "expectedFailedAssertions": [
+      "E006_PREDICATE",
+      "E006_GATE"
+    ],
+    "allowedAdditionalFailures": [
+      "E029_PREDICATE",
+      "E029_GATE",
+      "E030_PREDICATE",
+      "E030_GATE",
+      "E035_PREDICATE",
+      "E035_GATE",
+      "E036_PREDICATE",
+      "E036_GATE",
+      "E043_PREDICATE",
+      "E043_GATE",
+      "E044_PREDICATE",
+      "E044_GATE"
+    ],
+    "scenario": "normal"
+  },
+  {
+    "id": "P002_CODE_FAIL_OPEN",
+    "category": "product",
+    "target": "src/cms-admin/adminState.js",
+    "search": "&& isAbsentNullOrEmptyString(data, 'code')",
+    "replacement": "&& true",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_TEST_FAILURE",
+    "expectedFailedAssertions": [
+      "E007_PREDICATE",
+      "E007_GATE"
+    ],
+    "allowedAdditionalFailures": [
+      "E008_PREDICATE",
+      "E008_GATE",
+      "E009_PREDICATE",
+      "E009_GATE",
+      "E010_PREDICATE",
+      "E010_GATE",
+      "E031_PREDICATE",
+      "E031_GATE"
+    ],
+    "scenario": "normal"
+  },
+  {
+    "id": "P003_RELEASE_ID_FAIL_OPEN",
+    "category": "product",
+    "target": "src/cms-admin/adminState.js",
+    "search": "&& hasNoOperationIdentityFields(data)",
+    "replacement": "&& true",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_TEST_FAILURE",
+    "expectedFailedAssertions": [
+      "E011_PREDICATE",
+      "E011_GATE"
+    ],
+    "allowedAdditionalFailures": [
+      "E032_PREDICATE",
+      "E032_GATE",
+      "E041_PREDICATE",
+      "E041_GATE",
+      "E042_PREDICATE",
+      "E042_GATE"
+    ],
+    "scenario": "normal"
+  },
+  {
+    "id": "P004_UNKNOWN_KEY_FAIL_OPEN",
+    "category": "product",
+    "target": "src/cms-admin/adminState.js",
+    "search": "hasOnlyExactIdleAllowedKeys(data)",
+    "replacement": "true",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_TEST_FAILURE",
+    "expectedFailedAssertions": [
+      "E012_PREDICATE",
+      "E012_GATE"
+    ],
+    "allowedAdditionalFailures": [
+      "E013_PREDICATE",
+      "E013_GATE",
+      "E014_PREDICATE",
+      "E014_GATE",
+      "E015_PREDICATE",
+      "E015_GATE",
+      "E016_PREDICATE",
+      "E016_GATE",
+      "E020_PREDICATE",
+      "E020_GATE",
+      "E021_PREDICATE",
+      "E021_GATE",
+      "E022_PREDICATE",
+      "E022_GATE",
+      "E023_PREDICATE",
+      "E023_GATE",
+      "E024_PREDICATE",
+      "E024_GATE",
+      "E025_PREDICATE",
+      "E025_GATE",
+      "E026_PREDICATE",
+      "E026_GATE",
+      "E027_PREDICATE",
+      "E027_GATE",
+      "E028_PREDICATE",
+      "E028_GATE",
+      "E033_PREDICATE",
+      "E033_GATE",
+      "E034_PREDICATE",
+      "E034_GATE",
+      "E017_PREDICATE",
+      "E017_GATE",
+      "E018_PREDICATE",
+      "E018_GATE",
+      "E019_PREDICATE",
+      "E019_GATE"
+    ],
+    "scenario": "normal"
+  },
+  {
+    "id": "P005_NESTED_METADATA_FAIL_OPEN",
+    "category": "product",
+    "target": "src/cms-admin/adminState.js",
+    "search": "&& hasNoNestedOperationMetadata(data)",
+    "replacement": "&& true",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_TEST_FAILURE",
+    "expectedFailedAssertions": [
+      "E039_PREDICATE",
+      "E039_GATE"
+    ],
+    "allowedAdditionalFailures": [
+      "E040_PREDICATE",
+      "E040_GATE"
+    ],
+    "scenario": "normal"
+  },
+  {
+    "id": "P006_CLASSIFICATION_CLEAN_FAIL_OPEN",
+    "category": "product",
+    "target": "src/cms-admin/adminState.js",
+    "search": "data.classification === 'idle'",
+    "replacement": "true",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_TEST_FAILURE",
+    "expectedFailedAssertions": [
+      "E050_PREDICATE",
+      "E050_GATE"
+    ],
+    "scenario": "normal"
+  },
+  {
+    "id": "P007_STATE_CONFLICT_FAIL_OPEN",
+    "category": "product",
+    "target": "src/cms-admin/adminState.js",
+    "search": "if (hasOperationState && source.operationState !== 'idle') return false;",
+    "replacement": "if (false && hasOperationState && source.operationState !== 'idle') return false;",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_TEST_FAILURE",
+    "expectedFailedAssertions": [
+      "E045_PREDICATE",
+      "E045_GATE"
+    ],
+    "scenario": "normal",
+    "allowedAdditionalFailures": [
+      "E046_GATE",
+      "E047_GATE"
+    ]
+  },
+  {
+    "id": "P008_ERROR_FAIL_OPEN",
+    "category": "product",
+    "target": "src/cms-admin/adminState.js",
+    "search": "&& isAbsentOrNull(data, 'error')",
+    "replacement": "&& true",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_TEST_FAILURE",
+    "expectedFailedAssertions": [
+      "E037_PREDICATE",
+      "E037_GATE"
+    ],
+    "allowedAdditionalFailures": [
+      "E038_PREDICATE",
+      "E038_GATE"
+    ],
+    "scenario": "normal"
+  },
+  {
+    "id": "P009_OK_TYPE_FAIL_OPEN",
+    "category": "product",
+    "target": "src/cms-admin/adminState.js",
+    "search": "data.ok === true",
+    "replacement": "true",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_TEST_FAILURE",
+    "expectedFailedAssertions": [
+      "E052_PREDICATE",
+      "E052_GATE"
+    ],
+    "scenario": "normal"
+  }
+]

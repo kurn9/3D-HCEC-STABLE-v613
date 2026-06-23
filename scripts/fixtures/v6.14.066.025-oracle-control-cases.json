@@ -1,0 +1,63 @@
+[
+  {
+    "id": "O001_HARMLESS_SOURCE_MUTATION",
+    "category": "oracle",
+    "target": "scripts/verify-v6.14.066.025-cms-source-and-migration-child-runner.mjs",
+    "search": "const CHILD_REL = 'scripts/verify-v6.14.066.025-cms-source-and-migration-child-runner.mjs';",
+    "replacement": "const CHILD_REL = 'scripts/verify-v6.14.066.025-cms-source-and-migration-child-runner.mjs'; // harmless",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_ORACLE_REJECTION",
+    "expectedRejectReason": "EXPECTED_FAILURE_NOT_OBSERVED",
+    "expectedFailedAssertions": [
+      "HASH_ADMIN_SOURCE_MATCH"
+    ],
+    "scenario": "normal"
+  },
+  {
+    "id": "O002_ZERO_REPLACEMENT",
+    "category": "oracle",
+    "target": "scripts/verify-v6.14.066.025-cms-source-and-migration-child-runner.mjs",
+    "search": "THIS_STRING_DOES_NOT_EXIST",
+    "replacement": "x",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_ORACLE_REJECTION",
+    "expectedRejectReason": "REPLACEMENT_COUNT_MISMATCH",
+    "scenario": "normal"
+  },
+  {
+    "id": "O003_EXPECTED_PLUS_UNEXPECTED",
+    "category": "oracle",
+    "target": "scripts/verify-v6.14.066.025-cms-source-and-migration-child-runner.mjs",
+    "search": "add(assertions,'IMPORT_CACHE_ISOLATION', scenario !== 'cache-isolation-failure', scenario);",
+    "replacement": "add(assertions,'IMPORT_CACHE_ISOLATION', false, scenario); add(assertions,'EXTRA_UNEXPECTED_FAILURE', false, 'unexpected');",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_ORACLE_REJECTION",
+    "expectedRejectReason": "UNEXPECTED_FAILURES",
+    "expectedFailedAssertions": [
+      "IMPORT_CACHE_ISOLATION"
+    ],
+    "scenario": "normal"
+  },
+  {
+    "id": "O004_UNCHANGED_SOURCE",
+    "category": "oracle",
+    "target": "scripts/verify-v6.14.066.025-cms-source-and-migration-child-runner.mjs",
+    "search": "const scenario = args.get('scenario') || 'normal';",
+    "replacement": "const scenario = args.get('scenario') || 'normal';",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_ORACLE_REJECTION",
+    "expectedRejectReason": "MUTATED_SOURCE_UNCHANGED",
+    "scenario": "normal"
+  },
+  {
+    "id": "O005_SEMANTIC_DUPLICATE_CONTROL",
+    "category": "oracle",
+    "target": "scripts/verify-v6.14.066.025-cms-source-and-migration-child-runner.mjs",
+    "search": "DUPLICATE_CONTROL_NEVER_MATCHES",
+    "replacement": "x",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_ORACLE_REJECTION",
+    "expectedRejectReason": "REPLACEMENT_COUNT_MISMATCH",
+    "scenario": "normal"
+  }
+]
