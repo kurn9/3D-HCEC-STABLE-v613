@@ -1,0 +1,341 @@
+{
+  "scenarios": [
+    {
+      "id": "SCN_NORMAL",
+      "scenario": "normal",
+      "expectedOutcome": "CHILD_OK"
+    },
+    {
+      "id": "SCN_EXIT_1",
+      "scenario": "exit-1",
+      "expectedOutcome": "CHILD_EXPECTED_TEST_FAILURE"
+    },
+    {
+      "id": "SCN_EXIT_2",
+      "scenario": "exit-2",
+      "expectedOutcome": "CHILD_ABNORMAL_EXIT"
+    },
+    {
+      "id": "SCN_SIGNAL",
+      "scenario": "signal",
+      "expectedOutcome": "CHILD_SIGNAL"
+    },
+    {
+      "id": "SCN_TIMEOUT",
+      "scenario": "timeout",
+      "expectedOutcome": "CHILD_TIMEOUT"
+    },
+    {
+      "id": "SCN_SPAWN_ERROR",
+      "scenario": "spawn-error",
+      "expectedOutcome": "CHILD_SPAWN_ERROR"
+    },
+    {
+      "id": "SCN_MALFORMED_JSON",
+      "scenario": "malformed-json",
+      "expectedOutcome": "CHILD_MALFORMED_JSON"
+    },
+    {
+      "id": "SCN_MISSING_RESULT",
+      "scenario": "missing-result",
+      "expectedOutcome": "CHILD_RESULT_MISSING"
+    },
+    {
+      "id": "SCN_WRONG_PROTOCOL",
+      "scenario": "wrong-protocol",
+      "expectedOutcome": "CHILD_PROTOCOL_INVALID"
+    },
+    {
+      "id": "SCN_WRONG_RUN_ID",
+      "scenario": "wrong-run-id",
+      "expectedOutcome": "CHILD_PROTOCOL_INVALID"
+    },
+    {
+      "id": "SCN_WRONG_ROOT",
+      "scenario": "wrong-root",
+      "expectedOutcome": "CHILD_PROTOCOL_INVALID"
+    },
+    {
+      "id": "SCN_WRONG_EXECUTABLE",
+      "scenario": "wrong-executable",
+      "expectedOutcome": "CHILD_PROTOCOL_INVALID"
+    },
+    {
+      "id": "SCN_CLEANUP_LEAK",
+      "scenario": "cleanup-leak",
+      "expectedOutcome": "CHILD_CLEANUP_LEAK"
+    },
+    {
+      "id": "SCN_HIDDEN_CLEANUP_LEAK",
+      "scenario": "hidden-cleanup-leak",
+      "expectedOutcome": "CHILD_HIDDEN_CLEANUP_LEAK"
+    }
+  ],
+  "productMutations": [
+    {
+      "id": "P001_REPAIRABLE_TRUE_FAIL_OPEN"
+    },
+    {
+      "id": "P002_CODE_FAIL_OPEN"
+    },
+    {
+      "id": "P003_RELEASE_ID_FAIL_OPEN"
+    },
+    {
+      "id": "P004_UNKNOWN_KEY_FAIL_OPEN"
+    },
+    {
+      "id": "P005_NESTED_RECONCILIATION_FAIL_OPEN"
+    },
+    {
+      "id": "P006_CLASSIFICATION_CLEAN_FAIL_OPEN"
+    },
+    {
+      "id": "P007_STATE_CONFLICT_FAIL_OPEN"
+    },
+    {
+      "id": "P008_ERROR_FAIL_OPEN"
+    },
+    {
+      "id": "P009_WRAPPER_ERROR_FAIL_OPEN"
+    }
+  ],
+  "childFailureModes": [
+    {
+      "id": "CF001_ADMIN_HASH_MISMATCH",
+      "sourceMutation": "admin-hash-mismatch",
+      "expectedFailedAssertions": [
+        "HASH_ADMIN_SOURCE_MATCH"
+      ]
+    },
+    {
+      "id": "CF002_GATE_HASH_MISMATCH",
+      "sourceMutation": "gate-hash-mismatch",
+      "expectedFailedAssertions": [
+        "HASH_GATE_SOURCE_MATCH"
+      ]
+    },
+    {
+      "id": "CF003_EMPTY_FRONTEND_FIXTURE",
+      "sourceMutation": "empty-frontend-fixture",
+      "expectedFailedAssertions": [
+        "FRONTEND_FIXTURE_NON_EMPTY",
+        "REQUIRED_FRONTEND_CASES_PRESENT"
+      ]
+    },
+    {
+      "id": "CF004_MISSING_FRONTEND_REQUIRED",
+      "sourceMutation": "missing-required-frontend-case",
+      "expectedFailedAssertions": [
+        "REQUIRED_FRONTEND_CASES_PRESENT"
+      ]
+    },
+    {
+      "id": "CF005_EMPTY_MIGRATION_FIXTURE",
+      "sourceMutation": "empty-migration-fixture",
+      "expectedFailedAssertions": [
+        "MIGRATION_FIXTURE_NON_EMPTY",
+        "REQUIRED_MIGRATION_CASES_PRESENT"
+      ]
+    },
+    {
+      "id": "CF006_MISSING_MIGRATION_REQUIRED",
+      "sourceMutation": "missing-required-migration-case",
+      "expectedFailedAssertions": [
+        "REQUIRED_MIGRATION_CASES_PRESENT"
+      ]
+    }
+  ],
+  "migrationMutations": [
+    {
+      "id": "SQL001_ACQUIRE_ABSENT_PERFORM",
+      "kind": "text",
+      "target": "supabase/migrations/20260621235500_v6_14_066_017a_cms_rpc_signature_bridge_pre_014.sql",
+      "search": "raise exception 'CMS_RELEASE_RPC_BRIDGE_UNKNOWN_STATE: acquire_cms_release_operation(jsonb) absent after .013; Project Control review required.';",
+      "replacement": "perform 'CMS_RELEASE_RPC_BRIDGE_UNKNOWN_STATE: acquire_cms_release_operation(jsonb) absent after .013; Project Control review required.';",
+      "expectedFailedAssertions": [
+        "SQL_BRANCH_acquireAbsent_RAISE_EXCEPTION",
+        "MIGRATION_CASE_S003"
+      ],
+      "allowedAdditionalFailures": [
+        "SQL_BRANCH_acquireAbsent_UNIQUE"
+      ]
+    },
+    {
+      "id": "SQL002_AUDIT_ABSENT_PERFORM",
+      "kind": "text",
+      "target": "supabase/migrations/20260621235500_v6_14_066_017a_cms_rpc_signature_bridge_pre_014.sql",
+      "search": "raise exception 'CMS_RELEASE_RPC_BRIDGE_UNKNOWN_STATE: ensure_cms_terminal_operation_audit(uuid,text,jsonb,jsonb) absent after .013; Project Control review required.';",
+      "replacement": "perform 'CMS_RELEASE_RPC_BRIDGE_UNKNOWN_STATE: ensure_cms_terminal_operation_audit(uuid,text,jsonb,jsonb) absent after .013; Project Control review required.';",
+      "expectedFailedAssertions": [
+        "SQL_BRANCH_auditAbsent_RAISE_EXCEPTION",
+        "MIGRATION_CASE_S007"
+      ],
+      "allowedAdditionalFailures": [
+        "SQL_BRANCH_auditAbsent_UNIQUE"
+      ]
+    },
+    {
+      "id": "SQL003_ACQUIRE_UNKNOWN_NOTICE",
+      "kind": "text",
+      "target": "supabase/migrations/20260621235500_v6_14_066_017a_cms_rpc_signature_bridge_pre_014.sql",
+      "search": "raise exception 'CMS_RELEASE_RPC_BRIDGE_UNKNOWN_STATE: acquire_cms_release_operation(jsonb) observed %, expected % or %', v_acquire_result, v_acquire_013, v_acquire_target;",
+      "replacement": "raise notice 'CMS_RELEASE_RPC_BRIDGE_UNKNOWN_STATE: acquire_cms_release_operation(jsonb) observed %, expected % or %', v_acquire_result, v_acquire_013, v_acquire_target;",
+      "expectedFailedAssertions": [
+        "SQL_BRANCH_acquireUnknown_RAISE_EXCEPTION",
+        "MIGRATION_CASE_S004",
+        "MIGRATION_CASE_S016"
+      ],
+      "allowedAdditionalFailures": [
+        "SQL_BRANCH_acquireUnknown_UNIQUE"
+      ]
+    },
+    {
+      "id": "SQL004_AUDIT_UNKNOWN_ASSIGNMENT",
+      "kind": "text",
+      "target": "supabase/migrations/20260621235500_v6_14_066_017a_cms_rpc_signature_bridge_pre_014.sql",
+      "search": "raise exception 'CMS_RELEASE_RPC_BRIDGE_UNKNOWN_STATE: ensure_cms_terminal_operation_audit(uuid,text,jsonb,jsonb) observed %, expected % or %', v_audit_result, v_audit_013, v_audit_target;",
+      "replacement": "v_audit_result := 'CMS_RELEASE_RPC_BRIDGE_UNKNOWN_STATE: ensure_cms_terminal_operation_audit(uuid,text,jsonb,jsonb) observed';",
+      "expectedFailedAssertions": [
+        "SQL_BRANCH_auditUnknown_RAISE_EXCEPTION",
+        "MIGRATION_CASE_S008",
+        "MIGRATION_CASE_S017"
+      ],
+      "allowedAdditionalFailures": [
+        "SQL_BRANCH_auditUnknown_UNIQUE"
+      ]
+    },
+    {
+      "id": "SQL005_ACQUIRE_BRIDGE_BODY_PERFORM",
+      "kind": "text",
+      "target": "supabase/migrations/20260621235500_v6_14_066_017a_cms_rpc_signature_bridge_pre_014.sql",
+      "search": "raise exception 'CMS_RELEASE_RPC_BRIDGE_PENDING_CANONICAL_MIGRATION: acquire bridge body must not be called before .014/.017b completes.';",
+      "replacement": "perform 'CMS_RELEASE_RPC_BRIDGE_PENDING_CANONICAL_MIGRATION: acquire bridge body must not be called before .014/.017b completes.';",
+      "expectedFailedAssertions": [
+        "SQL_BRANCH_acquireBridge_RAISE_EXCEPTION",
+        "MIGRATION_CASE_S011"
+      ],
+      "allowedAdditionalFailures": [
+        "SQL_BRANCH_acquireBridge_UNIQUE"
+      ]
+    },
+    {
+      "id": "SQL006_AUDIT_BRIDGE_BODY_NOTICE",
+      "kind": "text",
+      "target": "supabase/migrations/20260621235500_v6_14_066_017a_cms_rpc_signature_bridge_pre_014.sql",
+      "search": "raise exception 'CMS_RELEASE_RPC_BRIDGE_PENDING_CANONICAL_MIGRATION: audit bridge body must not be called before .014/.017b completes.';",
+      "replacement": "raise notice 'CMS_RELEASE_RPC_BRIDGE_PENDING_CANONICAL_MIGRATION: audit bridge body must not be called before .014/.017b completes.';",
+      "expectedFailedAssertions": [
+        "SQL_BRANCH_auditBridge_RAISE_EXCEPTION",
+        "MIGRATION_CASE_S012"
+      ],
+      "allowedAdditionalFailures": [
+        "SQL_BRANCH_auditBridge_UNIQUE"
+      ]
+    },
+    {
+      "id": "SQL007_DROP_CASCADE_INTRODUCED",
+      "kind": "text",
+      "target": "supabase/migrations/20260621235500_v6_14_066_017a_cms_rpc_signature_bridge_pre_014.sql",
+      "search": "drop function public.acquire_cms_release_operation(jsonb);",
+      "replacement": "drop function public.acquire_cms_release_operation(jsonb) cascade;",
+      "expectedFailedAssertions": [
+        "NO_DROP_CASCADE",
+        "MIGRATION_CASE_S014"
+      ]
+    },
+    {
+      "id": "SQL008_017A_RENAMED_AFTER_014",
+      "kind": "rename",
+      "match": "066_017a.*\\.sql$",
+      "newName": "20260622000500_v6_14_066_017a_cms_rpc_signature_bridge_pre_014.sql",
+      "expectedFailedAssertions": [
+        "MIGRATION_ORDER_VALID",
+        "MIGRATION_CASE_S013"
+      ],
+      "allowedAdditionalFailures": [
+        "MIGRATION_017B_AFTER_015"
+      ]
+    },
+    {
+      "id": "SQL009_017B_RENAMED_BEFORE_015",
+      "kind": "rename",
+      "match": "066_017b.*\\.sql$",
+      "newName": "20260622001000_v6_14_066_017b_cms_release_lineage_canonical_migration_recovery.sql",
+      "expectedFailedAssertions": [
+        "MIGRATION_ORDER_VALID",
+        "MIGRATION_017B_AFTER_015",
+        "MIGRATION_CASE_S013",
+        "MIGRATION_CASE_S015"
+      ]
+    },
+    {
+      "id": "SQL010_DUPLICATE_014",
+      "kind": "duplicate",
+      "match": "066_014.*\\.sql$",
+      "newName": "20260622000000_duplicate_v6_14_066_014_cms_full_history_lineage_scan_nonrepairable_gate_and_resolved_error_status.sql",
+      "expectedFailedAssertions": [
+        "MIGRATION_FILES_PRESENT",
+        "MIGRATION_ORDER_VALID",
+        "MIGRATION_CASE_S013"
+      ],
+      "allowedAdditionalFailures": [
+        "BRIDGE_ACQUIRE_TARGET_MATCHES_014",
+        "BRIDGE_AUDIT_TARGET_MATCHES_014",
+        "MIGRATION_CASE_S009",
+        "MIGRATION_CASE_S010"
+      ]
+    },
+    {
+      "id": "SQL011_REMOVE_017A",
+      "kind": "remove",
+      "match": "066_017a.*\\.sql$",
+      "expectedFailedAssertions": [
+        "MIGRATION_FILES_PRESENT",
+        "ACQUIRE_013_SIGNATURE_PARSED",
+        "AUDIT_013_SIGNATURE_PARSED",
+        "BRIDGE_ACQUIRE_TARGET_MATCHES_014",
+        "BRIDGE_AUDIT_TARGET_MATCHES_014",
+        "SQL_BRANCH_acquireAbsent_UNIQUE",
+        "SQL_BRANCH_acquireAbsent_RAISE_EXCEPTION",
+        "SQL_BRANCH_acquireUnknown_UNIQUE",
+        "SQL_BRANCH_acquireUnknown_RAISE_EXCEPTION",
+        "SQL_BRANCH_auditAbsent_UNIQUE",
+        "SQL_BRANCH_auditAbsent_RAISE_EXCEPTION",
+        "SQL_BRANCH_auditUnknown_UNIQUE",
+        "SQL_BRANCH_auditUnknown_RAISE_EXCEPTION",
+        "SQL_BRANCH_acquireBridge_UNIQUE",
+        "SQL_BRANCH_acquireBridge_RAISE_EXCEPTION",
+        "SQL_BRANCH_auditBridge_UNIQUE",
+        "SQL_BRANCH_auditBridge_RAISE_EXCEPTION",
+        "MIGRATION_ORDER_VALID",
+        "MIGRATION_CASE_S001",
+        "MIGRATION_CASE_S002",
+        "MIGRATION_CASE_S003",
+        "MIGRATION_CASE_S004",
+        "MIGRATION_CASE_S005",
+        "MIGRATION_CASE_S006",
+        "MIGRATION_CASE_S007",
+        "MIGRATION_CASE_S008",
+        "MIGRATION_CASE_S009",
+        "MIGRATION_CASE_S010",
+        "MIGRATION_CASE_S011",
+        "MIGRATION_CASE_S012",
+        "MIGRATION_CASE_S013",
+        "MIGRATION_CASE_S016",
+        "MIGRATION_CASE_S017"
+      ]
+    },
+    {
+      "id": "SQL012_BRIDGE_TARGET_SIGNATURE_CHANGED",
+      "kind": "text",
+      "target": "supabase/migrations/20260621235500_v6_14_066_017a_cms_rpc_signature_bridge_pre_014.sql",
+      "search": "v_acquire_target text := 'TABLE(classification text, code text, repairable boolean, message text, id uuid",
+      "replacement": "v_acquire_target text := 'TABLE(classification text, code text, repairable boolean, broken_field text, id uuid",
+      "expectedFailedAssertions": [
+        "BRIDGE_ACQUIRE_TARGET_MATCHES_014",
+        "MIGRATION_CASE_S009"
+      ]
+    }
+  ]
+}
