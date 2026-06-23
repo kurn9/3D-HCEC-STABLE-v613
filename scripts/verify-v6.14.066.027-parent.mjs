@@ -98,7 +98,7 @@ function runChild(targetRoot, options = {}) {
   if (options.osSpawnError) {
     proc = spawnSync('/tmp/cms-066027-nonexistent-binary', [], { encoding: 'utf8', timeout: 1000 });
   } else {
-    const argv = [childPath, `--root=${targetRoot}`, `--fixture-root=${targetRoot}`, `--run-id=${childRunId}`, `--owned-root=${childOwnedRoot}`, `--result-file=${resultPath}`, `--scenario=${options.scenario || 'normal'}`];
+    const argv = [childPath, `--root=${targetRoot}`, `--fixture-root=${options.fixtureRoot || targetRoot}`, `--run-id=${childRunId}`, `--owned-root=${childOwnedRoot}`, `--result-file=${resultPath}`, `--scenario=${options.scenario || 'normal'}`];
     if (options.fixtureMutation) argv.push(`--fixture-mutation=${options.fixtureMutation}`);
     if (options.sourceMutation) argv.push(`--source-mutation=${options.sourceMutation}`);
     proc = spawnSync(process.execPath, argv, { encoding: 'utf8', cwd: targetRoot, timeout: options.timeoutMs || 5000 });
@@ -202,10 +202,17 @@ async function main() {
 
     for (const item of cases.childFailureModes) {
       const work = makeWorkRoot(`child-${item.id}`);
-      const evidence = runChild(work, { scenario: 'normal', sourceMutation: item.sourceMutation, fixtureMutation: item.fixtureMutation || '', label: item.id });
-      const mutation = { id: item.id, requiredReplacementCount: 1, replacementCount: 1, baselineSha: 'before', mutatedSha: 'after', expectedOutcome: 'EXPECTED_TEST_FAILURE', expectedFailedAssertions: item.expectedFailedAssertions };
+      let childFixtureRoot = work;
+      let sourcePatch = { replacementCount: 1, beforeSha: 'before', afterSha: 'after' };
+      if (item.sourceMutation === 'original-tree-import') {
+        const baselineRoot = makeWorkRoot(`child-${item.id}-baseline`);
+        childFixtureRoot = baselineRoot;
+        sourcePatch = applyReplacement(work, 'src/cms-admin/adminState.js', "    && data.classification === 'idle'\n", "    && true\n");
+      }
+      const evidence = runChild(work, { scenario: 'normal', sourceMutation: item.sourceMutation, fixtureMutation: item.fixtureMutation || '', fixtureRoot: childFixtureRoot, label: item.id });
+      const mutation = { id: item.id, requiredReplacementCount: 1, replacementCount: sourcePatch.replacementCount, baselineSha: sourcePatch.beforeSha, mutatedSha: sourcePatch.afterSha, expectedOutcome: 'EXPECTED_TEST_FAILURE', expectedFailedAssertions: item.expectedFailedAssertions, allowedAdditionalFailures: item.allowedAdditionalFailures || [] };
       const verdict = evaluateMutationOutcome(mutation, evidence);
-      childFailureModeRecords.push({ id: item.id, verdict: verdict.verdict, rejectReason: verdict.rejectReason, expected: item.expectedFailedAssertions, actual: verdict.actualFailures });
+      childFailureModeRecords.push({ id: item.id, verdict: verdict.verdict, rejectReason: verdict.rejectReason, expected: item.expectedFailedAssertions, actual: verdict.actualFailures, evidenceSha256: evidence.canonical.sha256 });
       add(assertions, `CHILD_FAILURE_MODE_${item.id}`, verdict.killed, verdict.rejectReason, verdict);
     }
 
@@ -236,8 +243,33 @@ async function main() {
     const wrongFails = wrongEvidence.failedAssertionIds;
     add(assertions, 'WRONG_S001_EXPECTED_ACTION_RED', wrongFails.includes('MIGRATION_CASE_S001') && wrongFails.filter((id) => id.startsWith('MIGRATION_CASE_')).length === 1, wrongFails.join(','));
 
-    const productRecords = cases.productMutations.map((item) => ({ id: item.id, verdict: 'KILLED', actualFunctionExecuted: true, evidenceSha256: crypto.createHash('sha256').update(item.id).digest('hex') }));
-    mutationRecords.push(...productRecords);
+    for (const item of cases.productMutations) {
+      const work = makeWorkRoot(`product-${item.id}`);
+      const replacement = applyReplacement(work, item.target, item.search, item.replacement);
+      const evidence = runChild(work, { scenario: 'normal', label: item.id });
+      const mutation = { ...item, replacementCount: replacement.replacementCount, baselineSha: replacement.beforeSha, mutatedSha: replacement.afterSha, expectedOutcome: 'EXPECTED_TEST_FAILURE' };
+      const verdict = evaluateMutationOutcome(mutation, evidence);
+      const record = {
+        id: item.id, category: 'product', target: item.target, search: item.search, replacement: item.replacement,
+        replacementCount: replacement.replacementCount, requiredReplacementCount: item.requiredReplacementCount,
+        beforeSha: replacement.beforeSha, afterSha: replacement.afterSha, sourceChanged: replacement.beforeSha !== replacement.afterSha,
+        processOutcome: verdict.processOutcome, actualFailures: verdict.actualFailures, expectedMissing: verdict.expectedMissing, unexpectedFailures: verdict.unexpectedFailed,
+        verdict: verdict.verdict, rejectReason: verdict.rejectReason, evidenceSha256: evidence.canonical.sha256, childStatus: evidence.status, childFailCount: evidence.result?.failCount ?? null
+      };
+      mutationRecords.push(record);
+      add(assertions, `PRODUCT_MUTATION_${item.id}`, verdict.killed, verdict.rejectReason, record);
+    }
+
+    const p001 = cases.productMutations.find((item) => item.id === 'P001_REPAIRABLE_TRUE_FAIL_OPEN');
+    if (p001) {
+      const poisonRoot = makeWorkRoot('product-p001-missing-case');
+      const replacement = applyReplacement(poisonRoot, p001.target, p001.search, p001.replacement);
+      const missingCase = (p001.dedicatedFrontendCaseIds || ['E006'])[0];
+      const poisonEvidence = runChild(poisonRoot, { scenario: 'normal', label: 'product-p001-missing-case', fixtureMutation: `remove-frontend-case:${missingCase}` });
+      const poisonMutation = { ...p001, replacementCount: replacement.replacementCount, baselineSha: replacement.beforeSha, mutatedSha: replacement.afterSha, expectedOutcome: 'EXPECTED_TEST_FAILURE' };
+      const poisonVerdict = evaluateMutationOutcome(poisonMutation, poisonEvidence);
+      add(assertions, 'PRODUCT_AUTHORITY_POISON_MISSING_DEDICATED_CASE_RED', poisonVerdict.killed === false && poisonVerdict.rejectReason === 'EXPECTED_FAILURE_NOT_OBSERVED', JSON.stringify({ rejectReason: poisonVerdict.rejectReason, expectedMissing: poisonVerdict.expectedMissing, actualFailures: poisonVerdict.actualFailures }));
+    }
   }
 
   for (const scenarioRecord of scenarioRecords) add(assertions, `SCENARIO_${scenarioRecord.id}`, scenarioRecord.pass && scenarioRecord.ownedRootsRemaining === 0, `${scenarioRecord.observedOutcome} expected ${scenarioRecord.expectedOutcome}`);
@@ -260,8 +292,8 @@ async function main() {
     childFailureModeRecords,
     migrationMutationRecords,
     mutationRecords,
-    productMutantsTotal: runMutations ? cases.productMutations.length : 0,
-    productMutantsKilled: runMutations ? cases.productMutations.length : 0,
+    productMutantsTotal: mutationRecords.filter((r) => r.category === 'product').length,
+    productMutantsKilled: mutationRecords.filter((r) => r.category === 'product' && r.verdict === 'KILLED').length,
     migrationMutantsTotal: migrationMutationRecords.length,
     migrationMutantsKilled: migrationMutationRecords.filter((r) => r.verdict === 'KILLED').length,
     childFailureModeMutantsTotal: childFailureModeRecords.length,

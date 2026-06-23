@@ -71,33 +71,170 @@
       "expectedOutcome": "CHILD_HIDDEN_CLEANUP_LEAK"
     }
   ],
+  "requiredFrontendCaseIds": [
+    "E006",
+    "E007",
+    "E011",
+    "E021",
+    "E017",
+    "E050",
+    "E045",
+    "E037",
+    "E052"
+  ],
   "productMutations": [
     {
-      "id": "P001_REPAIRABLE_TRUE_FAIL_OPEN"
+      "id": "P001_REPAIRABLE_TRUE_FAIL_OPEN",
+      "target": "src/cms-admin/adminState.js",
+      "search": "    'repairable',\n",
+      "replacement": "",
+      "requiredReplacementCount": 1,
+      "expectedFailedAssertions": [
+        "FRONTEND_E006",
+        "FRONTEND_E029",
+        "FRONTEND_E030"
+      ],
+      "allowedAdditionalFailures": [],
+      "dedicatedFrontendCaseIds": [
+        "E006"
+      ]
     },
     {
-      "id": "P002_CODE_FAIL_OPEN"
+      "id": "P002_CODE_FAIL_OPEN",
+      "target": "src/cms-admin/adminState.js",
+      "search": "    && isAbsentNullOrEmptyString(data, 'code')\n",
+      "replacement": "    && true\n",
+      "requiredReplacementCount": 1,
+      "expectedFailedAssertions": [
+        "FRONTEND_E007",
+        "FRONTEND_E008",
+        "FRONTEND_E009",
+        "FRONTEND_E010",
+        "FRONTEND_E031"
+      ],
+      "allowedAdditionalFailures": [],
+      "dedicatedFrontendCaseIds": [
+        "E007"
+      ]
     },
     {
-      "id": "P003_RELEASE_ID_FAIL_OPEN"
+      "id": "P003_RELEASE_ID_FAIL_OPEN",
+      "target": "src/cms-admin/adminState.js",
+      "search": "    'releaseId',\n",
+      "replacement": "",
+      "requiredReplacementCount": 1,
+      "expectedFailedAssertions": [
+        "FRONTEND_E011",
+        "FRONTEND_E032"
+      ],
+      "allowedAdditionalFailures": [],
+      "dedicatedFrontendCaseIds": [
+        "E011"
+      ]
     },
     {
-      "id": "P004_UNKNOWN_KEY_FAIL_OPEN"
+      "id": "P004_UNKNOWN_KEY_FAIL_OPEN",
+      "target": "src/cms-admin/adminState.js",
+      "search": "  if (!stringKeys.every((key) => EXACT_IDLE_ALLOWED_KEYS.has(key))) return false;\n",
+      "replacement": "  if (false && !stringKeys.every((key) => EXACT_IDLE_ALLOWED_KEYS.has(key))) return false;\n",
+      "requiredReplacementCount": 1,
+      "expectedFailedAssertions": [
+        "FRONTEND_E012",
+        "FRONTEND_E013",
+        "FRONTEND_E014",
+        "FRONTEND_E015",
+        "FRONTEND_E016",
+        "FRONTEND_E017",
+        "FRONTEND_E018",
+        "FRONTEND_E019",
+        "FRONTEND_E020",
+        "FRONTEND_E021",
+        "FRONTEND_E022",
+        "FRONTEND_E023",
+        "FRONTEND_E024",
+        "FRONTEND_E025",
+        "FRONTEND_E026",
+        "FRONTEND_E027",
+        "FRONTEND_E028",
+        "FRONTEND_E033",
+        "FRONTEND_E034"
+      ],
+      "allowedAdditionalFailures": [],
+      "dedicatedFrontendCaseIds": [
+        "E021"
+      ]
     },
     {
-      "id": "P005_NESTED_RECONCILIATION_FAIL_OPEN"
+      "id": "P005_NESTED_RECONCILIATION_FAIL_OPEN",
+      "target": "src/cms-admin/adminState.js",
+      "search": "  'contentPath',\n]);",
+      "replacement": "  'contentPath',\n  'reconciliation',\n]);",
+      "requiredReplacementCount": 1,
+      "expectedFailedAssertions": [
+        "FRONTEND_E017",
+        "FRONTEND_E033"
+      ],
+      "allowedAdditionalFailures": [],
+      "dedicatedFrontendCaseIds": [
+        "E017"
+      ]
     },
     {
-      "id": "P006_CLASSIFICATION_CLEAN_FAIL_OPEN"
+      "id": "P006_CLASSIFICATION_CLEAN_FAIL_OPEN",
+      "target": "src/cms-admin/adminState.js",
+      "search": "    && data.classification === 'idle'\n",
+      "replacement": "    && true\n",
+      "requiredReplacementCount": 1,
+      "expectedFailedAssertions": [
+        "FRONTEND_E050"
+      ],
+      "allowedAdditionalFailures": [],
+      "dedicatedFrontendCaseIds": [
+        "E050"
+      ]
     },
     {
-      "id": "P007_STATE_CONFLICT_FAIL_OPEN"
+      "id": "P007_STATE_CONFLICT_FAIL_OPEN",
+      "target": "src/cms-admin/adminState.js",
+      "search": "  if (hasOperationState && source.operationState !== 'idle') return false;\n",
+      "replacement": "  if (false && hasOperationState && source.operationState !== 'idle') return false;\n",
+      "requiredReplacementCount": 1,
+      "expectedFailedAssertions": [
+        "FRONTEND_E045"
+      ],
+      "allowedAdditionalFailures": [],
+      "dedicatedFrontendCaseIds": [
+        "E045"
+      ]
     },
     {
-      "id": "P008_ERROR_FAIL_OPEN"
+      "id": "P008_ERROR_FAIL_OPEN",
+      "target": "src/cms-admin/adminState.js",
+      "search": "    && isAbsentOrNull(data, 'error')\n",
+      "replacement": "    && true\n",
+      "requiredReplacementCount": 1,
+      "expectedFailedAssertions": [
+        "FRONTEND_E037",
+        "FRONTEND_E038"
+      ],
+      "allowedAdditionalFailures": [],
+      "dedicatedFrontendCaseIds": [
+        "E037"
+      ]
     },
     {
-      "id": "P009_WRAPPER_ERROR_FAIL_OPEN"
+      "id": "P009_WRAPPER_ERROR_FAIL_OPEN",
+      "target": "src/cms-admin/adminState.js",
+      "search": "    && data.ok === true\n",
+      "replacement": "    && true\n",
+      "requiredReplacementCount": 1,
+      "expectedFailedAssertions": [
+        "FRONTEND_E052"
+      ],
+      "allowedAdditionalFailures": [],
+      "dedicatedFrontendCaseIds": [
+        "E052"
+      ]
     }
   ],
   "childFailureModes": [
@@ -105,14 +242,16 @@
       "id": "CF001_ADMIN_HASH_MISMATCH",
       "sourceMutation": "admin-hash-mismatch",
       "expectedFailedAssertions": [
-        "HASH_ADMIN_SOURCE_MATCH"
+        "HASH_ADMIN_SOURCE_MATCH",
+        "IMPORT_SOURCE_MATCHES_MUTANT_TREE"
       ]
     },
     {
       "id": "CF002_GATE_HASH_MISMATCH",
       "sourceMutation": "gate-hash-mismatch",
       "expectedFailedAssertions": [
-        "HASH_GATE_SOURCE_MATCH"
+        "HASH_GATE_SOURCE_MATCH",
+        "IMPORT_SOURCE_MATCHES_MUTANT_TREE"
       ]
     },
     {
@@ -120,14 +259,16 @@
       "sourceMutation": "empty-frontend-fixture",
       "expectedFailedAssertions": [
         "FRONTEND_FIXTURE_NON_EMPTY",
-        "REQUIRED_FRONTEND_CASES_PRESENT"
+        "REQUIRED_FRONTEND_CASES_PRESENT",
+        "REQUIRED_FRONTEND_CASES_EXECUTED"
       ]
     },
     {
       "id": "CF004_MISSING_FRONTEND_REQUIRED",
       "sourceMutation": "missing-required-frontend-case",
       "expectedFailedAssertions": [
-        "REQUIRED_FRONTEND_CASES_PRESENT"
+        "REQUIRED_FRONTEND_CASES_PRESENT",
+        "REQUIRED_FRONTEND_CASES_EXECUTED"
       ]
     },
     {
@@ -143,6 +284,21 @@
       "sourceMutation": "missing-required-migration-case",
       "expectedFailedAssertions": [
         "REQUIRED_MIGRATION_CASES_PRESENT"
+      ]
+    },
+    {
+      "id": "CF007_ORIGINAL_TREE_IMPORT",
+      "sourceMutation": "original-tree-import",
+      "expectedFailedAssertions": [
+        "HASH_ADMIN_SOURCE_MATCH",
+        "IMPORT_SOURCE_MATCHES_MUTANT_TREE"
+      ]
+    },
+    {
+      "id": "CF008_STALE_MODULE_CACHE",
+      "sourceMutation": "cache-stable-url",
+      "expectedFailedAssertions": [
+        "IMPORT_CACHE_ISOLATION"
       ]
     }
   ],
@@ -336,6 +492,50 @@
         "BRIDGE_ACQUIRE_TARGET_MATCHES_014",
         "MIGRATION_CASE_S009"
       ]
+    },
+    {
+      "id": "SQL013_ACQUIRE_UNKNOWN_DUMMY_RAISE_NOT_OPERATIONAL",
+      "kind": "text",
+      "target": "supabase/migrations/20260621235500_v6_14_066_017a_cms_rpc_signature_bridge_pre_014.sql",
+      "search": "raise exception 'CMS_RELEASE_RPC_BRIDGE_UNKNOWN_STATE: acquire_cms_release_operation(jsonb) observed %, expected % or %', v_acquire_result, v_acquire_013, v_acquire_target;",
+      "replacement": "perform 'CMS_RELEASE_RPC_BRIDGE_UNKNOWN_STATE: acquire_cms_release_operation(jsonb) observed %, expected % or %';\n  end if;\n\n  do $dummy$ begin\n    raise exception 'CMS_RELEASE_RPC_BRIDGE_UNKNOWN_STATE: acquire_cms_release_operation(jsonb) observed %, expected % or %', v_acquire_result, v_acquire_013, v_acquire_target;\n  end $dummy$;\n\n  if true then\n    null;",
+      "requiredReplacementCount": 1,
+      "expectedFailedAssertions": [
+        "SQL_BRANCH_acquireUnknown_RAISE_EXCEPTION",
+        "MIGRATION_CASE_S004",
+        "MIGRATION_CASE_S016"
+      ],
+      "allowedAdditionalFailures": [
+        "SQL_BRANCH_acquireUnknown_UNIQUE"
+      ]
+    },
+    {
+      "id": "SQL014_AUDIT_UNKNOWN_DUMMY_RAISE_NOT_OPERATIONAL",
+      "kind": "text",
+      "target": "supabase/migrations/20260621235500_v6_14_066_017a_cms_rpc_signature_bridge_pre_014.sql",
+      "search": "raise exception 'CMS_RELEASE_RPC_BRIDGE_UNKNOWN_STATE: ensure_cms_terminal_operation_audit(uuid,text,jsonb,jsonb) observed %, expected % or %', v_audit_result, v_audit_013, v_audit_target;",
+      "replacement": "perform 'CMS_RELEASE_RPC_BRIDGE_UNKNOWN_STATE: ensure_cms_terminal_operation_audit(uuid,text,jsonb,jsonb) observed %, expected % or %';\n  end if;\n\n  do $dummy$ begin\n    raise exception 'CMS_RELEASE_RPC_BRIDGE_UNKNOWN_STATE: ensure_cms_terminal_operation_audit(uuid,text,jsonb,jsonb) observed %, expected % or %', v_audit_result, v_audit_013, v_audit_target;\n  end $dummy$;\n\n  if true then\n    null;",
+      "requiredReplacementCount": 1,
+      "expectedFailedAssertions": [
+        "SQL_BRANCH_auditUnknown_RAISE_EXCEPTION",
+        "MIGRATION_CASE_S008",
+        "MIGRATION_CASE_S017"
+      ],
+      "allowedAdditionalFailures": [
+        "SQL_BRANCH_auditUnknown_UNIQUE"
+      ]
+    },
+    {
+      "id": "SQL015_ACQUIRE_UNKNOWN_DUPLICATE_RAISE",
+      "kind": "text",
+      "target": "supabase/migrations/20260621235500_v6_14_066_017a_cms_rpc_signature_bridge_pre_014.sql",
+      "search": "raise exception 'CMS_RELEASE_RPC_BRIDGE_UNKNOWN_STATE: acquire_cms_release_operation(jsonb) observed %, expected % or %', v_acquire_result, v_acquire_013, v_acquire_target;",
+      "replacement": "raise exception 'CMS_RELEASE_RPC_BRIDGE_UNKNOWN_STATE: acquire_cms_release_operation(jsonb) observed %, expected % or %', v_acquire_result, v_acquire_013, v_acquire_target;\n  end if;\n\n  do $dummy$ begin\n    raise exception 'CMS_RELEASE_RPC_BRIDGE_UNKNOWN_STATE: acquire_cms_release_operation(jsonb) observed %, expected % or %', v_acquire_result, v_acquire_013, v_acquire_target;\n  end $dummy$;\n\n  if true then\n    null;",
+      "requiredReplacementCount": 1,
+      "expectedFailedAssertions": [
+        "SQL_BRANCH_acquireUnknown_UNIQUE"
+      ],
+      "allowedAdditionalFailures": []
     }
   ]
 }

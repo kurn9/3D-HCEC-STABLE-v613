@@ -122,15 +122,67 @@ function branch(sql, conditionNeedle, messageNeedle) {
 }
 
 
-function raiseBranchByMessage(sql, messageNeedle) {
+function splitTopLevelDoBlocks(sql = '') {
   const clean = stripSqlComments(sql);
-  const lower = clean.toLowerCase();
+  const blocks = [];
+  const re = /\bdo\s+\$\$[\s\S]*?end\s+\$\$/gi;
+  let match;
+  while ((match = re.exec(clean))) blocks.push({ start: match.index, end: match.index + match[0].length, text: match[0] });
+  return blocks;
+}
+
+function countMatchingRaises(text, messageNeedle) {
+  const lower = text.toLowerCase();
   const msg = messageNeedle.toLowerCase();
   const raiseRe = new RegExp(`raise\\s+exception\\s+'${msg.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'gi');
-  const raiseMatches = lower.match(raiseRe) || [];
-  const messageCount = lower.split(msg).length - 1;
-  const inertMessage = messageCount > raiseMatches.length;
-  return { ifConditionFound: raiseMatches.length === 1, raiseExceptionFound: raiseMatches.length === 1, messageMatched: messageCount >= 1, uniqueBranch: raiseMatches.length === 1 && messageCount === 1, inertMessage, branchCount: messageCount };
+  return (lower.match(raiseRe) || []).length;
+}
+
+function extractIfChainBlock(text, ifNeedle) {
+  const lower = text.toLowerCase();
+  const start = lower.indexOf(ifNeedle.toLowerCase());
+  if (start < 0) return '';
+  const end = lower.indexOf('end if;', start);
+  return end >= 0 ? text.slice(start, end + 'end if;'.length) : '';
+}
+
+function extractElseBlock(ifBlock) {
+  const lower = ifBlock.toLowerCase();
+  const elsePos = lower.lastIndexOf('else');
+  const endPos = lower.lastIndexOf('end if;');
+  if (elsePos < 0 || endPos < 0 || elsePos > endPos) return '';
+  return ifBlock.slice(elsePos, endPos);
+}
+
+function operationalUnknownBranch(sql, ifNeedle, messageNeedle) {
+  const clean = stripSqlComments(sql);
+  const blocks = splitTopLevelDoBlocks(sql);
+  const operationalBlocks = blocks.filter((block) => block.text.toLowerCase().includes(ifNeedle.toLowerCase()));
+  const operational = operationalBlocks[0]?.text || clean;
+  const ifBlock = extractIfChainBlock(operational, ifNeedle);
+  const elseBlock = extractElseBlock(ifBlock);
+  const globalMatchingRaiseCount = countMatchingRaises(clean, messageNeedle);
+  const operationalRaiseCount = countMatchingRaises(elseBlock, messageNeedle);
+  const lowerElse = elseBlock.toLowerCase();
+  const msg = messageNeedle.toLowerCase();
+  const messageCountInElse = lowerElse.split(msg).length - 1;
+  const inertMessage = messageCountInElse > operationalRaiseCount || ((lowerElse.includes('perform') || lowerElse.includes('raise notice') || lowerElse.includes(':=')) && lowerElse.includes(msg) && operationalRaiseCount === 0);
+  const result = {
+    doBlockCount: operationalBlocks.length,
+    decisionChainFound: Boolean(ifBlock),
+    unknownElseFound: Boolean(elseBlock),
+    operationalRaiseCount,
+    globalMatchingRaiseCount,
+    unrelatedMatchingRaiseCount: Math.max(0, globalMatchingRaiseCount - operationalRaiseCount),
+    ifConditionFound: Boolean(ifBlock),
+    raiseExceptionFound: operationalRaiseCount === 1,
+    messageMatched: messageCountInElse >= 1,
+    uniqueBranch: operationalBlocks.length === 1 && Boolean(ifBlock) && Boolean(elseBlock) && operationalRaiseCount === 1 && globalMatchingRaiseCount === 1,
+    inertMessage,
+    branchCount: globalMatchingRaiseCount,
+  };
+  result.pass = result.uniqueBranch && result.raiseExceptionFound;
+  return result;
 }
 
 function bridgeBody(sql, functionNeedle, messageNeedle) {
@@ -202,9 +254,9 @@ export function evaluateMigrationSource(root, fixtureCases = []) {
   };
   const branches = {
     acquireAbsent: branch(bridgeSql, 'if v_acquire is null then', 'CMS_RELEASE_RPC_BRIDGE_UNKNOWN_STATE: acquire_cms_release_operation(jsonb) absent'),
-    acquireUnknown: raiseBranchByMessage(bridgeSql, 'CMS_RELEASE_RPC_BRIDGE_UNKNOWN_STATE: acquire_cms_release_operation(jsonb) observed'),
+    acquireUnknown: operationalUnknownBranch(bridgeSql, 'if v_acquire_result = v_acquire_013 then', 'CMS_RELEASE_RPC_BRIDGE_UNKNOWN_STATE: acquire_cms_release_operation(jsonb) observed'),
     auditAbsent: branch(bridgeSql, 'if v_audit is null then', 'CMS_RELEASE_RPC_BRIDGE_UNKNOWN_STATE: ensure_cms_terminal_operation_audit(uuid,text,jsonb,jsonb) absent'),
-    auditUnknown: raiseBranchByMessage(bridgeSql, 'CMS_RELEASE_RPC_BRIDGE_UNKNOWN_STATE: ensure_cms_terminal_operation_audit(uuid,text,jsonb,jsonb) observed'),
+    auditUnknown: operationalUnknownBranch(bridgeSql, 'if v_audit_result = v_audit_013 then', 'CMS_RELEASE_RPC_BRIDGE_UNKNOWN_STATE: ensure_cms_terminal_operation_audit(uuid,text,jsonb,jsonb) observed'),
     acquireBridge: bridgeBody(bridgeSql, 'create function public.acquire_cms_release_operation', 'CMS_RELEASE_RPC_BRIDGE_PENDING_CANONICAL_MIGRATION: acquire bridge body'),
     auditBridge: bridgeBody(bridgeSql, 'create function public.ensure_cms_terminal_operation_audit', 'CMS_RELEASE_RPC_BRIDGE_PENDING_CANONICAL_MIGRATION: audit bridge body'),
   };

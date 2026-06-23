@@ -120,11 +120,12 @@ async function runNormal() {
   fs.mkdirSync(ownedRoot, { recursive: true });
   const assertions = [];
   const importRoot = path.join(ownedRoot, 'import-root');
+  const importSourceRoot = sourceMutation === 'original-tree-import' ? fixtureRoot : root;
   for (const rel of [
     'src/cms-admin/adminState.js',
     'src/cms-admin/adminReleaseOperationGate.js',
     'src/cms-admin/adminConfig.js',
-  ]) copyRel(root, importRoot, rel);
+  ]) copyRel(importSourceRoot, importRoot, rel);
   fs.writeFileSync(path.join(importRoot, 'package.json'), JSON.stringify({ type: 'module' }));
 
   const targetAdmin = path.join(root, 'src/cms-admin/adminState.js');
@@ -141,13 +142,22 @@ async function runNormal() {
   const importedGateSha = sha256File(importedGate);
   add(assertions, 'HASH_ADMIN_SOURCE_MATCH', targetAdminSha === importedAdminSha, `${targetAdminSha} ${importedAdminSha}`);
   add(assertions, 'HASH_GATE_SOURCE_MATCH', targetGateSha === importedGateSha, `${targetGateSha} ${importedGateSha}`);
+  add(assertions, 'IMPORT_SOURCE_MATCHES_MUTANT_TREE', targetAdminSha === importedAdminSha && targetGateSha === importedGateSha, JSON.stringify({ targetAdminSha, importedAdminSha, targetGateSha, importedGateSha, importSourceRoot }));
 
   const exactCasesPath = path.join(fixtureRoot, 'scripts/fixtures/v6.14.066.021-exact-idle-closed-schema-cases.json');
   let exactCases = readJson(exactCasesPath);
+  const localCasesPath = path.join(fixtureRoot, 'scripts/fixtures/v6.14.066.027-cases.json');
+  const localCases = fs.existsSync(localCasesPath) ? readJson(localCasesPath) : { requiredFrontendCaseIds: ['E001'] };
+  const requiredFrontendCaseIds = Array.isArray(localCases.requiredFrontendCaseIds) ? localCases.requiredFrontendCaseIds : ['E001'];
   if (sourceMutation === 'empty-frontend-fixture') exactCases = [];
-  if (sourceMutation === 'missing-required-frontend-case') exactCases = exactCases.filter((item) => item.id !== 'E001');
+  if (sourceMutation === 'missing-required-frontend-case') exactCases = exactCases.filter((item) => item.id !== (requiredFrontendCaseIds[0] || 'E001'));
+  if (fixtureMutation.startsWith('remove-frontend-case:')) {
+    const removedId = fixtureMutation.slice('remove-frontend-case:'.length);
+    exactCases = exactCases.filter((item) => item.id !== removedId);
+  }
   add(assertions, 'FRONTEND_FIXTURE_NON_EMPTY', exactCases.length > 0, `count=${exactCases.length}`);
-  add(assertions, 'REQUIRED_FRONTEND_CASES_PRESENT', exactCases.some((item) => item.id === 'E001'), 'E001');
+  const missingRequiredFrontend = requiredFrontendCaseIds.filter((id) => !exactCases.some((item) => item.id === id));
+  add(assertions, 'REQUIRED_FRONTEND_CASES_PRESENT', missingRequiredFrontend.length === 0, missingRequiredFrontend.join(','));
 
   let adminModule = null;
   try {
@@ -158,10 +168,14 @@ async function runNormal() {
     add(assertions, 'ADMIN_MODULE_IMPORTED', false, err.message);
   }
   if (adminModule?.isExactIdleReleaseStatusPayload) {
+    const executedFrontendCaseIds = [];
     for (const item of exactCases) {
       const observed = adminModule.isExactIdleReleaseStatusPayload(item.payload || {});
+      executedFrontendCaseIds.push(item.id);
       add(assertions, `FRONTEND_${item.id}`, observed === item.expectedExactIdle, `${item.name || ''}: observed=${observed} expected=${item.expectedExactIdle}`);
     }
+    const missingExecutedFrontend = requiredFrontendCaseIds.filter((id) => !executedFrontendCaseIds.includes(id));
+    add(assertions, 'REQUIRED_FRONTEND_CASES_EXECUTED', missingExecutedFrontend.length === 0, missingExecutedFrontend.join(','));
   }
 
   const migrationFixturePath = path.join(fixtureRoot, 'scripts/fixtures/v6.14.066.020-migration-bridge-action-cases.json');
@@ -188,12 +202,17 @@ async function runNormal() {
   add(assertions, 'MIGRATION_017B_AFTER_015', migration.sourceContracts.migration017bAfter015 === true);
   for (const item of migration.caseResults) add(assertions, `MIGRATION_CASE_${item.id}`, item.pass === true, `${item.observedAction} === ${item.expectedAction}`, item);
 
-  // Real cache-isolation control: import a copied module, mutate the file, then import with a cache-busting URL and require SHA divergence to be observable.
-  const cacheFile = importedAdmin;
-  const firstSha = sha256File(cacheFile);
-  fs.appendFileSync(cacheFile, '\n// cache isolation second version\n');
-  const secondSha = sha256File(cacheFile);
-  add(assertions, 'IMPORT_CACHE_ISOLATION', firstSha !== secondSha, JSON.stringify({ firstSha, secondSha, staleModuleDetected: firstSha === secondSha }));
+  // Real two-import cache-isolation control: import version A, write version B, then import again.
+  const cacheModuleFile = path.join(ownedRoot, 'cache-module.mjs');
+  fs.writeFileSync(cacheModuleFile, 'export const marker = "A";\n');
+  const stableUrl = pathToFileURL(cacheModuleFile).href;
+  const firstImport = await import(`${stableUrl}?stable=1`);
+  fs.writeFileSync(cacheModuleFile, 'export const marker = "B";\n');
+  const secondTarget = 'B';
+  const secondUrl = sourceMutation === 'cache-stable-url' ? `${stableUrl}?stable=1` : `${stableUrl}?stable=2`;
+  const secondImport = await import(secondUrl);
+  const cacheEvidence = { firstObserved: firstImport.marker, secondTarget, secondObserved: secondImport.marker, staleModuleDetected: secondImport.marker !== secondTarget, secondUrlMode: sourceMutation === 'cache-stable-url' ? 'stable' : 'cache-busting' };
+  add(assertions, 'IMPORT_CACHE_ISOLATION', cacheEvidence.staleModuleDetected === false, JSON.stringify(cacheEvidence));
 
   const remainingBeforeCleanup = fs.existsSync(ownedRoot) ? fs.readdirSync(ownedRoot).map((name) => path.join(ownedRoot, name)) : [];
   const resultExtra = {
@@ -201,6 +220,7 @@ async function runNormal() {
     importedAdminSha,
     targetGateSha,
     importedGateSha,
+    importSourceRoot,
     migrationSourceFilesRead: migration.migrationFiles.map((f) => f.relativePath),
     migrationSourceHashes: Object.fromEntries(migration.migrationFiles.map((f) => [f.relativePath, f.sha256])),
     migrationCaseResults: migration.caseResults,

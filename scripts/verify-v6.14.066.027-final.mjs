@@ -15,11 +15,14 @@ const fixtureRoot = path.resolve(args.get('fixture-root') || root);
 const runId = args.get('run-id') || `final-${Date.now()}-${process.pid}`;
 const ownedRoot = path.resolve(args.get('owned-root') || path.join(os.tmpdir(), `cms-066027-final-${runId}`));
 const resultFile = path.resolve(args.get('result-file') || path.join(os.tmpdir(), `cms-066027-final-result-${runId}.json`));
-const mode = args.get('mode') || 'full';
+const mode = args.get('mode') || (args.get('mutations') === 'false' ? 'normal' : 'full');
+const artifactDir = path.resolve(args.get('artifact-dir') || root);
 const parentResultForEval = args.get('parent-result') || '';
 const PARENT_REL = 'scripts/verify-v6.14.066.027-parent.mjs';
 const ORACLE_REL = 'scripts/lib/v6.14.066.027-oracle.mjs';
 const FINAL_REL = 'scripts/verify-v6.14.066.027-final.mjs';
+const ARTIFACT_REL = 'scripts/verify-v6.14.066.027-artifacts.mjs';
+const EXACT_ARTIFACTS = { zip: '3DGallery_CHANGED_v6.14.066.027_CMS_VERIFY_FINAL.zip', report: 'APPLY_v6.14.066.027_CMS_VERIFY_FINAL.md', full: 'FULL_CODE_v6.14.066.027_CMS_VERIFY_FINAL.md' };
 const COPY_RELS = [
   'src/cms-admin/adminState.js',
   'src/cms-admin/adminReleaseOperationGate.js',
@@ -33,6 +36,7 @@ const COPY_RELS = [
   FINAL_REL,
   ORACLE_REL,
   'scripts/lib/v6.14.066.027-sql.mjs',
+  ARTIFACT_REL,
 ];
 
 function add(assertions, id, pass, message = '', details = null) { assertions.push({ id, pass: Boolean(pass), message, ...(details ? { details } : {}) }); }
@@ -128,8 +132,57 @@ function poisonFinalAuthority() {
   const proc = spawnSync(process.execPath, [path.join(work, FINAL_REL), '--mode=authority-eval-only', `--parent-result=${poisonInput}`, `--root=${work}`, `--fixture-root=${work}`], { cwd: work, encoding: 'utf8', timeout: 10000 });
   return { id: 'POISON_ACTUAL_FINAL_AUTHORITY_FORCED_TRUE', replacementCount: count, fixedRejected: fixed.finalPass === false, mutatedAccepted: proc.status === 0, pass: count === 1 && fixed.finalPass === false && proc.status === 0, status: proc.status };
 }
-function poisonArtifactNames() { return { id: 'POISON_ARTIFACT_RENAMED_INCORRECTLY', observedRed: true, pass: true, evidence: 'artifact verifier rejects non-exact basename set' }; }
-function poisonFullCodeByteMismatch() { return { id: 'POISON_FULL_CODE_ONE_BYTE_MISMATCH', observedRed: true, pass: true, evidence: 'artifact verifier compares SHA-256 and byte length' }; }
+function copyArtifactSet(destDir) {
+  fs.mkdirSync(destDir, { recursive: true });
+  const copied = {};
+  for (const [key, base] of Object.entries(EXACT_ARTIFACTS)) {
+    const src = path.join(artifactDir, base);
+    const dst = path.join(destDir, base);
+    if (!fs.existsSync(src)) throw new Error(`artifact missing for poison: ${src}`);
+    fs.copyFileSync(src, dst);
+    copied[key] = dst;
+  }
+  return copied;
+}
+function runArtifactVerifier(set, expectedRootForVerifier = root) {
+  const resultPath = path.join(ownedRoot, `artifact-verifier-${Date.now()}-${Math.random().toString(16).slice(2)}.json`);
+  const proc = spawnSync(process.execPath, [path.join(root, ARTIFACT_REL), `--zip=${set.zip}`, `--report=${set.report}`, `--full=${set.full}`, `--expected-root=${expectedRootForVerifier}`, `--result-file=${resultPath}`], { cwd: root, encoding: 'utf8', timeout: 30000 });
+  let result = null;
+  try { if (fs.existsSync(resultPath)) result = readJson(resultPath); } catch {}
+  return { proc, result, resultPath };
+}
+function poisonArtifactNames() {
+  const dir = fs.mkdtempSync(path.join(ownedRoot, 'artifact-poison-name-'));
+  try {
+    const set = copyArtifactSet(dir);
+    const badZip = path.join(dir, 'BAD_NAME.zip');
+    fs.renameSync(set.zip, badZip);
+    set.zip = badZip;
+    const run = runArtifactVerifier(set, root);
+    const failures = (run.result?.assertions || []).filter((a) => !a.pass).map((a) => a.id);
+    return { id: 'POISON_ARTIFACT_RENAMED_INCORRECTLY', observedRed: run.proc.status !== 0, expectedFailure: 'ARTIFACT_ZIP_BASENAME_EXACT', actualFailures: failures, pass: run.proc.status !== 0 && failures.includes('ARTIFACT_ZIP_BASENAME_EXACT'), status: run.proc.status };
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
+function poisonFullCodeByteMismatch() {
+  const dir = fs.mkdtempSync(path.join(ownedRoot, 'artifact-poison-byte-'));
+  try {
+    const set = copyArtifactSet(dir);
+    let text = fs.readFileSync(set.full, 'utf8');
+    const idx = text.indexOf('<!-- FILE: ');
+    if (idx < 0) throw new Error('FULL_CODE block marker missing');
+    const codeStart = text.indexOf('\n', text.indexOf('```', idx));
+    const pos = codeStart + 1;
+    text = text.slice(0, pos) + (text[pos] === 'X' ? 'Y' : 'X') + text.slice(pos + 1);
+    fs.writeFileSync(set.full, text);
+    const run = runArtifactVerifier(set, root);
+    const failures = (run.result?.assertions || []).filter((a) => !a.pass).map((a) => a.id);
+    return { id: 'POISON_FULL_CODE_ONE_BYTE_MISMATCH', observedRed: run.proc.status !== 0, expectedFailurePrefix: 'BYTE_EQUAL_ZIP_FULL_', actualFailures: failures, pass: run.proc.status !== 0 && failures.some((id) => id.startsWith('BYTE_EQUAL_ZIP_FULL_')), status: run.proc.status };
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
 function writeResult(assertions, extra = {}) {
   const result = { protocolVersion: PROTOCOL_VERSION, runId, root, executablePath: path.resolve(process.argv[1]), mode, assertions, ...extra };
   result.passCount = assertions.filter((a) => a.pass).length;
@@ -152,11 +205,27 @@ async function main() {
   }
   const assertions = [];
   const normalRoot = makeWorkRoot('normal-parent-root');
-  const fullRoot = makeWorkRoot('full-parent-root');
   const normalParent = runParent(normalRoot, { label: 'normal-only', mutations: false, scenarios: false, timeoutMs: 60000 });
+
+  if (mode === 'normal') {
+    add(assertions, 'FINAL_NORMAL_ONLY_MODE', true, 'mode=normal');
+    add(assertions, 'FINAL_NORMAL_PARENT_GREEN', normalParent.proc.status === 0 && normalParent.result?.failCount === 0, `status=${normalParent.proc.status} fail=${normalParent.result?.failCount}`);
+    add(assertions, 'FINAL_NORMAL_MUTATIONS_ZERO', (normalParent.result?.mutationRecords?.length || 0) === 0 && (normalParent.result?.productMutantsTotal || 0) === 0 && (normalParent.result?.childFailureModeMutantsTotal || 0) === 0 && (normalParent.result?.migrationMutantsTotal || 0) === 0, JSON.stringify({ mutationRecords: normalParent.result?.mutationRecords?.length || 0, productMutantsTotal: normalParent.result?.productMutantsTotal || 0, childFailureModeMutantsTotal: normalParent.result?.childFailureModeMutantsTotal || 0, migrationMutantsTotal: normalParent.result?.migrationMutantsTotal || 0 }));
+    add(assertions, 'FINAL_NORMAL_SCENARIOS_ZERO', (normalParent.result?.scenarioRecords?.length || 0) === 0 && (normalParent.result?.adversarialScenariosTotal || 0) === 0, JSON.stringify({ scenarioRecords: normalParent.result?.scenarioRecords?.length || 0, adversarialScenariosTotal: normalParent.result?.adversarialScenariosTotal || 0 }));
+    add(assertions, 'FINAL_NORMAL_POISONS_ZERO', true, 'poison controls are not executed in normal-only mode');
+    const extra = { normalParent: normalParent.result, fullParent: null, mutationTotal: 0, scenarioTotal: 0, poisonTotal: 0, FULL_PARENT: null, MUTATION_TOTAL: 0, SCENARIO_TOTAL: 0, POISON_TOTAL: 0 };
+    const result = writeResult(assertions, extra);
+    fs.rmSync(ownedRoot, { recursive: true, force: true });
+    process.exit(result.failCount > 0 ? 1 : 0);
+  }
+
+  const fullRoot = makeWorkRoot('full-parent-root');
   const fullParent = runParent(fullRoot, { label: 'full', mutations: true, scenarios: true, timeoutMs: 120000 });
-  add(assertions, 'NORMAL_PARENT_GREEN', normalParent.proc.status === 0 && normalParent.result?.failCount === 0, `status=${normalParent.proc.status} fail=${normalParent.result?.failCount}`);
-  add(assertions, 'FULL_PARENT_GREEN', fullParent.proc.status === 0 && fullParent.result?.failCount === 0, `status=${fullParent.proc.status} fail=${fullParent.result?.failCount}`);
+  add(assertions, 'FINAL_FULL_MODE', mode === 'full', `mode=${mode}`);
+  add(assertions, 'FINAL_FULL_PARENT_GREEN', fullParent.proc.status === 0 && fullParent.result?.failCount === 0, `status=${fullParent.proc.status} fail=${fullParent.result?.failCount}`);
+  add(assertions, 'FINAL_FULL_MUTATIONS_EXECUTED', (fullParent.result?.productMutantsTotal || 0) > 0 && (fullParent.result?.childFailureModeMutantsTotal || 0) > 0 && (fullParent.result?.migrationMutantsTotal || 0) > 0, JSON.stringify({ product: fullParent.result?.productMutantsTotal || 0, child: fullParent.result?.childFailureModeMutantsTotal || 0, migration: fullParent.result?.migrationMutantsTotal || 0 }));
+  add(assertions, 'FINAL_FULL_SCENARIOS_EXECUTED', (fullParent.result?.scenarioRecords?.length || 0) > 0, `scenarios=${fullParent.result?.scenarioRecords?.length || 0}`);
+
   const baselineRedRecords = inspectBaseline026(root);
   for (const r of baselineRedRecords) add(assertions, r.id, r.pass, String(r.observedEvidence));
   const poisonControls = [
@@ -169,11 +238,12 @@ async function main() {
     poisonArtifactNames(),
     poisonFullCodeByteMismatch(),
   ];
+  add(assertions, 'FINAL_FULL_POISONS_EXECUTED', poisonControls.length >= 8, `poisons=${poisonControls.length}`);
   for (const p of poisonControls) add(assertions, p.id, p.pass, JSON.stringify(p));
   const globalBefore = countRunTempRoots();
   const authority = evaluateFinalAuthority({ normalParent, fullParent, baselineRedRecords, poisonControls, globalTempRootsRemaining: globalBefore > 1 ? globalBefore : 0 });
   add(assertions, 'ACTUAL_FINAL_AUTHORITY_PATH_EXECUTED', authority.finalPass, authority.requiredFailures.join(','), authority);
-  const extra = { normalParent: normalParent.result, fullParent: fullParent.result, baselineRedRecords, poisonControls, finalAuthority: authority, globalTempRootsBeforeCleanup: globalBefore };
+  const extra = { normalParent: normalParent.result, fullParent: fullParent.result, baselineRedRecords, poisonControls, finalAuthority: authority, globalTempRootsBeforeCleanup: globalBefore, artifactPoisonRootsRemaining: 0 };
   const result = writeResult(assertions, extra);
   fs.rmSync(ownedRoot, { recursive: true, force: true });
   const remaining = fs.readdirSync(os.tmpdir()).filter((name) => name.startsWith('cms-066027-')).map((name) => path.join(os.tmpdir(), name)).filter(isDir).filter((p) => p.includes(runId));
