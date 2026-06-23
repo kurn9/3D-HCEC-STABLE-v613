@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import { spawnSync } from 'node:child_process';
 
 const args = process.argv.slice(2);
 function readArg(name, fallback = '') {
@@ -12,16 +13,21 @@ function readArg(name, fallback = '') {
   if (index >= 0 && args[index + 1]) return args[index + 1];
   return fallback;
 }
+const skipMutations = args.includes('--skip-mutations');
+const oracleScanOnly = args.includes('--oracle-scan-only');
 
 const root = path.resolve(readArg('--root', process.cwd()));
 const adminStaticRel = 'src/cms-admin/adminStaticCmsDraft.js';
 const releaseGateRel = 'src/cms-admin/adminReleaseOperationGate.js';
 const adminStateRel = 'src/cms-admin/adminState.js';
 const fixtureRel = 'scripts/fixtures/v6.14.066.030-cms-publish-preflight-and-reconcile-consumer-cases.json';
+const verifierRel = 'scripts/verify-v6.14.066.030-cms-publish-preflight-and-reconcile-consumer.mjs';
 const adminStaticPath = path.join(root, adminStaticRel);
 const releaseGatePath = path.join(root, releaseGateRel);
 const adminStatePath = path.join(root, adminStateRel);
 const fixturePath = path.join(root, fixtureRel);
+const verifierPath = path.join(root, verifierRel);
+const expectedProductionHash = '843319eddbbe54c586dcd4a9409bf06eea9d01f858801c9228ecdd8916437e91';
 
 const results = [];
 const mutationRecords = [];
@@ -35,8 +41,8 @@ function readJson(filePath) {
   return JSON.parse(readText(filePath));
 }
 
-function sha256(text) {
-  return crypto.createHash('sha256').update(text).digest('hex');
+function sha256Bytes(value) {
+  return crypto.createHash('sha256').update(value).digest('hex');
 }
 
 function assertCase(id, pass, evidence = {}) {
@@ -208,22 +214,40 @@ function evaluateExactIdleFromSource(stateSource, data = {}) {
   return true;
 }
 
+function requiredInvalidationFieldsPresent(block) {
+  const required = [
+    'publishDryRunResult',
+    'publishLastVerifiedAt',
+    'publishVerifiedDraftId',
+    'publishVerifiedDraftUpdatedAt',
+    'publishVerifiedDraftVersion',
+    'publishVerifiedCandidateHash',
+    'publishVerificationInvalidatedAt',
+    'publishVerificationInvalidationReason',
+  ];
+  return required.every((field) => new RegExp(`${field}\\s*:`).test(block));
+}
+
 function analyzeStaticSource(adminSource) {
   const publishBody = findFunctionBody(adminSource, 'handlePublishStaticCmsDraft');
   const reconcileBody = findFunctionBody(adminSource, 'handleReconcileStaticCmsPublishPointer');
   const policyBody = findFunctionBody(adminSource, 'applyResolvedCapableReconcileState');
+  const invalidationBody = findFunctionBody(adminSource, 'buildPublishPreflightInvalidationPatch');
   const publishCallIndex = publishBody.indexOf('const result = await publishCmsJson');
   const staleBlock = extractBlockAfter(publishBody, 'if (verifiedId !== persistedDraft.id');
   const errorBlock = extractBlockAfter(reconcileBody, 'if (result.error)');
   const successResolvedBlock = extractBlockAfter(reconcileBody, 'if (resolvedCapable)', 2);
-  const unknownBlock = reconcileBody.slice(reconcileBody.indexOf('setReleaseOperationGateState({ blocked: true'));
+  const unknownMarkerIndex = reconcileBody.indexOf('setReleaseOperationGateState({ blocked: true');
+  const unknownBlock = unknownMarkerIndex >= 0 ? reconcileBody.slice(unknownMarkerIndex) : '';
   const activeExpectedBlock = extractSwitchCaseBlock(policyBody, 'active_expected_release');
   const activeOtherBlock = extractSwitchCaseBlock(policyBody, 'active_other_release') + extractSwitchCaseBlock(policyBody, 'resolved_active_other');
   const failedBeforeBlock = extractSwitchCaseBlock(policyBody, 'failed_before_pointer');
   const groupedBlock = ['operation_already_resolved', 'operation_already_resolved_non_success', 'lineage_repaired', 'failed_before_pointer']
     .map((caseValue) => extractSwitchCaseBlock(policyBody, caseValue)).join('\n');
 
-  const branchHasInvalidation = (block) => /\.\.\.invalidation/.test(block) || (/buildPublishPreflightInvalidationPatch/.test(block) && /publishDryRunResult\s*:\s*null/.test(block));
+  const invalidationHelperComplete = requiredInvalidationFieldsPresent(invalidationBody);
+  const branchHasInvalidation = (block) => /\.\.\.invalidation/.test(block) || (/buildPublishPreflightInvalidationPatch/.test(block) && invalidationHelperComplete);
+  const unknownInvalidates = /buildPublishPreflightInvalidationPatch\s*\(/.test(unknownBlock) && invalidationHelperComplete;
   return {
     publishHasNetworkCall: publishCallIndex >= 0,
     resultUsedBeforeDeclaration: publishCallIndex < 0 ? true : /\bresult\s*\./.test(publishBody.slice(0, publishCallIndex)),
@@ -233,7 +257,7 @@ function analyzeStaticSource(adminSource) {
     staleBranchCallsConfirmation: /window\.confirm|globalThis\.confirm/.test(staleBlock),
     staleBranchAppliesGate: /applyReleaseOperationGateFromServer\s*\(|setReleaseOperationGateState\s*\(/.test(staleBlock),
     staleBranchHasFakeMetadata: /operationId\s*:|releaseId\s*:|expectedReleaseId\s*:|contentHash\s*:|contentPath\s*:|phase\s*:\s*['"]pointer_written['"]|state\s*:\s*['"]pointer_unknown['"]/.test(staleBlock),
-    staleBranchInvalidatesDryRun: /publishDryRunResult\s*:\s*null/.test(staleBlock) && /publishVerifiedDraftId\s*:\s*''/.test(staleBlock) && /publishVerificationInvalidatedAt\s*:/.test(staleBlock),
+    staleBranchInvalidatesDryRun: requiredInvalidationFieldsPresent(staleBlock),
     sharedPolicyExists: Boolean(policyBody),
     errorPathHasRefresh: /refreshAndApplyReleaseOperationGateStatus\s*\(/.test(errorBlock),
     errorPathUsesSharedPolicy: /applyResolvedCapableReconcileState\s*\(/.test(errorBlock),
@@ -247,29 +271,67 @@ function analyzeStaticSource(adminSource) {
     failedBeforePointerHandled: /failed_before_pointer/.test(groupedBlock),
     failedBeforePointerInvalidatesDryRun: branchHasInvalidation(failedBeforeBlock) || branchHasInvalidation(groupedBlock),
     groupedResolvedInvalidatesDryRun: branchHasInvalidation(groupedBlock),
-    genericUnknownFailClosed: /blocked\s*:\s*true/.test(unknownBlock) && /publishRequiresReconciliation\s*:\s*true/.test(unknownBlock) && /buildPublishPreflightInvalidationPatch\s*\(/.test(unknownBlock),
+    genericUnknownFailClosed: /blocked\s*:\s*true/.test(unknownBlock) && /publishRequiresReconciliation\s*:\s*true/.test(unknownBlock),
+    genericUnknownInvalidatesDryRun: unknownInvalidates,
     exactIdleNotRelaxedInConsumer: !/classification\s*===\s*['"]clean['"]/.test(reconcileBody),
   };
 }
 
-function deriveCaseActual({ adminSource, gateSource, stateSource, item }) {
+const scenarioInputKeys = ['id', 'scenarioKind', 'transportOutcome', 'classification', 'state', 'code', 'ok', 'input'];
+const expectedOracleKeys = [
+  'expectedResolvedCapable',
+  'expectedExactIdle',
+  'expectedStatusRefreshRequired',
+  'expectedPublishSuccessAllowed',
+  'expectedGateBehavior',
+  'expectedDryRunInvalidation',
+  'expectedPointerState',
+  'expectedOperatorOutcome',
+];
+
+function buildScenarioInput(item = {}) {
+  const scenario = {};
+  for (const key of scenarioInputKeys) {
+    if (Object.prototype.hasOwnProperty.call(item, key)) scenario[key] = structuredClone(item[key]);
+  }
+  Object.freeze(scenario);
+  if (Object.keys(scenario).some((key) => key.startsWith('expected'))) {
+    throw new Error(`SCENARIO_INPUT_CONTAINS_EXPECTED:${item.id || 'UNKNOWN'}`);
+  }
+  return scenario;
+}
+
+function readExpectedOracle(item = {}) {
+  const oracle = {};
+  for (const key of expectedOracleKeys) oracle[key] = item[key];
+  Object.freeze(oracle);
+  return oracle;
+}
+
+function deriveCaseActual({ adminSource, gateSource, stateSource, scenario }) {
   const analysis = analyzeStaticSource(adminSource);
-  const input = item.input || {};
-  const classification = String(item.classification || input.classification || '').trim();
-  const resolved = evaluateResolvedCapableFromSource(gateSource, input);
-  const exactIdle = evaluateExactIdleFromSource(stateSource, input);
-  const transport = item.transportOutcome;
-  const statusRefresh = resolved && (transport === 'error_with_data' ? analysis.errorPathHasRefresh && analysis.errorPathUsesSharedPolicy : analysis.successPathHasRefresh && analysis.successPathUsesSharedPolicy);
+  const input = scenario.input || {};
+  const classification = String(scenario.classification || input.classification || '').trim();
+  const scenarioKind = String(scenario.scenarioKind || (input.mode === 'status' ? 'status_response' : 'reconcile_response'));
+  const resolved = scenarioKind === 'reconcile_response' ? evaluateResolvedCapableFromSource(gateSource, input) : false;
+  const exactIdle = scenarioKind === 'status_response' ? evaluateExactIdleFromSource(stateSource, input) : false;
+  const transport = scenario.transportOutcome;
+  const statusRefresh = scenarioKind === 'reconcile_response'
+    && resolved
+    && (transport === 'error_with_data'
+      ? analysis.errorPathHasRefresh && analysis.errorPathUsesSharedPolicy && analysis.errorPathReturnAfterPolicy
+      : analysis.successPathHasRefresh && analysis.successPathUsesSharedPolicy);
   let publishSuccessAllowed = false;
   let gateBehavior = 'unknown_fail_closed';
   let dryRunInvalidation = false;
   let pointerState = 'unknown';
-  let operatorOutcome = 'unknown_fail_closed';
+  let operatorOutcome = classification ? 'unknown_fail_closed' : 'missing_fail_closed';
 
-  if (item.id === 'EDGE_API_EXACT_IDLE' || exactIdle) {
+  if (scenarioKind === 'status_response') {
     gateBehavior = exactIdle ? 'exact_idle_may_clear' : 'unknown_fail_closed';
+    dryRunInvalidation = false;
     pointerState = exactIdle ? 'idle' : 'unknown';
-    operatorOutcome = exactIdle ? 'exact_idle_can_clear_gate' : 'unknown_fail_closed';
+    operatorOutcome = exactIdle ? 'exact_idle_can_clear_gate' : (classification === 'clean' ? 'sql_clean_rejected_as_frontend_idle' : 'unknown_fail_closed');
   } else if (classification === 'active_expected_release' && analysis.activeExpectedHandled) {
     publishSuccessAllowed = true;
     gateBehavior = 'exact_idle_may_clear';
@@ -288,41 +350,86 @@ function deriveCaseActual({ adminSource, gateSource, stateSource, item }) {
     operatorOutcome = 'failed_before_pointer_fail_closed';
   } else if (classification === 'operation_already_resolved' && analysis.groupedResolvedInvalidatesDryRun) {
     gateBehavior = 'blocked_until_status_refresh';
-    dryRunInvalidation = true;
+    dryRunInvalidation = analysis.groupedResolvedInvalidatesDryRun;
     pointerState = 'operation_already_resolved';
     operatorOutcome = 'resolved_requires_new_preflight';
   } else if (classification === 'operation_already_resolved_non_success' && analysis.groupedResolvedInvalidatesDryRun) {
     gateBehavior = 'remain_blocked';
-    dryRunInvalidation = true;
+    dryRunInvalidation = analysis.groupedResolvedInvalidatesDryRun;
     pointerState = 'operation_already_resolved_non_success';
     operatorOutcome = 'resolved_non_success_fail_closed';
   } else if (classification === 'lineage_repaired' && analysis.groupedResolvedInvalidatesDryRun) {
     gateBehavior = 'blocked_until_status_refresh';
-    dryRunInvalidation = true;
+    dryRunInvalidation = analysis.groupedResolvedInvalidatesDryRun;
     pointerState = 'lineage_repaired';
     operatorOutcome = 'lineage_repaired_requires_new_preflight';
   } else if (analysis.genericUnknownFailClosed) {
     gateBehavior = 'unknown_fail_closed';
-    dryRunInvalidation = Boolean(item.expectedDryRunInvalidation);
+    dryRunInvalidation = analysis.genericUnknownInvalidatesDryRun;
     pointerState = 'unknown';
-    operatorOutcome = item.id === 'SQL_CLEAN_NOT_FRONTEND_EXACT_IDLE' ? 'sql_clean_rejected_as_frontend_idle' : (classification ? 'unknown_fail_closed' : 'missing_fail_closed');
+    operatorOutcome = classification ? 'unknown_fail_closed' : 'missing_fail_closed';
   }
 
-  return {
-    expectedResolvedCapable: resolved,
-    expectedExactIdle: exactIdle,
-    expectedStatusRefreshRequired: statusRefresh,
-    expectedPublishSuccessAllowed: publishSuccessAllowed,
-    expectedGateBehavior: gateBehavior,
-    expectedDryRunInvalidation: dryRunInvalidation,
-    expectedPointerState: pointerState,
-    expectedOperatorOutcome: operatorOutcome,
-    transportOutcome: transport,
-  };
+  return Object.freeze({
+    resolvedCapable: resolved,
+    exactIdle,
+    statusRefreshRequired: Boolean(statusRefresh),
+    publishSuccessAllowed: Boolean(publishSuccessAllowed),
+    gateBehavior,
+    dryRunInvalidation: Boolean(dryRunInvalidation),
+    pointerState,
+    operatorOutcome,
+  });
 }
 
-function runStaticAssertions(adminSource) {
+function sliceFunctionForOracleScan(source, functionName) {
+  const markers = [
+    `function ${functionName}`,
+    `async function ${functionName}`,
+    `export function ${functionName}`,
+    `export async function ${functionName}`,
+  ];
+  let start = -1;
+  for (const marker of markers) {
+    start = source.indexOf(marker);
+    if (start >= 0) break;
+  }
+  if (start < 0) throw new Error(`FUNCTION_NOT_FOUND:${functionName}`);
+  const next = source.indexOf('\nfunction ', start + 1);
+  return source.slice(start, next > start ? next : source.length);
+}
+
+function actualDerivationDependencyScan(verifierSource) {
+  const functionsToScan = [
+    'buildScenarioInput',
+    'deriveCaseActual',
+    'analyzeStaticSource',
+    'evaluateResolvedCapableFromSource',
+    'evaluateExactIdleFromSource',
+  ];
+  const offenders = [];
+  for (const name of functionsToScan) {
+    let body = '';
+    try {
+      body = sliceFunctionForOracleScan(verifierSource, name);
+    } catch (error) {
+      offenders.push({ name, reason: error.message });
+      continue;
+    }
+    if (/\b(?:item|scenario|caseItem|fixture|caseRecord)\.expected[A-Za-z0-9_]*\b|\[['"]expected/.test(body)) {
+      offenders.push({ name, reason: 'expected oracle dependency detected' });
+    }
+    if (/\.\.\.item|\.\.\.case|\.\.\.fixture/.test(body)) {
+      offenders.push({ name, reason: 'whole fixture spread into actual path' });
+    }
+  }
+  return offenders;
+}
+
+function runStaticAssertions({ adminSource, verifierSource, skipProductionHash = false }) {
   const analysis = analyzeStaticSource(adminSource);
+  const productionHash = sha256Bytes(adminSource);
+  if (!skipProductionHash) assertCase('PRODUCTION_SOURCE_HASH_MATCHES_0301', productionHash === expectedProductionHash, { productionHash, expectedProductionHash });
   assertCase('SOURCE_HANDLE_PUBLISH_FUNCTION_FOUND', analysis.publishHasNetworkCall, { publishHasNetworkCall: analysis.publishHasNetworkCall });
   assertCase('STALE_NO_RESULT_BEFORE_DECLARATION', !analysis.resultUsedBeforeDeclaration, { resultUsedBeforeDeclaration: analysis.resultUsedBeforeDeclaration });
   assertCase('STALE_BRANCH_FOUND', analysis.staleBlockFound, { staleBlockFound: analysis.staleBlockFound });
@@ -342,7 +449,19 @@ function runStaticAssertions(adminSource) {
   assertCase('ACTIVE_OTHER_INVALIDATES_DRY_RUN', analysis.activeOtherInvalidatesDryRun, { activeOtherInvalidatesDryRun: analysis.activeOtherInvalidatesDryRun });
   assertCase('FAILED_BEFORE_POINTER_INVALIDATES_DRY_RUN', analysis.failedBeforePointerInvalidatesDryRun, { failedBeforePointerInvalidatesDryRun: analysis.failedBeforePointerInvalidatesDryRun });
   assertCase('UNKNOWN_MISSING_FAIL_CLOSED', analysis.genericUnknownFailClosed, { genericUnknownFailClosed: analysis.genericUnknownFailClosed });
+  assertCase('GENERIC_UNKNOWN_INVALIDATES_DRY_RUN', analysis.genericUnknownInvalidatesDryRun, { genericUnknownInvalidatesDryRun: analysis.genericUnknownInvalidatesDryRun });
   assertCase('CONSUMER_DOES_NOT_ACCEPT_CLEAN_AS_EXACT_IDLE', analysis.exactIdleNotRelaxedInConsumer, { exactIdleNotRelaxedInConsumer: analysis.exactIdleNotRelaxedInConsumer });
+  const oracleOffenders = actualDerivationDependencyScan(verifierSource);
+  assertCase('ACTUAL_DERIVATION_HAS_NO_EXPECTED_ORACLE_DEPENDENCY', oracleOffenders.length === 0, { oracleOffenders });
+}
+
+function validateFixtureCase({ item, requiredFields, allowedGateBehaviors }) {
+  const missingFields = requiredFields.filter((field) => !Object.prototype.hasOwnProperty.call(item, field));
+  assertCase(`FIXTURE_SCHEMA_FIELDS_PRESENT_${item.id || 'UNKNOWN'}`, missingFields.length === 0, { missingFields });
+  assertCase(`FIXTURE_GATE_BEHAVIOR_VOCABULARY_${item.id || 'UNKNOWN'}`, allowedGateBehaviors.has(item.expectedGateBehavior), { value: item.expectedGateBehavior });
+  assertCase(`FIXTURE_TRANSPORT_OUTCOME_VOCABULARY_${item.id || 'UNKNOWN'}`, ['success', 'error_with_data'].includes(item.transportOutcome), { value: item.transportOutcome });
+  assertCase(`FIXTURE_SCENARIO_KIND_VOCABULARY_${item.id || 'UNKNOWN'}`, ['reconcile_response', 'status_response'].includes(item.scenarioKind), { value: item.scenarioKind });
+  return missingFields.length === 0;
 }
 
 function runFixtureAssertions({ fixture, adminSource, gateSource, stateSource }) {
@@ -354,33 +473,45 @@ function runFixtureAssertions({ fixture, adminSource, gateSource, stateSource })
     assertCase(`FIXTURE_REQUIRED_CASE_PRESENT_${id}`, ids.has(id), { id });
   }
   for (const item of cases) {
-    const missingFields = requiredFields.filter((field) => !Object.prototype.hasOwnProperty.call(item, field));
-    assertCase(`FIXTURE_SCHEMA_FIELDS_PRESENT_${item.id || 'UNKNOWN'}`, missingFields.length === 0, { missingFields });
-    assertCase(`FIXTURE_GATE_BEHAVIOR_VOCABULARY_${item.id || 'UNKNOWN'}`, allowedGateBehaviors.has(item.expectedGateBehavior), { value: item.expectedGateBehavior });
-    assertCase(`FIXTURE_TRANSPORT_OUTCOME_VOCABULARY_${item.id || 'UNKNOWN'}`, ['success', 'error_with_data'].includes(item.transportOutcome), { value: item.transportOutcome });
-    if (missingFields.length > 0) continue;
-    const actual = deriveCaseActual({ adminSource, gateSource, stateSource, item });
-    for (const field of requiredFields.filter((field) => field.startsWith('expected') || field === 'transportOutcome')) {
-      assertCase(`FIXTURE_ASSERTS_${field}_${item.id}`, actual[field] === item[field], { expected: item[field], actual: actual[field] });
+    const schemaOk = validateFixtureCase({ item, requiredFields, allowedGateBehaviors });
+    if (!schemaOk) continue;
+    const scenario = buildScenarioInput(item);
+    const scenarioExpectedKeys = Object.keys(scenario).filter((key) => key.startsWith('expected'));
+    assertCase(`SCENARIO_INPUT_HAS_NO_EXPECTED_ORACLE_${item.id}`, scenarioExpectedKeys.length === 0, { scenarioExpectedKeys });
+    const actual = deriveCaseActual({ adminSource, gateSource, stateSource, scenario });
+    const expected = readExpectedOracle(item);
+    const actualByExpectedField = {
+      expectedResolvedCapable: actual.resolvedCapable,
+      expectedExactIdle: actual.exactIdle,
+      expectedStatusRefreshRequired: actual.statusRefreshRequired,
+      expectedPublishSuccessAllowed: actual.publishSuccessAllowed,
+      expectedGateBehavior: actual.gateBehavior,
+      expectedDryRunInvalidation: actual.dryRunInvalidation,
+      expectedPointerState: actual.pointerState,
+      expectedOperatorOutcome: actual.operatorOutcome,
+    };
+    for (const field of expectedOracleKeys) {
+      assertCase(`FIXTURE_ASSERTS_${field}_${item.id}`, actualByExpectedField[field] === expected[field], { expected: expected[field], actual: actualByExpectedField[field], scenarioKind: scenario.scenarioKind });
     }
   }
 }
 
-function collectFailuresForSources({ adminSource, gateSource, stateSource, fixture }) {
+function collectFailuresForSources({ adminSource, gateSource, stateSource, fixture, verifierSource, skipProductionHash = false }) {
   const beforeLength = results.length;
-  runStaticAssertions(adminSource);
+  runStaticAssertions({ adminSource, verifierSource, skipProductionHash });
   runFixtureAssertions({ fixture, adminSource, gateSource, stateSource });
   const scoped = results.splice(beforeLength);
   return scoped.filter((item) => !item.pass).map((item) => item.id);
 }
 
-function writeMutantRoot({ adminSource, gateSource, stateSource, fixture }) {
-  const tempRoot = makeTempRoot('cms-0660301-mutant-');
+function writeMutantRoot({ adminSource, gateSource, stateSource, fixture, verifierSource }) {
+  const tempRoot = makeTempRoot('cms-0660302-mutant-');
   const files = {
     [adminStaticRel]: adminSource,
     [releaseGateRel]: gateSource,
     [adminStateRel]: stateSource,
     [fixtureRel]: JSON.stringify(fixture, null, 2) + '\n',
+    [verifierRel]: verifierSource,
   };
   for (const [rel, content] of Object.entries(files)) {
     const target = path.join(tempRoot, rel);
@@ -390,9 +521,9 @@ function writeMutantRoot({ adminSource, gateSource, stateSource, fixture }) {
   return tempRoot;
 }
 
-function recordMutation({ id, target, beforeSource, afterSource, replacementCount, requiredReplacementCount, expectedFailureIds, fixedFailures, mutatedFailures, tempRoot }) {
-  const beforeHash = sha256(beforeSource);
-  const afterHash = sha256(afterSource);
+function recordMutation({ id, target, beforeSource, afterSource, replacementCount, requiredReplacementCount = 1, expectedFailureIds, fixedFailures, mutatedFailures, tempRoot }) {
+  const beforeHash = sha256Bytes(beforeSource);
+  const afterHash = sha256Bytes(afterSource);
   const expectedObserved = expectedFailureIds.every((failureId) => mutatedFailures.includes(failureId));
   const unrelatedFailures = mutatedFailures.filter((failureId) => !expectedFailureIds.includes(failureId));
   const killed = replacementCount === requiredReplacementCount
@@ -420,8 +551,25 @@ function recordMutation({ id, target, beforeSource, afterSource, replacementCoun
   assertCase(`MUTATION_${id}_KILLED`, killed, record);
 }
 
-function runMutationControls({ adminSource, gateSource, stateSource, fixture }) {
-  const fixedFailures = collectFailuresForSources({ adminSource, gateSource, stateSource, fixture });
+function failuresFromVerifierProcess(tempRoot) {
+  const result = spawnSync(process.execPath, [path.join(tempRoot, verifierRel), '--root', tempRoot, '--skip-mutations', '--oracle-scan-only'], {
+    cwd: tempRoot,
+    encoding: 'utf8',
+    maxBuffer: 20 * 1024 * 1024,
+  });
+  let parsed = null;
+  try {
+    parsed = JSON.parse(result.stdout || '{}');
+  } catch {
+    // ignore parse failures; classify as internal execution failure below
+  }
+  const failed = parsed?.results?.filter((item) => !item.pass).map((item) => item.id) || [];
+  if (result.status !== 0 && failed.length === 0) return ['VERIFIER_PROCESS_FAILED_WITHOUT_STRUCTURED_ASSERTION'];
+  return failed;
+}
+
+function runMutationControls({ adminSource, gateSource, stateSource, fixture, verifierSource }) {
+  const fixedFailures = collectFailuresForSources({ adminSource, gateSource, stateSource, fixture, verifierSource });
   assertCase('FIXED_SOURCE_BASELINE_PASS_BEFORE_MUTATIONS', fixedFailures.length === 0, { fixedFailures });
 
   const mutations = [];
@@ -434,7 +582,6 @@ function runMutationControls({ adminSource, gateSource, stateSource, fixture }) 
   });
 
   mutations.push(() => {
-    const activeOtherBlock = extractSwitchCaseBlock(findFunctionBody(adminSource, 'applyResolvedCapableReconcileState'), 'active_other_release');
     const search = `        ...invalidation,\n        publishVerificationInvalidationReason: 'Reconcile xác nhận website đang dùng release khác; kết quả dry-run cũ không còn hợp lệ.',`;
     const replacement = `        publishVerificationInvalidationReason: 'Reconcile xác nhận website đang dùng release khác; kết quả dry-run cũ không còn hợp lệ.',`;
     const applied = replaceExact(adminSource, search, replacement, 1);
@@ -487,17 +634,67 @@ function runMutationControls({ adminSource, gateSource, stateSource, fixture }) 
     return { id: 'M009_REMOVE_REQUIRED_FIXTURE_FIELD', target: fixtureRel, sourceKind: 'fixture', applied: { source: JSON.stringify(mutantFixture, null, 2) + '\n', replacementCount: 1, sourceChanged: true }, fixture: mutantFixture, expectedFailureIds: ['FIXTURE_SCHEMA_FIELDS_PRESENT_LINEAGE_REPAIRED'] };
   });
 
+  mutations.push(() => {
+    const mutantFixture = structuredClone(fixture);
+    mutantFixture.cases.find((item) => item.id === 'UNKNOWN_CLASSIFICATION').expectedDryRunInvalidation = false;
+    return { id: 'M010_POISON_UNKNOWN_DRY_RUN_EXPECTATION', target: fixtureRel, sourceKind: 'fixture', applied: { source: JSON.stringify(mutantFixture, null, 2) + '\n', replacementCount: 1, sourceChanged: true }, fixture: mutantFixture, expectedFailureIds: ['FIXTURE_ASSERTS_expectedDryRunInvalidation_UNKNOWN_CLASSIFICATION'] };
+  });
+
+  mutations.push(() => {
+    const mutantFixture = structuredClone(fixture);
+    mutantFixture.cases.find((item) => item.id === 'MISSING_CLASSIFICATION').expectedDryRunInvalidation = false;
+    return { id: 'M011_POISON_MISSING_DRY_RUN_EXPECTATION', target: fixtureRel, sourceKind: 'fixture', applied: { source: JSON.stringify(mutantFixture, null, 2) + '\n', replacementCount: 1, sourceChanged: true }, fixture: mutantFixture, expectedFailureIds: ['FIXTURE_ASSERTS_expectedDryRunInvalidation_MISSING_CLASSIFICATION'] };
+  });
+
+  mutations.push(() => {
+    const mutantFixture = structuredClone(fixture);
+    mutantFixture.cases.find((item) => item.id === 'SQL_CLEAN_NOT_FRONTEND_EXACT_IDLE').expectedDryRunInvalidation = true;
+    return { id: 'M012_POISON_SQL_CLEAN_DRY_RUN_EXPECTATION', target: fixtureRel, sourceKind: 'fixture', applied: { source: JSON.stringify(mutantFixture, null, 2) + '\n', replacementCount: 1, sourceChanged: true }, fixture: mutantFixture, expectedFailureIds: ['FIXTURE_ASSERTS_expectedDryRunInvalidation_SQL_CLEAN_NOT_FRONTEND_EXACT_IDLE'] };
+  });
+
+  mutations.push(() => {
+    const search = `...buildPublishPreflightInvalidationPatch('Reconcile không xác định được classification an toàn; kết quả dry-run cũ không còn hợp lệ.'),`;
+    const replacement = `publishVerificationInvalidationReason: 'M013 removed generic unknown invalidation',`;
+    const applied = replaceExact(adminSource, search, replacement, 1);
+    return { id: 'M013_REMOVE_GENERIC_UNKNOWN_PRODUCTION_INVALIDATION', target: adminStaticRel, sourceKind: 'admin', applied, expectedFailureIds: ['GENERIC_UNKNOWN_INVALIDATES_DRY_RUN', 'FIXTURE_ASSERTS_expectedDryRunInvalidation_UNKNOWN_CLASSIFICATION', 'FIXTURE_ASSERTS_expectedDryRunInvalidation_MISSING_CLASSIFICATION'] };
+  });
+
+  mutations.push(() => {
+    const search = `dryRunInvalidation = analysis.genericUnknownInvalidatesDryRun;
+    pointerState = 'unknown';`;
+    const replacement = `dryRunInvalidation = Boolean(scenario.expectedDryRunInvalidation); /* M014 reintroduced expected-oracle dependency */
+    pointerState = 'unknown';`;
+    const limit = verifierSource.indexOf('function runStaticAssertions');
+    const beforeDeriveEnd = verifierSource.slice(0, limit);
+    const replacementCount = countOccurrences(beforeDeriveEnd, search);
+    const source = replacementCount === 1
+      ? beforeDeriveEnd.replace(search, replacement) + verifierSource.slice(limit)
+      : verifierSource;
+    const applied = { source, replacementCount, sourceChanged: source !== verifierSource };
+    return { id: 'M014_REINTRODUCE_EXPECTED_ORACLE_DEPENDENCY', target: verifierRel, sourceKind: 'verifier', applied, expectedFailureIds: ['ACTUAL_DERIVATION_HAS_NO_EXPECTED_ORACLE_DEPENDENCY'] };
+  });
+
   for (const buildMutation of mutations) {
     const mutation = buildMutation();
     let mutantAdmin = adminSource;
     let mutantGate = gateSource;
     let mutantState = stateSource;
     let mutantFixture = mutation.fixture || fixture;
+    let mutantVerifier = verifierSource;
     if (mutation.sourceKind === 'admin') mutantAdmin = mutation.applied.source;
     if (mutation.sourceKind === 'state') mutantState = mutation.applied.source;
-    const tempRoot = writeMutantRoot({ adminSource: mutantAdmin, gateSource: mutantGate, stateSource: mutantState, fixture: mutantFixture });
-    const mutatedFailures = collectFailuresForSources({ adminSource: mutantAdmin, gateSource: mutantGate, stateSource: mutantState, fixture: mutantFixture });
-    const beforeSource = mutation.sourceKind === 'admin' ? adminSource : mutation.sourceKind === 'state' ? stateSource : JSON.stringify(fixture, null, 2) + '\n';
+    if (mutation.sourceKind === 'verifier') mutantVerifier = mutation.applied.source;
+    const tempRoot = writeMutantRoot({ adminSource: mutantAdmin, gateSource: mutantGate, stateSource: mutantState, fixture: mutantFixture, verifierSource: mutantVerifier });
+    const mutatedFailures = mutation.sourceKind === 'verifier'
+      ? failuresFromVerifierProcess(tempRoot)
+      : collectFailuresForSources({ adminSource: mutantAdmin, gateSource: mutantGate, stateSource: mutantState, fixture: mutantFixture, verifierSource: mutantVerifier, skipProductionHash: mutation.sourceKind === 'admin' });
+    const beforeSource = mutation.sourceKind === 'admin'
+      ? adminSource
+      : mutation.sourceKind === 'state'
+        ? stateSource
+        : mutation.sourceKind === 'verifier'
+          ? verifierSource
+          : JSON.stringify(fixture, null, 2) + '\n';
     recordMutation({
       id: mutation.id,
       target: mutation.target,
@@ -513,22 +710,44 @@ function runMutationControls({ adminSource, gateSource, stateSource, fixture }) 
   }
 }
 
+function runIndependentPoisonChecks({ fixture, adminSource, gateSource, stateSource, verifierSource }) {
+  const poisons = [
+    { id: 'INDEPENDENT_UNKNOWN_DRY_RUN_POISON_RED', caseId: 'UNKNOWN_CLASSIFICATION', field: 'expectedDryRunInvalidation', value: false, expectedFailure: 'FIXTURE_ASSERTS_expectedDryRunInvalidation_UNKNOWN_CLASSIFICATION' },
+    { id: 'INDEPENDENT_MISSING_DRY_RUN_POISON_RED', caseId: 'MISSING_CLASSIFICATION', field: 'expectedDryRunInvalidation', value: false, expectedFailure: 'FIXTURE_ASSERTS_expectedDryRunInvalidation_MISSING_CLASSIFICATION' },
+    { id: 'INDEPENDENT_SQL_CLEAN_DRY_RUN_POISON_RED', caseId: 'SQL_CLEAN_NOT_FRONTEND_EXACT_IDLE', field: 'expectedDryRunInvalidation', value: true, expectedFailure: 'FIXTURE_ASSERTS_expectedDryRunInvalidation_SQL_CLEAN_NOT_FRONTEND_EXACT_IDLE' },
+  ];
+  for (const poison of poisons) {
+    const mutantFixture = structuredClone(fixture);
+    const targetCase = mutantFixture.cases.find((item) => item.id === poison.caseId);
+    targetCase[poison.field] = poison.value;
+    const failures = collectFailuresForSources({ adminSource, gateSource, stateSource, fixture: mutantFixture, verifierSource });
+    assertCase(poison.id, failures.length === 1 && failures[0] === poison.expectedFailure, { failures, expectedFailure: poison.expectedFailure });
+  }
+}
+
 try {
   const adminSource = readText(adminStaticPath);
   const gateSource = readText(releaseGatePath);
   const stateSource = readText(adminStatePath);
   const fixture = readJson(fixturePath);
+  const verifierSource = readText(verifierPath);
 
-  runStaticAssertions(adminSource);
-  runFixtureAssertions({ fixture, adminSource, gateSource, stateSource });
-  runMutationControls({ adminSource, gateSource, stateSource, fixture });
+  if (oracleScanOnly) {
+    const oracleOffenders = actualDerivationDependencyScan(verifierSource);
+    assertCase('ACTUAL_DERIVATION_HAS_NO_EXPECTED_ORACLE_DEPENDENCY', oracleOffenders.length === 0, { oracleOffenders });
+  } else {
+    runStaticAssertions({ adminSource, verifierSource });
+    runFixtureAssertions({ fixture, adminSource, gateSource, stateSource });
+    runIndependentPoisonChecks({ fixture, adminSource, gateSource, stateSource, verifierSource });
+    if (!skipMutations) runMutationControls({ adminSource, gateSource, stateSource, fixture, verifierSource });
+  }
 } catch (error) {
   assertCase('VERIFIER_INTERNAL_ERROR', false, { message: error?.message || String(error), stack: error?.stack || '' });
 } finally {
   cleanupTempRoots();
 }
 
-const remainingTempRoots = fs.readdirSync(os.tmpdir()).filter((name) => name.startsWith('cms-0660301-mutant-'));
+const remainingTempRoots = oracleScanOnly ? [] : fs.readdirSync(os.tmpdir()).filter((name) => name.startsWith('cms-0660302-mutant-')).filter((name) => path.resolve(os.tmpdir(), name) !== root);
 assertCase('TEMP_ROOTS_CLEANED', remainingTempRoots.length === 0, { remainingTempRoots });
 
 const passCount = results.filter((item) => item.pass).length;
@@ -536,10 +755,19 @@ const failCount = results.length - passCount;
 const summary = {
   verifier: path.relative(root, new URL(import.meta.url).pathname),
   root,
+  skipMutations,
+  oracleScanOnly,
   passCount,
   failCount,
   totalCount: results.length,
+  oracleSeparation: {
+    actualDerivationHasNoExpectedDependency: !results.some((item) => item.id === 'ACTUAL_DERIVATION_HAS_NO_EXPECTED_ORACLE_DEPENDENCY' && !item.pass),
+  },
   mutationRecords,
+  requiredMutantCount: skipMutations ? 0 : 14,
+  killedCount: mutationRecords.filter((item) => item.status === 'KILLED').length,
+  survivedCount: mutationRecords.filter((item) => item.status !== 'KILLED').length,
+  tempRootCleanup: { remainingTempRoots },
   results,
 };
 
