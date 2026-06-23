@@ -1,0 +1,22 @@
+[
+  {
+    "id": "O001_HARMLESS_REJECTED",
+    "expectedRejectReason": "EXPECTED_FAILURE_NOT_OBSERVED"
+  },
+  {
+    "id": "O002_ZERO_REPLACEMENT_REJECTED",
+    "expectedRejectReason": "REPLACEMENT_COUNT_MISMATCH"
+  },
+  {
+    "id": "O003_UNEXPECTED_FAILURE_REJECTED",
+    "expectedRejectReason": "UNEXPECTED_FAILURES"
+  },
+  {
+    "id": "O004_UNCHANGED_SOURCE_REJECTED",
+    "expectedRejectReason": "MUTATED_SOURCE_UNCHANGED"
+  },
+  {
+    "id": "O005_SEMANTIC_DUPLICATE_REJECTED",
+    "expectedRejectReason": "MANIFEST_SEMANTIC_DUPLICATE"
+  }
+]

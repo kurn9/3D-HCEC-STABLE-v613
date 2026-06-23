@@ -1,0 +1,170 @@
+[
+  {
+    "id": "M001_REPLACEMENT_EXACT",
+    "category": "meta-direct-guard",
+    "guard": "replacement exact",
+    "target": "scripts/verify-v6.14.066.026-cms-verification-meta-orchestrator.mjs",
+    "search": "return e.replacementCountMatches === true;",
+    "replacement": "return true;",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_META_REJECTION",
+    "scenario": "replacement-count",
+    "expectedMetaViolationIds": [
+      "M001_REPLACEMENT_EXACT_BAD_ACCEPTANCE"
+    ]
+  },
+  {
+    "id": "M002_SOURCE_CHANGED",
+    "category": "meta-direct-guard",
+    "guard": "source changed",
+    "target": "scripts/verify-v6.14.066.026-cms-verification-meta-orchestrator.mjs",
+    "search": "return e.sourceChanged === true;",
+    "replacement": "return true;",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_META_REJECTION",
+    "scenario": "source-changed",
+    "expectedMetaViolationIds": [
+      "M002_SOURCE_CHANGED_BAD_ACCEPTANCE"
+    ]
+  },
+  {
+    "id": "M003_EXEC_UNDER_ROOT",
+    "category": "meta-direct-guard",
+    "guard": "exec under root",
+    "target": "scripts/verify-v6.14.066.026-cms-verification-meta-orchestrator.mjs",
+    "search": "return e.executableUnderRoot === true;",
+    "replacement": "return true;",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_META_REJECTION",
+    "scenario": "executable-under-root",
+    "expectedMetaViolationIds": [
+      "M003_EXEC_UNDER_ROOT_BAD_ACCEPTANCE"
+    ]
+  },
+  {
+    "id": "M004_FIXED_REJECTED",
+    "category": "meta-direct-guard",
+    "guard": "fixed rejected",
+    "target": "scripts/verify-v6.14.066.026-cms-verification-meta-orchestrator.mjs",
+    "search": "return e.fixedRejected === true;",
+    "replacement": "return true;",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_META_REJECTION",
+    "scenario": "fixed-rejected",
+    "expectedMetaViolationIds": [
+      "M004_FIXED_REJECTED_BAD_ACCEPTANCE"
+    ]
+  },
+  {
+    "id": "M005_MUTATED_ACCEPTED",
+    "category": "meta-direct-guard",
+    "guard": "mutated accepted",
+    "target": "scripts/verify-v6.14.066.026-cms-verification-meta-orchestrator.mjs",
+    "search": "return e.mutatedAccepted === true;",
+    "replacement": "return true;",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_META_REJECTION",
+    "scenario": "mutated-accepted",
+    "expectedMetaViolationIds": [
+      "M005_MUTATED_ACCEPTED_BAD_ACCEPTANCE"
+    ]
+  },
+  {
+    "id": "M006_MUTATED_STATUS_ZERO",
+    "category": "meta-direct-guard",
+    "guard": "mutated status zero",
+    "target": "scripts/verify-v6.14.066.026-cms-verification-meta-orchestrator.mjs",
+    "search": "return e.mutatedStatusZero === true;",
+    "replacement": "return true;",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_META_REJECTION",
+    "scenario": "mutated-status-zero",
+    "expectedMetaViolationIds": [
+      "M006_MUTATED_STATUS_ZERO_BAD_ACCEPTANCE"
+    ]
+  },
+  {
+    "id": "M007_MUTATED_FAIL_ZERO",
+    "category": "meta-direct-guard",
+    "guard": "mutated fail zero",
+    "target": "scripts/verify-v6.14.066.026-cms-verification-meta-orchestrator.mjs",
+    "search": "return e.mutatedFailCountZero === true;",
+    "replacement": "return true;",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_META_REJECTION",
+    "scenario": "mutated-fail-zero",
+    "expectedMetaViolationIds": [
+      "M007_MUTATED_FAIL_ZERO_BAD_ACCEPTANCE"
+    ]
+  },
+  {
+    "id": "M008_PARENT_PROTOCOL",
+    "category": "meta-direct-guard",
+    "guard": "parent protocol",
+    "target": "scripts/verify-v6.14.066.026-cms-verification-meta-orchestrator.mjs",
+    "search": "return e.parentProtocolValid === true;",
+    "replacement": "return true;",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_META_REJECTION",
+    "scenario": "parent-protocol",
+    "expectedMetaViolationIds": [
+      "M008_PARENT_PROTOCOL_BAD_ACCEPTANCE"
+    ]
+  },
+  {
+    "id": "M009_EXPECTED_VIOLATIONS",
+    "category": "meta-direct-guard",
+    "guard": "expected violations",
+    "target": "scripts/verify-v6.14.066.026-cms-verification-meta-orchestrator.mjs",
+    "search": "return e.expectedMetaViolationsObserved === true;",
+    "replacement": "return true;",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_META_REJECTION",
+    "scenario": "expected-violations",
+    "expectedMetaViolationIds": [
+      "M009_EXPECTED_VIOLATIONS_BAD_ACCEPTANCE"
+    ]
+  },
+  {
+    "id": "M010_UNEXPECTED_VIOLATIONS",
+    "category": "meta-direct-guard",
+    "guard": "unexpected violations",
+    "target": "scripts/verify-v6.14.066.026-cms-verification-meta-orchestrator.mjs",
+    "search": "return e.unexpectedMetaViolations.length === 0;",
+    "replacement": "return true;",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_META_REJECTION",
+    "scenario": "unexpected-violations",
+    "expectedMetaViolationIds": [
+      "M010_UNEXPECTED_VIOLATIONS_BAD_ACCEPTANCE"
+    ]
+  },
+  {
+    "id": "M011_RAW_EVIDENCE",
+    "category": "meta-direct-guard",
+    "guard": "raw evidence",
+    "target": "scripts/verify-v6.14.066.026-cms-verification-meta-orchestrator.mjs",
+    "search": "return e.rawEvidenceEqual === true;",
+    "replacement": "return true;",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_META_REJECTION",
+    "scenario": "raw-evidence",
+    "expectedMetaViolationIds": [
+      "M011_RAW_EVIDENCE_BAD_ACCEPTANCE"
+    ]
+  },
+  {
+    "id": "M012_META_PROTOCOL_ZERO",
+    "category": "meta-direct-guard",
+    "guard": "meta protocol zero",
+    "target": "scripts/verify-v6.14.066.026-cms-verification-meta-orchestrator.mjs",
+    "search": "return e.metaProtocolErrors === 0;",
+    "replacement": "return true;",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_META_REJECTION",
+    "scenario": "meta-protocol-zero",
+    "expectedMetaViolationIds": [
+      "M012_META_PROTOCOL_ZERO_BAD_ACCEPTANCE"
+    ]
+  }
+]

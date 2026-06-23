@@ -1,0 +1,296 @@
+[
+  {
+    "id": "G001_NORMAL_CHILD_EXIT",
+    "category": "parent-direct-guard",
+    "guard": "normal child exit",
+    "target": "scripts/verify-v6.14.066.026-cms-mutation-parent-orchestrator.mjs",
+    "search": "return record.status === 0;",
+    "replacement": "return true;",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_PARENT_REJECTION",
+    "scenario": "normal-exit",
+    "expectedMetaViolationIds": [
+      "G001_NORMAL_CHILD_EXIT_BAD_ACCEPTANCE"
+    ]
+  },
+  {
+    "id": "G002_EXPECTED_MUTANT_EXIT",
+    "category": "parent-direct-guard",
+    "guard": "expected mutant exit",
+    "target": "scripts/verify-v6.14.066.026-cms-mutation-parent-orchestrator.mjs",
+    "search": "return record.status === 1;",
+    "replacement": "return true;",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_PARENT_REJECTION",
+    "scenario": "mutation-exit",
+    "expectedMetaViolationIds": [
+      "G002_EXPECTED_MUTANT_EXIT_BAD_ACCEPTANCE"
+    ]
+  },
+  {
+    "id": "G003_EXIT_2",
+    "category": "parent-direct-guard",
+    "guard": "exit 2",
+    "target": "scripts/verify-v6.14.066.026-cms-mutation-parent-orchestrator.mjs",
+    "search": "return !(Number(record.status) >= 2);",
+    "replacement": "return true;",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_PARENT_REJECTION",
+    "scenario": "exit-2",
+    "expectedMetaViolationIds": [
+      "G003_EXIT_2_BAD_ACCEPTANCE"
+    ]
+  },
+  {
+    "id": "G004_SIGNAL",
+    "category": "parent-direct-guard",
+    "guard": "signal",
+    "target": "scripts/verify-v6.14.066.026-cms-mutation-parent-orchestrator.mjs",
+    "search": "return record.signal === null;",
+    "replacement": "return true;",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_PARENT_REJECTION",
+    "scenario": "signal",
+    "expectedMetaViolationIds": [
+      "G004_SIGNAL_BAD_ACCEPTANCE"
+    ]
+  },
+  {
+    "id": "G005_TIMEOUT",
+    "category": "parent-direct-guard",
+    "guard": "timeout",
+    "target": "scripts/verify-v6.14.066.026-cms-mutation-parent-orchestrator.mjs",
+    "search": "return record.timedOut === false;",
+    "replacement": "return true;",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_PARENT_REJECTION",
+    "scenario": "timeout",
+    "expectedMetaViolationIds": [
+      "G005_TIMEOUT_BAD_ACCEPTANCE"
+    ]
+  },
+  {
+    "id": "G006_SPAWN_ERROR",
+    "category": "parent-direct-guard",
+    "guard": "spawn error",
+    "target": "scripts/verify-v6.14.066.026-cms-mutation-parent-orchestrator.mjs",
+    "search": "return record.spawnError === '';",
+    "replacement": "return true;",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_PARENT_REJECTION",
+    "scenario": "spawn-error",
+    "expectedMetaViolationIds": [
+      "G006_SPAWN_ERROR_BAD_ACCEPTANCE"
+    ]
+  },
+  {
+    "id": "G007_PARSE_ERROR",
+    "category": "parent-direct-guard",
+    "guard": "parse error",
+    "target": "scripts/verify-v6.14.066.026-cms-mutation-parent-orchestrator.mjs",
+    "search": "return record.parseError === '';",
+    "replacement": "return true;",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_PARENT_REJECTION",
+    "scenario": "parse-error",
+    "expectedMetaViolationIds": [
+      "G007_PARSE_ERROR_BAD_ACCEPTANCE"
+    ]
+  },
+  {
+    "id": "G008_PROTOCOL",
+    "category": "parent-direct-guard",
+    "guard": "protocol",
+    "target": "scripts/verify-v6.14.066.026-cms-mutation-parent-orchestrator.mjs",
+    "search": "return record.protocolErrors.length === 0;",
+    "replacement": "return true;",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_PARENT_REJECTION",
+    "scenario": "protocol-error",
+    "expectedMetaViolationIds": [
+      "G008_PROTOCOL_BAD_ACCEPTANCE"
+    ]
+  },
+  {
+    "id": "G009_ROOT",
+    "category": "parent-direct-guard",
+    "guard": "root",
+    "target": "scripts/verify-v6.14.066.026-cms-mutation-parent-orchestrator.mjs",
+    "search": "return record.rootOk === true;",
+    "replacement": "return true;",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_PARENT_REJECTION",
+    "scenario": "wrong-root",
+    "expectedMetaViolationIds": [
+      "G009_ROOT_BAD_ACCEPTANCE"
+    ]
+  },
+  {
+    "id": "G010_RUN_ID",
+    "category": "parent-direct-guard",
+    "guard": "run id",
+    "target": "scripts/verify-v6.14.066.026-cms-mutation-parent-orchestrator.mjs",
+    "search": "return record.runIdOk === true;",
+    "replacement": "return true;",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_PARENT_REJECTION",
+    "scenario": "wrong-run-id",
+    "expectedMetaViolationIds": [
+      "G010_RUN_ID_BAD_ACCEPTANCE"
+    ]
+  },
+  {
+    "id": "G011_EXECUTABLE",
+    "category": "parent-direct-guard",
+    "guard": "executable",
+    "target": "scripts/verify-v6.14.066.026-cms-mutation-parent-orchestrator.mjs",
+    "search": "return record.executableOk === true;",
+    "replacement": "return true;",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_PARENT_REJECTION",
+    "scenario": "wrong-executable",
+    "expectedMetaViolationIds": [
+      "G011_EXECUTABLE_BAD_ACCEPTANCE"
+    ]
+  },
+  {
+    "id": "G012_UNEXPECTED_FAILURE",
+    "category": "parent-direct-guard",
+    "guard": "unexpected failure",
+    "target": "scripts/verify-v6.14.066.026-cms-mutation-parent-orchestrator.mjs",
+    "search": "return record.failedAssertionIds.length === 0;",
+    "replacement": "return true;",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_PARENT_REJECTION",
+    "scenario": "unexpected-failure",
+    "expectedMetaViolationIds": [
+      "G012_UNEXPECTED_FAILURE_BAD_ACCEPTANCE"
+    ]
+  },
+  {
+    "id": "G013_CLEANUP",
+    "category": "parent-direct-guard",
+    "guard": "cleanup",
+    "target": "scripts/verify-v6.14.066.026-cms-mutation-parent-orchestrator.mjs",
+    "search": "return record.cleanupLeak === false;",
+    "replacement": "return true;",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_PARENT_REJECTION",
+    "scenario": "cleanup-leak",
+    "expectedMetaViolationIds": [
+      "G013_CLEANUP_BAD_ACCEPTANCE"
+    ]
+  },
+  {
+    "id": "G014_HIDDEN_CLEANUP",
+    "category": "parent-direct-guard",
+    "guard": "hidden cleanup",
+    "target": "scripts/verify-v6.14.066.026-cms-mutation-parent-orchestrator.mjs",
+    "search": "return record.hiddenCleanupLeak === false;",
+    "replacement": "return true;",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_PARENT_REJECTION",
+    "scenario": "hidden-cleanup-leak",
+    "expectedMetaViolationIds": [
+      "G014_HIDDEN_CLEANUP_BAD_ACCEPTANCE"
+    ]
+  },
+  {
+    "id": "G015_RAW_RESULT",
+    "category": "parent-direct-guard",
+    "guard": "raw result",
+    "target": "scripts/verify-v6.14.066.026-cms-mutation-parent-orchestrator.mjs",
+    "search": "return record.resultPresent === true;",
+    "replacement": "return true;",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_PARENT_REJECTION",
+    "scenario": "missing-result",
+    "expectedMetaViolationIds": [
+      "G015_RAW_RESULT_BAD_ACCEPTANCE"
+    ]
+  },
+  {
+    "id": "G016_REPLACEMENT_COUNT",
+    "category": "parent-direct-guard",
+    "guard": "replacement count",
+    "target": "scripts/verify-v6.14.066.026-cms-mutation-parent-orchestrator.mjs",
+    "search": "return record.replacementCountMatches === true;",
+    "replacement": "return true;",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_PARENT_REJECTION",
+    "scenario": "replacement-count",
+    "expectedMetaViolationIds": [
+      "G016_REPLACEMENT_COUNT_BAD_ACCEPTANCE"
+    ]
+  },
+  {
+    "id": "G017_SOURCE_CHANGED",
+    "category": "parent-direct-guard",
+    "guard": "source changed",
+    "target": "scripts/verify-v6.14.066.026-cms-mutation-parent-orchestrator.mjs",
+    "search": "return record.sourceChanged === true;",
+    "replacement": "return true;",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_PARENT_REJECTION",
+    "scenario": "source-unchanged",
+    "expectedMetaViolationIds": [
+      "G017_SOURCE_CHANGED_BAD_ACCEPTANCE"
+    ]
+  },
+  {
+    "id": "G018_AGG_PROTOCOL",
+    "category": "parent-direct-guard",
+    "guard": "aggregate protocol",
+    "target": "scripts/verify-v6.14.066.026-cms-mutation-parent-orchestrator.mjs",
+    "search": "return record.aggregateProtocolErrors === 0;",
+    "replacement": "return true;",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_PARENT_REJECTION",
+    "scenario": "aggregate-protocol",
+    "expectedMetaViolationIds": [
+      "G018_AGG_PROTOCOL_BAD_ACCEPTANCE"
+    ]
+  },
+  {
+    "id": "G019_AGG_TIMEOUT",
+    "category": "parent-direct-guard",
+    "guard": "aggregate timeout",
+    "target": "scripts/verify-v6.14.066.026-cms-mutation-parent-orchestrator.mjs",
+    "search": "return record.aggregateTimeouts === 0;",
+    "replacement": "return true;",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_PARENT_REJECTION",
+    "scenario": "aggregate-timeout",
+    "expectedMetaViolationIds": [
+      "G019_AGG_TIMEOUT_BAD_ACCEPTANCE"
+    ]
+  },
+  {
+    "id": "G020_AGG_ABNORMAL",
+    "category": "parent-direct-guard",
+    "guard": "aggregate abnormal",
+    "target": "scripts/verify-v6.14.066.026-cms-mutation-parent-orchestrator.mjs",
+    "search": "return record.aggregateAbnormalExits === 0;",
+    "replacement": "return true;",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_PARENT_REJECTION",
+    "scenario": "aggregate-abnormal",
+    "expectedMetaViolationIds": [
+      "G020_AGG_ABNORMAL_BAD_ACCEPTANCE"
+    ]
+  },
+  {
+    "id": "G021_AGG_SCENARIO",
+    "category": "parent-direct-guard",
+    "guard": "aggregate scenario",
+    "target": "scripts/verify-v6.14.066.026-cms-mutation-parent-orchestrator.mjs",
+    "search": "return record.unexpectedScenarioOutcomes === 0;",
+    "replacement": "return true;",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_PARENT_REJECTION",
+    "scenario": "aggregate-scenario",
+    "expectedMetaViolationIds": [
+      "G021_AGG_SCENARIO_BAD_ACCEPTANCE"
+    ]
+  }
+]

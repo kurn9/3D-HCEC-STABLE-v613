@@ -1,0 +1,27 @@
+[
+  {
+    "id": "B001_REPLACEMENT_GTE",
+    "target": "scripts/lib/v6.14.066.025-mutation-outcome-oracle.mjs",
+    "search": ">= mutation.requiredReplacementCount"
+  },
+  {
+    "id": "B002_META_MANIFEST_EMPTY",
+    "target": "scripts/fixtures/v6.14.066.025-meta-direct-guard-mutation-cases.json",
+    "search": "[]"
+  },
+  {
+    "id": "B003_EXPECTED_RED_SELF_ATTESTED",
+    "target": "scripts/fixtures/v6.14.066.025-baseline-red-cases.json",
+    "search": "expectedRed"
+  },
+  {
+    "id": "B004_SQL_RAISE_SUBSTRING",
+    "target": "scripts/lib/v6.14.066.025-migration-source-evaluator.mjs",
+    "search": "includes"
+  },
+  {
+    "id": "B005_HARDCODED_ORDER",
+    "target": "scripts/lib/v6.14.066.025-migration-source-evaluator.mjs",
+    "search": "MIGRATION_RELS"
+  }
+]
