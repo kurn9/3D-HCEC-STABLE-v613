@@ -1,0 +1,10 @@
+[
+  {"id":"B001_CHILD_BEHAVIOR_RELAXED_BRANCH","target":"scripts/verify-v6.14.066.023-cms-mutation-parent-orchestrator.mjs","contains":"category === 'child-behavior'"},
+  {"id":"B002_META_REPLACEMENT_GTE_ZERO","target":"scripts/verify-v6.14.066.023-cms-verification-meta-orchestrator.mjs","contains":"replacement.replacementCount >= 0"},
+  {"id":"B003_META_EXPECTED_MISSING_HARDCODE_EMPTY","target":"scripts/verify-v6.14.066.023-cms-verification-meta-orchestrator.mjs","contains":"expectedMissing: []"},
+  {"id":"B004_META_UNEXPECTED_FAILED_HARDCODE_EMPTY","target":"scripts/verify-v6.14.066.023-cms-verification-meta-orchestrator.mjs","contains":"unexpectedFailed: []"},
+  {"id":"B005_PROTOCOL_GATE_GTE_ZERO","target":"scripts/verify-v6.14.066.023-cms-mutation-parent-orchestrator.mjs","contains":"summary.protocolErrors >= 0"},
+  {"id":"B006_CHILD_MUTANTS_SUMMARY_ONLY","target":"scripts/verify-v6.14.066.023-cms-verification-meta-orchestrator.mjs","contains":"NORMAL_CHILD_MUTANTS_KILLED"},
+  {"id":"B007_PARENT_ACCEPTS_EXECUTED_ONLY","target":"scripts/verify-v6.14.066.023-cms-verification-meta-orchestrator.mjs","contains":"expected.length > 0 && executed"},
+  {"id":"B008_PARENT_BEHAVIOR_NO_RAW_VIOLATION_DIFF","target":"scripts/verify-v6.14.066.023-cms-verification-meta-orchestrator.mjs","contains":"actualFailedAssertions"}
+]

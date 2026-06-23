@@ -1,0 +1,240 @@
+[
+  {
+    "id": "M001",
+    "category": "parent-behavior",
+    "target": "scripts/verify-v6.14.066.024-cms-mutation-parent-orchestrator.mjs",
+    "search": "const PARENT_BYPASS_SLOT_01 = false;",
+    "replacement": "const PARENT_BYPASS_SLOT_01 = true;",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_PARENT_REJECTION",
+    "expectedFailedAssertions": [],
+    "allowedAdditionalFailures": [],
+    "expectedMetaViolationIds": [
+      "PARENT_ACCEPTED_NORMAL_CHILD_TEST_FAILURE"
+    ],
+    "scenario": "unexpected-failure"
+  },
+  {
+    "id": "M002",
+    "category": "parent-behavior",
+    "target": "scripts/verify-v6.14.066.024-cms-mutation-parent-orchestrator.mjs",
+    "search": "const PARENT_BYPASS_SLOT_02 = false;",
+    "replacement": "const PARENT_BYPASS_SLOT_02 = true;",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_PARENT_REJECTION",
+    "expectedFailedAssertions": [],
+    "allowedAdditionalFailures": [],
+    "expectedMetaViolationIds": [
+      "PARENT_ACCEPTED_ABNORMAL_EXIT"
+    ],
+    "scenario": "exit-2-after-result"
+  },
+  {
+    "id": "M003",
+    "category": "parent-behavior",
+    "target": "scripts/verify-v6.14.066.024-cms-mutation-parent-orchestrator.mjs",
+    "search": "const PARENT_BYPASS_SLOT_03 = false;",
+    "replacement": "const PARENT_BYPASS_SLOT_03 = true;",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_PARENT_REJECTION",
+    "expectedFailedAssertions": [],
+    "allowedAdditionalFailures": [],
+    "expectedMetaViolationIds": [
+      "PARENT_ACCEPTED_SIGNAL"
+    ],
+    "scenario": "signal-after-result"
+  },
+  {
+    "id": "M004",
+    "category": "parent-behavior",
+    "target": "scripts/verify-v6.14.066.024-cms-mutation-parent-orchestrator.mjs",
+    "search": "const PARENT_BYPASS_SLOT_04 = false;",
+    "replacement": "const PARENT_BYPASS_SLOT_04 = true;",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_PARENT_REJECTION",
+    "expectedFailedAssertions": [],
+    "allowedAdditionalFailures": [],
+    "expectedMetaViolationIds": [
+      "PARENT_ACCEPTED_TIMEOUT"
+    ],
+    "scenario": "timeout"
+  },
+  {
+    "id": "M005",
+    "category": "parent-behavior",
+    "target": "scripts/verify-v6.14.066.024-cms-mutation-parent-orchestrator.mjs",
+    "search": "const PARENT_BYPASS_SLOT_05 = false;",
+    "replacement": "const PARENT_BYPASS_SLOT_05 = true;",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_PARENT_REJECTION",
+    "expectedFailedAssertions": [],
+    "allowedAdditionalFailures": [],
+    "expectedMetaViolationIds": [
+      "PARENT_ACCEPTED_PROTOCOL_INVALID"
+    ],
+    "scenario": "malformed-result"
+  },
+  {
+    "id": "M006",
+    "category": "parent-behavior",
+    "target": "scripts/verify-v6.14.066.024-cms-mutation-parent-orchestrator.mjs",
+    "search": "const PARENT_BYPASS_SLOT_06 = false;",
+    "replacement": "const PARENT_BYPASS_SLOT_06 = true;",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_PARENT_REJECTION",
+    "expectedFailedAssertions": [],
+    "allowedAdditionalFailures": [],
+    "expectedMetaViolationIds": [
+      "PARENT_ACCEPTED_WRONG_ROOT"
+    ],
+    "scenario": "wrong-root"
+  },
+  {
+    "id": "M007",
+    "category": "parent-behavior",
+    "target": "scripts/verify-v6.14.066.024-cms-mutation-parent-orchestrator.mjs",
+    "search": "const PARENT_BYPASS_SLOT_07 = false;",
+    "replacement": "const PARENT_BYPASS_SLOT_07 = true;",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_PARENT_REJECTION",
+    "expectedFailedAssertions": [],
+    "allowedAdditionalFailures": [],
+    "expectedMetaViolationIds": [
+      "PARENT_ACCEPTED_WRONG_RUN_ID"
+    ],
+    "scenario": "wrong-run-id"
+  },
+  {
+    "id": "M008",
+    "category": "parent-behavior",
+    "target": "scripts/verify-v6.14.066.024-cms-mutation-parent-orchestrator.mjs",
+    "search": "const PARENT_BYPASS_SLOT_08 = false;",
+    "replacement": "const PARENT_BYPASS_SLOT_08 = true;",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_PARENT_REJECTION",
+    "expectedFailedAssertions": [],
+    "allowedAdditionalFailures": [],
+    "expectedMetaViolationIds": [
+      "PARENT_ACCEPTED_CLEANUP_LEAK"
+    ],
+    "scenario": "cleanup-leak"
+  },
+  {
+    "id": "M009",
+    "category": "parent-behavior",
+    "target": "scripts/verify-v6.14.066.024-cms-mutation-parent-orchestrator.mjs",
+    "search": "const PARENT_BYPASS_SLOT_09 = false;",
+    "replacement": "const PARENT_BYPASS_SLOT_09 = true;",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_PARENT_REJECTION",
+    "expectedFailedAssertions": [],
+    "allowedAdditionalFailures": [],
+    "expectedMetaViolationIds": [
+      "PARENT_ACCEPTED_WRONG_EXECUTABLE"
+    ],
+    "scenario": "wrong-executable"
+  },
+  {
+    "id": "M010",
+    "category": "parent-behavior",
+    "target": "scripts/verify-v6.14.066.024-cms-mutation-parent-orchestrator.mjs",
+    "search": "const PARENT_BYPASS_SLOT_10 = false;",
+    "replacement": "const PARENT_BYPASS_SLOT_10 = true;",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_PARENT_REJECTION",
+    "expectedFailedAssertions": [],
+    "allowedAdditionalFailures": [],
+    "expectedMetaViolationIds": [
+      "PARENT_ACCEPTED_ABNORMAL_EXIT"
+    ],
+    "scenario": "exit-2-after-result"
+  },
+  {
+    "id": "M011",
+    "category": "parent-behavior",
+    "target": "scripts/verify-v6.14.066.024-cms-mutation-parent-orchestrator.mjs",
+    "search": "const PARENT_BYPASS_SLOT_11 = false;",
+    "replacement": "const PARENT_BYPASS_SLOT_11 = true;",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_PARENT_REJECTION",
+    "expectedFailedAssertions": [],
+    "allowedAdditionalFailures": [],
+    "expectedMetaViolationIds": [
+      "PARENT_ACCEPTED_PROTOCOL_INVALID"
+    ],
+    "scenario": "malformed-result"
+  },
+  {
+    "id": "M012",
+    "category": "parent-behavior",
+    "target": "scripts/verify-v6.14.066.024-cms-mutation-parent-orchestrator.mjs",
+    "search": "const PARENT_BYPASS_SLOT_12 = false;",
+    "replacement": "const PARENT_BYPASS_SLOT_12 = true;",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_PARENT_REJECTION",
+    "expectedFailedAssertions": [],
+    "allowedAdditionalFailures": [],
+    "expectedMetaViolationIds": [
+      "PARENT_ACCEPTED_TIMEOUT"
+    ],
+    "scenario": "timeout"
+  },
+  {
+    "id": "M013",
+    "category": "parent-behavior",
+    "target": "scripts/verify-v6.14.066.024-cms-mutation-parent-orchestrator.mjs",
+    "search": "const PARENT_BYPASS_SLOT_13 = false;",
+    "replacement": "const PARENT_BYPASS_SLOT_13 = true;",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_PARENT_REJECTION",
+    "expectedFailedAssertions": [],
+    "allowedAdditionalFailures": [],
+    "expectedMetaViolationIds": [
+      "PARENT_ACCEPTED_SIGNAL"
+    ],
+    "scenario": "signal-after-result"
+  },
+  {
+    "id": "M014",
+    "category": "parent-behavior",
+    "target": "scripts/verify-v6.14.066.024-cms-mutation-parent-orchestrator.mjs",
+    "search": "const PARENT_BYPASS_SLOT_14 = false;",
+    "replacement": "const PARENT_BYPASS_SLOT_14 = true;",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_PARENT_REJECTION",
+    "expectedFailedAssertions": [],
+    "allowedAdditionalFailures": [],
+    "expectedMetaViolationIds": [
+      "PARENT_ACCEPTED_WRONG_ROOT"
+    ],
+    "scenario": "wrong-root"
+  },
+  {
+    "id": "M015",
+    "category": "parent-behavior",
+    "target": "scripts/verify-v6.14.066.024-cms-mutation-parent-orchestrator.mjs",
+    "search": "const PARENT_BYPASS_SLOT_15 = false;",
+    "replacement": "const PARENT_BYPASS_SLOT_15 = true;",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_PARENT_REJECTION",
+    "expectedFailedAssertions": [],
+    "allowedAdditionalFailures": [],
+    "expectedMetaViolationIds": [
+      "PARENT_ACCEPTED_WRONG_RUN_ID"
+    ],
+    "scenario": "wrong-run-id"
+  },
+  {
+    "id": "M016",
+    "category": "parent-behavior",
+    "target": "scripts/verify-v6.14.066.024-cms-mutation-parent-orchestrator.mjs",
+    "search": "__MISSING_PARENT_SEARCH_FOR_ZERO_REPLACEMENT__",
+    "replacement": "noop",
+    "requiredReplacementCount": 1,
+    "expectedOutcome": "EXPECTED_ORACLE_REJECTION",
+    "expectedFailedAssertions": [],
+    "allowedAdditionalFailures": [],
+    "expectedRejectReason": "REPLACEMENT_COUNT_MISMATCH",
+    "scenario": "normal"
+  }
+]
