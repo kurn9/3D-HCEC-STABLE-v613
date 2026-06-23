@@ -4698,18 +4698,9 @@ export async function handlePublishStaticCmsDraft({ dryRun = true, handlers = {}
     const verifiedVersion = String(draftState.publishVerifiedDraftVersion || '').trim();
     const verifiedCandidateHash = normalizeSha256Hash(draftState.publishVerifiedCandidateHash || draftState.publishDryRunResult?.candidateHash || draftState.publishDryRunResult?.plan?.candidateHash || '');
     if (verifiedId !== persistedDraft.id || !areDraftRevisionTokensEqual(verifiedUpdatedAt, persistedDraft.updatedAt) || verifiedVersion !== persistedDraft.version || !verifiedCandidateHash) {
-      applyReleaseOperationGateFromServer({
-        operationId: String(result.data?.operationId || ''),
-        operationType: 'publish',
-        state: 'pointer_unknown',
-        phase: 'pointer_written',
-        expectedReleaseId: String(result.data?.releaseId || ''),
-        contentHash: normalizeSha256Hash(result.data?.contentHash || ''),
-        contentPath: String(result.data?.contentPath || ''),
-      });
       setStaticCmsPublishState({
         isPublishingCms: false,
-        publishError: 'Bản chuẩn bị đã thay đổi sau lần kiểm tra. Hãy lưu và kiểm tra lại trước khi đưa lên website.',
+        publishError: 'Bản chuẩn bị đã thay đổi sau lần kiểm tra. Hãy lưu và bấm “Kiểm tra trước khi đưa lên” lại trước khi công khai.',
         publishStatus: '',
         publishDryRunResult: null,
         publishResult: null,
@@ -4719,7 +4710,7 @@ export async function handlePublishStaticCmsDraft({ dryRun = true, handlers = {}
         publishVerifiedDraftVersion: '',
         publishVerifiedCandidateHash: '',
         publishVerificationInvalidatedAt: new Date().toISOString(),
-        publishVerificationInvalidationReason: 'Bản chuẩn bị đã thay đổi sau lần kiểm tra.',
+        publishVerificationInvalidationReason: 'Bản chuẩn bị đã thay đổi sau lần kiểm tra; request công khai chưa được gửi.',
       });
       handlers.onRerender?.();
       return;
@@ -4853,6 +4844,118 @@ export async function handlePublishStaticCmsDraft({ dryRun = true, handlers = {}
 }
 
 
+
+function buildPublishPreflightInvalidationPatch(reason = '') {
+  return {
+    publishDryRunResult: null,
+    publishLastVerifiedAt: null,
+    publishVerifiedDraftId: '',
+    publishVerifiedDraftUpdatedAt: null,
+    publishVerifiedDraftVersion: '',
+    publishVerifiedCandidateHash: '',
+    publishVerificationInvalidatedAt: new Date().toISOString(),
+    publishVerificationInvalidationReason: reason || 'Trạng thái reconcile đã thay đổi; cần kiểm tra trước khi công khai lại.',
+  };
+}
+
+function applyResolvedCapableReconcileState({
+  data = {},
+  classification = '',
+  current = {},
+  gate = {},
+  expectedReleaseId = '',
+  expectedContentHash = '',
+  statusRefresh = null,
+  transportError = null,
+} = {}) {
+  const normalizedClassification = String(classification || data.classification || '').trim();
+  const exactIdle = statusRefresh?.idle === true;
+  const transportMessage = transportError ? normalizeErrorMessage(transportError) : '';
+  const invalidation = buildPublishPreflightInvalidationPatch(`${normalizedClassification || 'resolved'} yêu cầu preflight mới trước lần công khai tiếp theo.`);
+
+  switch (normalizedClassification) {
+    case 'active_expected_release': {
+      setStaticCmsPublishState({
+        isReconcilingPublishPointer: false,
+        publishPointerState: 'active_expected_release',
+        publishRequiresReconciliation: exactIdle !== true,
+        publishReconciliationResult: data,
+        publishReconciliationError: transportMessage || null,
+        publishReconciliationStatus: exactIdle
+          ? 'Đã kiểm tra: website đang dùng bản vừa thao tác và máy chủ đã trở về trạng thái idle. Hãy kiểm tra lại trước lần công khai tiếp theo.'
+          : 'Đã kiểm tra: website đang dùng bản vừa thao tác, nhưng máy chủ chưa xác nhận exact idle. Hãy kiểm tra trạng thái hiện tại trước thao tác tiếp.',
+        publishError: exactIdle ? null : 'Máy chủ chưa xác nhận exact idle. Không bấm công khai lại bằng kết quả kiểm tra cũ.',
+        publishStatus: exactIdle
+          ? 'Website đang dùng bản vừa thao tác. Hãy mở website để kiểm tra hiển thị, rồi chạy preflight mới trước lần công khai tiếp theo.'
+          : '',
+        publishResult: {
+          ...(current.publishResult || {}),
+          ok: true,
+          dryRun: false,
+          releaseId: data.releaseId || expectedReleaseId,
+          contentPath: data.contentPath || current.publishPendingContentPath || '',
+          contentHash: data.contentHash || expectedContentHash,
+          verifyStatus: 'pass',
+          reconciled: true,
+          operationId: data.operationId || gate.operationId || '',
+        },
+        ...invalidation,
+        publishVerificationInvalidationReason: 'Reconcile xác nhận website đang dùng bản vừa thao tác; cần preflight mới trước lần công khai tiếp theo.',
+      });
+      return true;
+    }
+
+    case 'active_other_release':
+    case 'resolved_active_other': {
+      setStaticCmsPublishState({
+        isReconcilingPublishPointer: false,
+        publishPointerState: 'active_other_release',
+        publishRequiresReconciliation: true,
+        publishReconciliationResult: data,
+        publishReconciliationError: transportMessage || null,
+        publishReconciliationStatus: 'Đã kiểm tra: website đang dùng một bản khác. Hãy tải lại bản chuẩn bị và kiểm tra lại trước khi thao tác tiếp.',
+        publishError: 'Website đang dùng một bản khác với bản vừa thao tác. Không bấm công khai lại bằng kết quả cũ.',
+        publishStatus: '',
+        ...invalidation,
+        publishVerificationInvalidationReason: 'Reconcile xác nhận website đang dùng release khác; kết quả dry-run cũ không còn hợp lệ.',
+      });
+      return true;
+    }
+
+    case 'operation_already_resolved':
+    case 'operation_already_resolved_non_success':
+    case 'lineage_repaired':
+    case 'failed_before_pointer': {
+      const statusLabel = {
+        operation_already_resolved: 'Operation đã được resolve trước đó.',
+        operation_already_resolved_non_success: 'Operation đã resolve nhưng không phải trạng thái publish thành công.',
+        lineage_repaired: 'Lineage đã được sửa hoặc hoàn tất lại.',
+        failed_before_pointer: 'Operation thất bại trước khi pointer công khai được xác nhận.',
+      }[normalizedClassification] || 'Reconcile đã trả trạng thái resolved cần xác minh lại.';
+      setStaticCmsPublishState({
+        isReconcilingPublishPointer: false,
+        publishPointerState: normalizedClassification,
+        publishRequiresReconciliation: exactIdle !== true,
+        publishReconciliationResult: data,
+        publishReconciliationError: transportMessage || null,
+        publishReconciliationStatus: exactIdle
+          ? `${statusLabel} Máy chủ hiện đã idle; hãy bấm kiểm tra trước khi thao tác publish mới.`
+          : `${statusLabel} Máy chủ chưa xác nhận exact idle; gate vẫn khóa.`,
+        publishError: normalizedClassification === 'failed_before_pointer'
+          ? 'Operation đã dừng trước khi pointer công khai được xác nhận. Không bấm công khai lại bằng kết quả kiểm tra cũ; hãy kiểm tra lại từ đầu.'
+          : 'Trạng thái publish cũ đã được xử lý. Không bấm công khai lại bằng kết quả kiểm tra cũ; hãy kiểm tra lại từ đầu.',
+        publishStatus: '',
+        ...invalidation,
+        publishVerificationInvalidationReason: `${normalizedClassification} yêu cầu preflight mới trước lần công khai tiếp theo.`,
+      });
+      return true;
+    }
+
+    default:
+      return false;
+  }
+}
+
 export async function handleReconcileStaticCmsPublishPointer({ handlers = {} } = {}) {
   const current = getState().staticCmsDraft || {};
   const gate = getState().releaseOperationGate || {};
@@ -4872,77 +4975,77 @@ export async function handleReconcileStaticCmsPublishPointer({ handlers = {} } =
     contentHash: expectedContentHash,
   });
   const data = result.data || {};
-  if (result.error) {
-    if (isResolvedCapableReleaseResponse(data)) {
-      await refreshAndApplyReleaseOperationGateStatus({ successResult: data, fallbackMessage: 'Response lỗi có thể đã resolve operation; cần kiểm tra trạng thái máy chủ.' });
-    } else {
-      setReleaseOperationGateState({ reconciling: false, error: normalizeErrorMessage(result.error), lastCheckedAt: new Date().toISOString() });
-    }
-    setStaticCmsPublishState({
-      isReconcilingPublishPointer: false,
-      publishReconciliationError: normalizeErrorMessage(result.error),
-      publishReconciliationStatus: '',
-    });
-    handlers.onRerender?.();
-    return;
-  }
   const classification = String(data.classification || 'read_failed');
-  if (classification === 'active_expected_release') {
-    await refreshAndApplyReleaseOperationGateStatus({ successResult: data, fallbackMessage: 'Operation đã resolve nhưng máy chủ chưa xác nhận exact idle.' });
-    setStaticCmsPublishState({
-      isReconcilingPublishPointer: false,
-      publishPointerState: 'active_expected_release',
-      publishRequiresReconciliation: false,
-      publishReconciliationResult: data,
-      publishReconciliationError: null,
-      publishReconciliationStatus: 'Đã kiểm tra: website đang dùng bản vừa thao tác. Không bấm công khai lại.',
-      publishError: null,
-      publishStatus: 'Website đang dùng bản vừa thao tác. Hãy mở website để kiểm tra hiển thị.',
-      publishResult: {
-        ...(current.publishResult || {}),
-        ok: true,
-        dryRun: false,
-        releaseId: data.releaseId || expectedReleaseId,
-        contentPath: data.contentPath || current.publishPendingContentPath || '',
-        contentHash: data.contentHash || expectedContentHash,
-        verifyStatus: 'pass',
-        reconciled: true,
-        operationId: data.operationId || gate.operationId || '',
-      },
-    });
-  } else if (classification === 'active_other_release') {
-    await refreshAndApplyReleaseOperationGateStatus({ successResult: data, fallbackMessage: 'Operation active_other_release đã resolve nhưng máy chủ chưa xác nhận exact idle.' });
-    setStaticCmsPublishState({
-      isReconcilingPublishPointer: false,
-      publishPointerState: 'active_other_release',
-      publishRequiresReconciliation: true,
-      publishReconciliationResult: data,
-      publishReconciliationError: null,
-      publishReconciliationStatus: 'Đã kiểm tra: website đang dùng một bản khác. Hãy tải lại bản chuẩn bị và kiểm tra lại trước khi thao tác tiếp.',
-      publishError: 'Website đang dùng một bản khác với bản vừa thao tác. Không bấm công khai lại bằng kết quả cũ.',
-      publishDryRunResult: null,
-      publishVerifiedDraftId: '',
-      publishVerifiedDraftUpdatedAt: null,
-      publishVerifiedDraftVersion: '',
-      publishVerifiedCandidateHash: '',
-    });
-  } else {
-    setReleaseOperationGateState({ blocked: true, reconciliationRequired: true, reconciling: false, state: 'pointer_unknown', message: 'Chưa xác định website đang dùng bản nào. Không bấm công khai hoặc khôi phục lại. Hãy kiểm tra trạng thái hiện tại.', lastCheckedAt: new Date().toISOString(), result: data });
+  const resolvedCapable = isResolvedCapableReleaseResponse(data);
+
+  if (result.error) {
+    if (resolvedCapable) {
+      const statusRefresh = await refreshAndApplyReleaseOperationGateStatus({
+        successResult: data,
+        fallbackMessage: 'Response lỗi có thể đã resolve operation; cần kiểm tra trạng thái máy chủ trước khi mở gate.',
+      });
+      const handled = applyResolvedCapableReconcileState({
+        data,
+        classification,
+        current,
+        gate,
+        expectedReleaseId,
+        expectedContentHash,
+        statusRefresh,
+        transportError: result.error,
+      });
+      if (handled) {
+        handlers.onRerender?.();
+        return;
+      }
+    }
+
+    setReleaseOperationGateState({ reconciling: false, error: normalizeErrorMessage(result.error), lastCheckedAt: new Date().toISOString() });
     setStaticCmsPublishState({
       isReconcilingPublishPointer: false,
       publishPointerState: 'unknown',
       publishRequiresReconciliation: true,
-      publishReconciliationResult: data,
-      publishReconciliationError: null,
-      publishReconciliationStatus: 'Vẫn chưa xác định website đang dùng bản nào. Không bấm công khai lại. Có thể thử kiểm tra trạng thái lại hoặc mở lịch sử phiên bản.',
-      publishError: 'Chưa xác định website đang dùng bản nào. Không bấm công khai lại.',
-      publishDryRunResult: null,
-      publishVerifiedDraftId: '',
-      publishVerifiedDraftUpdatedAt: null,
-      publishVerifiedDraftVersion: '',
-      publishVerifiedCandidateHash: '',
+      publishReconciliationError: normalizeErrorMessage(result.error),
+      publishReconciliationStatus: '',
+      publishError: 'Không xác định được trạng thái reconcile. Không bấm công khai lại; hãy kiểm tra trạng thái hiện tại.',
+      ...buildPublishPreflightInvalidationPatch('Reconcile trả lỗi không đủ dữ liệu resolved; kết quả dry-run cũ không còn hợp lệ.'),
     });
+    handlers.onRerender?.();
+    return;
   }
+
+  if (resolvedCapable) {
+    const statusRefresh = await refreshAndApplyReleaseOperationGateStatus({
+      successResult: data,
+      fallbackMessage: 'Reconcile response có thể đã resolve operation; cần kiểm tra trạng thái máy chủ trước khi mở gate.',
+    });
+    const handled = applyResolvedCapableReconcileState({
+      data,
+      classification,
+      current,
+      gate,
+      expectedReleaseId,
+      expectedContentHash,
+      statusRefresh,
+      transportError: null,
+    });
+    if (handled) {
+      handlers.onRerender?.();
+      return;
+    }
+  }
+
+  setReleaseOperationGateState({ blocked: true, reconciliationRequired: true, reconciling: false, state: 'pointer_unknown', message: 'Chưa xác định website đang dùng bản nào. Không bấm công khai hoặc khôi phục lại. Hãy kiểm tra trạng thái hiện tại.', lastCheckedAt: new Date().toISOString(), result: data });
+  setStaticCmsPublishState({
+    isReconcilingPublishPointer: false,
+    publishPointerState: 'unknown',
+    publishRequiresReconciliation: true,
+    publishReconciliationResult: data,
+    publishReconciliationError: null,
+    publishReconciliationStatus: 'Vẫn chưa xác định website đang dùng bản nào. Không bấm công khai lại. Có thể thử kiểm tra trạng thái lại hoặc mở lịch sử phiên bản.',
+    publishError: 'Chưa xác định website đang dùng bản nào. Không bấm công khai lại.',
+    ...buildPublishPreflightInvalidationPatch('Reconcile không xác định được classification an toàn; kết quả dry-run cũ không còn hợp lệ.'),
+  });
   handlers.onRerender?.();
 }
 
