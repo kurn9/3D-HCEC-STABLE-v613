@@ -261,15 +261,10 @@ async function createEnv(options: EnvOptions = {}): Promise<TestEnvWithAdapters>
     nowIso: () => "2026-06-21T19:40:52.000Z",
     sleep: () => Promise.resolve(),
   };
-  env.plan = await createCanonicalPointerRepairPlan(adapters, {
-    sourceAuditLogId,
-    sourceVersionPath: sourcePath,
-    expectedSourceHash: sourceHash,
-    expectedPublishedVersion: publishedVersion,
-  });
-  if (options.pointer === "valid" && env.plan) {
-    storage.set(env.plan.contentPath, env.plan.canonicalReleaseText);
-    storage.set(POINTER_PATH, env.plan.pointerText);
+  if (options.pointer === "valid") {
+    const plan = await ensurePlan(Object.assign(env, { adapters }));
+    storage.set(plan.contentPath, plan.canonicalReleaseText);
+    storage.set(POINTER_PATH, plan.pointerText);
   } else if (options.pointer === "different") {
     const otherReleaseId = await createStableRepairReleaseId(
       "other-audit",
@@ -295,6 +290,18 @@ async function createEnv(options: EnvOptions = {}): Promise<TestEnvWithAdapters>
   return Object.assign(env, { adapters });
 }
 
+async function ensurePlan(env: TestEnvWithAdapters): Promise<RepairPlan> {
+  if (!env.plan) {
+    env.plan = await createCanonicalPointerRepairPlan(env.adapters, {
+      sourceAuditLogId: env.sourceAuditLogId,
+      sourceVersionPath: env.sourcePath,
+      expectedSourceHash: env.sourceHash,
+      expectedPublishedVersion: env.publishedVersion,
+    });
+  }
+  return env.plan;
+}
+
 async function dryRun(env: TestEnvWithAdapters) {
   return await executeCanonicalPointerRepair({
     mode: "repair-pointer",
@@ -308,8 +315,9 @@ async function dryRun(env: TestEnvWithAdapters) {
 }
 async function apply(
   env: TestEnvWithAdapters,
-  planHash = env.plan?.planHash || "",
+  planHash?: string,
 ) {
+  const effectivePlanHash = planHash ?? (await ensurePlan(env)).planHash;
   return await executeCanonicalPointerRepair({
     mode: "repair-pointer",
     dryRun: false,
@@ -317,7 +325,7 @@ async function apply(
     sourceVersionPath: env.sourcePath,
     expectedSourceHash: env.sourceHash,
     expectedPublishedVersion: env.publishedVersion,
-    expectedPlanHash: planHash,
+    expectedPlanHash: effectivePlanHash,
     confirmation: REPAIR_CONFIRMATION,
     actorId: "admin-1",
   }, env.adapters);
@@ -517,11 +525,13 @@ Deno.test("post-lock pointer read failure returns 500 and finalizes operation", 
 
 Deno.test("immutable exact reuse passes and different bytes return 409", async () => {
   const reuse = await createEnv();
-  reuse.storage.set(reuse.plan!.contentPath, reuse.plan!.canonicalReleaseText);
+  const reusePlan = await ensurePlan(reuse);
+  reuse.storage.set(reusePlan.contentPath, reusePlan.canonicalReleaseText);
   const reuseResult = await apply(reuse);
   assertEquals(reuseResult.status, 200, "reuse status");
   const conflict = await createEnv();
-  conflict.storage.set(conflict.plan!.contentPath, "different");
+  const conflictPlan = await ensurePlan(conflict);
+  conflict.storage.set(conflictPlan.contentPath, "different");
   const conflictResult = await apply(conflict);
   assertEquals(conflictResult.status, 409, "conflict status");
   assertEquals(conflictResult.body.ok, false, "conflict ok false");
@@ -529,12 +539,13 @@ Deno.test("immutable exact reuse passes and different bytes return 409", async (
 
 Deno.test("immutable existing read failures return 500 for canonical and legacy objects", async () => {
   const canonical = await createEnv({ readFailedPaths: [] });
-  canonical.storage.set(canonical.plan!.contentPath, "different");
+  const canonicalPlan = await ensurePlan(canonical);
+  canonical.storage.set(canonicalPlan.contentPath, "different");
   (canonical.adapters as unknown as {
     readTextObject: (path: string) => Promise<unknown>;
   }).readTextObject = (path: string) => {
     canonical.calls.push(`read:${path}`);
-    if (path === canonical.plan!.contentPath) {
+    if (path === canonicalPlan.contentPath) {
       return Promise.resolve({
         kind: "read_failed",
         error: "read existing failed",
@@ -555,12 +566,13 @@ Deno.test("immutable existing read failures return 500 for canonical and legacy 
   );
 
   const legacy = await createEnv();
-  legacy.storage.set(legacy.plan!.legacyVersionPath, "different");
+  const legacyPlan = await ensurePlan(legacy);
+  legacy.storage.set(legacyPlan.legacyVersionPath, "different");
   (legacy.adapters as unknown as {
     readTextObject: (path: string) => Promise<unknown>;
   }).readTextObject = (path: string) => {
     legacy.calls.push(`read:${path}`);
-    if (path === legacy.plan!.legacyVersionPath) {
+    if (path === legacyPlan.legacyVersionPath) {
       return Promise.resolve({
         kind: "read_failed",
         error: "read legacy failed",
@@ -584,8 +596,9 @@ Deno.test("immutable existing read failures return 500 for canonical and legacy 
 Deno.test("pointer race and pointer write recovery classify conflicts and read failures correctly", async () => {
   const same = await createEnv({
     afterAcquire: (e) => {
-      e.storage.set(e.plan!.contentPath, e.plan!.canonicalReleaseText);
-      e.storage.set(POINTER_PATH, e.plan!.pointerText);
+      assert(e.plan, "plan must exist before afterAcquire hook");
+      e.storage.set(e.plan.contentPath, e.plan.canonicalReleaseText);
+      e.storage.set(POINTER_PATH, e.plan.pointerText);
     },
   });
   assertEquals(

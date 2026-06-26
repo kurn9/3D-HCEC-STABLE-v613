@@ -124,20 +124,8 @@ const mutations = [
   {
     id: "M008_POINTER_VERIFY_FAILURE_SUCCESS",
     file: moduleRel,
-    search: `if (!pointerVerify.valid) {
-      throw conflict(
-        "Pointer verification failed after write.",
-        "REPAIR_POINTER_VERIFY_FAILED",
-        { pointerVerify },
-      );
-    }`,
-    replacement: `if (false && !pointerVerify.valid) {
-      throw conflict(
-        "Pointer verification failed after write.",
-        "REPAIR_POINTER_VERIFY_FAILED",
-        { pointerVerify },
-      );
-    }`,
+    search: `if (!pointerVerify.valid) {`,
+    replacement: `if (false && !pointerVerify.valid) {`,
   },
   {
     id: "M009_REMOVE_OPERATION_FINALIZATION",
