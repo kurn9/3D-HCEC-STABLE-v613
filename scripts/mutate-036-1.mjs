@@ -69,8 +69,10 @@ const mutations = [
   {
     id: "M003_WRITE_BEFORE_POST_LOCK_GATE",
     file: moduleRel,
-    search: `const postLockPlan = await createCanonicalPointerRepairPlan(adapters, {`,
-    replacement: `await adapters.writeTextObject("pre_lock_illegal_probe.json", "{}", {
+    search:
+      `const postLockPlan = await createCanonicalPointerRepairPlan(adapters, {`,
+    replacement:
+      `await adapters.writeTextObject("pre_lock_illegal_probe.json", "{}", {
       upsert: false,
       cacheControl: "0",
     });
@@ -79,7 +81,8 @@ const mutations = [
   {
     id: "M004_REMOVE_POST_LOCK_SOURCE_REREAD",
     file: moduleRel,
-    search: `const postLockPlan = await createCanonicalPointerRepairPlan(adapters, {
+    search:
+      `const postLockPlan = await createCanonicalPointerRepairPlan(adapters, {
       sourceAuditLogId: plan.sourceAuditLogId,
       sourceVersionPath: plan.sourceVersionPath,
       expectedSourceHash: plan.sourceHash,
@@ -189,14 +192,18 @@ function shaFile(rel) {
 
 function snapshotRootHashes() {
   return Object.fromEntries(
-    rootHashFiles.map((rel) => [rel, fs.existsSync(path.join(root, rel)) ? shaFile(rel) : null]),
+    rootHashFiles.map((
+      rel,
+    ) => [rel, fs.existsSync(path.join(root, rel)) ? shaFile(rel) : null]),
   );
 }
 
 function copyFileIntoTemp(tmp, rel) {
   const source = path.join(root, rel);
   if (!fs.existsSync(source)) {
-    throw new Error(`Missing required file for mutation temp workspace: ${rel}`);
+    throw new Error(
+      `Missing required file for mutation temp workspace: ${rel}`,
+    );
   }
   const target = path.join(tmp, rel);
   fs.mkdirSync(path.dirname(target), { recursive: true });
@@ -312,7 +319,8 @@ if (!control.pass) {
     records: [],
     rootHashesBefore,
     rootHashesAfter,
-    rootHashesStable: JSON.stringify(rootHashesBefore) === JSON.stringify(rootHashesAfter),
+    rootHashesStable:
+      JSON.stringify(rootHashesBefore) === JSON.stringify(rootHashesAfter),
   };
   console.log(JSON.stringify(result, null, 2));
   process.exit(1);
@@ -410,11 +418,17 @@ for (const mutation of mutations) {
 }
 
 const rootHashesAfter = snapshotRootHashes();
-const rootHashesStable = JSON.stringify(rootHashesBefore) === JSON.stringify(rootHashesAfter);
-const killed = records.filter((record) => record.classification === "KILLED").length;
-const survived = records.filter((record) => record.classification === "SURVIVED").length;
-const invalid = records.filter((record) => record.classification === "INVALID_MUTATION").length;
-const infraErrors = records.filter((record) => record.classification === "INFRA_ERROR").length;
+const rootHashesStable =
+  JSON.stringify(rootHashesBefore) === JSON.stringify(rootHashesAfter);
+const killed =
+  records.filter((record) => record.classification === "KILLED").length;
+const survived =
+  records.filter((record) => record.classification === "SURVIVED").length;
+const invalid =
+  records.filter((record) => record.classification === "INVALID_MUTATION")
+    .length;
+const infraErrors =
+  records.filter((record) => record.classification === "INFRA_ERROR").length;
 const result = {
   control,
   controlPass: true,
