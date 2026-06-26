@@ -4,6 +4,7 @@ import {
   executeCanonicalPointerRepair,
   type JsonObject,
   REPAIR_CONFIRMATION,
+  type RepairPlan,
 } from "../supabase/functions/_shared/cmsCanonicalPointerRepair.ts";
 import {
   buildReleasePointer,
@@ -36,6 +37,26 @@ function assertIncludes(values: string[], expected: string, message: string) {
   }
 }
 
+type TestEnv = {
+  sourcePath: string;
+  sourceText: string;
+  sourceHash: string;
+  sourceAuditLogId: string;
+  publishedVersion: string;
+  auditRow: JsonObject;
+  storage: Map<string, string>;
+  calls: string[];
+  writes: string[];
+  transitions: string[];
+  finalized: string[];
+  terminalAudits: string[];
+  plan: RepairPlan | null;
+};
+
+type TestEnvWithAdapters = TestEnv & {
+  adapters: CanonicalPointerRepairAdapters;
+};
+
 type EnvOptions = {
   pointer?: "missing" | "valid" | "different" | "invalid";
   readFailedPaths?: string[];
@@ -48,10 +69,10 @@ type EnvOptions = {
   acquireFails?: boolean;
   transitionFailsAt?: string;
   terminalAuditFails?: boolean;
-  afterAcquire?: (env: any) => void | Promise<void>;
+  afterAcquire?: (env: TestEnv) => void | Promise<void>;
 };
 
-async function createEnv(options: EnvOptions = {}) {
+async function createEnv(options: EnvOptions = {}): Promise<TestEnvWithAdapters> {
   const sourcePath = "published/versions/source.json";
   const sourceObject = {
     source: "cms-admin-draft",
@@ -91,7 +112,7 @@ async function createEnv(options: EnvOptions = {}) {
   const transitions: string[] = [];
   const finalized: string[] = [];
   const terminalAudits: string[] = [];
-  const env = {
+  const env: TestEnv = {
     sourcePath,
     sourceText,
     sourceHash,
@@ -114,45 +135,51 @@ async function createEnv(options: EnvOptions = {}) {
   const writeFailedPaths = new Set(options.writeFailedPaths || []);
 
   const adapters: CanonicalPointerRepairAdapters = {
-    async inspectLineageGate() {
+    inspectLineageGate() {
       calls.push("inspectLineageGate");
-      return { classification: "clean", repairable: false };
+      return Promise.resolve({ classification: "clean", repairable: false });
     },
-    async getActiveOperation() {
+    getActiveOperation() {
       calls.push("getActiveOperation");
-      return { operation: null };
+      return Promise.resolve({ operation: null });
     },
-    async readSourceAuditLog(id: string) {
+    readSourceAuditLog(id: string) {
       calls.push("readSourceAuditLog");
       if (options.auditReadFailed) {
-        return { kind: "read_failed", error: "database outage" };
+        return Promise.resolve({ kind: "read_failed", error: "database outage" });
       }
       if (options.auditMissing || id !== sourceAuditLogId) {
-        return { kind: "missing", error: "not found" };
+        return Promise.resolve({ kind: "missing", error: "not found" });
       }
-      return { kind: "found", row: auditRow };
+      return Promise.resolve({ kind: "found", row: auditRow });
     },
-    async readTextObject(path: string) {
+    readTextObject(path: string) {
       calls.push(`read:${path}`);
       if (readFailedPaths.has(path)) {
-        return { kind: "read_failed", error: `read failed ${path}` };
+        return Promise.resolve({
+          kind: "read_failed",
+          error: `read failed ${path}`,
+        });
       }
       if (missingPaths.has(path) || !storage.has(path)) {
-        return { kind: "missing", error: `missing ${path}` };
+        return Promise.resolve({ kind: "missing", error: `missing ${path}` });
       }
-      return { kind: "found", text: storage.get(path) || "" };
+      return Promise.resolve({ kind: "found", text: storage.get(path) || "" });
     },
-    async writeTextObject(path: string, text: string) {
+    writeTextObject(path: string, text: string) {
       calls.push(`write:${path}`);
       writes.push(path);
       if (writeFailedPaths.has(path)) {
-        return { kind: "write_failed", error: `write failed ${path}` };
+        return Promise.resolve({
+          kind: "write_failed",
+          error: `write failed ${path}`,
+        });
       }
       if (writeConflictPaths.has(path) || storage.has(path)) {
-        return { kind: "conflict", error: `conflict ${path}` };
+        return Promise.resolve({ kind: "conflict", error: `conflict ${path}` });
       }
       storage.set(path, text);
-      return { kind: "written" };
+      return Promise.resolve({ kind: "written" });
     },
     async acquireOperation(input: JsonObject) {
       calls.push("acquireOperation");
@@ -180,7 +207,7 @@ async function createEnv(options: EnvOptions = {}) {
         resolvedAt: "",
       };
     },
-    async transitionOperation(input) {
+    transitionOperation(input) {
       calls.push(
         `transition:${String(input.patch.phase || input.patch.state || "")}`,
       );
@@ -190,7 +217,7 @@ async function createEnv(options: EnvOptions = {}) {
         String(input.patch.phase || input.patch.state || "") ===
           options.transitionFailsAt
       ) throw new Error("transition runtime failure");
-      return {
+      return Promise.resolve({
         id: input.operationId,
         lockKey: "cms-public-current-release",
         operationType: "publish",
@@ -209,30 +236,30 @@ async function createEnv(options: EnvOptions = {}) {
         createdAt: "2026-06-21T19:40:52.000Z",
         updatedAt: "2026-06-21T19:40:52.000Z",
         resolvedAt: String(input.patch.resolvedAt || ""),
-      };
+      });
     },
-    async finalizeOperationFailure(input) {
+    finalizeOperationFailure(input) {
       calls.push("finalizeOperationFailure");
       finalized.push(input.operationId);
-      return { operation: null, finalState: "failed_before_pointer" };
+      return Promise.resolve({ operation: null, finalState: "failed_before_pointer" });
     },
-    async persistTerminalAudit() {
+    persistTerminalAudit() {
       calls.push("persistTerminalAudit");
       terminalAudits.push("terminal");
-      return options.terminalAuditFails
+      return Promise.resolve(options.terminalAuditFails
         ? {
           persisted: false,
           auditLogState: "missing_or_unknown",
           warning: "audit failed",
         }
-        : { persisted: true, auditLogState: "present", id: "audit-1" };
+        : { persisted: true, auditLogState: "present", id: "audit-1" });
     },
-    async persistOperationContextPatch() {
+    persistOperationContextPatch() {
       calls.push("persistOperationContextPatch");
-      return {};
+      return Promise.resolve({});
     },
     nowIso: () => "2026-06-21T19:40:52.000Z",
-    sleep: async () => {},
+    sleep: () => Promise.resolve(),
   };
   env.plan = await createCanonicalPointerRepairPlan(adapters, {
     sourceAuditLogId,
@@ -265,10 +292,10 @@ async function createEnv(options: EnvOptions = {}) {
   } else if (options.pointer === "invalid") {
     storage.set(POINTER_PATH, '{"schemaVersion":1,"releaseId":"bad"}');
   }
-  return { ...env, adapters };
+  return Object.assign(env, { adapters });
 }
 
-async function dryRun(env: Awaited<ReturnType<typeof createEnv>>) {
+async function dryRun(env: TestEnvWithAdapters) {
   return await executeCanonicalPointerRepair({
     mode: "repair-pointer",
     dryRun: true,
@@ -280,7 +307,7 @@ async function dryRun(env: Awaited<ReturnType<typeof createEnv>>) {
   }, env.adapters);
 }
 async function apply(
-  env: Awaited<ReturnType<typeof createEnv>>,
+  env: TestEnvWithAdapters,
   planHash = env.plan?.planHash || "",
 ) {
   return await executeCanonicalPointerRepair({
@@ -451,20 +478,20 @@ Deno.test("acquire runtime failure returns 500 and zero writes", async () => {
 Deno.test("post-lock source and alias drift return 409 with zero storage writes and finalize operation", async () => {
   for (
     const [name, hook] of [
-      ["source", async (env: any) =>
+      ["source", (env: TestEnv) =>
         env.storage.set(
           env.sourcePath,
           canonicalJsonStringify({ changed: true }),
         )],
-      ["alias", async (env: any) =>
+      ["alias", (env: TestEnv) =>
         env.storage.set(
           LEGACY_LATEST_PATH,
           canonicalJsonStringify({ changed: true }),
         )],
-      ["audit", async (env: any) => {
+      ["audit", (env: TestEnv) => {
         env.auditRow.hash_after = "a".repeat(64);
       }],
-    ] as const
+    ] as Array<[string, (env: TestEnv) => void | Promise<void>]>
   ) {
     const env = await createEnv({ afterAcquire: hook });
     const result = await apply(env);
