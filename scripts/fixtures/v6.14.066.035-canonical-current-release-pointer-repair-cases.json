@@ -1,0 +1,217 @@
+{
+  "version": "v6.14.066.035",
+  "requiredCaseIds": [
+    "STATUS_VALID_POINTER_IDLE",
+    "STATUS_MISSING_POINTER_REPAIRABLE",
+    "STATUS_POINTER_INVALID_FAIL_CLOSED",
+    "DRY_RUN_EXACT_SOURCE_ZERO_WRITE",
+    "DRY_RUN_SOURCE_AUDIT_MISSING_FAIL",
+    "DRY_RUN_SOURCE_PATH_MISMATCH_FAIL",
+    "DRY_RUN_SOURCE_HASH_MISMATCH_FAIL",
+    "DRY_RUN_ALIAS_MISMATCH_FAIL",
+    "DRY_RUN_INVALID_JSON_FAIL",
+    "APPLY_MISSING_CONFIRMATION_FAIL",
+    "APPLY_PLAN_HASH_MISMATCH_FAIL",
+    "APPLY_POINTER_OTHER_RELEASE_FAIL",
+    "APPLY_CANONICAL_OBJECT_SAME_BYTES_REUSE",
+    "APPLY_CANONICAL_OBJECT_DIFFERENT_BYTES_CONFLICT",
+    "APPLY_HAPPY_PATH_POINTER_VERIFIED_AUDITED",
+    "APPLY_RETRY_ALREADY_REPAIRED_NO_DUPLICATE",
+    "APPLY_POINTER_WRITE_FAILURE_NO_SUCCESS_AUDIT",
+    "APPLY_POINTER_VERIFY_FAILURE_POINTER_UNKNOWN",
+    "APPLY_TERMINAL_AUDIT_FAILURE_LINEAGE_REPAIR_REQUIRED",
+    "UNAUTHENTICATED_401",
+    "NON_ADMIN_403",
+    "OPTIONS_200",
+    "REPAIR_LINEAGE_CONTRACT_NO_REGRESSION",
+    "PUBLISH_BUILDER_PARITY_NO_REGRESSION",
+    "ROLLBACK_CONTRACT_NO_REGRESSION"
+  ],
+  "cases": [
+    {
+      "id": "STATUS_VALID_POINTER_IDLE",
+      "mode": "status",
+      "pointerState": "valid",
+      "expectedClassification": "idle",
+      "expectedWrites": false
+    },
+    {
+      "id": "STATUS_MISSING_POINTER_REPAIRABLE",
+      "mode": "status",
+      "pointerState": "missing",
+      "expectedClassification": "canonical_pointer_missing",
+      "expectedCode": "CANONICAL_CURRENT_RELEASE_POINTER_MISSING",
+      "expectedBlocked": true,
+      "expectedRepairable": true,
+      "expectedWrites": false
+    },
+    {
+      "id": "STATUS_POINTER_INVALID_FAIL_CLOSED",
+      "mode": "status",
+      "pointerState": "invalid",
+      "expectedClassification": "canonical_pointer_invalid",
+      "expectedBlocked": true,
+      "expectedRepairable": false,
+      "expectedWrites": false
+    },
+    {
+      "id": "DRY_RUN_EXACT_SOURCE_ZERO_WRITE",
+      "mode": "repair-pointer",
+      "dryRun": true,
+      "sourceState": "exact",
+      "expectedClassification": "canonical_pointer_repair_dry_run",
+      "expectedWrites": false
+    },
+    {
+      "id": "DRY_RUN_SOURCE_AUDIT_MISSING_FAIL",
+      "mode": "repair-pointer",
+      "dryRun": true,
+      "sourceState": "audit_missing",
+      "expectedClassification": "source_audit_not_found",
+      "expectedWrites": false
+    },
+    {
+      "id": "DRY_RUN_SOURCE_PATH_MISMATCH_FAIL",
+      "mode": "repair-pointer",
+      "dryRun": true,
+      "sourceState": "path_mismatch",
+      "expectedClassification": "source_path_mismatch",
+      "expectedWrites": false
+    },
+    {
+      "id": "DRY_RUN_SOURCE_HASH_MISMATCH_FAIL",
+      "mode": "repair-pointer",
+      "dryRun": true,
+      "sourceState": "hash_mismatch",
+      "expectedClassification": "source_hash_mismatch",
+      "expectedWrites": false
+    },
+    {
+      "id": "DRY_RUN_ALIAS_MISMATCH_FAIL",
+      "mode": "repair-pointer",
+      "dryRun": true,
+      "sourceState": "alias_mismatch",
+      "expectedClassification": "active_alias_mismatch",
+      "expectedWrites": false
+    },
+    {
+      "id": "DRY_RUN_INVALID_JSON_FAIL",
+      "mode": "repair-pointer",
+      "dryRun": true,
+      "sourceState": "invalid_json",
+      "expectedClassification": "source_json_invalid",
+      "expectedWrites": false
+    },
+    {
+      "id": "APPLY_MISSING_CONFIRMATION_FAIL",
+      "mode": "repair-pointer",
+      "dryRun": false,
+      "applyState": "missing_confirmation",
+      "expectedClassification": "repair_confirmation_required",
+      "expectedWrites": false
+    },
+    {
+      "id": "APPLY_PLAN_HASH_MISMATCH_FAIL",
+      "mode": "repair-pointer",
+      "dryRun": false,
+      "applyState": "plan_hash_mismatch",
+      "expectedClassification": "repair_plan_hash_mismatch",
+      "expectedWrites": false
+    },
+    {
+      "id": "APPLY_POINTER_OTHER_RELEASE_FAIL",
+      "mode": "repair-pointer",
+      "dryRun": false,
+      "applyState": "pointer_other_release",
+      "expectedClassification": "canonical_pointer_conflict",
+      "expectedWrites": false
+    },
+    {
+      "id": "APPLY_CANONICAL_OBJECT_SAME_BYTES_REUSE",
+      "mode": "repair-pointer",
+      "dryRun": false,
+      "applyState": "canonical_same_bytes",
+      "expectedClassification": "canonical_pointer_repaired",
+      "expectedCanonicalReuseAllowed": true
+    },
+    {
+      "id": "APPLY_CANONICAL_OBJECT_DIFFERENT_BYTES_CONFLICT",
+      "mode": "repair-pointer",
+      "dryRun": false,
+      "applyState": "canonical_different_bytes",
+      "expectedClassification": "storage_write_failed",
+      "expectedWrites": false
+    },
+    {
+      "id": "APPLY_HAPPY_PATH_POINTER_VERIFIED_AUDITED",
+      "mode": "repair-pointer",
+      "dryRun": false,
+      "applyState": "happy_path",
+      "expectedClassification": "canonical_pointer_repaired",
+      "expectedOperationPhase": "pointer_verified",
+      "expectedAudit": true
+    },
+    {
+      "id": "APPLY_RETRY_ALREADY_REPAIRED_NO_DUPLICATE",
+      "mode": "repair-pointer",
+      "dryRun": false,
+      "applyState": "already_repaired",
+      "expectedClassification": "already_repaired",
+      "expectedDuplicateAudit": false
+    },
+    {
+      "id": "APPLY_POINTER_WRITE_FAILURE_NO_SUCCESS_AUDIT",
+      "mode": "repair-pointer",
+      "dryRun": false,
+      "applyState": "pointer_write_failure",
+      "expectedSuccessAudit": false,
+      "expectedClassification": "storage_write_failed"
+    },
+    {
+      "id": "APPLY_POINTER_VERIFY_FAILURE_POINTER_UNKNOWN",
+      "mode": "repair-pointer",
+      "dryRun": false,
+      "applyState": "pointer_verify_failure",
+      "expectedFinalState": "pointer_unknown",
+      "expectedSuccessAudit": false,
+      "expectedClassification": "repair_pointer_verify_failed"
+    },
+    {
+      "id": "APPLY_TERMINAL_AUDIT_FAILURE_LINEAGE_REPAIR_REQUIRED",
+      "mode": "repair-pointer",
+      "dryRun": false,
+      "applyState": "terminal_audit_failure",
+      "expectedClassification": "lineage_repair_required"
+    },
+    {
+      "id": "UNAUTHENTICATED_401",
+      "authState": "missing",
+      "expectedStatus": 401
+    },
+    {
+      "id": "NON_ADMIN_403",
+      "authState": "non_admin",
+      "expectedStatus": 403
+    },
+    {
+      "id": "OPTIONS_200",
+      "method": "OPTIONS",
+      "expectedStatus": 200
+    },
+    {
+      "id": "REPAIR_LINEAGE_CONTRACT_NO_REGRESSION",
+      "mode": "repair-lineage",
+      "expectedUnchanged": true
+    },
+    {
+      "id": "PUBLISH_BUILDER_PARITY_NO_REGRESSION",
+      "target": "publish-cms-json",
+      "expectedSharedBuilder": true
+    },
+    {
+      "id": "ROLLBACK_CONTRACT_NO_REGRESSION",
+      "target": "rollback-cms-json",
+      "expectedUnchanged": true
+    }
+  ]
+}
