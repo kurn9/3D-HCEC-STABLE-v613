@@ -10,7 +10,7 @@ const root = process.argv.find((arg) => arg.startsWith("--root="))?.slice(
 ) || process.cwd();
 const moduleRel = "supabase/functions/_shared/cmsCanonicalPointerRepair.ts";
 const testRel = "scripts/test-036-1.ts";
-const denoArgs = ["test", "--frozen", testRel];
+const denoArgs = ["test", "--frozen", "--node-modules-dir=auto", testRel];
 const runTimeoutMs = Number(
   process.argv.find((arg) => arg.startsWith("--timeout-ms="))?.slice(
     "--timeout-ms=".length,
@@ -233,6 +233,7 @@ function hasInfraSignature(run) {
       run.signal === "SIGTERM" ||
       text.includes("lockfile is out of date") ||
       text.includes("could not find a matching package") ||
+      text.includes("node_modules directory") ||
       text.includes("module not found") ||
       text.includes("cannot resolve") ||
       text.includes("failed to resolve") ||
