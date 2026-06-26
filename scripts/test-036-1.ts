@@ -713,18 +713,23 @@ Deno.test("retry already repaired does not duplicate writes or terminal audit", 
 });
 
 Deno.test("runtime failure responses never contain ok true", async () => {
-  for (
-    const options of [
-      { readFailedPaths: [POINTER_PATH] },
-      { auditReadFailed: true },
-      { acquireFails: true },
-    ] as EnvOptions[]
-  ) {
-    const env = await createEnv(options);
-    const result = await (options.readFailedPaths
-      ? executeCanonicalPointerRepair({ mode: "status" }, env.adapters)
-      : apply(env));
-    assertEquals(result.status, 500, "runtime status");
-    assertEquals(result.body.ok, false, "runtime ok false");
-  }
+  const pointerReadFailure = await createEnv({
+    readFailedPaths: [POINTER_PATH],
+  });
+  const pointerStatusResult = await executeCanonicalPointerRepair(
+    { mode: "status" },
+    pointerReadFailure.adapters,
+  );
+  assertEquals(pointerStatusResult.status, 500, "pointer status read failure");
+  assertEquals(pointerStatusResult.body.ok, false, "pointer status ok false");
+
+  const auditReadFailure = await createEnv({ auditReadFailed: true });
+  const auditDryRunResult = await dryRun(auditReadFailure);
+  assertEquals(auditDryRunResult.status, 500, "audit read failure");
+  assertEquals(auditDryRunResult.body.ok, false, "audit ok false");
+
+  const acquireFailure = await createEnv({ acquireFails: true });
+  const acquireResult = await apply(acquireFailure);
+  assertEquals(acquireResult.status, 500, "acquire failure");
+  assertEquals(acquireResult.body.ok, false, "acquire ok false");
 });
