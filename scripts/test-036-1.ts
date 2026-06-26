@@ -532,31 +532,53 @@ Deno.test("immutable existing read failures return 500 for canonical and legacy 
   canonical.storage.set(canonical.plan!.contentPath, "different");
   (canonical.adapters as unknown as {
     readTextObject: (path: string) => Promise<unknown>;
-  }).readTextObject = async (path: string) => {
+  }).readTextObject = (path: string) => {
     canonical.calls.push(`read:${path}`);
     if (path === canonical.plan!.contentPath) {
-      return { kind: "read_failed", error: "read existing failed" };
+      return Promise.resolve({
+        kind: "read_failed",
+        error: "read existing failed",
+      });
     }
     if (!canonical.storage.has(path)) {
-      return { kind: "missing", error: "missing" };
+      return Promise.resolve({ kind: "missing", error: "missing" });
     }
-    return { kind: "found", text: canonical.storage.get(path) || "" };
+    return Promise.resolve({
+      kind: "found",
+      text: canonical.storage.get(path) || "",
+    });
   };
-  assertEquals((await apply(canonical)).status, 500, "canonical read failure");
+  assertEquals(
+    (await apply(canonical)).status,
+    500,
+    "canonical read failure",
+  );
 
   const legacy = await createEnv();
   legacy.storage.set(legacy.plan!.legacyVersionPath, "different");
   (legacy.adapters as unknown as {
     readTextObject: (path: string) => Promise<unknown>;
-  }).readTextObject = async (path: string) => {
+  }).readTextObject = (path: string) => {
     legacy.calls.push(`read:${path}`);
     if (path === legacy.plan!.legacyVersionPath) {
-      return { kind: "read_failed", error: "read legacy failed" };
+      return Promise.resolve({
+        kind: "read_failed",
+        error: "read legacy failed",
+      });
     }
-    if (!legacy.storage.has(path)) return { kind: "missing", error: "missing" };
-    return { kind: "found", text: legacy.storage.get(path) || "" };
+    if (!legacy.storage.has(path)) {
+      return Promise.resolve({ kind: "missing", error: "missing" });
+    }
+    return Promise.resolve({
+      kind: "found",
+      text: legacy.storage.get(path) || "",
+    });
   };
-  assertEquals((await apply(legacy)).status, 500, "legacy read failure");
+  assertEquals(
+    (await apply(legacy)).status,
+    500,
+    "legacy read failure",
+  );
 });
 
 Deno.test("pointer race and pointer write recovery classify conflicts and read failures correctly", async () => {
