@@ -1,6 +1,5 @@
 import {
   type CanonicalPointerRepairAdapters,
-  type ReadTextResult,
   createCanonicalPointerRepairPlan,
   executeCanonicalPointerRepair,
   type JsonObject,
@@ -37,22 +36,6 @@ function assertIncludes(values: string[], expected: string, message: string) {
   }
 }
 
-type TestEnv = {
-  sourcePath: string;
-  sourceText: string;
-  sourceHash: string;
-  sourceAuditLogId: string;
-  publishedVersion: string;
-  auditRow: JsonObject;
-  storage: Map<string, string>;
-  calls: string[];
-  writes: string[];
-  transitions: string[];
-  finalized: string[];
-  terminalAudits: string[];
-  plan: null | Awaited<ReturnType<typeof createCanonicalPointerRepairPlan>>;
-};
-
 type EnvOptions = {
   pointer?: "missing" | "valid" | "different" | "invalid";
   readFailedPaths?: string[];
@@ -65,7 +48,7 @@ type EnvOptions = {
   acquireFails?: boolean;
   transitionFailsAt?: string;
   terminalAuditFails?: boolean;
-  afterAcquire?: (env: TestEnv) => void | Promise<void>;
+  afterAcquire?: (env: any) => void | Promise<void>;
 };
 
 async function createEnv(options: EnvOptions = {}) {
@@ -131,45 +114,45 @@ async function createEnv(options: EnvOptions = {}) {
   const writeFailedPaths = new Set(options.writeFailedPaths || []);
 
   const adapters: CanonicalPointerRepairAdapters = {
-    inspectLineageGate() {
+    async inspectLineageGate() {
       calls.push("inspectLineageGate");
-      return Promise.resolve({ classification: "clean", repairable: false });
+      return { classification: "clean", repairable: false };
     },
-    getActiveOperation() {
+    async getActiveOperation() {
       calls.push("getActiveOperation");
-      return Promise.resolve({ operation: null });
+      return { operation: null };
     },
-    readSourceAuditLog(id: string) {
+    async readSourceAuditLog(id: string) {
       calls.push("readSourceAuditLog");
       if (options.auditReadFailed) {
-        return Promise.resolve({ kind: "read_failed", error: "database outage" });
+        return { kind: "read_failed", error: "database outage" };
       }
       if (options.auditMissing || id !== sourceAuditLogId) {
-        return Promise.resolve({ kind: "missing", error: "not found" });
+        return { kind: "missing", error: "not found" };
       }
-      return Promise.resolve({ kind: "found", row: auditRow });
+      return { kind: "found", row: auditRow };
     },
-    readTextObject(path: string) {
+    async readTextObject(path: string) {
       calls.push(`read:${path}`);
       if (readFailedPaths.has(path)) {
-        return Promise.resolve({ kind: "read_failed", error: `read failed ${path}` });
+        return { kind: "read_failed", error: `read failed ${path}` };
       }
       if (missingPaths.has(path) || !storage.has(path)) {
-        return Promise.resolve({ kind: "missing", error: `missing ${path}` });
+        return { kind: "missing", error: `missing ${path}` };
       }
-      return Promise.resolve({ kind: "found", text: storage.get(path) || "" });
+      return { kind: "found", text: storage.get(path) || "" };
     },
-    writeTextObject(path: string, text: string) {
+    async writeTextObject(path: string, text: string) {
       calls.push(`write:${path}`);
       writes.push(path);
       if (writeFailedPaths.has(path)) {
-        return Promise.resolve({ kind: "write_failed", error: `write failed ${path}` });
+        return { kind: "write_failed", error: `write failed ${path}` };
       }
       if (writeConflictPaths.has(path) || storage.has(path)) {
-        return Promise.resolve({ kind: "conflict", error: `conflict ${path}` });
+        return { kind: "conflict", error: `conflict ${path}` };
       }
       storage.set(path, text);
-      return Promise.resolve({ kind: "written" });
+      return { kind: "written" };
     },
     async acquireOperation(input: JsonObject) {
       calls.push("acquireOperation");
@@ -197,7 +180,7 @@ async function createEnv(options: EnvOptions = {}) {
         resolvedAt: "",
       };
     },
-    transitionOperation(input) {
+    async transitionOperation(input) {
       calls.push(
         `transition:${String(input.patch.phase || input.patch.state || "")}`,
       );
@@ -207,7 +190,7 @@ async function createEnv(options: EnvOptions = {}) {
         String(input.patch.phase || input.patch.state || "") ===
           options.transitionFailsAt
       ) throw new Error("transition runtime failure");
-      return Promise.resolve({
+      return {
         id: input.operationId,
         lockKey: "cms-public-current-release",
         operationType: "publish",
@@ -226,30 +209,30 @@ async function createEnv(options: EnvOptions = {}) {
         createdAt: "2026-06-21T19:40:52.000Z",
         updatedAt: "2026-06-21T19:40:52.000Z",
         resolvedAt: String(input.patch.resolvedAt || ""),
-      });
+      };
     },
-    finalizeOperationFailure(input) {
+    async finalizeOperationFailure(input) {
       calls.push("finalizeOperationFailure");
       finalized.push(input.operationId);
-      return Promise.resolve({ operation: null, finalState: "failed_before_pointer" });
+      return { operation: null, finalState: "failed_before_pointer" };
     },
-    persistTerminalAudit() {
+    async persistTerminalAudit() {
       calls.push("persistTerminalAudit");
       terminalAudits.push("terminal");
-      return Promise.resolve(options.terminalAuditFails
+      return options.terminalAuditFails
         ? {
           persisted: false,
           auditLogState: "missing_or_unknown",
           warning: "audit failed",
         }
-        : { persisted: true, auditLogState: "present", id: "audit-1" });
+        : { persisted: true, auditLogState: "present", id: "audit-1" };
     },
-    persistOperationContextPatch() {
+    async persistOperationContextPatch() {
       calls.push("persistOperationContextPatch");
-      return Promise.resolve({});
+      return {};
     },
     nowIso: () => "2026-06-21T19:40:52.000Z",
-    sleep: () => Promise.resolve(),
+    sleep: async () => {},
   };
   env.plan = await createCanonicalPointerRepairPlan(adapters, {
     sourceAuditLogId,
@@ -468,17 +451,17 @@ Deno.test("acquire runtime failure returns 500 and zero writes", async () => {
 Deno.test("post-lock source and alias drift return 409 with zero storage writes and finalize operation", async () => {
   for (
     const [name, hook] of [
-      ["source", (env: TestEnv) =>
+      ["source", async (env: any) =>
         env.storage.set(
           env.sourcePath,
           canonicalJsonStringify({ changed: true }),
         )],
-      ["alias", (env: TestEnv) =>
+      ["alias", async (env: any) =>
         env.storage.set(
           LEGACY_LATEST_PATH,
           canonicalJsonStringify({ changed: true }),
         )],
-      ["audit", (env: TestEnv) => {
+      ["audit", async (env: any) => {
         env.auditRow.hash_after = "a".repeat(64);
       }],
     ] as const
@@ -520,29 +503,31 @@ Deno.test("immutable exact reuse passes and different bytes return 409", async (
 Deno.test("immutable existing read failures return 500 for canonical and legacy objects", async () => {
   const canonical = await createEnv({ readFailedPaths: [] });
   canonical.storage.set(canonical.plan!.contentPath, "different");
-  canonical.adapters.readTextObject = (path: string): Promise<ReadTextResult> => {
+  (canonical.adapters as unknown as {
+    readTextObject: (path: string) => Promise<unknown>;
+  }).readTextObject = async (path: string) => {
     canonical.calls.push(`read:${path}`);
     if (path === canonical.plan!.contentPath) {
-      return Promise.resolve({ kind: "read_failed", error: "read existing failed" });
+      return { kind: "read_failed", error: "read existing failed" };
     }
     if (!canonical.storage.has(path)) {
-      return Promise.resolve({ kind: "missing", error: "missing" });
+      return { kind: "missing", error: "missing" };
     }
-    return Promise.resolve({ kind: "found", text: canonical.storage.get(path) || "" });
+    return { kind: "found", text: canonical.storage.get(path) || "" };
   };
   assertEquals((await apply(canonical)).status, 500, "canonical read failure");
 
   const legacy = await createEnv();
   legacy.storage.set(legacy.plan!.legacyVersionPath, "different");
-  legacy.adapters.readTextObject = (path: string): Promise<ReadTextResult> => {
+  (legacy.adapters as unknown as {
+    readTextObject: (path: string) => Promise<unknown>;
+  }).readTextObject = async (path: string) => {
     legacy.calls.push(`read:${path}`);
     if (path === legacy.plan!.legacyVersionPath) {
-      return Promise.resolve({ kind: "read_failed", error: "read legacy failed" });
+      return { kind: "read_failed", error: "read legacy failed" };
     }
-    if (!legacy.storage.has(path)) {
-      return Promise.resolve({ kind: "missing", error: "missing" });
-    }
-    return Promise.resolve({ kind: "found", text: legacy.storage.get(path) || "" });
+    if (!legacy.storage.has(path)) return { kind: "missing", error: "missing" };
+    return { kind: "found", text: legacy.storage.get(path) || "" };
   };
   assertEquals((await apply(legacy)).status, 500, "legacy read failure");
 });

@@ -37,7 +37,7 @@ const test = read(testRel);
 const fixture = JSON.parse(read(fixtureRel));
 add(
   "HANDLER_IMPORTS_PRODUCTION_EXECUTOR",
-  handler.includes("../_shared/cmsCanonicalPointerRepair.ts"),
+  /from\s+[\"\']\.\.\/_shared\/cmsCanonicalPointerRepair\.ts[\"\']/.test(handler),
   {},
 );
 add(
@@ -62,14 +62,14 @@ add(
 );
 add(
   "PRODUCTION_EXECUTOR_HAS_DISCRIMINATED_READ_RESULT",
-  (/kind:\s*["\']read_failed["\']/.test(executor) &&
-    /kind:\s*["\']missing["\']/.test(executor) &&
-    /kind:\s*["\']found["\']/.test(executor)),
+  /[{;]\s*kind:\s*[\"\']read_failed[\"\']/.test(executor) &&
+    /[{;]\s*kind:\s*[\"\']missing[\"\']/.test(executor) &&
+    /[{;]\s*kind:\s*[\"\']found[\"\']/.test(executor),
   {},
 );
 add(
   "PRODUCTION_EXECUTOR_MAPS_STATUS_READ_FAILED_500",
-  /classification === [\"']read_failed[\"'][\s\S]{0,160}status: 500/.test(executor),
+  /classification\s*===\s*[\"']read_failed[\"'][\s\S]{0,220}status:\s*500/.test(executor),
   {},
 );
 add(
