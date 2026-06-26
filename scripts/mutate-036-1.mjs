@@ -10,6 +10,24 @@ const root = process.argv.find((arg) => arg.startsWith("--root="))?.slice(
 ) || process.cwd();
 const moduleRel = "supabase/functions/_shared/cmsCanonicalPointerRepair.ts";
 const testRel = "scripts/test-036-1.ts";
+const denoArgs = ["test", "--frozen", testRel];
+const runTimeoutMs = Number(
+  process.argv.find((arg) => arg.startsWith("--timeout-ms="))?.slice(
+    "--timeout-ms=".length,
+  ) || 120000,
+);
+
+const requiredTempFiles = [
+  "package.json",
+  "package-lock.json",
+  "deno.lock",
+  "supabase/functions/_shared/cmsCanonicalPointerRepair.ts",
+  "supabase/functions/_shared/cmsReleaseContract.ts",
+  "supabase/functions/_shared/cmsReleaseOperation.ts",
+  "supabase/functions/_shared/cmsReleaseAudit.ts",
+  "scripts/test-036-1.ts",
+];
+const rootHashFiles = [...requiredTempFiles, "scripts/mutate-036-1.mjs"];
 
 const mutations = [
   {
@@ -164,62 +182,254 @@ const mutations = [
 function sha(text) {
   return crypto.createHash("sha256").update(text).digest("hex");
 }
-function copyIntoTemp(tmp) {
-  for (
-    const rel of [
-      "supabase/functions/_shared/cmsCanonicalPointerRepair.ts",
-      "supabase/functions/_shared/cmsReleaseContract.ts",
-      "supabase/functions/_shared/cmsReleaseOperation.ts",
-      "supabase/functions/_shared/cmsReleaseAudit.ts",
-      "scripts/test-036-1.ts",
-    ]
-  ) {
-    const source = path.join(root, rel);
-    const target = path.join(tmp, rel);
-    fs.mkdirSync(path.dirname(target), { recursive: true });
-    fs.copyFileSync(source, target);
+
+function shaFile(rel) {
+  return sha(fs.readFileSync(path.join(root, rel)));
+}
+
+function snapshotRootHashes() {
+  return Object.fromEntries(
+    rootHashFiles.map((rel) => [rel, fs.existsSync(path.join(root, rel)) ? shaFile(rel) : null]),
+  );
+}
+
+function copyFileIntoTemp(tmp, rel) {
+  const source = path.join(root, rel);
+  if (!fs.existsSync(source)) {
+    throw new Error(`Missing required file for mutation temp workspace: ${rel}`);
   }
+  const target = path.join(tmp, rel);
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.copyFileSync(source, target);
+}
+
+function copyIntoTemp(tmp) {
+  for (const rel of requiredTempFiles) copyFileIntoTemp(tmp, rel);
+}
+
+function runDenoTest(cwd) {
+  const deno = spawnSync("deno", denoArgs, {
+    cwd,
+    encoding: "utf8",
+    timeout: runTimeoutMs,
+  });
+  const output = `${deno.stdout || ""}\n${deno.stderr || ""}`;
+  return {
+    status: deno.status,
+    signal: deno.signal,
+    error: deno.error ? String(deno.error.message || deno.error) : null,
+    stdout: deno.stdout || "",
+    stderr: deno.stderr || "",
+    output,
+    outputTail: output.slice(-5000),
+  };
+}
+
+function hasInfraSignature(run) {
+  const text = `${run.error || ""}\n${run.output || ""}`.toLowerCase();
+  return Boolean(
+    run.error ||
+      run.status === null ||
+      run.signal === "SIGTERM" ||
+      text.includes("lockfile is out of date") ||
+      text.includes("could not find a matching package") ||
+      text.includes("module not found") ||
+      text.includes("cannot resolve") ||
+      text.includes("failed to resolve") ||
+      text.includes("no such file") ||
+      text.includes("deno executable not found") ||
+      text.includes("enoent") ||
+      text.includes("permission denied") ||
+      text.includes("timed out") ||
+      text.includes("timeout"),
+  );
+}
+
+function hasBaselinePassOutput(run) {
+  return /21\s+passed/i.test(run.output) && /0\s+failed/i.test(run.output);
+}
+
+function createTemp(prefix) {
+  return fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+}
+
+function cleanupTemp(tmp) {
+  fs.rmSync(tmp, { recursive: true, force: true });
+}
+
+function runControl() {
+  const tmp = createTemp("mutate-036-1-control-");
+  try {
+    copyIntoTemp(tmp);
+    const run = runDenoTest(tmp);
+    const infraError = hasInfraSignature(run);
+    const pass = !infraError && run.status === 0 && hasBaselinePassOutput(run);
+    return {
+      classification: pass ? "BASELINE_VALID" : "BASELINE_INVALID",
+      pass,
+      exitCode: run.status,
+      signal: run.signal,
+      error: run.error,
+      outputTail: run.outputTail,
+      command: ["deno", ...denoArgs].join(" "),
+      infraError,
+      expectedOutput: "21 passed / 0 failed",
+    };
+  } catch (error) {
+    return {
+      classification: "BASELINE_INVALID",
+      pass: false,
+      exitCode: null,
+      signal: null,
+      error: error instanceof Error ? error.message : String(error),
+      outputTail: "",
+      command: ["deno", ...denoArgs].join(" "),
+      infraError: true,
+      expectedOutput: "21 passed / 0 failed",
+    };
+  } finally {
+    cleanupTemp(tmp);
+  }
+}
+
+const rootHashesBefore = snapshotRootHashes();
+const control = runControl();
+
+if (!control.pass) {
+  const rootHashesAfter = snapshotRootHashes();
+  const result = {
+    control,
+    controlPass: false,
+    controlExitCode: control.exitCode,
+    controlOutputTail: control.outputTail,
+    classification: "BASELINE_INVALID",
+    killed: 0,
+    survived: 0,
+    invalid: 0,
+    infraErrors: control.infraError ? 1 : 0,
+    total: 0,
+    records: [],
+    rootHashesBefore,
+    rootHashesAfter,
+    rootHashesStable: JSON.stringify(rootHashesBefore) === JSON.stringify(rootHashesAfter),
+  };
+  console.log(JSON.stringify(result, null, 2));
+  process.exit(1);
 }
 
 const records = [];
 for (const mutation of mutations) {
-  const tmp = fs.mkdtempSync(
-    path.join(os.tmpdir(), `mutate-036-1-${mutation.id}-`),
-  );
-  copyIntoTemp(tmp);
-  const target = path.join(tmp, mutation.file);
-  const before = fs.readFileSync(target, "utf8");
-  const replacementCount = before.split(mutation.search).length - 1;
-  const after = before.replace(mutation.search, mutation.replacement);
-  fs.writeFileSync(target, after);
-  const sourceChanged = sha(before) !== sha(after);
-  const deno = spawnSync("deno", ["test", "--frozen", testRel], {
-    cwd: tmp,
-    encoding: "utf8",
-  });
-  const output = `${deno.stdout}\n${deno.stderr}`;
-  const killed = replacementCount === 1 && sourceChanged && deno.status !== 0;
-  records.push({
-    id: mutation.id,
-    target: mutation.file,
-    replacementCount,
-    expectedReplacementCount: 1,
-    sourceHashBefore: sha(before),
-    sourceHashAfter: sha(after),
-    sourceChanged,
-    exitCode: deno.status,
-    failedAsExpected: killed,
-    outputTail: output.slice(-3000),
-    status: killed ? "KILLED" : "SURVIVED",
-  });
-  fs.rmSync(tmp, { recursive: true, force: true });
+  const tmp = createTemp(`mutate-036-1-${mutation.id}-`);
+  try {
+    copyIntoTemp(tmp);
+    const target = path.join(tmp, mutation.file);
+    if (!fs.existsSync(target)) {
+      records.push({
+        id: mutation.id,
+        target: mutation.file,
+        replacementCount: 0,
+        expectedReplacementCount: 1,
+        sourceHashBefore: null,
+        sourceHashAfter: null,
+        sourceChanged: false,
+        exitCode: null,
+        classification: "INVALID_MUTATION",
+        failedAsExpected: false,
+        outputTail: "Target file missing in temp workspace.",
+        status: "INVALID_MUTATION",
+      });
+      continue;
+    }
+    const before = fs.readFileSync(target, "utf8");
+    const replacementCount = before.split(mutation.search).length - 1;
+    const after = before.replace(mutation.search, mutation.replacement);
+    const sourceHashBefore = sha(before);
+    const sourceHashAfter = sha(after);
+    const sourceChanged = sourceHashBefore !== sourceHashAfter;
+    if (replacementCount !== 1 || !sourceChanged) {
+      records.push({
+        id: mutation.id,
+        target: mutation.file,
+        replacementCount,
+        expectedReplacementCount: 1,
+        sourceHashBefore,
+        sourceHashAfter,
+        sourceChanged,
+        exitCode: null,
+        classification: "INVALID_MUTATION",
+        failedAsExpected: false,
+        outputTail: replacementCount !== 1
+          ? `Expected exactly one replacement, found ${replacementCount}.`
+          : "Mutation did not change source bytes.",
+        status: "INVALID_MUTATION",
+      });
+      continue;
+    }
+    fs.writeFileSync(target, after);
+    const deno = runDenoTest(tmp);
+    const infraError = hasInfraSignature(deno);
+    const classification = infraError
+      ? "INFRA_ERROR"
+      : deno.status === 0
+      ? "SURVIVED"
+      : "KILLED";
+    records.push({
+      id: mutation.id,
+      target: mutation.file,
+      replacementCount,
+      expectedReplacementCount: 1,
+      sourceHashBefore,
+      sourceHashAfter,
+      sourceChanged,
+      exitCode: deno.status,
+      signal: deno.signal,
+      classification,
+      failedAsExpected: classification === "KILLED",
+      outputTail: deno.outputTail,
+      status: classification,
+    });
+  } catch (error) {
+    records.push({
+      id: mutation.id,
+      target: mutation.file,
+      replacementCount: null,
+      expectedReplacementCount: 1,
+      sourceHashBefore: null,
+      sourceHashAfter: null,
+      sourceChanged: false,
+      exitCode: null,
+      classification: "INFRA_ERROR",
+      failedAsExpected: false,
+      outputTail: error instanceof Error ? error.message : String(error),
+      status: "INFRA_ERROR",
+    });
+  } finally {
+    cleanupTemp(tmp);
+  }
 }
-const killed = records.filter((record) => record.status === "KILLED").length;
+
+const rootHashesAfter = snapshotRootHashes();
+const rootHashesStable = JSON.stringify(rootHashesBefore) === JSON.stringify(rootHashesAfter);
+const killed = records.filter((record) => record.classification === "KILLED").length;
+const survived = records.filter((record) => record.classification === "SURVIVED").length;
+const invalid = records.filter((record) => record.classification === "INVALID_MUTATION").length;
+const infraErrors = records.filter((record) => record.classification === "INFRA_ERROR").length;
 const result = {
+  control,
+  controlPass: true,
+  controlExitCode: control.exitCode,
+  controlOutputTail: control.outputTail,
   killed,
-  survived: records.length - killed,
+  survived,
+  invalid,
+  infraErrors,
   total: records.length,
   records,
+  rootHashesBefore,
+  rootHashesAfter,
+  rootHashesStable,
 };
 console.log(JSON.stringify(result, null, 2));
-if (result.survived) process.exit(1);
+const success = rootHashesStable && killed === 10 && survived === 0 &&
+  invalid === 0 && infraErrors === 0 && records.length === 10;
+if (!success) process.exit(1);
