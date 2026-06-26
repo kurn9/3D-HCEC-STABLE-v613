@@ -37,7 +37,9 @@ const test = read(testRel);
 const fixture = JSON.parse(read(fixtureRel));
 add(
   "HANDLER_IMPORTS_PRODUCTION_EXECUTOR",
-  /from\s+[\"\']\.\.\/_shared\/cmsCanonicalPointerRepair\.ts[\"\']/.test(handler),
+  /from\s+[\"\']\.\.\/_shared\/cmsCanonicalPointerRepair\.ts[\"\']/.test(
+    handler,
+  ),
   {},
 );
 add(
@@ -69,7 +71,9 @@ add(
 );
 add(
   "PRODUCTION_EXECUTOR_MAPS_STATUS_READ_FAILED_500",
-  /classification\s*===\s*[\"']read_failed[\"'][\s\S]{0,220}status:\s*500/.test(executor),
+  /classification\s*===\s*[\"']read_failed[\"'][\s\S]{0,220}status:\s*500/.test(
+    executor,
+  ),
   {},
 );
 add(

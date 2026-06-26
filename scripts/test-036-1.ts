@@ -72,7 +72,9 @@ type EnvOptions = {
   afterAcquire?: (env: TestEnv) => void | Promise<void>;
 };
 
-async function createEnv(options: EnvOptions = {}): Promise<TestEnvWithAdapters> {
+async function createEnv(
+  options: EnvOptions = {},
+): Promise<TestEnvWithAdapters> {
   const sourcePath = "published/versions/source.json";
   const sourceObject = {
     source: "cms-admin-draft",
@@ -146,7 +148,10 @@ async function createEnv(options: EnvOptions = {}): Promise<TestEnvWithAdapters>
     readSourceAuditLog(id: string) {
       calls.push("readSourceAuditLog");
       if (options.auditReadFailed) {
-        return Promise.resolve({ kind: "read_failed", error: "database outage" });
+        return Promise.resolve({
+          kind: "read_failed",
+          error: "database outage",
+        });
       }
       if (options.auditMissing || id !== sourceAuditLogId) {
         return Promise.resolve({ kind: "missing", error: "not found" });
@@ -241,18 +246,23 @@ async function createEnv(options: EnvOptions = {}): Promise<TestEnvWithAdapters>
     finalizeOperationFailure(input) {
       calls.push("finalizeOperationFailure");
       finalized.push(input.operationId);
-      return Promise.resolve({ operation: null, finalState: "failed_before_pointer" });
+      return Promise.resolve({
+        operation: null,
+        finalState: "failed_before_pointer",
+      });
     },
     persistTerminalAudit() {
       calls.push("persistTerminalAudit");
       terminalAudits.push("terminal");
-      return Promise.resolve(options.terminalAuditFails
-        ? {
-          persisted: false,
-          auditLogState: "missing_or_unknown",
-          warning: "audit failed",
-        }
-        : { persisted: true, auditLogState: "present", id: "audit-1" });
+      return Promise.resolve(
+        options.terminalAuditFails
+          ? {
+            persisted: false,
+            auditLogState: "missing_or_unknown",
+            warning: "audit failed",
+          }
+          : { persisted: true, auditLogState: "present", id: "audit-1" },
+      );
     },
     persistOperationContextPatch() {
       calls.push("persistOperationContextPatch");
