@@ -407,6 +407,7 @@ Deno.test("dry-run returns ok true and performs zero writes", async () => {
 
 Deno.test("missing confirmation and plan mismatch perform zero writes", async () => {
   const env = await createEnv();
+  const plan = await ensurePlan(env);
   const noConfirm = await executeCanonicalPointerRepair({
     mode: "repair-pointer",
     dryRun: false,
@@ -414,7 +415,7 @@ Deno.test("missing confirmation and plan mismatch perform zero writes", async ()
     sourceVersionPath: env.sourcePath,
     expectedSourceHash: env.sourceHash,
     expectedPublishedVersion: env.publishedVersion,
-    expectedPlanHash: env.plan?.planHash,
+    expectedPlanHash: plan.planHash,
     actorId: "admin-1",
   }, env.adapters);
   assertEquals(noConfirm.status, 400, "confirmation status");
