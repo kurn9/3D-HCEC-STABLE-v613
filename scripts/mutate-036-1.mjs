@@ -197,8 +197,10 @@ const mutations = [
   {
     id: "M013_TREAT_403_AS_MISSING",
     file: moduleRel,
-    search: `return status === 401 || status === 403 || (status !== null && status >= 500) ||`,
-    replacement: `return status === 401 || false && status === 403 || (status !== null && status >= 500) ||`,
+    search: `return status === 401 || status === 403 ||
+      (status !== null && status >= 500) ||`,
+    replacement: `return status === 401 || false && status === 403 ||
+      (status !== null && status >= 500) ||`,
   },
   {
     id: "M014_READ_FAILED_REPAIRABLE_TRUE",

@@ -437,10 +437,22 @@ Deno.test("storage object-not-found shapes classify pointer as missing and zero 
     const [name, error] of [
       [
         "live statusCode string",
-        { statusCode: "404", error: "not_found", message: "Object not found" },
+        {
+          statusCode: "404",
+          error: "not_found",
+          message: "Object not found",
+        },
       ],
+      ["status 404 only", { status: 404 }],
+      ["statusCode string 404 only", { statusCode: "404" }],
       ["numeric status NoSuchKey", { status: 404, code: "NoSuchKey" }],
-      ["thrown object not found", () => { throw new Error("Object not found"); }],
+      ["not_found only", { error: "not_found" }],
+      [
+        "thrown object not found",
+        () => {
+          throw new Error("Object not found");
+        },
+      ],
     ] as const
   ) {
     const { result, uploadCalls } = await statusWithFakeStorageError(error);
@@ -459,13 +471,30 @@ Deno.test("storage permission and runtime failures remain read_failed and zero w
   for (
     const [name, error] of [
       ["forbidden", { statusCode: 403, message: "Forbidden" }],
-      ["network", () => { throw new Error("network failure"); }],
+      [
+        "forbidden with missing markers",
+        {
+          statusCode: 403,
+          error: "not_found",
+          message: "Object not found",
+        },
+      ],
+      [
+        "network",
+        () => {
+          throw new Error("network failure");
+        },
+      ],
     ] as const
   ) {
     const { result, uploadCalls } = await statusWithFakeStorageError(error);
     assertEquals(result.status, 500, `${name} status`);
     assertEquals(result.body.ok, false, `${name} ok false`);
-    assertEquals(result.body.classification, "read_failed", `${name} classification`);
+    assertEquals(
+      result.body.classification,
+      "read_failed",
+      `${name} classification`,
+    );
     assertEquals(result.body.repairable, false, `${name} repairable`);
     assertEquals(uploadCalls.length, 0, `${name} zero writes`);
   }
