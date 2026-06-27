@@ -241,6 +241,7 @@ const EXACT_IDLE_ALLOWED_KEYS = new Set([
   'operationState',
   'blocked',
   'repairable',
+  'pointerHealth',
   'error',
   'code',
   'operationResolved',
