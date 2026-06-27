@@ -4744,14 +4744,30 @@ export async function handlePublishStaticCmsDraft({ dryRun = true, handlers = {}
   });
   handlers.onRerender?.();
 
-  const result = await publishCmsJson(appState.supabase, {
-    draftId: persistedDraft.id,
-    confirmVersion,
-    dryRun,
-    expectedDraftUpdatedAt: persistedDraft.updatedAt,
-    expectedDraftVersion: persistedDraft.version,
-    expectedCandidateHash: dryRun ? '' : normalizeSha256Hash(draftState.publishVerifiedCandidateHash || draftState.publishDryRunResult?.candidateHash || draftState.publishDryRunResult?.plan?.candidateHash || ''),
-  });
+  let result;
+  try {
+    result = await publishCmsJson(appState.supabase, {
+      draftId: persistedDraft.id,
+      confirmVersion,
+      dryRun,
+      expectedDraftUpdatedAt: persistedDraft.updatedAt,
+      expectedDraftVersion: persistedDraft.version,
+      expectedCandidateHash: dryRun ? '' : normalizeSha256Hash(draftState.publishVerifiedCandidateHash || draftState.publishDryRunResult?.candidateHash || draftState.publishDryRunResult?.plan?.candidateHash || ''),
+    });
+  } catch (error) {
+    console.error('[cms-admin] publish flow failed', error);
+    setStaticCmsPublishState({
+      isPublishingCms: false,
+      publishStatus: '',
+      publishError: dryRun
+        ? 'Không thể kiểm tra bản chuẩn bị do lỗi trình duyệt hoặc kết nối. Website chưa thay đổi. Hãy tải lại trạng thái và thử lại.'
+        : 'Không thể đưa bản chuẩn bị lên website do lỗi trình duyệt hoặc kết nối. Website chưa xác nhận thay đổi. Hãy tải lại trạng thái và thử lại.',
+      publishResult: draftState.publishResult,
+      publishDryRunResult: draftState.publishDryRunResult,
+    });
+    handlers.onRerender?.();
+    return;
+  }
 
   if (result.error) {
     const resultCode = result.error?.code || result.data?.code || '';

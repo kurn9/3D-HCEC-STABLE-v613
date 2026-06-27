@@ -779,8 +779,8 @@ export async function publishCmsJson(client, payload = {}) {
     expectedDraftUpdatedAt,
     expectedDraftVersion,
   };
-  const expectedCandidateHash = normalizeOptionalText(payload.expectedCandidateHash).toLowerCase();
-  if (expectedCandidateHash) bodyPayload.expectedCandidateHash = expectedCandidateHash;
+  const expectedCandidateHash = normalizeOptionalText(payload.expectedCandidateHash);
+  if (expectedCandidateHash) bodyPayload.expectedCandidateHash = expectedCandidateHash.toLowerCase();
   const confirmVersion = normalizeOptionalText(payload.confirmVersion);
   if (confirmVersion) {
     bodyPayload.confirmVersion = confirmVersion;
