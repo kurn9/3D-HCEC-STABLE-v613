@@ -567,46 +567,135 @@ async function handlePointerRepairApply() {
 
 async function resolvePointerRepairSourceIdentity() {
   const current = getState();
-  const fromGate = extractPointerRepairSourceIdentity(current.releaseOperationGate?.result);
+  const diagnostics = [];
+  const gateSources = [
+    current.releaseOperationGate?.result,
+    current.releaseOperationGate?.result?.sourceIdentity,
+    current.releaseOperationGate?.result?.pointerRepair,
+    current.releaseOperationGate?.result?.repairPointer,
+    current.releaseOperationGate?.result?.publishLog,
+    current.releaseOperationGate?.result?.sourceAuditLog,
+  ].filter(Boolean);
+  const fromGate = findPointerRepairSourceIdentity(gateSources, {
+    sourceName: 'trạng thái release',
+    allowMissingStatus: true,
+  });
   if (fromGate.ok) return fromGate;
+  diagnostics.push(fromGate);
 
   const existingLogs = safeArray(current.publishHistory?.items);
-  const fromState = findPointerRepairSourceIdentity(existingLogs);
+  const fromState = findPointerRepairSourceIdentity(existingLogs, {
+    sourceName: 'lịch sử công khai đã tải',
+  });
   if (fromState.ok) return fromState;
+  diagnostics.push(fromState);
 
   const result = await listCmsPublishLogs(current.supabase, { limit: 20 });
   if (result.error) {
     return { ok: false, error: `Không đọc được lịch sử công khai để lấy source identity: ${normalizeErrorMessage(result.error)}` };
   }
-  const fromServer = findPointerRepairSourceIdentity(result.data || []);
+  const fromServer = findPointerRepairSourceIdentity(result.data || [], {
+    sourceName: 'cms_publish_logs',
+  });
   if (fromServer.ok) return fromServer;
-  return { ok: false, error: 'Không tìm thấy sourceAuditLogId, sourceVersionPath, expectedSourceHash và expectedPublishedVersion trong lịch sử công khai.' };
+  diagnostics.push(fromServer);
+
+  return { ok: false, error: buildPointerRepairIdentityMissingMessage(diagnostics) };
 }
 
-function findPointerRepairSourceIdentity(logs = []) {
+function findPointerRepairSourceIdentity(logs = [], options = {}) {
+  const diagnostics = createPointerRepairIdentityDiagnostics(options.sourceName || 'cms_publish_logs');
   for (const log of safeArray(logs)) {
-    const status = String(log?.status || '').trim().toLowerCase();
-    if (status && !['published', 'rolled_back'].includes(status)) continue;
-    const identity = extractPointerRepairSourceIdentity({
-      sourceAuditLogId: log?.id,
-      sourceVersionPath: log?.version_path,
-      expectedSourceHash: log?.hash_after,
-      expectedPublishedVersion: log?.published_version,
-    });
-    if (identity.ok) return identity;
+    if (!log || typeof log !== 'object') continue;
+    diagnostics.checked += 1;
+    const eligibility = evaluatePointerRepairLogEligibility(log, options);
+    if (!eligibility.ok) {
+      diagnostics.skipped += 1;
+      if (eligibility.reason) diagnostics.skipReasons.add(eligibility.reason);
+      continue;
+    }
+    const identity = extractPointerRepairSourceIdentity(log);
+    if (identity.ok) {
+      return {
+        ...identity,
+        diagnostics: {
+          sourceName: diagnostics.sourceName,
+          checked: diagnostics.checked,
+        },
+      };
+    }
+    diagnostics.candidates += 1;
+    safeArray(identity.missingFields).forEach((field) => diagnostics.missingFields.add(field));
+    if (identity.invalidPath) diagnostics.invalidPaths += 1;
   }
-  return { ok: false };
+  return finishPointerRepairIdentityDiagnostics(diagnostics);
+}
+
+function evaluatePointerRepairLogEligibility(source = {}, options = {}) {
+  if (options.allowMissingStatus === true && !source.status && !source.operation_type) {
+    return { ok: true };
+  }
+  const status = normalizePointerRepairText(source.status || source.publishStatus || source.publish_status).toLowerCase();
+  if (status && !['published', 'success', 'succeeded', 'completed'].includes(status)) {
+    return { ok: false, reason: `status=${status}` };
+  }
+  const operationType = normalizePointerRepairText(source.operation_type || source.operationType || source.operation).toLowerCase();
+  if (operationType && operationType !== 'publish') {
+    return { ok: false, reason: `operation_type=${operationType}` };
+  }
+  const errorMessage = normalizePointerRepairText(source.error || source.error_message || source.message).toLowerCase();
+  if (/fail|error|cancel|abort/.test(errorMessage)) return { ok: false, reason: 'error_message' };
+  return { ok: true };
 }
 
 function extractPointerRepairSourceIdentity(source = {}) {
-  if (!source || typeof source !== 'object') return { ok: false };
-  const sourceAuditLogId = String(source.sourceAuditLogId || source.source_audit_log_id || '').trim();
-  const sourceVersionPath = String(source.sourceVersionPath || source.source_version_path || source.version_path || '').trim();
-  const expectedSourceHash = String(source.expectedSourceHash || source.expected_source_hash || source.hash_after || source.sourceHash || '').trim().toLowerCase();
-  const expectedPublishedVersion = String(source.expectedPublishedVersion || source.expected_published_version || source.published_version || source.publishedVersion || '').trim();
-  if (!sourceAuditLogId || !sourceVersionPath || !expectedSourceHash || !expectedPublishedVersion) return { ok: false };
-  if (!/^published\/releases\/[0-9a-f-]{36}\/cms_public_content\.json$/i.test(sourceVersionPath)) return { ok: false };
-  if (!/^[a-f0-9]{64}$/i.test(expectedSourceHash)) return { ok: false };
+  if (!source || typeof source !== 'object') return { ok: false, missingFields: ['sourceAuditLogId', 'sourceVersionPath', 'expectedSourceHash', 'expectedPublishedVersion'] };
+  const verifyJson = normalizePointerRepairVerifyJson(source.verify_json || source.verifyJson);
+  const sourceAuditLogId = firstPointerRepairText(
+    source.sourceAuditLogId,
+    source.source_audit_log_id,
+    source.id,
+    verifyJson.sourceAuditLogId,
+    verifyJson.source_audit_log_id,
+  );
+  const sourceVersionPath = firstPointerRepairText(
+    source.sourceVersionPath,
+    source.source_version_path,
+    source.version_path,
+    verifyJson.versionPath,
+    verifyJson.sourceVersionPath,
+    verifyJson.releasePath,
+    verifyJson.latestPath,
+    source.latest_path,
+    source.rollback_to_path,
+  );
+  const expectedSourceHash = firstPointerRepairText(
+    source.expectedSourceHash,
+    source.expected_source_hash,
+    source.hash_after,
+    source.sourceHash,
+    verifyJson.hashAfter,
+    verifyJson.contentHash,
+    verifyJson.sourceHash,
+  ).toLowerCase();
+  let expectedPublishedVersion = firstPointerRepairText(
+    source.expectedPublishedVersion,
+    source.expected_published_version,
+    source.published_version,
+    source.publishedVersion,
+    verifyJson.publishedVersion,
+    verifyJson.expectedPublishedVersion,
+  );
+  if (!expectedPublishedVersion) expectedPublishedVersion = extractPublishedVersionFromPointerRepairPath(sourceVersionPath);
+
+  const missingFields = [];
+  if (!sourceAuditLogId) missingFields.push('sourceAuditLogId');
+  if (!sourceVersionPath) missingFields.push('sourceVersionPath');
+  if (!expectedSourceHash) missingFields.push('expectedSourceHash');
+  if (!expectedPublishedVersion) missingFields.push('expectedPublishedVersion');
+  if (missingFields.length) return { ok: false, missingFields };
+  if (!isPointerRepairSupportedSourcePath(sourceVersionPath)) return { ok: false, missingFields: [], invalidPath: true };
+  if (!/^[a-f0-9]{64}$/i.test(expectedSourceHash)) return { ok: false, missingFields: ['expectedSourceHash'] };
   return {
     ok: true,
     sourceAuditLogId,
@@ -614,6 +703,88 @@ function extractPointerRepairSourceIdentity(source = {}) {
     expectedSourceHash,
     expectedPublishedVersion,
   };
+}
+
+function normalizePointerRepairVerifyJson(value) {
+  if (!value) return {};
+  if (typeof value === 'object') return value;
+  if (typeof value !== 'string') return {};
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch (_error) {
+    return {};
+  }
+}
+
+function firstPointerRepairText(...values) {
+  for (const value of values) {
+    const text = normalizePointerRepairText(value);
+    if (text) return text;
+  }
+  return '';
+}
+
+function normalizePointerRepairText(value) {
+  if (value === null || value === undefined) return '';
+  return String(value).trim();
+}
+
+function isPointerRepairSupportedSourcePath(path = '') {
+  const value = normalizePointerRepairText(path);
+  if (!value) return false;
+  if (value.includes('..') || value.includes('\\') || value.includes('//')) return false;
+  if (/^[a-z][a-z0-9+.-]*:/i.test(value)) return false;
+  if (!value.startsWith('published/')) return false;
+  if (/^published\/releases\/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\/cms_public_content\.json$/i.test(value)) return true;
+  return /^published\/versions\/cms_public_content_[A-Za-z0-9][A-Za-z0-9._-]*\.json$/i.test(value);
+}
+
+function extractPublishedVersionFromPointerRepairPath(path = '') {
+  const match = normalizePointerRepairText(path).match(/^published\/versions\/cms_public_content_([A-Za-z0-9][A-Za-z0-9._-]*)\.json$/i);
+  return match ? match[1] : '';
+}
+
+function createPointerRepairIdentityDiagnostics(sourceName = 'cms_publish_logs') {
+  return {
+    sourceName,
+    checked: 0,
+    skipped: 0,
+    candidates: 0,
+    invalidPaths: 0,
+    missingFields: new Set(),
+    skipReasons: new Set(),
+  };
+}
+
+function finishPointerRepairIdentityDiagnostics(diagnostics) {
+  return {
+    ok: false,
+    sourceName: diagnostics.sourceName,
+    checked: diagnostics.checked,
+    skipped: diagnostics.skipped,
+    candidates: diagnostics.candidates,
+    invalidPaths: diagnostics.invalidPaths,
+    missingFields: Array.from(diagnostics.missingFields),
+    skipReasons: Array.from(diagnostics.skipReasons),
+  };
+}
+
+function buildPointerRepairIdentityMissingMessage(diagnosticsList = []) {
+  const summaries = safeArray(diagnosticsList).filter(Boolean);
+  const checked = summaries.reduce((total, item) => total + (Number(item.checked) || 0), 0);
+  const invalidPaths = summaries.reduce((total, item) => total + (Number(item.invalidPaths) || 0), 0);
+  const missing = new Set(['sourceAuditLogId', 'sourceVersionPath', 'expectedSourceHash', 'expectedPublishedVersion']);
+  summaries.forEach((item) => safeArray(item.missingFields).forEach((field) => missing.add(field)));
+  const skippedReasons = summaries.flatMap((item) => safeArray(item.skipReasons)).slice(0, 4);
+  return [
+    'Không tìm thấy source identity để sửa current_release.json.',
+    `Đã đọc ${checked} bản ghi/trạng thái lịch sử công khai.`,
+    `Thiếu hoặc chưa hợp lệ: ${Array.from(missing).join(', ')}.`,
+    invalidPaths ? `Có ${invalidPaths} bản ghi có version path không thuộc published/releases hoặc published/versions an toàn.` : '',
+    skippedReasons.length ? `Đã bỏ qua bản ghi không đủ điều kiện: ${skippedReasons.join(', ')}.` : '',
+    'Gợi ý: kiểm tra cms_publish_logs fields id, version_path/latest_path, hash_after, published_version và verify_json.',
+  ].filter(Boolean).join(' ');
 }
 
 function renderRuntimeFallbackPanel(error) {
