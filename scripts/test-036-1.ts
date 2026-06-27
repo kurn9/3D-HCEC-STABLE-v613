@@ -1,6 +1,6 @@
 import {
   type CanonicalPointerRepairAdapters,
-  createCanonicalPointerRepairAdapters,
+  createSupabaseCanonicalPointerRepairAdapters,
   createCanonicalPointerRepairPlan,
   executeCanonicalPointerRepair,
   type JsonObject,
