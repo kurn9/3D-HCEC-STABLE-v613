@@ -7400,15 +7400,15 @@ function getPublishCommandNextAction(model = {}) {
   if (!model.hasDraftJson) {
     return {
       state: 'no-content',
-      label: 'Tải nội dung website hiện tại',
-      note: 'Tải nội dung website hiện tại để bắt đầu chuẩn bị bản mới. Thao tác này chỉ đọc dữ liệu.',
+      label: 'Nạp website đang chạy vào bản chuẩn bị mới',
+      note: 'Nạp website đang chạy vào bản chuẩn bị mới. Thao tác này có thể rời bản chuẩn bị đang mở sau khi xác nhận; website chưa thay đổi.',
       kind: 'load-baseline',
     };
   }
   if (!model.hasSavedDraft) {
     return {
       state: 'unsaved-draft',
-      label: 'Lưu thành bản chuẩn bị',
+      label: 'Lưu bản chuẩn bị mới',
       note: 'Lưu nội dung đã tải thành bản chuẩn bị CMS. Website đang hoạt động chưa thay đổi.',
       kind: 'save-new-draft',
     };
@@ -7452,14 +7452,14 @@ function getPublishCommandNextAction(model = {}) {
     if (model.dryRunReady && model.access?.allowed) {
       return {
         state: 'retry-publish',
-        label: 'Thử đưa bản này lên website lại',
+        label: 'Thử đưa bản chuẩn bị lên website lại',
         note: 'Lần công khai trước chưa thành công. Có thể thử lại nếu điều kiện vẫn còn hợp lệ và bạn xác nhận rõ.',
         kind: 'publish-live',
       };
     }
     return {
       state: 'retry-check',
-      label: 'Kiểm tra trước khi đưa lên lại',
+      label: 'Kiểm tra bản chuẩn bị lại',
       note: 'Lần xử lý trước có lỗi. Hãy chạy lại bước kiểm tra trước khi thử công khai.',
       kind: 'dry-run',
     };
@@ -7467,7 +7467,7 @@ function getPublishCommandNextAction(model = {}) {
   if (!model.dryRunReady) {
     return {
       state: 'needs-safety-check',
-      label: 'Kiểm tra trước khi đưa lên',
+      label: 'Kiểm tra bản chuẩn bị',
       note: 'Bước này dùng luồng kiểm tra hiện hữu. Kiểm tra có thể ghi log vận hành nhưng chưa làm website thay đổi.',
       kind: 'dry-run',
     };
@@ -7483,7 +7483,7 @@ function getPublishCommandNextAction(model = {}) {
   }
   return {
     state: 'ready-to-publish',
-    label: 'Đưa bản này lên website',
+    label: 'Đưa bản chuẩn bị lên website',
     note: 'Bước này dùng luồng xác nhận hiện hữu. Website chỉ thay đổi sau khi bạn xác nhận công khai thật.',
     kind: 'publish-live',
   };
@@ -7542,7 +7542,7 @@ function getPublishCommandSteps(model = {}) {
       value: !hasPreparedContent ? 'Chưa đến bước.' : saved ? 'Đã lưu bản chuẩn bị CMS.' : model.hasDirtyDraft ? 'Cần lưu thay đổi.' : 'Cần lưu thành bản chuẩn bị.',
     },
     {
-      label: 'Kiểm tra trước khi đưa lên',
+      label: 'Kiểm tra bản chuẩn bị',
       status: !saved ? 'upcoming' : checked ? 'done' : 'current',
       value: !saved ? 'Chưa đến bước.' : !model.validationOk ? 'Cần sửa nội dung trước.' : model.publishInclusion?.blocksPublish ? 'Cần đối chiếu bản chuẩn bị.' : checked ? 'Đã kiểm tra cho bản hiện tại.' : 'Cần chạy kiểm tra.',
     },

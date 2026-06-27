@@ -327,7 +327,7 @@ export function renderStaticCmsDraftTab(state, handlers = {}) {
     empty.appendChild(renderEmptyState(copy.noBaseline || 'Chưa tải nội dung đang công khai.'));
     empty.appendChild(createElement('p', {
       className: 'cms-admin-help-text',
-      text: 'Bấm “Tải nội dung đang công khai” để lấy nội dung website đang dùng. Thao tác này chỉ mở bản nháp, chưa làm thay đổi website.',
+      text: 'Bấm “Nạp website đang chạy vào bản chuẩn bị mới” khi bạn muốn bắt đầu từ nội dung public hiện tại. Thao tác này sẽ rời bản chuẩn bị đang mở sau khi xác nhận và website chưa thay đổi.',
     }));
     panel.appendChild(empty);
     return panel;
@@ -2664,7 +2664,7 @@ function renderMainLoadActions(draftState = {}, handlers = {}) {
   const actions = createElement('div', { className: 'cms-admin-actions cms-admin-static-actions cms-admin-static-main-load-actions' });
   const loadButton = createElement('button', {
     className: 'cms-admin-button cms-admin-button-secondary',
-    text: draftState.loading ? 'Đang tải...' : 'Tải nội dung đang công khai',
+    text: draftState.loading ? 'Đang nạp website đang chạy...' : 'Nạp website đang chạy vào bản chuẩn bị mới',
     type: 'button',
   });
   loadButton.disabled = Boolean(draftState.loading) || !ADMIN_FEATURE_FLAGS.allowStaticCmsDraftEdit;
@@ -4259,14 +4259,34 @@ function projectGateContentToDraftPatch(gateContent = null, draftGate = {}) {
   setTextIfOwn(nextGate, 'description', gateContent, 'description');
   if (hasOwn(gateContent, 'back_label')) nextGate.backLabel = normalizeTextValue(gateContent.back_label);
   const rooms = coerceObjectValue(gateContent.rooms_json);
-  if (rooms) nextGate.rooms = rooms;
+  if (rooms) nextGate.rooms = mergeGateRoomsPreservingAliases(nextGate.rooms, rooms);
   const editor = coerceObjectValue(gateContent.editor_json);
-  if (editor) nextGate.editor = editor;
+  if (editor) nextGate.editor = mergePlainObjectPreservingUnknown(nextGate.editor, editor);
   return {
     ok: true,
     draftFragment: { gate: cloneJson(draftGate || {}) },
     sourceFragment: { gate: nextGate },
-    technical: 'gate_content -> gate.eyebrow/title/description/backLabel/rooms/editor',
+    technical: 'gate_content -> gate.eyebrow/title/description/backLabel/rooms/editor; room/editor aliases preserved',
+  };
+}
+
+function mergeGateRoomsPreservingAliases(existingRooms = {}, incomingRooms = {}) {
+  const out = isPlainObjectValue(existingRooms) ? cloneJson(existingRooms) : {};
+  Object.keys(incomingRooms || {}).forEach((roomKey) => {
+    const existingRoom = isPlainObjectValue(out[roomKey]) ? out[roomKey] : {};
+    const incomingRoom = isPlainObjectValue(incomingRooms[roomKey]) ? incomingRooms[roomKey] : incomingRooms[roomKey];
+    out[roomKey] = isPlainObjectValue(incomingRoom)
+      ? mergePlainObjectPreservingUnknown(existingRoom, incomingRoom)
+      : incomingRoom;
+  });
+  return out;
+}
+
+function mergePlainObjectPreservingUnknown(existing = {}, incoming = {}) {
+  if (!isPlainObjectValue(incoming)) return cloneJson(incoming || {});
+  return {
+    ...(isPlainObjectValue(existing) ? cloneJson(existing) : {}),
+    ...cloneJson(incoming),
   };
 }
 
@@ -5719,8 +5739,18 @@ async function handleUploadStaticCmsMedia({ input, target = {}, handlers = {} } 
 export async function handleLoadStaticCmsBaseline(handlers = {}) {
   if (!ADMIN_FEATURE_FLAGS.allowStaticCmsDraftEdit) return;
   const currentDraftState = getState().staticCmsDraft || {};
-  if (currentDraftState.currentDraftId) {
-    const ok = window.confirm('Mở lại nội dung website đang chạy sẽ rời bản chuẩn bị hiện tại. Các thay đổi đã lưu vẫn còn trong CMS nhưng sẽ không còn là bản đang mở. Tiếp tục?');
+  const baselineGuard = getPublicBaselineLoadGuard(currentDraftState);
+  if (baselineGuard.blocked) {
+    setStaticCmsDraftState({
+      loadError: baselineGuard.message,
+      exportSuccess: null,
+      draftSaveStatus: currentDraftState.draftSaveStatus || '',
+    });
+    handlers.onRerender?.();
+    return;
+  }
+  if (baselineGuard.needsConfirm) {
+    const ok = window.confirm(baselineGuard.message);
     if (!ok) return;
   }
   setStaticCmsDraftState({ loading: true, loadError: null, exportError: null, exportSuccess: null });
@@ -5735,10 +5765,70 @@ export async function handleLoadStaticCmsBaseline(handlers = {}) {
       sourceUrl: result.url,
       validation,
     });
+    setStaticCmsDraftState({
+      currentDraftId: '',
+      persistedDraftId: '',
+      persistedDraftUpdatedAt: null,
+      persistedDraftVersion: '',
+      publishDryRunResult: null,
+      publishResult: null,
+      publishStatus: '',
+      publishError: null,
+      publishLastVerifiedAt: null,
+      publishVerifiedDraftId: '',
+      publishVerifiedDraftUpdatedAt: null,
+      publishVerifiedDraftVersion: '',
+      publishVerifiedCandidateHash: '',
+      publishVerificationInvalidatedAt: null,
+      publishVerificationInvalidationReason: '',
+      draftSaveStatus: 'Đã nạp website đang chạy thành bản chuẩn bị mới. Website chưa thay đổi. Nếu muốn dùng nội dung này để công khai, hãy lưu bản chuẩn bị trước.',
+      exportSuccess: 'Đã nạp website đang chạy vào bản chuẩn bị mới. Những bản nháp đã lưu không bị xóa.',
+      draftPersistenceError: null,
+    });
   } catch (error) {
     setStaticCmsDraftState({ loading: false, loadError: normalizeErrorMessage(error) });
   }
   handlers.onRerender?.();
+}
+
+function getPublicBaselineLoadGuard(draftState = {}) {
+  if (draftState.isSavingDraft) {
+    return { blocked: true, message: 'Đang lưu bản chuẩn bị. Không nạp website đang chạy cho đến khi lưu xong.' };
+  }
+  if (draftState.isPublishingCms) {
+    return { blocked: true, message: 'Đang kiểm tra hoặc đưa bản chuẩn bị lên website. Không nạp website đang chạy trong lúc này.' };
+  }
+  if (draftState.isComposingPreparationDraft) {
+    return { blocked: true, message: 'Đang cập nhật bản chuẩn bị từ nội dung đã lưu. Hãy chờ thao tác hoàn tất.' };
+  }
+  if (draftState.isUploadingMedia) {
+    return { blocked: true, message: 'Đang upload media. Hãy chờ upload hoàn tất trước khi nạp website đang chạy.' };
+  }
+  if (draftState.loading) {
+    return { blocked: true, message: 'Đang nạp nội dung. Vui lòng chờ thao tác hiện tại hoàn tất.' };
+  }
+  const hasOpenDraft = Boolean(
+    draftState.dirty
+    || String(draftState.currentDraftId || '').trim()
+    || String(draftState.persistedDraftId || '').trim()
+    || isPlainObjectValue(draftState.draftJson)
+  );
+  if (!hasOpenDraft) return { blocked: false, needsConfirm: false, message: '' };
+  const parts = [];
+  if (draftState.dirty) parts.push('có thay đổi chưa lưu');
+  if (draftState.currentDraftId || draftState.persistedDraftId) parts.push('đang mở một bản chuẩn bị đã lưu');
+  if (draftState.draftJson && !draftState.currentDraftId && !draftState.persistedDraftId) parts.push('đang có bản chuẩn bị trong trình duyệt');
+  return {
+    blocked: false,
+    needsConfirm: true,
+    message: [
+      'Thao tác này sẽ rời bản chuẩn bị đang mở và nạp nội dung website đang chạy thành bản chuẩn bị mới.',
+      'Website đang chạy có thể chưa chứa các thay đổi bạn đã lưu trong CMS nhưng chưa đưa lên website.',
+      parts.length ? `Trạng thái hiện tại: ${parts.join(', ')}.` : '',
+      'Bản nháp đã lưu trong CMS không bị xóa, nhưng sẽ không còn là bản đang mở sau thao tác này.',
+      'Nếu bạn đang chỉnh dở, hãy hủy thao tác này và mở/lưu bản nháp đã lưu thay vì nạp website đang chạy. Tiếp tục?',
+    ].filter(Boolean).join(' '),
+  };
 }
 
 async function loadStaticCmsBaseline() {
