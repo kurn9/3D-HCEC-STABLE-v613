@@ -6,7 +6,7 @@ import {
   signInWithEmailPassword,
   signOut,
 } from './adminAuth.js';
-import { confirmDeleteCmsMedia, fetchDashboardData, prepareDeleteCmsMedia, reconcileCmsReleasePointer, setCachedSupabaseClientForApi, updateExperienceIndexSectionDraft, updateGateContentDraft, updateGuideIndexSectionDraft, updateIndexSectionDraft, updateSiteSettingsDraft } from './adminApi.js';
+import { confirmDeleteCmsMedia, fetchDashboardData, listCmsPublishLogs, prepareDeleteCmsMedia, reconcileCmsReleasePointer, setCachedSupabaseClientForApi, updateExperienceIndexSectionDraft, updateGateContentDraft, updateGuideIndexSectionDraft, updateIndexSectionDraft, updateSiteSettingsDraft } from './adminApi.js';
 import {
   appendChildren,
   byId,
@@ -45,6 +45,7 @@ import {
   setSiteSettingsEditState,
   setState,
   setReleaseOperationGateState,
+  setPointerRepairState,
   startGateEdit,
   startHomeExperienceEdit,
   startHomeGuideEdit,
@@ -319,6 +320,8 @@ function renderAdminShell() {
 function renderReleaseOperationGateNotice(state = getState()) {
   const gate = state.releaseOperationGate || {};
   if (!gate.blocked && !gate.error) return createElement('div', { className: 'cms-admin-hidden' });
+  if (isCanonicalPointerMissingGate(gate)) return renderCanonicalPointerRepairNotice(state);
+
   const panel = createElement('section', { className: 'cms-admin-panel cms-admin-alert cms-admin-alert-warning', attrs: { role: 'status' } });
   panel.appendChild(createElement('strong', { text: gate.blocked ? 'Cần kiểm tra trạng thái website hiện tại' : 'Không kiểm tra được trạng thái release' }));
   panel.appendChild(createElement('p', {
@@ -337,6 +340,280 @@ function renderReleaseOperationGateNotice(state = getState()) {
     }));
   }
   return panel;
+}
+
+function isCanonicalPointerMissingGate(gate = {}) {
+  const classification = String(gate.classification || gate.result?.classification || '').trim();
+  const code = String(gate.code || gate.result?.code || '').trim();
+  const pointerPath = String(gate.pointerPath || gate.result?.pointerPath || gate.result?.pointerHealth?.pointerPath || '').trim();
+  return Boolean(
+    (gate.pointerRepairRequired === true || gate.repairable === true || gate.result?.repairable === true)
+    && (classification === 'canonical_pointer_missing' || code === 'CANONICAL_CURRENT_RELEASE_POINTER_MISSING')
+    && (!pointerPath || pointerPath === 'published/current_release.json')
+  );
+}
+
+function renderCanonicalPointerRepairNotice(state = getState()) {
+  const gate = state.releaseOperationGate || {};
+  const repair = state.pointerRepair || {};
+  const panel = createElement('section', { className: 'cms-admin-panel cms-admin-alert cms-admin-alert-warning', attrs: { role: 'status' } });
+  panel.appendChild(createElement('strong', { text: 'Thiếu con trỏ current_release.json' }));
+  panel.appendChild(createElement('p', {
+    className: 'cms-admin-help-text',
+    text: 'Website chưa có file chỉ định bản công khai hiện tại. Không dọn tệp, không công khai lại và không khôi phục. Hãy sửa con trỏ theo đúng quy trình hai bước.',
+  }));
+  panel.appendChild(renderRequirementList('Quy trình an toàn', [
+    'Bước 1: Kiểm tra kế hoạch sửa con trỏ — chưa ghi dữ liệu.',
+    'Bước 2: Áp dụng sửa con trỏ — chỉ bật sau khi kế hoạch hợp lệ và có planHash.',
+    'Sau khi áp dụng thành công, tải lại trạng thái website để xác nhận active_canonical_release.',
+  ]));
+  panel.appendChild(renderPointerRepairFacts(gate, repair));
+  panel.appendChild(renderPointerRepairResult(repair));
+  if (repair.status === 'apply_pass') {
+    panel.appendChild(createElement('div', {
+      className: 'cms-admin-alert cms-admin-alert-success',
+      text: 'Đã áp dụng sửa con trỏ. Hãy tải lại trạng thái website để xác nhận active_canonical_release.',
+    }));
+  }
+  panel.appendChild(renderPointerRepairActions(state));
+  if (repair.error) panel.appendChild(renderErrorBox(repair.error, 'Không thể sửa con trỏ'));
+  return panel;
+}
+
+function renderPointerRepairFacts(gate = {}, repair = {}) {
+  const plan = repair.plan || {};
+  return renderKeyValueList([
+    ['Trạng thái', gate.classification || gate.result?.classification || 'canonical_pointer_missing'],
+    ['Đường dẫn con trỏ', gate.result?.pointerPath || gate.result?.pointerHealth?.pointerPath || 'published/current_release.json'],
+    ['Có thể sửa', gate.repairable === true || gate.result?.repairable === true ? 'Có' : 'Chưa rõ'],
+    ['Mã kế hoạch', repair.planHash || plan.planHash || 'Chưa có'],
+    ['Nguồn phiên bản', plan.sourceVersionPath || repair.sourceIdentity?.sourceVersionPath || 'Chưa kiểm tra'],
+    ['Hash nguồn', plan.sourceHash || repair.sourceIdentity?.expectedSourceHash || 'Chưa kiểm tra'],
+    ['Phiên bản công khai', plan.publishedVersion || repair.sourceIdentity?.expectedPublishedVersion || 'Chưa kiểm tra'],
+    ['Ghi dữ liệu ở bước kiểm tra', plan.writesPerformed === false || repair.lastResult?.writesPerformed === false ? 'Không' : 'Chưa chạy'],
+  ]);
+}
+
+function renderPointerRepairResult(repair = {}) {
+  const plan = repair.plan || repair.lastResult || null;
+  if (!plan) return createElement('div', { className: 'cms-admin-hidden' });
+  const wrap = createElement('details', { className: 'cms-admin-technical-details cms-admin-publish-command-technical-details', attrs: { open: 'true' } });
+  wrap.appendChild(createElement('summary', { text: 'Kế hoạch sửa con trỏ' }));
+  const writePlan = safeArray(plan.writePlan).map((item) => `${item.kind || 'object'} · ${item.path || ''} · overwrite=${item.overwrite === true ? 'true' : 'false'}`).join('\n') || 'Chưa có writePlan';
+  const pre = createElement('pre', { className: 'cms-admin-technical-note cms-admin-mono', text: writePlan });
+  wrap.appendChild(renderKeyValueList([
+    ['classification', plan.classification || '—'],
+    ['planHash', plan.planHash || '—'],
+    ['sourceAuditLogId', plan.sourceAuditLogId || '—'],
+    ['sourceVersionPath', plan.sourceVersionPath || '—'],
+    ['sourceHash', plan.sourceHash || '—'],
+    ['publishedVersion', plan.publishedVersion || '—'],
+    ['writesPerformed', plan.writesPerformed === true ? 'true' : plan.writesPerformed === false ? 'false' : '—'],
+  ]));
+  wrap.appendChild(pre);
+  return wrap;
+}
+
+function renderPointerRepairActions(state = getState()) {
+  const repair = state.pointerRepair || {};
+  const gate = state.releaseOperationGate || {};
+  const actions = createElement('div', { className: 'cms-admin-actions' });
+  const dryRunButton = createElement('button', {
+    className: 'cms-admin-button cms-admin-button-secondary',
+    type: 'button',
+    text: repair.dryRunLoading ? 'Đang kiểm tra kế hoạch...' : 'Kiểm tra kế hoạch sửa con trỏ',
+  });
+  dryRunButton.disabled = repair.dryRunLoading || repair.applyLoading || !isCanonicalPointerMissingGate(gate);
+  dryRunButton.addEventListener('click', () => handlePointerRepairDryRun());
+  const applyButton = createElement('button', {
+    className: 'cms-admin-button cms-admin-button-primary',
+    type: 'button',
+    text: repair.applyLoading ? 'Đang áp dụng sửa con trỏ...' : 'Áp dụng sửa con trỏ current_release.json',
+  });
+  applyButton.disabled = !canApplyPointerRepair(state);
+  applyButton.addEventListener('click', () => handlePointerRepairApply());
+  actions.appendChild(dryRunButton);
+  actions.appendChild(applyButton);
+  actions.appendChild(createElement('p', {
+    className: 'cms-admin-help-text',
+    text: canApplyPointerRepair(state)
+      ? 'Apply sẽ dùng đúng planHash từ bước kiểm tra và confirmation kỹ thuật bắt buộc.'
+      : 'Apply chỉ bật sau khi Dry Run trả planHash hợp lệ cho trạng thái canonical_pointer_missing.',
+  }));
+  return actions;
+}
+
+function canApplyPointerRepair(state = getState()) {
+  const repair = state.pointerRepair || {};
+  const plan = repair.plan || {};
+  return Boolean(
+    isCanonicalPointerMissingGate(state.releaseOperationGate || {})
+    && !repair.dryRunLoading
+    && !repair.applyLoading
+    && repair.status === 'dry_run_pass'
+    && repair.planHash
+    && plan.classification === 'canonical_pointer_repair_dry_run'
+    && plan.writesPerformed === false
+  );
+}
+
+async function handlePointerRepairDryRun() {
+  const state = getState();
+  if (!isCanonicalPointerMissingGate(state.releaseOperationGate || {})) return;
+  setPointerRepairState({
+    status: 'dry_run_loading',
+    dryRunLoading: true,
+    applyLoading: false,
+    error: null,
+    plan: null,
+    planHash: '',
+    lastResult: null,
+  });
+  renderAdminShell();
+  try {
+    const identity = await resolvePointerRepairSourceIdentity();
+    if (!identity.ok) {
+      setPointerRepairState({
+        status: 'blocked',
+        dryRunLoading: false,
+        sourceIdentity: null,
+        error: identity.error || 'Không tìm thấy source identity hợp lệ cho repair-pointer.',
+      });
+      renderAdminShell();
+      return;
+    }
+    const payload = {
+      mode: 'repair-pointer',
+      dryRun: true,
+      sourceAuditLogId: identity.sourceAuditLogId,
+      sourceVersionPath: identity.sourceVersionPath,
+      expectedSourceHash: identity.expectedSourceHash,
+      expectedPublishedVersion: identity.expectedPublishedVersion,
+    };
+    const result = await reconcileCmsReleasePointer(state.supabase, payload);
+    if (result.error || result.data?.ok === false || result.data?.classification !== 'canonical_pointer_repair_dry_run' || !result.data?.planHash || result.data?.writesPerformed !== false) {
+      setPointerRepairState({
+        status: 'dry_run_failed',
+        dryRunLoading: false,
+        sourceIdentity: identity,
+        lastResult: result.data || null,
+        error: result.error || result.data?.error || 'Dry Run sửa con trỏ chưa đạt điều kiện an toàn.',
+      });
+      renderAdminShell();
+      return;
+    }
+    setPointerRepairState({
+      status: 'dry_run_pass',
+      dryRunLoading: false,
+      sourceIdentity: identity,
+      plan: result.data,
+      planHash: String(result.data.planHash || ''),
+      lastResult: result.data,
+      lastCheckedAt: new Date().toISOString(),
+      error: null,
+    });
+  } catch (error) {
+    setPointerRepairState({
+      status: 'dry_run_failed',
+      dryRunLoading: false,
+      error,
+    });
+  }
+  renderAdminShell();
+}
+
+async function handlePointerRepairApply() {
+  const state = getState();
+  if (!canApplyPointerRepair(state)) return;
+  const repair = state.pointerRepair || {};
+  const identity = repair.sourceIdentity || {};
+  setPointerRepairState({ status: 'apply_loading', applyLoading: true, error: null });
+  renderAdminShell();
+  try {
+    const payload = {
+      mode: 'repair-pointer',
+      dryRun: false,
+      sourceAuditLogId: identity.sourceAuditLogId,
+      sourceVersionPath: identity.sourceVersionPath,
+      expectedSourceHash: identity.expectedSourceHash,
+      expectedPublishedVersion: identity.expectedPublishedVersion,
+      expectedPlanHash: repair.planHash,
+      confirmation: 'REPAIR_MISSING_CANONICAL_CURRENT_RELEASE_POINTER',
+    };
+    const result = await reconcileCmsReleasePointer(state.supabase, payload);
+    if (result.error || result.data?.ok === false || result.data?.classification !== 'canonical_pointer_repaired' || result.data?.writesPerformed !== true) {
+      const message = normalizeErrorMessage(result.error || result.data?.error || 'Apply sửa con trỏ chưa được xác nhận.');
+      setPointerRepairState({
+        status: /PLAN_HASH/i.test(message) ? 'dry_run_required' : 'apply_failed',
+        applyLoading: false,
+        lastResult: result.data || null,
+        error: message,
+      });
+      renderAdminShell();
+      return;
+    }
+    setPointerRepairState({
+      status: 'apply_pass',
+      applyLoading: false,
+      lastResult: result.data,
+      error: null,
+    });
+    await refreshReleaseOperationGate(state.supabase);
+  } catch (error) {
+    setPointerRepairState({ status: 'apply_failed', applyLoading: false, error });
+  }
+  renderAdminShell();
+}
+
+async function resolvePointerRepairSourceIdentity() {
+  const current = getState();
+  const fromGate = extractPointerRepairSourceIdentity(current.releaseOperationGate?.result);
+  if (fromGate.ok) return fromGate;
+
+  const existingLogs = safeArray(current.publishHistory?.items);
+  const fromState = findPointerRepairSourceIdentity(existingLogs);
+  if (fromState.ok) return fromState;
+
+  const result = await listCmsPublishLogs(current.supabase, { limit: 20 });
+  if (result.error) {
+    return { ok: false, error: `Không đọc được lịch sử công khai để lấy source identity: ${normalizeErrorMessage(result.error)}` };
+  }
+  const fromServer = findPointerRepairSourceIdentity(result.data || []);
+  if (fromServer.ok) return fromServer;
+  return { ok: false, error: 'Không tìm thấy sourceAuditLogId, sourceVersionPath, expectedSourceHash và expectedPublishedVersion trong lịch sử công khai.' };
+}
+
+function findPointerRepairSourceIdentity(logs = []) {
+  for (const log of safeArray(logs)) {
+    const status = String(log?.status || '').trim().toLowerCase();
+    if (status && !['published', 'rolled_back'].includes(status)) continue;
+    const identity = extractPointerRepairSourceIdentity({
+      sourceAuditLogId: log?.id,
+      sourceVersionPath: log?.version_path,
+      expectedSourceHash: log?.hash_after,
+      expectedPublishedVersion: log?.published_version,
+    });
+    if (identity.ok) return identity;
+  }
+  return { ok: false };
+}
+
+function extractPointerRepairSourceIdentity(source = {}) {
+  if (!source || typeof source !== 'object') return { ok: false };
+  const sourceAuditLogId = String(source.sourceAuditLogId || source.source_audit_log_id || '').trim();
+  const sourceVersionPath = String(source.sourceVersionPath || source.source_version_path || source.version_path || '').trim();
+  const expectedSourceHash = String(source.expectedSourceHash || source.expected_source_hash || source.hash_after || source.sourceHash || '').trim().toLowerCase();
+  const expectedPublishedVersion = String(source.expectedPublishedVersion || source.expected_published_version || source.published_version || source.publishedVersion || '').trim();
+  if (!sourceAuditLogId || !sourceVersionPath || !expectedSourceHash || !expectedPublishedVersion) return { ok: false };
+  if (!/^published\/releases\/[0-9a-f-]{36}\/cms_public_content\.json$/i.test(sourceVersionPath)) return { ok: false };
+  if (!/^[a-f0-9]{64}$/i.test(expectedSourceHash)) return { ok: false };
+  return {
+    ok: true,
+    sourceAuditLogId,
+    sourceVersionPath,
+    expectedSourceHash,
+    expectedPublishedVersion,
+  };
 }
 
 function renderRuntimeFallbackPanel(error) {

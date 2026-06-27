@@ -965,13 +965,12 @@ export async function reconcileCmsReleasePointer(clientOrExpected = {}, maybeExp
   if (sessionError) return { data: null, error: sessionError };
   const token = sessionData?.session?.access_token;
   if (!token) return { data: null, error: new Error('Cần đăng nhập để kiểm tra trạng thái release.') };
-  const operationId = normalizeOptionalText(expected.operationId || expected.id);
-  const mode = normalizeOptionalText(expected.mode) || 'reconcile';
+  const payload = buildReleaseReconcilePayload(expected);
   try {
     const response = await fetch(CMS_RELEASE_RECONCILE_CONFIG.endpoint, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mode, ...(operationId ? { operationId } : {}) }),
+      body: JSON.stringify(payload),
     });
     const body = await response.json().catch(() => ({}));
     if (!response.ok || body?.ok === false) {
@@ -992,6 +991,32 @@ function getCachedSupabaseClient() {
 
 export function setCachedSupabaseClientForApi(client) {
   globalThis.__cmsAdminSupabaseClient = client || null;
+}
+
+function buildReleaseReconcilePayload(expected = {}) {
+  const mode = normalizeOptionalText(expected.mode) || 'reconcile';
+  const payload = { mode };
+  const operationId = normalizeOptionalText(expected.operationId || expected.id);
+  if (operationId) payload.operationId = operationId;
+
+  if (mode !== 'repair-pointer') return payload;
+
+  if (expected.dryRun === true) payload.dryRun = true;
+  if (expected.dryRun === false) payload.dryRun = false;
+
+  [
+    'sourceAuditLogId',
+    'sourceVersionPath',
+    'expectedSourceHash',
+    'expectedPublishedVersion',
+    'expectedPlanHash',
+    'confirmation',
+  ].forEach((key) => {
+    const text = normalizeOptionalText(expected[key]);
+    if (text) payload[key] = text;
+  });
+
+  return payload;
 }
 
 

@@ -13,6 +13,7 @@ const initialState = {
   staticCmsDraft: createEmptyStaticCmsDraftState(),
   publishHistory: createEmptyPublishHistoryState(),
   releaseOperationGate: createEmptyReleaseOperationGateState(),
+  pointerRepair: createEmptyPointerRepairState(),
   storageCleanup: createEmptyStorageCleanupState(),
   data: {
     siteSettings: null,
@@ -153,6 +154,7 @@ export function createEmptyReleaseOperationGateState() {
     error: null,
     lineageRepairRequired: false,
     repairRequired: false,
+    pointerRepairRequired: false,
     terminalAuditIdentityInvalid: false,
     terminalAuditConflict: false,
     result: null,
@@ -173,12 +175,41 @@ export function clearReleaseOperationGateState() {
   return setState({ releaseOperationGate: createEmptyReleaseOperationGateState() });
 }
 
+export function createEmptyPointerRepairState() {
+  return {
+    status: 'idle',
+    dryRunLoading: false,
+    applyLoading: false,
+    plan: null,
+    planHash: '',
+    sourceIdentity: null,
+    error: null,
+    lastResult: null,
+    lastCheckedAt: null,
+  };
+}
+
+export function setPointerRepairState(patch = {}) {
+  const current = state.pointerRepair || createEmptyPointerRepairState();
+  return setState({
+    pointerRepair: {
+      ...current,
+      ...patch,
+    },
+  });
+}
+
+export function resetPointerRepairState() {
+  return setState({ pointerRepair: createEmptyPointerRepairState() });
+}
+
 export function clearReleaseOperationGateFromExactIdle(result = null) {
   return setReleaseOperationGateState({
     ...createEmptyReleaseOperationGateState(),
     blocked: false,
     lineageRepairRequired: false,
     repairRequired: false,
+    pointerRepairRequired: false,
     terminalAuditIdentityInvalid: false,
     terminalAuditConflict: false,
     reconciliationRequired: false,
@@ -217,6 +248,7 @@ const EXACT_IDLE_ALLOWED_KEYS = new Set([
   'reconciling',
   'lineageRepairRequired',
   'repairRequired',
+  'pointerRepairRequired',
   'terminalAuditIdentityInvalid',
   'terminalAuditConflict',
   'operation',
@@ -294,6 +326,7 @@ function hasSafeExactIdleFlags(source) {
     'reconciling',
     'lineageRepairRequired',
     'repairRequired',
+    'pointerRepairRequired',
     'terminalAuditIdentityInvalid',
     'terminalAuditConflict',
   ].every((key) => isAbsentOrFalseBoolean(source, key));
@@ -328,7 +361,11 @@ export function applyReleaseOperationGateFromServer(data = {}, fallbackMessage =
   const classification = rawClassification || rawCode || 'unknown';
   const identityInvalid = Boolean(source.terminalAuditIdentityInvalid === true || classification === 'terminal_audit_identity_invalid' || rawCode === 'TERMINAL_AUDIT_IDENTITY_INVALID' || rawCode === 'TERMINAL_AUDIT_ORIGINAL_ACTOR_MISSING');
   const auditConflict = Boolean(source.terminalAuditConflict === true || classification === 'terminal_audit_conflict' || rawCode === 'TERMINAL_AUDIT_CONFLICT');
-  const lineageRepairRequired = !identityInvalid && !auditConflict && Boolean(source.lineageRepairRequired === true || source.repairable === true || classification === 'lineage_repair_required' || rawCode === 'RELEASE_LINEAGE_REPAIR_REQUIRED');
+  const pointerRepairRequired = !identityInvalid && !auditConflict && Boolean(
+    source.pointerRepairRequired === true
+    || (source.repairable === true && (classification === 'canonical_pointer_missing' || rawCode === 'CANONICAL_CURRENT_RELEASE_POINTER_MISSING'))
+  );
+  const lineageRepairRequired = !identityInvalid && !auditConflict && !pointerRepairRequired && Boolean(source.lineageRepairRequired === true || source.repairable === true || classification === 'lineage_repair_required' || rawCode === 'RELEASE_LINEAGE_REPAIR_REQUIRED');
   const pointerUnknown = Boolean(source.reconciliationRequired === true || classification === 'pointer_unknown' || stateText === 'pointer_unknown' || rawCode === 'POINTER_STATE_UNKNOWN');
   // Fail-closed contract: this function is only reached after exact-idle was rejected.
   // Therefore every non-exact-idle, including classification='clean', remains blocked.
@@ -336,9 +373,11 @@ export function applyReleaseOperationGateFromServer(data = {}, fallbackMessage =
     ? 'Lịch sử vận hành của bản công khai thiếu hoặc mâu thuẫn thông tin định danh. Cần kiểm tra dữ liệu vận hành trước khi tiếp tục.'
     : auditConflict
       ? 'Lịch sử vận hành có bản ghi terminal mâu thuẫn. Cần kiểm tra forensic trước khi tiếp tục.'
-      : lineageRepairRequired
-        ? 'Bản công khai đã được xác nhận nhưng lịch sử vận hành chưa hoàn tất. Hãy sửa lịch sử vận hành trước khi tiếp tục.'
-        : pointerUnknown
+      : pointerRepairRequired
+        ? 'Thiếu con trỏ current_release.json. Hãy kiểm tra kế hoạch sửa con trỏ trước khi áp dụng, không dọn tệp hoặc công khai lại.'
+        : lineageRepairRequired
+          ? 'Bản công khai đã được xác nhận nhưng lịch sử vận hành chưa hoàn tất. Hãy sửa lịch sử vận hành trước khi tiếp tục.'
+          : pointerUnknown
           ? 'Chưa xác định website đang dùng bản nào. Không công khai hoặc khôi phục lại. Hãy kiểm tra trạng thái hiện tại.'
           : (fallbackMessage || 'Máy chủ chưa xác nhận trạng thái an toàn. Không công khai hoặc khôi phục thêm.');
   return setReleaseOperationGateState({
@@ -358,6 +397,7 @@ export function applyReleaseOperationGateFromServer(data = {}, fallbackMessage =
     reconciliationRequired: pointerUnknown,
     lineageRepairRequired,
     repairRequired: lineageRepairRequired,
+    pointerRepairRequired,
     terminalAuditIdentityInvalid: identityInvalid,
     terminalAuditConflict: auditConflict,
     reconciling: false,
