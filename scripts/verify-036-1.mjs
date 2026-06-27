@@ -37,9 +37,7 @@ const test = read(testRel);
 const fixture = JSON.parse(read(fixtureRel));
 add(
   "HANDLER_IMPORTS_PRODUCTION_EXECUTOR",
-  /from\s+[\"\']\.\.\/_shared\/cmsCanonicalPointerRepair\.ts[\"\']/.test(
-    handler,
-  ),
+  /from\s+[\"\']\.\.\/_shared\/cmsCanonicalPointerRepair\.ts[\"\']/.test(handler),
   {},
 );
 add(
@@ -71,9 +69,34 @@ add(
 );
 add(
   "PRODUCTION_EXECUTOR_MAPS_STATUS_READ_FAILED_500",
-  /classification\s*===\s*[\"']read_failed[\"'][\s\S]{0,220}status:\s*500/.test(
-    executor,
-  ),
+  /classification\s*===\s*[\"']read_failed[\"'][\s\S]{0,220}status:\s*500/.test(executor),
+  {},
+);
+add(
+  "PRODUCTION_EXECUTOR_HAS_STORAGE_MISSING_CLASSIFIER",
+  executor.includes("isStorageObjectMissingError") &&
+    executor.includes("collectStorageErrorDiagnostics") &&
+    executor.includes("summarizeStorageReadError"),
+  {},
+);
+add(
+  "PRODUCTION_EXECUTOR_RECOGNIZES_STORAGE_404_NOT_FOUND",
+  /status\s*===\s*404/.test(executor) &&
+    /NoSuchKey\|NoSuchObject/.test(executor) &&
+    /not_found/.test(executor) &&
+    executor.includes("object\\s+not\\s+found"),
+  {},
+);
+add(
+  "PRODUCTION_EXECUTOR_DOES_NOT_TREAT_PERMISSION_AS_MISSING",
+  /status\s*===\s*401\s*\|\|\s*status\s*===\s*403/.test(executor) &&
+    /permission denied\|forbidden\|unauthorized/.test(executor),
+  {},
+);
+add(
+  "PRODUCTION_EXECUTOR_STATUS_MISSING_ZERO_WRITE",
+  /classification\s*===\s*["']canonical_pointer_missing["'][\s\S]{0,140}status:\s*200/.test(executor) &&
+    !/canonical_pointer_missing[\s\S]{0,260}writeTextObject/.test(executor),
   {},
 );
 add(

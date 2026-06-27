@@ -1,10 +1,11 @@
 import {
   type CanonicalPointerRepairAdapters,
+  createCanonicalPointerRepairAdapters,
   createCanonicalPointerRepairPlan,
   executeCanonicalPointerRepair,
   type JsonObject,
-  REPAIR_CONFIRMATION,
   type RepairPlan,
+  REPAIR_CONFIRMATION,
 } from "../supabase/functions/_shared/cmsCanonicalPointerRepair.ts";
 import {
   buildReleasePointer,
@@ -51,9 +52,6 @@ type TestEnv = {
   finalized: string[];
   terminalAudits: string[];
   plan: RepairPlan | null;
-};
-
-type TestEnvWithAdapters = TestEnv & {
   adapters: CanonicalPointerRepairAdapters;
 };
 
@@ -72,9 +70,19 @@ type EnvOptions = {
   afterAcquire?: (env: TestEnv) => void | Promise<void>;
 };
 
-async function createEnv(
-  options: EnvOptions = {},
-): Promise<TestEnvWithAdapters> {
+async function ensurePlan(env: TestEnv): Promise<RepairPlan> {
+  if (!env.plan) {
+    env.plan = await createCanonicalPointerRepairPlan(env.adapters, {
+      sourceAuditLogId: env.sourceAuditLogId,
+      sourceVersionPath: env.sourcePath,
+      expectedSourceHash: env.sourceHash,
+      expectedPublishedVersion: env.publishedVersion,
+    });
+  }
+  return env.plan;
+}
+
+async function createEnv(options: EnvOptions = {}): Promise<TestEnv> {
   const sourcePath = "published/versions/source.json";
   const sourceObject = {
     source: "cms-admin-draft",
@@ -114,7 +122,12 @@ async function createEnv(
   const transitions: string[] = [];
   const finalized: string[] = [];
   const terminalAudits: string[] = [];
-  const env: TestEnv = {
+  const readFailedPaths = new Set(options.readFailedPaths || []);
+  const missingPaths = new Set(options.missingPaths || []);
+  const writeConflictPaths = new Set(options.writeConflictPaths || []);
+  const writeFailedPaths = new Set(options.writeFailedPaths || []);
+
+  const env = {
     sourcePath,
     sourceText,
     sourceHash,
@@ -127,14 +140,9 @@ async function createEnv(
     transitions,
     finalized,
     terminalAudits,
-    plan: null as
-      | null
-      | Awaited<ReturnType<typeof createCanonicalPointerRepairPlan>>,
-  };
-  const readFailedPaths = new Set(options.readFailedPaths || []);
-  const missingPaths = new Set(options.missingPaths || []);
-  const writeConflictPaths = new Set(options.writeConflictPaths || []);
-  const writeFailedPaths = new Set(options.writeFailedPaths || []);
+    plan: null,
+    adapters: null as unknown as CanonicalPointerRepairAdapters,
+  } satisfies TestEnv;
 
   const adapters: CanonicalPointerRepairAdapters = {
     inspectLineageGate() {
@@ -148,10 +156,7 @@ async function createEnv(
     readSourceAuditLog(id: string) {
       calls.push("readSourceAuditLog");
       if (options.auditReadFailed) {
-        return Promise.resolve({
-          kind: "read_failed",
-          error: "database outage",
-        });
+        return Promise.resolve({ kind: "read_failed", error: "database outage" });
       }
       if (options.auditMissing || id !== sourceAuditLogId) {
         return Promise.resolve({ kind: "missing", error: "not found" });
@@ -161,10 +166,7 @@ async function createEnv(
     readTextObject(path: string) {
       calls.push(`read:${path}`);
       if (readFailedPaths.has(path)) {
-        return Promise.resolve({
-          kind: "read_failed",
-          error: `read failed ${path}`,
-        });
+        return Promise.resolve({ kind: "read_failed", error: `read failed ${path}` });
       }
       if (missingPaths.has(path) || !storage.has(path)) {
         return Promise.resolve({ kind: "missing", error: `missing ${path}` });
@@ -175,10 +177,7 @@ async function createEnv(
       calls.push(`write:${path}`);
       writes.push(path);
       if (writeFailedPaths.has(path)) {
-        return Promise.resolve({
-          kind: "write_failed",
-          error: `write failed ${path}`,
-        });
+        return Promise.resolve({ kind: "write_failed", error: `write failed ${path}` });
       }
       if (writeConflictPaths.has(path) || storage.has(path)) {
         return Promise.resolve({ kind: "conflict", error: `conflict ${path}` });
@@ -213,9 +212,7 @@ async function createEnv(
       };
     },
     transitionOperation(input) {
-      calls.push(
-        `transition:${String(input.patch.phase || input.patch.state || "")}`,
-      );
+      calls.push(`transition:${String(input.patch.phase || input.patch.state || "")}`);
       transitions.push(String(input.patch.phase || input.patch.state || ""));
       if (
         options.transitionFailsAt &&
@@ -246,23 +243,18 @@ async function createEnv(
     finalizeOperationFailure(input) {
       calls.push("finalizeOperationFailure");
       finalized.push(input.operationId);
-      return Promise.resolve({
-        operation: null,
-        finalState: "failed_before_pointer",
-      });
+      return Promise.resolve({ operation: null, finalState: "failed_before_pointer" });
     },
     persistTerminalAudit() {
       calls.push("persistTerminalAudit");
       terminalAudits.push("terminal");
-      return Promise.resolve(
-        options.terminalAuditFails
-          ? {
-            persisted: false,
-            auditLogState: "missing_or_unknown",
-            warning: "audit failed",
-          }
-          : { persisted: true, auditLogState: "present", id: "audit-1" },
-      );
+      return Promise.resolve(options.terminalAuditFails
+        ? {
+          persisted: false,
+          auditLogState: "missing_or_unknown",
+          warning: "audit failed",
+        }
+        : { persisted: true, auditLogState: "present", id: "audit-1" });
     },
     persistOperationContextPatch() {
       calls.push("persistOperationContextPatch");
@@ -271,8 +263,10 @@ async function createEnv(
     nowIso: () => "2026-06-21T19:40:52.000Z",
     sleep: () => Promise.resolve(),
   };
+  env.adapters = adapters;
+
   if (options.pointer === "valid") {
-    const plan = await ensurePlan(Object.assign(env, { adapters }));
+    const plan = await ensurePlan(env);
     storage.set(plan.contentPath, plan.canonicalReleaseText);
     storage.set(POINTER_PATH, plan.pointerText);
   } else if (options.pointer === "different") {
@@ -297,22 +291,10 @@ async function createEnv(
   } else if (options.pointer === "invalid") {
     storage.set(POINTER_PATH, '{"schemaVersion":1,"releaseId":"bad"}');
   }
-  return Object.assign(env, { adapters });
+  return env;
 }
 
-async function ensurePlan(env: TestEnvWithAdapters): Promise<RepairPlan> {
-  if (!env.plan) {
-    env.plan = await createCanonicalPointerRepairPlan(env.adapters, {
-      sourceAuditLogId: env.sourceAuditLogId,
-      sourceVersionPath: env.sourcePath,
-      expectedSourceHash: env.sourceHash,
-      expectedPublishedVersion: env.publishedVersion,
-    });
-  }
-  return env.plan;
-}
-
-async function dryRun(env: TestEnvWithAdapters) {
+async function dryRun(env: TestEnv) {
   return await executeCanonicalPointerRepair({
     mode: "repair-pointer",
     dryRun: true,
@@ -324,10 +306,10 @@ async function dryRun(env: TestEnvWithAdapters) {
   }, env.adapters);
 }
 async function apply(
-  env: TestEnvWithAdapters,
+  env: TestEnv,
   planHash?: string,
 ) {
-  const effectivePlanHash = planHash ?? (await ensurePlan(env)).planHash;
+  const plan = await ensurePlan(env);
   return await executeCanonicalPointerRepair({
     mode: "repair-pointer",
     dryRun: false,
@@ -335,10 +317,54 @@ async function apply(
     sourceVersionPath: env.sourcePath,
     expectedSourceHash: env.sourceHash,
     expectedPublishedVersion: env.publishedVersion,
-    expectedPlanHash: effectivePlanHash,
+    expectedPlanHash: planHash ?? plan.planHash,
     confirmation: REPAIR_CONFIRMATION,
     actorId: "admin-1",
   }, env.adapters);
+}
+
+type FakeStorageDownload = { data: { text: () => Promise<string> } | null; error: unknown };
+type FakeServiceClient = Parameters<typeof createSupabaseCanonicalPointerRepairAdapters>[0];
+
+function createFakeStorageServiceClient(
+  outcome: unknown | (() => never),
+  uploadCalls: string[] = [],
+): FakeServiceClient {
+  const storageApi = {
+    download(_path: string): Promise<FakeStorageDownload> {
+      if (typeof outcome === "function") outcome();
+      return Promise.resolve({ data: null, error: outcome });
+    },
+    upload(path: string): Promise<{ error: null }> {
+      uploadCalls.push(path);
+      return Promise.resolve({ error: null });
+    },
+  };
+  return {
+    storage: {
+      from(_bucket: string) {
+        return storageApi;
+      },
+    },
+    from(_table: string) {
+      return {
+        select() { return this; },
+        eq() { return this; },
+        maybeSingle() {
+          return Promise.resolve({ data: null, error: null });
+        },
+      };
+    },
+  } as unknown as FakeServiceClient;
+}
+
+async function statusWithFakeStorageError(error: unknown | (() => never)) {
+  const uploadCalls: string[] = [];
+  const adapters = createSupabaseCanonicalPointerRepairAdapters(
+    createFakeStorageServiceClient(error, uploadCalls),
+  );
+  const result = await executeCanonicalPointerRepair({ mode: "status" }, adapters);
+  return { result, uploadCalls };
 }
 
 Deno.test("standard UUID and stable repair UUID are accepted and produce non-empty paths", async () => {
@@ -404,6 +430,45 @@ Deno.test("status pointer read failure returns 500 ok false", async () => {
   assertEquals(result.status, 500, "status");
   assertEquals(result.body.ok, false, "ok false");
   assertEquals(env.writes.length, 0, "zero writes");
+});
+
+Deno.test("storage object-not-found shapes classify pointer as missing and zero write", async () => {
+  for (
+    const [name, error] of [
+      [
+        "live statusCode string",
+        { statusCode: "404", error: "not_found", message: "Object not found" },
+      ],
+      ["numeric status NoSuchKey", { status: 404, code: "NoSuchKey" }],
+      ["thrown object not found", () => { throw new Error("Object not found"); }],
+    ] as const
+  ) {
+    const { result, uploadCalls } = await statusWithFakeStorageError(error);
+    assertEquals(result.status, 200, `${name} status`);
+    assertEquals(
+      result.body.classification,
+      "canonical_pointer_missing",
+      `${name} classification`,
+    );
+    assertEquals(result.body.repairable, true, `${name} repairable`);
+    assertEquals(uploadCalls.length, 0, `${name} zero writes`);
+  }
+});
+
+Deno.test("storage permission and runtime failures remain read_failed and zero write", async () => {
+  for (
+    const [name, error] of [
+      ["forbidden", { statusCode: 403, message: "Forbidden" }],
+      ["network", () => { throw new Error("network failure"); }],
+    ] as const
+  ) {
+    const { result, uploadCalls } = await statusWithFakeStorageError(error);
+    assertEquals(result.status, 500, `${name} status`);
+    assertEquals(result.body.ok, false, `${name} ok false`);
+    assertEquals(result.body.classification, "read_failed", `${name} classification`);
+    assertEquals(result.body.repairable, false, `${name} repairable`);
+    assertEquals(uploadCalls.length, 0, `${name} zero writes`);
+  }
 });
 
 Deno.test("dry-run returns ok true and performs zero writes", async () => {
@@ -497,20 +562,22 @@ Deno.test("acquire runtime failure returns 500 and zero writes", async () => {
 Deno.test("post-lock source and alias drift return 409 with zero storage writes and finalize operation", async () => {
   for (
     const [name, hook] of [
-      ["source", (env: TestEnv) =>
+      ["source", (env: TestEnv) => {
         env.storage.set(
           env.sourcePath,
           canonicalJsonStringify({ changed: true }),
-        )],
-      ["alias", (env: TestEnv) =>
+        );
+      }],
+      ["alias", (env: TestEnv) => {
         env.storage.set(
           LEGACY_LATEST_PATH,
           canonicalJsonStringify({ changed: true }),
-        )],
+        );
+      }],
       ["audit", (env: TestEnv) => {
         env.auditRow.hash_after = "a".repeat(64);
       }],
-    ] as Array<[string, (env: TestEnv) => void | Promise<void>]>
+    ] as const
   ) {
     const env = await createEnv({ afterAcquire: hook });
     const result = await apply(env);
@@ -557,24 +624,14 @@ Deno.test("immutable existing read failures return 500 for canonical and legacy 
   }).readTextObject = (path: string) => {
     canonical.calls.push(`read:${path}`);
     if (path === canonicalPlan.contentPath) {
-      return Promise.resolve({
-        kind: "read_failed",
-        error: "read existing failed",
-      });
+      return Promise.resolve({ kind: "read_failed", error: "read existing failed" });
     }
     if (!canonical.storage.has(path)) {
       return Promise.resolve({ kind: "missing", error: "missing" });
     }
-    return Promise.resolve({
-      kind: "found",
-      text: canonical.storage.get(path) || "",
-    });
+    return Promise.resolve({ kind: "found", text: canonical.storage.get(path) || "" });
   };
-  assertEquals(
-    (await apply(canonical)).status,
-    500,
-    "canonical read failure",
-  );
+  assertEquals((await apply(canonical)).status, 500, "canonical read failure");
 
   const legacy = await createEnv();
   const legacyPlan = await ensurePlan(legacy);
@@ -584,32 +641,21 @@ Deno.test("immutable existing read failures return 500 for canonical and legacy 
   }).readTextObject = (path: string) => {
     legacy.calls.push(`read:${path}`);
     if (path === legacyPlan.legacyVersionPath) {
-      return Promise.resolve({
-        kind: "read_failed",
-        error: "read legacy failed",
-      });
+      return Promise.resolve({ kind: "read_failed", error: "read legacy failed" });
     }
     if (!legacy.storage.has(path)) {
       return Promise.resolve({ kind: "missing", error: "missing" });
     }
-    return Promise.resolve({
-      kind: "found",
-      text: legacy.storage.get(path) || "",
-    });
+    return Promise.resolve({ kind: "found", text: legacy.storage.get(path) || "" });
   };
-  assertEquals(
-    (await apply(legacy)).status,
-    500,
-    "legacy read failure",
-  );
+  assertEquals((await apply(legacy)).status, 500, "legacy read failure");
 });
 
 Deno.test("pointer race and pointer write recovery classify conflicts and read failures correctly", async () => {
   const same = await createEnv({
     afterAcquire: (e) => {
-      assert(e.plan, "plan must exist before afterAcquire hook");
-      e.storage.set(e.plan.contentPath, e.plan.canonicalReleaseText);
-      e.storage.set(POINTER_PATH, e.plan.pointerText);
+      e.storage.set(e.plan!.contentPath, e.plan!.canonicalReleaseText);
+      e.storage.set(POINTER_PATH, e.plan!.pointerText);
     },
   });
   assertEquals(
@@ -723,23 +769,21 @@ Deno.test("retry already repaired does not duplicate writes or terminal audit", 
 });
 
 Deno.test("runtime failure responses never contain ok true", async () => {
-  const pointerReadFailure = await createEnv({
-    readFailedPaths: [POINTER_PATH],
-  });
-  const pointerStatusResult = await executeCanonicalPointerRepair(
+  const pointerReadFail = await createEnv({ readFailedPaths: [POINTER_PATH] });
+  const pointerStatus = await executeCanonicalPointerRepair(
     { mode: "status" },
-    pointerReadFailure.adapters,
+    pointerReadFail.adapters,
   );
-  assertEquals(pointerStatusResult.status, 500, "pointer status read failure");
-  assertEquals(pointerStatusResult.body.ok, false, "pointer status ok false");
+  assertEquals(pointerStatus.status, 500, "pointer read failure status");
+  assertEquals(pointerStatus.body.ok, false, "pointer read failure ok false");
 
-  const auditReadFailure = await createEnv({ auditReadFailed: true });
-  const auditDryRunResult = await dryRun(auditReadFailure);
-  assertEquals(auditDryRunResult.status, 500, "audit read failure");
-  assertEquals(auditDryRunResult.body.ok, false, "audit ok false");
+  const auditReadFail = await createEnv({ auditReadFailed: true });
+  const auditDryRun = await dryRun(auditReadFail);
+  assertEquals(auditDryRun.status, 500, "audit read failure status");
+  assertEquals(auditDryRun.body.ok, false, "audit read failure ok false");
 
   const acquireFailure = await createEnv({ acquireFails: true });
-  const acquireResult = await apply(acquireFailure);
-  assertEquals(acquireResult.status, 500, "acquire failure");
-  assertEquals(acquireResult.body.ok, false, "acquire ok false");
+  const acquireApply = await apply(acquireFailure);
+  assertEquals(acquireApply.status, 500, "acquire failure status");
+  assertEquals(acquireApply.body.ok, false, "acquire failure ok false");
 });

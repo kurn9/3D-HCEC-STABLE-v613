@@ -180,6 +180,56 @@ const mutations = [
     replacement: `ok: true,
           classification: "lineage_repair_required",`,
   },
+  {
+    id: "M011_REMOVE_404_MISSING_RECOGNITION",
+    file: moduleRel,
+    search: `return status === 404 ||
+      /^(NoSuchKey|NoSuchObject)$/i.test(code) ||`,
+    replacement: `return false && status === 404 ||
+      /^(NoSuchKey|NoSuchObject)$/i.test(code) ||`,
+  },
+  {
+    id: "M012_REMOVE_NOT_FOUND_ERROR_RECOGNITION",
+    file: moduleRel,
+    search: `/^not_found$/i.test(error) ||`,
+    replacement: `/^not_found_mutant_disabled$/i.test(error) ||`,
+  },
+  {
+    id: "M013_TREAT_403_AS_MISSING",
+    file: moduleRel,
+    search: `return status === 401 || status === 403 || (status !== null && status >= 500) ||`,
+    replacement: `return status === 401 || false && status === 403 || (status !== null && status >= 500) ||`,
+  },
+  {
+    id: "M014_READ_FAILED_REPAIRABLE_TRUE",
+    file: moduleRel,
+    search: `const repairable =
+    pointerHealth.classification === "canonical_pointer_missing";`,
+    replacement: `const repairable =
+    pointerHealth.classification === "canonical_pointer_missing" ||
+    pointerHealth.classification === "read_failed";`,
+  },
+  {
+    id: "M015_STATUS_MISSING_PERFORMS_WRITE",
+    file: moduleRel,
+    search: `if (pointerHealth.classification === "canonical_pointer_missing") {
+    return {
+      status: 200,
+      body: buildPointerHealthStatusResponse(pointerHealth),
+    };
+  }`,
+    replacement: `if (pointerHealth.classification === "canonical_pointer_missing") {
+    await adapters.writeTextObject("status_illegal_write.json", "{}", {
+      upsert: false,
+      cacheControl: "0",
+      contentType: "application/json; charset=utf-8",
+    });
+    return {
+      status: 200,
+      body: buildPointerHealthStatusResponse(pointerHealth),
+    };
+  }`,
+  },
 ];
 
 function sha(text) {
@@ -254,7 +304,8 @@ function hasInfraSignature(run) {
 }
 
 function hasBaselinePassOutput(run) {
-  return /21\s+passed/i.test(run.output) && /0\s+failed/i.test(run.output);
+  const passed = Number(/(\d+)\s+passed/i.exec(run.output)?.[1] || 0);
+  return passed >= 23 && /0\s+failed/i.test(run.output);
 }
 
 function createTemp(prefix) {
@@ -281,7 +332,7 @@ function runControl() {
       outputTail: run.outputTail,
       command: ["deno", ...denoArgs].join(" "),
       infraError,
-      expectedOutput: "21 passed / 0 failed",
+      expectedOutput: ">=23 passed / 0 failed",
     };
   } catch (error) {
     return {
@@ -293,7 +344,7 @@ function runControl() {
       outputTail: "",
       command: ["deno", ...denoArgs].join(" "),
       infraError: true,
-      expectedOutput: "21 passed / 0 failed",
+      expectedOutput: ">=23 passed / 0 failed",
     };
   } finally {
     cleanupTemp(tmp);
@@ -445,6 +496,6 @@ const result = {
   rootHashesStable,
 };
 console.log(JSON.stringify(result, null, 2));
-const success = rootHashesStable && killed === 10 && survived === 0 &&
-  invalid === 0 && infraErrors === 0 && records.length === 10;
+const success = rootHashesStable && killed === mutations.length && survived === 0 &&
+  invalid === 0 && infraErrors === 0 && records.length === mutations.length;
 if (!success) process.exit(1);
