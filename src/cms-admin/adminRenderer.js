@@ -7253,9 +7253,13 @@ function buildPublishCommandCenterModel(state = {}) {
   const publishSucceeded = publishResult?.ok === true && publishResult?.dryRun !== true;
   const publishFailed = Boolean(draftState.publishError) || (publishResult && publishResult.ok === false && publishResult.dryRun !== true);
   const publishRequiresReconciliation = Boolean(draftState.publishRequiresReconciliation || draftState.publishPointerState === 'unknown');
-  const currentDraftId = draftState.currentDraftId || '';
-  const hasDraftJson = Boolean(draftState.draftJson);
-  const hasSavedDraft = Boolean(currentDraftId);
+  const currentDraftId = normalizePublishDraftIdentity(draftState.currentDraftId);
+  const persistedDraftId = normalizePublishDraftIdentity(draftState.persistedDraftId);
+  const effectiveDraftId = currentDraftId || persistedDraftId;
+  const hasDraftJson = isPublishDraftObject(draftState.draftJson);
+  const hasDraftIdentity = Boolean(effectiveDraftId);
+  const hasSavedDraft = Boolean(hasDraftJson && hasDraftIdentity);
+  const hasDraftIdentityWithoutJson = Boolean(hasDraftIdentity && !hasDraftJson);
   const hasDirtyDraft = Boolean(draftState.dirty);
   const validationKnown = Boolean(validation);
   const validationOk = validation?.valid === true;
@@ -7325,14 +7329,26 @@ function buildPublishCommandCenterModel(state = {}) {
     isComposingPreparationDraft,
     operationBusy,
     hasDraftJson,
+    hasDraftIdentity,
+    hasDraftIdentityWithoutJson,
     hasSavedDraft,
     hasDirtyDraft,
-    currentDraftId,
+    currentDraftId: effectiveDraftId,
+    persistedDraftId,
     publicVersion,
     draftVersion,
     latestPublishedVersion,
     nextAction,
   };
+}
+
+
+function normalizePublishDraftIdentity(value = '') {
+  return String(value || '').trim();
+}
+
+function isPublishDraftObject(value) {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value));
 }
 
 function getPublishCommandNextAction(model = {}) {
@@ -7395,6 +7411,15 @@ function getPublishCommandNextAction(model = {}) {
       label: 'Mở website để kiểm tra',
       note: 'Nội dung đã được đưa lên website trong phiên hiện tại. Hãy mở website để kiểm tra hiển thị.',
       kind: 'public-link',
+    };
+  }
+  if (model.hasDraftIdentityWithoutJson) {
+    return {
+      state: 'content-error',
+      label: 'Mở lại bản chuẩn bị đã lưu',
+      note: 'CMS có ID bản chuẩn bị nhưng không đọc được nội dung trong trình duyệt. Hãy mở lại bản nháp đã lưu, không nạp website đang chạy để tránh ghi đè nhầm.',
+      kind: 'blocked-content',
+      disabledReason: 'Không đọc được nội dung bản chuẩn bị đã lưu.',
     };
   }
   if (!model.hasDraftJson) {
@@ -7649,14 +7674,21 @@ function renderPublishLiveWebsiteCard(model = {}) {
 
 function renderPublishDraftCard(model = {}) {
   const card = createElement('article', { className: 'cms-admin-panel cms-admin-view-panel cms-admin-publish-command-card' });
-  card.appendChild(renderPanelTitle('Bản chuẩn bị', model.hasSavedDraft ? 'Đã lưu' : model.hasDraftJson ? 'Chưa lưu' : 'Chưa tải'));
+  const statusLabel = model.hasSavedDraft
+    ? 'Đã lưu'
+    : model.hasDraftJson
+      ? 'Chưa lưu'
+      : model.hasDraftIdentityWithoutJson ? 'Cần mở lại' : 'Chưa tải';
+  card.appendChild(renderPanelTitle('Bản chuẩn bị', statusLabel));
   card.appendChild(createElement('p', {
     className: 'cms-admin-compact-copy',
     text: model.hasSavedDraft
       ? 'Bản chuẩn bị đã lưu là nguồn được dùng cho bước kiểm tra trước khi đưa lên và công khai.'
       : model.hasDraftJson
-        ? 'Nội dung đã có trong trình duyệt nhưng chưa được lưu thành bản chuẩn bị CMS.'
-        : 'Hãy tải nội dung website hiện tại để bắt đầu chuẩn bị bản mới.',
+        ? 'Bản chuẩn bị đang mở nhưng chưa lưu. Hãy bấm “Lưu bản chuẩn bị” trước khi kiểm tra hoặc đưa lên website.'
+        : model.hasDraftIdentityWithoutJson
+          ? 'Không đọc được nội dung bản chuẩn bị đã lưu trong trình duyệt. Hãy mở lại bản nháp đã lưu; không nạp website đang chạy để tránh ghi đè nhầm.'
+          : 'Hãy nạp website đang chạy vào bản chuẩn bị mới nếu muốn bắt đầu từ nội dung public hiện tại.',
   }));
   const facts = createElement('div', { className: 'cms-admin-publish-command-facts' });
   facts.appendChild(renderInfoTile('Nội dung trong trình duyệt', model.hasDraftJson ? 'Đã tải' : 'Chưa tải'));
@@ -7664,6 +7696,13 @@ function renderPublishDraftCard(model = {}) {
   facts.appendChild(renderInfoTile('Thay đổi chưa lưu', model.hasDirtyDraft ? 'Có' : 'Không'));
   facts.appendChild(renderInfoTile('Kiểm tra nội dung', getPublishValidationSummary(model)));
   card.appendChild(facts);
+  if (model.hasDraftIdentityWithoutJson) {
+    card.appendChild(createElement('div', {
+      className: 'cms-admin-alert cms-admin-alert-error',
+      attrs: { role: 'alert' },
+      text: 'Trạng thái bản chuẩn bị không nhất quán: có draft ID nhưng thiếu nội dung draftJson. Hãy mở lại bản nháp đã lưu trước khi kiểm tra.',
+    }));
+  }
   card.appendChild(renderPublishValidationIssues(model));
   return card;
 }

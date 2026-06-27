@@ -5375,9 +5375,33 @@ export async function handleSaveStaticCmsDraft({ asNew = false, explicitCopy = f
     note: draftState.draftNote || '',
   };
 
-  const result = shouldCreate
-    ? await createCmsDraft(appState.supabase, payload, access.userId)
-    : await updateCmsDraft(appState.supabase, currentDraftId, payload, access.userId, { expectedUpdatedAt });
+  let result;
+  try {
+    result = shouldCreate
+      ? await createCmsDraft(appState.supabase, payload, access.userId)
+      : await updateCmsDraft(appState.supabase, currentDraftId, payload, access.userId, { expectedUpdatedAt });
+  } catch (error) {
+    console.error('[cms-admin] static CMS draft save failed before readback', error);
+    setStaticCmsDraftPersistenceState({
+      isSavingDraft: false,
+      draftPersistenceError: 'Không thể lưu bản chuẩn bị do lỗi trình duyệt hoặc kết nối. Website chưa thay đổi. Hãy thử lưu lại.',
+      draftSaveStatus: '',
+      dirty: true,
+      publishDryRunResult: null,
+      publishResult: null,
+      publishStatus: '',
+      publishError: null,
+      publishLastVerifiedAt: null,
+      publishVerifiedDraftId: '',
+      publishVerifiedDraftUpdatedAt: null,
+      publishVerifiedDraftVersion: '',
+      publishVerifiedCandidateHash: '',
+      publishVerificationInvalidatedAt: new Date().toISOString(),
+      publishVerificationInvalidationReason: 'Lưu bản chuẩn bị bị gián đoạn trước readback.',
+    });
+    handlers.onRerender?.();
+    return;
+  }
 
   if (result.error) {
     const isConflict = result.conflict === true || result.error?.code === 'DRAFT_SAVE_CONFLICT';
@@ -5410,7 +5434,13 @@ export async function handleSaveStaticCmsDraft({ asNew = false, explicitCopy = f
   }
 
   const savedDraftId = result.data?.id || (shouldCreate ? '' : currentDraftId);
-  const readback = await readPersistedCmsDraftSnapshot(appState.supabase, savedDraftId);
+  let readback;
+  try {
+    readback = await readPersistedCmsDraftSnapshot(appState.supabase, savedDraftId);
+  } catch (error) {
+    console.error('[cms-admin] static CMS draft readback failed after save', error);
+    readback = { ok: false, code: 'readback_exception', reason: 'Không xác nhận được bản chuẩn bị đã lưu. Website chưa thay đổi. Hãy mở lại bản nháp đã lưu hoặc thử lưu lại.' };
+  }
   if (!readback.ok) {
     setStaticCmsDraftPersistenceState({
       isSavingDraft: false,
@@ -5490,7 +5520,9 @@ export async function handleSaveStaticCmsDraft({ asNew = false, explicitCopy = f
     persistedDraftUpdatedAt: persistedDraft.updatedAt,
     persistedDraftVersion: persistedDraft.version,
     draftLastSavedAt: persistedDraft.updatedAt,
-    draftTitle: result.data?.title || payload.title,
+    source: 'saved-draft',
+    sourceUrl: persistedDraft.id ? `cms_drafts:${persistedDraft.id}` : 'cms_drafts',
+    draftTitle: result.data?.title || persistedDraft.title || payload.title,
     draftTitleTouched: Boolean(draftState.draftTitleTouched || shouldCreate),
     draftSaveStatus: shouldCreate ? 'Đã lưu thành bản chuẩn bị mới. Website đang hoạt động chưa thay đổi.' : 'Đã cập nhật bản chuẩn bị hiện tại. Website đang hoạt động chưa thay đổi.',
     dirty: false,
@@ -5506,6 +5538,7 @@ export async function handleSaveStaticCmsDraft({ asNew = false, explicitCopy = f
     publishVerifiedDraftId: '',
     publishVerifiedDraftUpdatedAt: null,
     publishVerifiedDraftVersion: '',
+    publishVerifiedCandidateHash: '',
     publishVerificationInvalidatedAt: new Date().toISOString(),
     publishVerificationInvalidationReason: 'Bản chuẩn bị vừa được lưu; cần kiểm tra lại trước khi công khai.',
   });
