@@ -37,9 +37,7 @@ const test = read(testRel);
 const fixture = JSON.parse(read(fixtureRel));
 add(
   "HANDLER_IMPORTS_PRODUCTION_EXECUTOR",
-  /from\s+[\"\']\.\.\/_shared\/cmsCanonicalPointerRepair\.ts[\"\']/.test(
-    handler,
-  ),
+  /from\s+[\"\']\.\.\/_shared\/cmsCanonicalPointerRepair\.ts[\"\']/.test(handler),
   {},
 );
 add(
@@ -71,9 +69,7 @@ add(
 );
 add(
   "PRODUCTION_EXECUTOR_MAPS_STATUS_READ_FAILED_500",
-  /classification\s*===\s*[\"']read_failed[\"'][\s\S]{0,220}status:\s*500/.test(
-    executor,
-  ),
+  /classification\s*===\s*[\"']read_failed[\"'][\s\S]{0,220}status:\s*500/.test(executor),
   {},
 );
 add(
@@ -98,9 +94,23 @@ add(
   {},
 );
 add(
+  "PRODUCTION_EXECUTOR_HAS_BOUNDED_STORAGE_UNKNOWN_POINTER_CLASSIFIER",
+  executor.includes("StorageUnknownError") &&
+    executor.includes("hasPointerScopedStorageUnknownMissingEvidence") &&
+    /path\s*===\s*POINTER_PATH/.test(executor) &&
+    executor.includes("isStorageObjectMissingErrorForPath(path, error)"),
+  {},
+);
+add(
+  "PRODUCTION_EXECUTOR_PERMISSION_GUARD_PRECEDES_STORAGE_UNKNOWN_FALLBACK",
+  executor.indexOf("hasPermissionOrRuntimeFailureEvidence(diagnostics)") >= 0 &&
+    executor.indexOf("hasPointerScopedStorageUnknownMissingEvidence(path, diagnostics)") >
+      executor.indexOf("hasPermissionOrRuntimeFailureEvidence(diagnostics)"),
+  {},
+);
+add(
   "PRODUCTION_EXECUTOR_STATUS_MISSING_ZERO_WRITE",
-  /classification\s*===\s*["']canonical_pointer_missing["'][\s\S]{0,140}status:\s*200/
-    .test(executor) &&
+  /classification\s*===\s*["']canonical_pointer_missing["'][\s\S]{0,140}status:\s*200/.test(executor) &&
     !/canonical_pointer_missing[\s\S]{0,260}writeTextObject/.test(executor),
   {},
 );
@@ -131,6 +141,26 @@ add(
   "TEST_HAS_BEHAVIORAL_DENO_TESTS",
   (test.match(/Deno\.test/g) || []).length >= 18,
   { count: (test.match(/Deno\.test/g) || []).length },
+);
+add(
+  "TEST_HAS_STORAGE_UNKNOWN_POINTER_MISSING_REGRESSION",
+  test.includes("live StorageUnknownError wrapper") &&
+    test.includes("nested StorageUnknownError wrapper") &&
+    test.includes("canonical_pointer_missing"),
+  {},
+);
+add(
+  "TEST_HAS_STORAGE_UNKNOWN_NON_POINTER_GUARD",
+  test.includes("non-pointer StorageUnknownError remains read_failed") &&
+    test.includes("published/versions/source.json"),
+  {},
+);
+add(
+  "TEST_HAS_STORAGE_UNKNOWN_PERMISSION_GUARD",
+  test.includes("StorageUnknownError with forbidden status") &&
+    test.includes("StorageUnknownError with permission marker") &&
+    test.includes("read_failed"),
+  {},
 );
 add(
   "FIXTURE_REQUIRED_CASES_PRESENT",

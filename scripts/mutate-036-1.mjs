@@ -232,6 +232,12 @@ const mutations = [
     };
   }`,
   },
+  {
+    id: "M016_REMOVE_STORAGE_UNKNOWN_POINTER_RECOGNITION",
+    file: moduleRel,
+    search: `return path === POINTER_PATH && hasStorageUnknownErrorEvidence(diagnostics);`,
+    replacement: `return false && path === POINTER_PATH && hasStorageUnknownErrorEvidence(diagnostics);`,
+  },
 ];
 
 function sha(text) {

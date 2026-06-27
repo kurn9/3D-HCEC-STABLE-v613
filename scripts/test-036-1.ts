@@ -448,6 +448,14 @@ Deno.test("storage object-not-found shapes classify pointer as missing and zero 
       ["numeric status NoSuchKey", { status: 404, code: "NoSuchKey" }],
       ["not_found only", { error: "not_found" }],
       [
+        "live StorageUnknownError wrapper",
+        { message: '{"name":"StorageUnknownError"}' },
+      ],
+      [
+        "nested StorageUnknownError wrapper",
+        { body: '{"name":"StorageUnknownError"}' },
+      ],
+      [
         "thrown object not found",
         () => {
           throw new Error("Object not found");
@@ -480,6 +488,14 @@ Deno.test("storage permission and runtime failures remain read_failed and zero w
         },
       ],
       [
+        "StorageUnknownError with forbidden status",
+        { statusCode: 403, message: '{"name":"StorageUnknownError"}' },
+      ],
+      [
+        "StorageUnknownError with permission marker",
+        { message: "Forbidden StorageUnknownError" },
+      ],
+      [
         "network",
         () => {
           throw new Error("network failure");
@@ -498,6 +514,23 @@ Deno.test("storage permission and runtime failures remain read_failed and zero w
     assertEquals(result.body.repairable, false, `${name} repairable`);
     assertEquals(uploadCalls.length, 0, `${name} zero writes`);
   }
+
+  const uploadCalls: string[] = [];
+  const adapters = createSupabaseCanonicalPointerRepairAdapters(
+    createFakeStorageServiceClient(
+      { message: '{"name":"StorageUnknownError"}' },
+      uploadCalls,
+    ),
+  );
+  const nonPointerRead = await adapters.readTextObject(
+    "published/versions/source.json",
+  );
+  assertEquals(
+    nonPointerRead.kind,
+    "read_failed",
+    "non-pointer StorageUnknownError remains read_failed",
+  );
+  assertEquals(uploadCalls.length, 0, "non-pointer zero writes");
 });
 
 Deno.test("dry-run returns ok true and performs zero writes", async () => {
