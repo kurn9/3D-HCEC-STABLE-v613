@@ -7753,7 +7753,13 @@ function renderPublishInclusionStatusCard(model = {}) {
   safeArray(inclusion.items).forEach((item) => list.appendChild(renderPublishInclusionRow(item)));
   card.appendChild(list);
   if (inclusion.blocksPublish) {
-    card.appendChild(renderNoticeBox(inclusion.hasDifferent ? 'Có nội dung đã lưu chưa nằm trong bản chuẩn bị. Hãy cập nhật bản chuẩn bị, sau đó lưu lại trước khi kiểm tra hoặc đưa lên website.' : 'Chưa thể công khai an toàn cho đến khi xử lý hoặc xác minh các khu vực đang bị chặn.', 'warning'));
+    const blockedLabels = safeArray(inclusion.blockedLabels).join(' / ') || 'một số khu vực';
+    const message = inclusion.hasDifferent
+      ? `Có nội dung đã lưu trong CMS nhưng chưa nằm trong bản chuẩn bị: ${blockedLabels}. Hãy cập nhật bản chuẩn bị, sau đó lưu lại trước khi kiểm tra hoặc đưa lên website.`
+      : inclusion.hasUnsavedDraft
+        ? `Bản chuẩn bị chưa lưu hoặc còn thay đổi chưa lưu: ${blockedLabels}. Hãy lưu bản chuẩn bị trước khi kiểm tra.`
+        : `Chưa thể công khai an toàn cho đến khi xử lý hoặc xác minh: ${blockedLabels}.`;
+    card.appendChild(renderNoticeBox(message, 'warning'));
   }
   return card;
 }
@@ -7787,8 +7793,10 @@ function getPublishInclusionStatusLabel(status = '') {
     included: 'Đã có trong bản chuẩn bị',
     no_newer_change_detected: 'Chưa phát hiện thay đổi mới hơn',
     newer_than_draft: 'Có thay đổi chưa nằm trong bản chuẩn bị',
-    different: 'Khác bản chuẩn bị',
+    different: 'Cần cập nhật vào bản chuẩn bị',
     missing_draft: 'Chưa có bản chuẩn bị',
+    unsaved_draft: 'Bản chuẩn bị chưa lưu',
+    no_source: 'Chưa có nguồn CMS',
     unverifiable: 'Chưa xác minh được',
     not_applicable: 'Không áp dụng',
   };
