@@ -1044,22 +1044,93 @@ function renderEditActionBlock(editState = {}, copy = {}, handlers = {}) {
 }
 
 
-function renderPostSavePublishNextStep(message = 'Khi hoàn tất chỉnh sửa, mở “Đưa website lên bản mới”.') {
+function renderPostSavePublishNextStep(message = 'Sau khi lưu, xem khối “Đưa phần này lên website” ngay trong từng tab. Website public chưa thay đổi ở phase này.') {
   const wrap = createElement('div', { className: 'cms-admin-post-save-next-step' });
   wrap.appendChild(createElement('p', {
     className: 'cms-admin-help-text',
     text: message,
   }));
-  const button = createElement('button', {
-    className: 'cms-admin-button cms-admin-button-secondary cms-admin-button-small',
-    type: 'button',
-    text: 'Tiếp tục: Đưa website lên bản mới',
-    attrs: { 'aria-label': 'Mở màn Đưa website lên bản mới' },
-  });
-  button.addEventListener('click', () => switchAdminTab('publish'));
-  wrap.appendChild(button);
+  wrap.appendChild(createElement('span', {
+    className: 'cms-admin-inline-note',
+    text: 'Tab “Đưa website lên bản mới” đã được bỏ khỏi luồng vận hành chính để tránh publish tổng gây nhầm lẫn.',
+  }));
   return wrap;
 }
+
+function normalizeAdminMainTabKey(tabKey) {
+  const key = String(tabKey || '').trim();
+  if (key === 'publish' || key === 'settings') return 'home';
+  return key || 'dashboard';
+}
+
+function renderScopedPublishShell(scopeKey, options = {}) {
+  const title = options.title || 'Đưa phần này lên website';
+  const eyebrow = options.eyebrow || 'CÔNG KHAI THEO KHU VỰC';
+  const includes = safeArray(options.includes);
+  const reason = options.reason || 'Chức năng đưa riêng khu vực này lên website sẽ được bật sau khi backend scoped publish hoàn tất.';
+  const panel = createElement('section', {
+    className: `cms-admin-panel cms-admin-view-panel cms-admin-scoped-publish-shell cms-admin-scoped-publish-shell-${scopeKey}`,
+    dataset: { cmsScopedPublishShell: scopeKey },
+  });
+  const header = createElement('header', { className: 'cms-admin-scoped-publish-header' });
+  const copy = createElement('div');
+  copy.appendChild(createElement('span', { className: 'cms-admin-eyebrow', text: eyebrow }));
+  copy.appendChild(createElement('h3', { text: title }));
+  copy.appendChild(createElement('p', {
+    className: 'cms-admin-compact-copy',
+    text: options.summary || 'Website chưa thay đổi. Panel này chỉ hiển thị trạng thái và hướng dẫn cho luồng publish riêng từng khu vực.',
+  }));
+  const badges = createElement('div', { className: 'cms-admin-scoped-publish-badges' });
+  badges.appendChild(renderBadge('Đang chờ backend scoped publish', 'warning'));
+  badges.appendChild(renderBadge('Không gọi publish thật', 'success'));
+  appendChildren(header, [copy, badges]);
+  panel.appendChild(header);
+  if (includes.length) {
+    const listWrap = createElement('div', { className: 'cms-admin-scoped-publish-includes' });
+    listWrap.appendChild(createElement('strong', { text: 'Khi bật ở phase sau, khu vực này sẽ gồm:' }));
+    const list = createElement('ul', { className: 'cms-admin-operator-bullet-list' });
+    includes.forEach((item) => list.appendChild(createElement('li', { text: item })));
+    listWrap.appendChild(list);
+    panel.appendChild(listWrap);
+  }
+  const action = createElement('div', { className: 'cms-admin-scoped-publish-action-row' });
+  const button = createElement('button', {
+    className: 'cms-admin-button cms-admin-button-primary',
+    text: options.buttonLabel || 'Kiểm tra & đưa phần này lên website',
+    type: 'button',
+    attrs: { disabled: 'disabled', 'aria-disabled': 'true' },
+  });
+  button.disabled = true;
+  action.appendChild(button);
+  action.appendChild(createElement('p', { className: 'cms-admin-help-text', text: reason }));
+  panel.appendChild(action);
+  panel.appendChild(createElement('p', {
+    className: 'cms-admin-inline-note',
+    text: 'Bạn vẫn có thể lưu nội dung trong CMS. Không có thao tác nào ở panel này kiểm tra server hoặc đưa nội dung lên website.',
+  }));
+  return panel;
+}
+
+function renderHomeScopedPublishShell() {
+  return renderScopedPublishShell('home', {
+    title: 'Đưa Trang chủ lên website',
+    buttonLabel: 'Kiểm tra & đưa Trang chủ lên website',
+    summary: 'Dùng cho nội dung Trang chủ và thông tin website/liên hệ sau khi backend publish riêng Trang chủ được bật.',
+    includes: ['Trang chủ', 'Thông tin website / liên hệ', 'Tác phẩm tiêu biểu nếu thuộc Trang chủ'],
+    reason: 'Chức năng đưa riêng Trang chủ lên website sẽ được bật sau khi backend scoped publish hoàn tất. Hiện tại chỉ được lưu nội dung trong CMS.',
+  });
+}
+
+function renderGateScopedPublishShell() {
+  return renderScopedPublishShell('gate', {
+    title: 'Đưa Cổng vào triển lãm lên website',
+    buttonLabel: 'Kiểm tra & đưa Cổng vào lên website',
+    summary: 'Dùng cho màn chào và các card chọn không gian sau khi backend publish riêng Cổng vào được bật.',
+    includes: ['Màn chào', 'Không gian trong nhà card', 'Không gian ngoài trời card'],
+    reason: 'Đang chờ backend scoped publish cho Cổng vào triển lãm. Không dùng tab publish tổng nữa.',
+  });
+}
+
 
 function renderPostSaveSuccessBlock(message = 'Đã lưu ở màn này. Website đang hoạt động chưa thay đổi.') {
   const wrap = createElement('div', { className: 'cms-admin-post-save-success-block' });
@@ -1344,7 +1415,8 @@ function renderActiveTab(state) {
     return renderLoadingPanel();
   }
 
-  switch (state.activeTab) {
+  const activeTab = normalizeAdminMainTabKey(state.activeTab);
+  switch (activeTab) {
     case 'dashboard':
       return renderWorkspaceShell('dashboard', renderDashboardWorkspaceContent(state), state, { hideTabs: true, hideRail: true });
     case 'home':
@@ -1370,21 +1442,13 @@ function renderActiveTab(state) {
           activeRoomKey: activeKey,
           onRerender: renderAdminShell,
           onOpenHistory: () => switchAdminTab('history'),
-          onOpenPublish: () => switchAdminTab('publish'),
+          onOpenPublish: () => switchAdminTab('staticDraft'),
         }),
-      });
-    case 'publish':
-      return renderWorkspaceShell('publish', null, state, {
-        hideTabs: true,
-        hideRail: true,
-        renderContent: () => renderPublishWorkspaceContent(state),
       });
     case 'history':
       return renderWorkspaceShell('history', renderRollbackHistoryTab(state, { onRerender: renderAdminShell }), state, { hideTabs: true, hideRail: true });
     case 'cleanup':
       return renderWorkspaceShell('cleanup', renderCmsStorageCleanupTab(state, { onRerender: renderAdminShell }), state, { hideTabs: true, hideRail: true });
-    case 'settings':
-      return renderWorkspaceShell('settings', renderSettingsTab(state), state, { hideTabs: true, hideRail: true });
     default:
       return renderWorkspaceShell('dashboard', renderDashboard(state), state);
   }
@@ -1398,7 +1462,7 @@ const WORKSPACE_TAB_DEFINITIONS = Object.freeze({
     { key: 'hero', label: 'Khu vực đầu trang', summary: 'Phần người xem thấy đầu tiên khi mở website.' },
     { key: 'experience', label: 'Khu vực trải nghiệm', summary: 'Phần giới thiệu hành trình và cảm giác tham quan.' },
     { key: 'guide', label: 'Hướng dẫn tham quan', summary: 'Phần giúp người xem biết cách bắt đầu và đi tiếp.' },
-    { key: 'contact', label: 'Liên hệ tham chiếu', summary: 'Đối chiếu thông tin liên hệ; chỉnh nguồn chính ở Thông tin website.' },
+    { key: 'contact', label: 'Thông tin website / Liên hệ', summary: 'Chỉnh thông tin liên hệ chính thức ngay trong Trang chủ.' },
   ],
   gate: [
     { key: 'intro', label: 'Màn chào', summary: 'Phần người xem đọc trước khi chọn không gian.' },
@@ -1745,7 +1809,7 @@ function getWorkspaceSecondaryNotes(workspaceKey, tabKey, state = {}) {
       confirm: ['Dọn dẹp thật chỉ thực hiện khi có feature flag, quyền admin và cụm xác nhận hợp lệ.', 'Không có auto-delete khi chuyển tab.'],
     },
     settings: {
-      edit: ['Chỉnh sửa thông tin website chỉ lưu thay đổi CMS.', 'Website chỉ thay đổi tại màn Đưa website lên bản mới.'],
+      edit: ['Chỉnh sửa thông tin website chỉ lưu thay đổi CMS.', 'Website chỉ thay đổi khi publish riêng Trang chủ được bật ở phase sau.'],
       identity: ['Thông tin hiển thị chỉ gồm tên, đơn vị, liên hệ và ngôn ngữ.', 'Các field legacy không thuộc thao tác operator ở màn này.'],
       details: ['Trạng thái quản trị và dữ liệu kỹ thuật dùng để hỗ trợ vận hành, không phải nội dung chính.'],
     },
@@ -1794,8 +1858,8 @@ function getWorkspaceRailGuidance(workspaceKey, tabKey, pageCopy = {}, stepConfi
       contact: {
         title: 'Bạn đang xem Thông tin liên hệ',
         status: 'Tham chiếu',
-        summary: 'Đây là dữ liệu tiện ích. Thông tin liên hệ chính thức được quản lý ở màn Thông tin website.',
-        steps: ['Đối chiếu thông tin liên hệ.', 'Mở Thông tin website nếu cần cập nhật.', 'Không tạo form liên hệ mới ở Trang chủ.'],
+        summary: 'Thông tin website / liên hệ được quản lý ngay trong tab Trang chủ.',
+        steps: ['Đối chiếu thông tin liên hệ.', 'Chỉnh thông tin trong form Thông tin website / Liên hệ.', 'Lưu trong CMS; website chưa đổi.'],
       },
     },
     gate: {
@@ -2183,7 +2247,7 @@ function renderDashboardAttentionItem(title, body, targetTab = '') {
   text.appendChild(createElement('p', { text: body }));
   item.appendChild(text);
   if (targetTab) {
-    const button = createElement('button', { className: 'cms-admin-button cms-admin-button-secondary cms-admin-mini-action', type: 'button', text: targetTab === 'publish' ? 'Mở màn kiểm tra' : 'Mở nội dung' });
+    const button = createElement('button', { className: 'cms-admin-button cms-admin-button-secondary cms-admin-mini-action', type: 'button', text: targetTab === 'publish' ? 'Mở Trang chủ' : 'Mở nội dung' });
     button.addEventListener('click', () => switchAdminTab(targetTab));
     item.appendChild(button);
   }
@@ -2199,7 +2263,7 @@ function renderDashboardFastActionsPanel() {
   const actions = [
     ...(safeArray(copy.actions)),
     { key: 'media', label: 'Mở Ảnh & video', note: 'Xem thư viện ảnh/video đang có' },
-    { key: 'publish', label: 'Mở Đưa website lên bản mới', note: 'Kiểm tra trước khi công khai ở màn riêng' },
+    { key: 'home', label: 'Mở Trang chủ', note: 'Xem nội dung và publish shell riêng của Trang chủ' },
   ];
   actions.forEach((action) => grid.appendChild(renderDashboardNavigationAction(action)));
   const website = createElement('a', {
@@ -2284,10 +2348,12 @@ function renderHomeWorkspaceContent(state, activeKey = 'hero') {
     emptyPanel.appendChild(renderEmptyState(`${copy.emptyTitle}. ${copy.emptyBody}`));
     emptyPanel.appendChild(renderTechnicalSourceNote('Nguồn kỹ thuật phụ', 'CMS index_sections'));
     wrap.appendChild(emptyPanel);
+    wrap.appendChild(renderHomeScopedPublishShell());
     return wrap;
   }
 
   wrap.appendChild(renderHomeSectionWorkspacePanel(state, sections, normalizedActiveKey, copy, editState));
+  wrap.appendChild(renderHomeScopedPublishShell());
   return wrap;
 }
 
@@ -2332,10 +2398,10 @@ function getHomeSectionPriorityMeta(sectionKey) {
       technical: 'CMS index_sections.section_key = guide',
     },
     contact: {
-      label: 'Liên hệ tham chiếu',
-      badge: 'Tham chiếu',
-      role: 'Thông tin đơn vị quản lý và liên hệ hỗ trợ.',
-      focus: 'Đây là dữ liệu tiện ích. Thông tin liên hệ chính thức được chỉnh ở màn Thông tin website.',
+      label: 'Thông tin website / Liên hệ',
+      badge: 'Nguồn chính thức',
+      role: 'Thông tin đơn vị quản lý, địa chỉ và liên hệ hỗ trợ của website.',
+      focus: 'Khu vực này là nơi chỉnh thông tin website chính thức trong tab Trang chủ.',
       technical: 'CMS index_sections.section_key = contact',
     },
   };
@@ -2370,7 +2436,7 @@ function renderHomeSectionWorkspacePanel(state, sections = [], sectionKey = 'her
   const side = renderHomeContextualChecklistPanel(state, section, sectionKey, copy, editState, { isEditing: isEditingThisSection, meta });
 
   if (sectionKey === 'contact') {
-    main.appendChild(renderHomeContactReferencePanel(state, section, meta, copy));
+    main.appendChild(renderHomeIntegratedSiteSettingsPanel(state, section, meta, copy));
     main.appendChild(renderHomeSectionTechnicalFooter(section, meta));
     main.appendChild(renderLockedNotice(getHomeSectionSafetyNote(sectionKey)));
     appendChildren(workspace, [main, side]);
@@ -2441,7 +2507,7 @@ function renderHomeContextualChecklistPanel(state, section, sectionKey, copy = A
 }
 
 function getHomeContextSummary(section, sectionKey, meta = getHomeSectionPriorityMeta(sectionKey)) {
-  if (sectionKey === 'contact') return 'Liên hệ trong Trang chủ chỉ để đối chiếu. Dữ liệu chính được chỉnh ở Thông tin website.';
+  if (sectionKey === 'contact') return 'Thông tin website / liên hệ được chỉnh trực tiếp trong tab Trang chủ. Lưu ở đây chưa làm đổi website public.';
   if (!section) return `Chưa đọc được ${meta.label}.`;
   return `${meta.label} đang ở chế độ xem. Chỉnh sửa chỉ lưu thay đổi trong CMS.`;
 }
@@ -2554,7 +2620,7 @@ function buildHomeMediaChecklistItem(sectionKey, media) {
 
 function buildHomeButtonChecklistItem(sectionKey, cta) {
   if (sectionKey === 'contact') {
-    return { label: 'Nút', value: 'Mở Thông tin website', status: 'info', detail: 'Liên hệ chính thức chỉnh ở màn Thông tin website.' };
+    return { label: 'Nút', value: 'Trong Trang chủ', status: 'info', detail: 'Liên hệ chính thức chỉnh ngay trong tab Trang chủ.' };
   }
   if (sectionKey === 'hero') {
     return { label: 'Nút', value: isBlank(cta) ? 'Cần kiểm tra' : 'Đã có', status: isBlank(cta) ? 'warning' : 'pass', detail: isBlank(cta) ? 'Khu vực đầu trang nên có nút rõ để người xem đi tiếp.' : 'Đã có dữ liệu nút; đường dẫn kỹ thuật nằm trong details nếu cần đối chiếu.' };
@@ -2593,15 +2659,7 @@ function renderHomeContextualActionPanel(state, section, sectionKey, editState =
   }
 
   if (sectionKey === 'contact') {
-    const openButton = createElement('button', {
-      className: 'cms-admin-button cms-admin-button-primary',
-      text: 'Mở Thông tin website',
-      type: 'button',
-      ariaLabel: 'Mở màn Thông tin website để chỉnh dữ liệu liên hệ chính thức',
-    });
-    openButton.addEventListener('click', () => switchAdminTab('settings'));
-    panel.appendChild(openButton);
-    panel.appendChild(renderHomeChecklistActionNote('Trang chủ chỉ đối chiếu thông tin liên hệ.', 'info'));
+    panel.appendChild(renderHomeChecklistActionNote('Form Thông tin website / Liên hệ đang nằm trong nội dung chính của tab Trang chủ. Website public chưa đổi sau khi lưu CMS.', 'info'));
     return panel;
   }
 
@@ -2807,6 +2865,25 @@ function renderHomeSectionEditZone(state, sections = [], section, sectionKey, co
 }
 
 
+function renderHomeIntegratedSiteSettingsPanel(state, section, meta = getHomeSectionPriorityMeta('contact'), copy = ADMIN_COPY.contentViews.home) {
+  const wrap = createElement('div', { className: 'cms-admin-home-contact-reference-flow cms-admin-home-settings-merged-flow' });
+  const header = createElement('header', { className: 'cms-admin-home-contact-reference-header' });
+  header.appendChild(renderPanelTitle('Thông tin website / Liên hệ', 'Trong Trang chủ'));
+  header.appendChild(createElement('p', {
+    className: 'cms-admin-operator-summary',
+    text: 'Thông tin này thuộc Trang chủ và phần liên hệ của website. Lưu ở đây chưa làm đổi website public.',
+  }));
+  if (section) {
+    header.appendChild(createElement('p', {
+      className: 'cms-admin-home-section-focus',
+      text: 'Section Contact cũ vẫn được giữ để đối chiếu, nhưng form Thông tin website bên dưới là nơi thao tác chính.',
+    }));
+  }
+  wrap.appendChild(header);
+  wrap.appendChild(renderSettingsTab(state));
+  return wrap;
+}
+
 function renderHomeContactReferencePanel(state, section, meta = getHomeSectionPriorityMeta('contact'), copy = ADMIN_COPY.contentViews.home) {
   const wrap = createElement('div', { className: 'cms-admin-home-contact-reference-flow' });
   const header = createElement('header', { className: 'cms-admin-home-contact-reference-header' });
@@ -2818,20 +2895,23 @@ function renderHomeContactReferencePanel(state, section, meta = getHomeSectionPr
   wrap.appendChild(renderHomeContactOfficialInfoCard(state, copy));
 
   const actionCard = createElement('article', { className: 'cms-admin-data-card cms-admin-home-section-card cms-admin-home-contact-action-card' });
-  actionCard.appendChild(renderDataCardTitle('Sửa thông tin liên hệ ở đâu?', 'Nguồn riêng'));
+  actionCard.appendChild(renderDataCardTitle('Sửa thông tin liên hệ ở đâu?', 'Trong Trang chủ'));
   actionCard.appendChild(createElement('p', {
     className: 'cms-admin-operator-summary',
-    text: 'Thông tin liên hệ chính thức được quản lý tại màn Thông tin website. Màn Trang chủ chỉ đối chiếu để tránh lệch nguồn dữ liệu.',
+    text: 'Thông tin liên hệ chính thức được quản lý ngay trong tab Trang chủ. Form Thông tin website / Liên hệ là nguồn thao tác chính.',
   }));
   const actions = createElement('div', { className: 'cms-admin-settings-edit-actions cms-admin-contact-source-actions' });
   const openButton = createElement('button', {
     className: 'cms-admin-button cms-admin-button-ghost',
-    text: 'Mở Thông tin website',
-    title: 'Mở màn Thông tin website để chỉnh dữ liệu liên hệ chính thức',
+    text: 'Mở Thông tin website / Liên hệ',
+    title: 'Mở khu vực Thông tin website / Liên hệ trong Trang chủ',
     type: 'button',
-    ariaLabel: 'Mở màn Thông tin website để chỉnh dữ liệu liên hệ chính thức',
+    ariaLabel: 'Mở khu vực Thông tin website / Liên hệ trong Trang chủ',
   });
-  openButton.addEventListener('click', () => switchAdminTab('settings'));
+  openButton.addEventListener('click', () => {
+    setWorkspaceTabState('home', 'contact');
+    switchAdminTab('home');
+  });
   actions.appendChild(openButton);
   actions.appendChild(createElement('span', { className: 'cms-admin-inline-note', text: 'Không tạo form liên hệ mới trong Trang chủ.' }));
   actionCard.appendChild(actions);
@@ -2900,14 +2980,14 @@ function getHomeSectionEditHint(sectionKey) {
     hero: 'Sửa tiêu đề, mô tả, media giới thiệu và nút cho phần người xem thấy đầu tiên.',
     experience: 'Sửa chữ hiển thị của khu vực trải nghiệm. Mã phòng/route kỹ thuật vẫn được khóa.',
     guide: 'Sửa chữ hướng dẫn và nội dung con được phép. Không làm đổi website cho đến khi công khai.',
-    contact: 'Thông tin liên hệ chính thức được chỉnh tại màn Thông tin website, không tạo form mới trong Trang chủ.',
+    contact: 'Thông tin website / liên hệ được chỉnh ngay trong tab Trang chủ.',
   };
   return hints[sectionKey] || 'Sửa nội dung được phép trong bản nháp CMS.';
 }
 
 function getHomeSectionSafetyNote(sectionKey) {
-  if (sectionKey === 'contact') return 'Tab này chỉ đối chiếu thông tin liên hệ. Nếu cần sửa, mở màn Thông tin website.';
-  return 'Lưu thay đổi chưa làm đổi website. Website chỉ thay đổi tại màn Đưa website lên bản mới.';
+  if (sectionKey === 'contact') return 'Lưu thông tin website trong Trang chủ chưa làm đổi website public.';
+  return 'Lưu thay đổi chưa làm đổi website. Website chỉ thay đổi khi publish riêng từng khu vực được bật.';
 }
 
 function renderHomeSectionMediaCtaSummary(section, copy = ADMIN_COPY.contentViews.home) {
@@ -3070,15 +3150,18 @@ function renderGateWorkspaceContent(state, activeKey = 'intro') {
     ]));
     emptyPanel.appendChild(renderLockedNotice(copy.safety));
     wrap.appendChild(emptyPanel);
+    wrap.appendChild(renderGateScopedPublishShell());
     return wrap;
   }
 
   if (sectionKey === 'indoor' || sectionKey === 'outdoor') {
     wrap.appendChild(renderGateRoomWorkspacePanel(state, gate, sectionKey, editState, copy));
+    wrap.appendChild(renderGateScopedPublishShell());
     return wrap;
   }
 
   wrap.appendChild(renderGateIntroWorkspacePanel(state, gate, editState, copy));
+  wrap.appendChild(renderGateScopedPublishShell());
   return wrap;
 }
 
@@ -4568,7 +4651,7 @@ function renderMediaCleanupActionRail(cleanupModel = {}, candidate = null) {
   resetDetails.appendChild(resetButton);
   rail.appendChild(resetDetails);
 
-  rail.appendChild(createElement('p', { className: 'cms-admin-media-public-note', text: 'Website đang công khai chưa đổi. Website chỉ thay đổi ở màn Đưa website lên bản mới.' }));
+  rail.appendChild(createElement('p', { className: 'cms-admin-media-public-note', text: 'Website đang công khai chưa đổi. Publish riêng từng khu vực sẽ được bật ở phase sau.' }));
   return rail;
 }
 
@@ -6999,15 +7082,20 @@ function getResolvedMediaReferenceTarget(reference = {}) {
 function handleNavigateToMediaReference(reference = {}) {
   const target = getResolvedMediaReferenceTarget(reference);
   if (!target?.tab || !['settings', 'home', 'staticDraft', 'gate'].includes(target.tab)) return;
+  const targetTab = normalizeAdminMainTabKey(target.tab);
+  if (target.tab === 'settings') {
+    target.workspaceKey = 'home';
+    target.workspaceTab = 'contact';
+  }
   const currentState = getState();
-  if (currentState.activeTab !== target.tab) {
+  if (normalizeAdminMainTabKey(currentState.activeTab) !== targetTab) {
     if (!requestLeaveEditSession('media-reference-navigation')) return;
-    setActiveTab(target.tab);
+    setActiveTab(targetTab);
   }
   if (target.workspaceKey && target.workspaceTab) {
     setWorkspaceTabState(target.workspaceKey, target.workspaceTab);
   }
-  queueMediaReferenceFocus(target);
+  queueMediaReferenceFocus({ ...target, tab: targetTab });
   renderAdminShell();
 }
 
@@ -8586,7 +8674,7 @@ function renderSiteSettingsFeedback(editState = {}) {
 function renderSiteSettingsWorkspaceHeader() {
   const header = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel cms-admin-settings-workspace-header' });
   const title = createElement('div');
-  title.appendChild(createElement('span', { className: 'cms-admin-eyebrow', text: 'CẤU HÌNH / THÔNG TIN WEBSITE' }));
+  title.appendChild(createElement('span', { className: 'cms-admin-eyebrow', text: 'TRANG CHỦ / THÔNG TIN WEBSITE' }));
   title.appendChild(createElement('h2', { text: ADMIN_COPY.settings.websiteTitle || 'Thông tin website' }));
   title.appendChild(createElement('p', {
     className: 'cms-admin-compact-copy',
@@ -9701,14 +9789,17 @@ function renderHomeContactSourceOfTruthBlock(state, section, homeCopy) {
   const actions = createElement('div', { className: 'cms-admin-settings-edit-actions cms-admin-contact-source-actions' });
   const openButton = createElement('button', {
     className: 'cms-admin-button cms-admin-button-ghost',
-    text: copy.openSettings || 'Mở Thông tin website',
-    title: copy.openSettingsTitle || 'Mở tab Thông tin website để chỉnh dữ liệu liên hệ chính thức',
+    text: copy.openSettings || 'Mở Thông tin website / Liên hệ',
+    title: copy.openSettingsTitle || 'Mở khu vực Thông tin website / Liên hệ trong Trang chủ',
     type: 'button',
-    ariaLabel: copy.openSettingsAria || 'Mở Thông tin website để chỉnh dữ liệu liên hệ chính thức',
+    ariaLabel: copy.openSettingsAria || 'Mở khu vực Thông tin website / Liên hệ trong Trang chủ',
   });
-  openButton.addEventListener('click', () => switchAdminTab('settings'));
+  openButton.addEventListener('click', () => {
+    setWorkspaceTabState('home', 'contact');
+    switchAdminTab('home');
+  });
   actions.appendChild(openButton);
-  actions.appendChild(createElement('span', { className: 'cms-admin-inline-note', text: copy.settingsHint || 'Nếu cần cập nhật thông tin liên hệ, hãy chỉnh tại Thông tin website.' }));
+  actions.appendChild(createElement('span', { className: 'cms-admin-inline-note', text: copy.settingsHint || 'Thông tin liên hệ chính thức hiện nằm trong tab Trang chủ.' }));
   block.appendChild(actions);
   return block;
 }
@@ -11468,10 +11559,12 @@ function renderInfoTile(label, value, technical = false) {
 }
 
 function switchAdminTab(tabKey) {
+  const nextTab = normalizeAdminMainTabKey(tabKey);
+  if (tabKey === 'settings') setWorkspaceTabState('home', 'contact');
   const currentState = getState();
-  if (currentState.activeTab === tabKey) return true;
+  if (normalizeAdminMainTabKey(currentState.activeTab) === nextTab) return true;
   if (!requestLeaveEditSession('tab-switch')) return false;
-  setActiveTab(tabKey);
+  setActiveTab(nextTab);
   renderAdminShell();
   return true;
 }

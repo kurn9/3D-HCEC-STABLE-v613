@@ -292,6 +292,54 @@ function renderStaticOperatorStepPanel(config = {}, options = {}) {
   return panel;
 }
 
+
+function renderRooms3dScopedPublishShell() {
+  const panel = createElement('section', {
+    className: 'cms-admin-panel cms-admin-view-panel cms-admin-scoped-publish-shell cms-admin-scoped-publish-shell-rooms3d',
+    dataset: { cmsScopedPublishShell: 'rooms3d' },
+  });
+  const header = createElement('header', { className: 'cms-admin-scoped-publish-header' });
+  const copy = createElement('div');
+  copy.appendChild(createElement('span', { className: 'cms-admin-eyebrow', text: 'CÔNG KHAI THEO KHU VỰC' }));
+  copy.appendChild(createElement('h3', { text: 'Đưa Nội dung phòng 3D lên website' }));
+  copy.appendChild(createElement('p', {
+    className: 'cms-admin-compact-copy',
+    text: 'Dùng cho nội dung phòng trong nhà, phòng ngoài trời, tác phẩm/item và media references trong phòng sau khi backend scoped publish được bật.',
+  }));
+  const badges = createElement('div', { className: 'cms-admin-scoped-publish-badges' });
+  badges.appendChild(renderBadge('Đang chờ backend scoped publish', 'warning'));
+  badges.appendChild(renderBadge('Không gọi publish thật', 'success'));
+  appendChildren(header, [copy, badges]);
+  panel.appendChild(header);
+
+  const listWrap = createElement('div', { className: 'cms-admin-scoped-publish-includes' });
+  listWrap.appendChild(createElement('strong', { text: 'Khi bật ở phase sau, khu vực này sẽ gồm:' }));
+  const list = createElement('ul', { className: 'cms-admin-operator-bullet-list' });
+  ['Phòng trong nhà', 'Phòng ngoài trời', 'Tác phẩm / item / media references trong phòng'].forEach((item) => list.appendChild(createElement('li', { text: item })));
+  listWrap.appendChild(list);
+  panel.appendChild(listWrap);
+
+  const action = createElement('div', { className: 'cms-admin-scoped-publish-action-row' });
+  const button = createElement('button', {
+    className: 'cms-admin-button cms-admin-button-primary',
+    text: 'Kiểm tra & đưa Nội dung phòng 3D lên website',
+    type: 'button',
+    attrs: { disabled: 'disabled', 'aria-disabled': 'true' },
+  });
+  button.disabled = true;
+  action.appendChild(button);
+  action.appendChild(createElement('p', {
+    className: 'cms-admin-help-text',
+    text: 'Đang chờ backend scoped publish cho scope rooms3d. Hãy tiếp tục lưu bản nháp 3D trong CMS, chưa publish thật.',
+  }));
+  panel.appendChild(action);
+  panel.appendChild(createElement('p', {
+    className: 'cms-admin-inline-note',
+    text: 'Panel này chỉ là trạng thái tạm thời; chưa kiểm tra server và chưa đưa nội dung lên website.',
+  }));
+  return panel;
+}
+
 export function renderStaticCmsDraftTab(state, handlers = {}) {
   const copy = ADMIN_COPY.staticDraft || {};
   const baseDraftState = state.staticCmsDraft || {};
@@ -330,6 +378,7 @@ export function renderStaticCmsDraftTab(state, handlers = {}) {
       text: 'Bấm “Nạp website đang chạy vào bản chuẩn bị mới” khi bạn muốn bắt đầu từ nội dung public hiện tại. Thao tác này sẽ rời bản chuẩn bị đang mở sau khi xác nhận và website chưa thay đổi.',
     }));
     panel.appendChild(empty);
+    panel.appendChild(renderRooms3dScopedPublishShell());
     return panel;
   }
 
@@ -337,6 +386,7 @@ export function renderStaticCmsDraftTab(state, handlers = {}) {
     ? renderFeaturedWorkspaceShell(draftState, state, handlers, copy)
     : renderStaticWorkspaceShell(draftState, state, currentItem, handlers, copy, activeRoomKey));
   panel.appendChild(renderUtilityDrawers(draftState, state, currentItem, handlers, copy));
+  panel.appendChild(renderRooms3dScopedPublishShell());
   return panel;
 }
 

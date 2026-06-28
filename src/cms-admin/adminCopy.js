@@ -47,15 +47,9 @@ export const ADMIN_COPY = Object.freeze({
       key: 'operations',
       label: 'Vận hành',
       items: [
-        { key: 'publish', label: 'Đưa website lên bản mới' },
         { key: 'history', label: 'Lịch sử phiên bản' },
         { key: 'cleanup', label: 'Quét & dọn tệp' },
       ],
-    },
-    {
-      key: 'settings',
-      label: 'Cấu hình',
-      items: [{ key: 'settings', label: 'Thông tin website' }],
     },
   ],
   nav: [
@@ -64,10 +58,8 @@ export const ADMIN_COPY = Object.freeze({
     { key: 'gate', label: 'Cổng vào triển lãm' },
     { key: 'media', label: 'Ảnh & video' },
     { key: 'staticDraft', label: 'Nội dung phòng 3D' },
-    { key: 'publish', label: 'Đưa website lên bản mới' },
     { key: 'history', label: 'Lịch sử phiên bản' },
     { key: 'cleanup', label: 'Quét & dọn tệp' },
-    { key: 'settings', label: 'Thông tin website' },
   ],
   globalEdit: {
     cleanEditing: 'Đang chỉnh sửa — chưa có thay đổi.',
@@ -99,7 +91,7 @@ export const ADMIN_COPY = Object.freeze({
       bullets: [
         'Sửa phần lớn nội dung',
         'Tải ảnh hoặc video',
-        'Đưa website lên bản mới',
+        'Đưa từng khu vực lên website khi backend publish riêng được bật',
         'Khôi phục phiên bản cũ',
       ],
       footer: 'Đây là khóa chủ động để bảo vệ dữ liệu, không phải lỗi. Website đang chạy không bị ảnh hưởng.',
@@ -109,7 +101,7 @@ export const ADMIN_COPY = Object.freeze({
       title: 'Vì sao chưa chỉnh sửa được?',
       paragraphs: [
         'Chức năng chỉnh sửa đang được khóa cho phần lớn nội dung để bảo vệ dữ liệu.',
-        'Riêng màn Thông tin website, Cổng vào triển lãm và Khu vực đầu trang của Trang chủ có thể được bật chỉnh sửa bản nháp khi đủ quyền.',
+        'Thông tin website hiện nằm trong Trang chủ; Cổng vào triển lãm và Khu vực đầu trang vẫn được bật chỉnh sửa bản nháp khi đủ quyền.',
       ],
       listTitle: 'Các chức năng sẽ được bật ở bước sau:',
       bullets: [
@@ -131,7 +123,7 @@ export const ADMIN_COPY = Object.freeze({
     },
     home: {
       title: 'Trang chủ',
-      subtitle: 'Kiểm tra nội dung hiển thị ở trang giới thiệu đầu tiên của website triển lãm.',
+      subtitle: 'Chỉnh nội dung Trang chủ, thông tin website/liên hệ và xem trạng thái đưa riêng phần Trang chủ lên website.',
     },
     gate: {
       title: 'Cổng vào triển lãm',
@@ -143,11 +135,11 @@ export const ADMIN_COPY = Object.freeze({
     },
     staticDraft: {
       title: 'Nội dung phòng 3D',
-      subtitle: 'Chỉnh nội dung, hình ảnh và video cho các phòng 3D. Website chỉ thay đổi sau khi đưa bản này lên website.',
+      subtitle: 'Chỉnh nội dung, hình ảnh và video cho các phòng 3D. Website chỉ thay đổi sau khi publish riêng Nội dung phòng 3D được bật.',
     },
     publish: {
-      title: 'Đưa website lên bản mới',
-      subtitle: 'Làm theo các bước: lưu thay đổi, kiểm tra an toàn, đưa bản này lên website, rồi mở website để kiểm tra.',
+      title: 'Publish tổng đã ẩn khỏi navigation',
+      subtitle: 'Workflow công khai đang chuyển sang publish riêng từng khu vực trong từng tab.',
     },
     history: {
       title: 'Lịch sử phiên bản',
@@ -158,8 +150,8 @@ export const ADMIN_COPY = Object.freeze({
       subtitle: 'Quét tệp, kiểm tra tệp có thể xóa, xem danh sách và chỉ xóa khi đã xác nhận.',
     },
     settings: {
-      title: 'Thông tin website',
-      subtitle: 'Xem và chỉnh sửa bản nháp thông tin website ở phạm vi an toàn.',
+      title: 'Thông tin website / Liên hệ',
+      subtitle: 'Thông tin website đã được nhập vào tab Trang chủ.',
     },
   },
   staticDraft: {
@@ -363,15 +355,15 @@ export const ADMIN_COPY = Object.freeze({
       },
       contactSource: {
         title: 'Nguồn dữ liệu liên hệ chính thức',
-        notice: 'Thông tin liên hệ chính thức được quản lý tại Thông tin website.',
+        notice: 'Thông tin liên hệ chính thức được quản lý ngay trong tab Trang chủ.',
         detail: 'Địa chỉ, điện thoại, fax và email không chỉnh trong Trang chủ để tránh lệch nguồn dữ liệu.',
-        publicNote: 'Chỉnh Thông tin website chỉ lưu vào bản nháp trong CMS; website vẫn cần luồng công khai riêng.',
+        publicNote: 'Chỉnh Thông tin website trong Trang chủ chỉ lưu vào CMS; website vẫn cần publish riêng Trang chủ ở phase sau.',
         mirrorTitle: 'Dữ liệu liên hệ đang dùng',
         sectionDataTitle: 'Nội dung section Contact hiện tại',
-        openSettings: 'Mở Thông tin website',
-        openSettingsTitle: 'Mở tab Thông tin website để chỉnh dữ liệu liên hệ chính thức',
-        openSettingsAria: 'Mở Thông tin website để chỉnh dữ liệu liên hệ chính thức',
-        settingsHint: 'Nếu cần cập nhật thông tin liên hệ chính thức, hãy chỉnh tại Thông tin website; không tạo bản sao trong Trang chủ.',
+        openSettings: 'Mở khu vực Thông tin website / Liên hệ',
+        openSettingsTitle: 'Mở khu vực Thông tin website / Liên hệ trong Trang chủ',
+        openSettingsAria: 'Mở khu vực Thông tin website / Liên hệ trong Trang chủ',
+        settingsHint: 'Thông tin liên hệ chính thức hiện nằm trong tab Trang chủ.',
         readonly: 'Liên hệ tham chiếu đang ở chế độ chỉ xem.',
         missing: 'Chưa khai báo',
         fields: {
@@ -545,7 +537,7 @@ export const ADMIN_COPY = Object.freeze({
       experienceEdit: {
         title: 'Chỉnh sửa Khu vực trải nghiệm',
         enabledScope: 'Chỉ bật chỉnh sửa Khu vực trải nghiệm',
-        readOnlyScope: 'Thông tin liên hệ vẫn đang chỉ xem; Contact chính thức quản lý tại Thông tin website.',
+        readOnlyScope: 'Thông tin liên hệ chính thức đã được nhập vào tab Trang chủ.',
         button: 'Chỉnh sửa phần này',
         buttonTitle: 'Chỉnh sửa chữ hiển thị của Khu vực trải nghiệm',
         buttonAria: 'Chỉnh sửa chữ hiển thị của Khu vực trải nghiệm',
@@ -895,7 +887,7 @@ export const ADMIN_COPY = Object.freeze({
     dbReferenceHint: 'Bản ghi tham chiếu có thể lệch với nội dung website đang dùng. Không dùng bản ghi này để quyết định website hiện tại nếu có dữ liệu public mới hơn.',
     surfaceTitle: 'Bề mặt trạng thái công khai',
     surfaceStatus: 'Chỉ xem trạng thái',
-    surfaceBody: 'Màn Đưa website lên bản mới là nơi duy nhất cập nhật bản chuẩn bị, kiểm tra trước khi đưa lên và đưa bản này lên website.',
+    surfaceBody: 'Workflow publish tổng đã ẩn khỏi navigation chính; publish riêng từng khu vực sẽ được bật theo phase backend scoped publish.',
     workflowTitle: 'Các bước đưa website lên bản mới',
     workflowStatus: 'Màn chính đang khóa thao tác ghi',
     workflowSteps: [
@@ -1062,7 +1054,7 @@ export const ADMIN_COPY = Object.freeze({
         'Mở website để kiểm tra.',
       ],
     },
-    websiteTitle: 'Thông tin website',
+    websiteTitle: 'Thông tin website / Liên hệ',
     workspaceIntro: 'Cập nhật thông tin đơn vị, liên hệ và ngôn ngữ. Lưu thay đổi chỉ lưu nội dung ở màn này. Website đang hoạt động chưa thay đổi.',
     publicBoundaryNote: 'Lưu thay đổi chỉ lưu nội dung ở màn này. Website đang hoạt động chưa thay đổi. Website chỉ đổi sau luồng công khai riêng.',
     adminTitle: 'Trạng thái quản trị',
@@ -1088,7 +1080,7 @@ export const ADMIN_COPY = Object.freeze({
     },
     missingEmail: 'Chưa khai báo thư điện tử.',
     cmsStatusNote: 'Đây là trạng thái bản ghi quản trị trong CMS, không phải trạng thái phiên bản website đang chạy.',
-    notice: 'Chỉ màn Thông tin website, Cổng vào triển lãm và Khu vực đầu trang của Trang chủ được bật chỉnh sửa bản nháp ở bước này. Các khu vực khác vẫn đang chỉ xem.',
+    notice: 'Thông tin website đã được nhập vào Trang chủ; Cổng vào triển lãm và Khu vực đầu trang của Trang chủ vẫn giữ quyền chỉnh sửa hiện có.',
     edit: {
       title: 'Chỉnh sửa thông tin website',
       enabledScope: 'Chỉ bật chỉnh sửa Thông tin website',
