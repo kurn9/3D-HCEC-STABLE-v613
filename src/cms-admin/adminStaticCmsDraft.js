@@ -5880,6 +5880,116 @@ async function handleUploadStaticCmsMedia({ input, target = {}, handlers = {} } 
   handlers.onRerender?.();
 }
 
+
+export async function handleCreateCmsPreparationDraftFromSavedContent({ handlers = {} } = {}) {
+  if (!ADMIN_FEATURE_FLAGS.allowStaticCmsDraftEdit) return;
+  const appState = getState();
+  const currentDraftState = appState.staticCmsDraft || {};
+  const baselineGuard = getPublicBaselineLoadGuard(currentDraftState);
+  if (baselineGuard.blocked) {
+    setStaticCmsDraftState({
+      loadError: baselineGuard.message,
+      exportSuccess: null,
+      draftSaveStatus: currentDraftState.draftSaveStatus || '',
+    });
+    handlers.onRerender?.();
+    return;
+  }
+  if (baselineGuard.needsConfirm) {
+    const ok = window.confirm(baselineGuard.message);
+    if (!ok) return;
+  }
+
+  setStaticCmsDraftState({
+    loading: true,
+    isComposingPreparationDraft: true,
+    loadError: null,
+    exportError: null,
+    exportSuccess: null,
+    preparationCompositionError: null,
+    preparationCompositionStatus: 'Đang tạo bản chuẩn bị từ website đang chạy và nội dung đã lưu trong CMS...',
+    preparationCompositionResult: null,
+  });
+  handlers.onRerender?.();
+
+  try {
+    const baselineResult = await loadStaticCmsBaseline();
+    const sanitizedBaseline = sanitizeStaticCmsExport(baselineResult.json, { keepVersion: true });
+    const baselineValidation = validateStaticCmsDraft(sanitizedBaseline, STATIC_CMS_DRAFT_CONFIG);
+    if (!baselineValidation.valid) {
+      throw new Error(`Nội dung website đang chạy không đạt kiểm tra cấu trúc (${Object.keys(baselineValidation.errors || {}).length} lỗi).`);
+    }
+
+    const refresh = await fetchDashboardData(appState.supabase);
+    const refreshErrors = refresh?.errors || {};
+    const criticalError = refreshErrors.siteSettings || refreshErrors.indexSections || refreshErrors.gateContent || null;
+    if (criticalError) {
+      throw new Error(`Không đọc được nội dung đã lưu trong CMS để tạo bản chuẩn bị: ${normalizeErrorMessage(criticalError)}`);
+    }
+    if (refresh?.data) setNestedData(refresh.data);
+
+    const composition = composeCmsPreparationDraft({ draftJson: sanitizedBaseline, data: refresh?.data || appState.data || {} });
+    if (!composition.ok) {
+      throw new Error(composition.errors.join(' | ') || 'Không thể tạo bản chuẩn bị từ nội dung đã lưu trong CMS.');
+    }
+
+    const nextDraftJson = composition.draftJson || sanitizedBaseline;
+    const validation = validateStaticCmsDraft(nextDraftJson, STATIC_CMS_DRAFT_CONFIG);
+    if (!validation.valid) {
+      throw new Error(`Bản chuẩn bị sau khi tạo chưa đạt kiểm tra cấu trúc (${Object.keys(validation.errors || {}).length} lỗi).`);
+    }
+
+    setStaticCmsDraftBaseline({
+      baselineJson: sanitizedBaseline,
+      source: baselineResult.source,
+      sourceUrl: baselineResult.url,
+      validation: baselineValidation,
+    });
+    setStaticCmsDraftState({
+      draftJson: nextDraftJson,
+      dirty: true,
+      validation,
+      currentDraftId: '',
+      persistedDraftId: '',
+      persistedDraftUpdatedAt: null,
+      persistedDraftVersion: '',
+      isComposingPreparationDraft: false,
+      loading: false,
+      loadError: null,
+      preparationCompositionError: null,
+      preparationCompositionStatus: composition.changed
+        ? `Đã tạo bản chuẩn bị và cập nhật nội dung đã lưu trong CMS: ${composition.changedAreas.map((area) => area.label).join(', ')}. Website chưa thay đổi. Hãy lưu bản chuẩn bị trước khi kiểm tra.`
+        : 'Đã tạo bản chuẩn bị mới từ website đang chạy. Website chưa thay đổi. Hãy lưu bản chuẩn bị trước khi kiểm tra.',
+      preparationCompositionResult: composition,
+      draftSaveStatus: 'Bản chuẩn bị mới đang mở trong trình duyệt và chưa lưu. Website chưa thay đổi. Hãy bấm “Lưu bản chuẩn bị”.',
+      exportSuccess: 'Đã tạo bản chuẩn bị mới. Các bản nháp đã lưu không bị xóa.',
+      draftPersistenceError: null,
+      publishDryRunResult: null,
+      publishResult: null,
+      publishStatus: '',
+      publishError: null,
+      publishLastVerifiedAt: null,
+      publishVerifiedDraftId: '',
+      publishVerifiedDraftUpdatedAt: null,
+      publishVerifiedDraftVersion: '',
+      publishVerifiedCandidateHash: '',
+      publishVerificationInvalidatedAt: new Date().toISOString(),
+      publishVerificationInvalidationReason: 'Bản chuẩn bị mới đã được tạo/cập nhật từ nội dung đã lưu trong CMS và cần lưu trước khi kiểm tra.',
+    });
+  } catch (error) {
+    setStaticCmsDraftState({
+      loading: false,
+      isComposingPreparationDraft: false,
+      loadError: normalizeErrorMessage(error),
+      preparationCompositionError: normalizeErrorMessage(error),
+      preparationCompositionStatus: '',
+      preparationCompositionResult: null,
+      exportSuccess: null,
+    });
+  }
+  handlers.onRerender?.();
+}
+
 export async function handleLoadStaticCmsBaseline(handlers = {}) {
   if (!ADMIN_FEATURE_FLAGS.allowStaticCmsDraftEdit) return;
   const currentDraftState = getState().staticCmsDraft || {};

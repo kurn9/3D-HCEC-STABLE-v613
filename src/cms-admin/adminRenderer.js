@@ -81,6 +81,7 @@ import {
   getPublishGateAccess,
   getPublishReadiness,
   handleLoadStaticCmsBaseline,
+  handleCreateCmsPreparationDraftFromSavedContent,
   handleSaveStaticCmsDraft,
   handlePublishStaticCmsDraft,
   handleReconcileStaticCmsPublishPointer,
@@ -7425,9 +7426,9 @@ function getPublishCommandNextAction(model = {}) {
   if (!model.hasDraftJson) {
     return {
       state: 'no-content',
-      label: 'Nạp website đang chạy vào bản chuẩn bị mới',
-      note: 'Nạp website đang chạy vào bản chuẩn bị mới. Thao tác này có thể rời bản chuẩn bị đang mở sau khi xác nhận; website chưa thay đổi.',
-      kind: 'load-baseline',
+      label: 'Tạo bản chuẩn bị mới từ website đang chạy và nội dung đã lưu trong CMS',
+      note: 'Tạo bản chuẩn bị trong trình duyệt từ website đang chạy, rồi tự cập nhật nội dung đã lưu trong CMS vào bản chuẩn bị. Website chưa thay đổi; sau bước này bạn cần lưu bản chuẩn bị.',
+      kind: 'create-preparation',
     };
   }
   if (!model.hasSavedDraft) {
@@ -7521,11 +7522,11 @@ function renderPublishCommandHeader(model = {}) {
   copy.appendChild(createElement('h2', { text: 'Đưa nội dung mới lên website' }));
   copy.appendChild(createElement('p', {
     className: 'cms-admin-compact-copy',
-    text: 'Tải nội dung hiện tại, lưu bản chuẩn bị, kiểm tra trước khi đưa lên và xác nhận công khai ngay tại màn này.',
+    text: 'Tạo hoặc cập nhật bản chuẩn bị từ nội dung đã lưu trong CMS, lưu bản chuẩn bị, kiểm tra rồi mới xác nhận đưa lên website.',
   }));
   const badges = createElement('div', { className: 'cms-admin-publish-command-badges' });
   badges.appendChild(renderBadge(model.canonicalKnown ? 'Website đang hoạt động đã đọc' : 'Cần đọc website', model.canonicalKnown ? 'success' : 'warning'));
-  badges.appendChild(renderBadge(model.hasSavedDraft ? 'Có bản chuẩn bị' : model.hasDraftJson ? 'Chưa lưu bản chuẩn bị' : 'Chưa tải nội dung', model.hasSavedDraft ? 'success' : 'warning'));
+  badges.appendChild(renderBadge(model.hasSavedDraft ? 'Có bản chuẩn bị' : model.hasDraftJson ? 'Chưa lưu bản chuẩn bị' : 'Chưa có bản chuẩn bị', model.hasSavedDraft ? 'success' : 'warning'));
   header.appendChild(copy);
   header.appendChild(badges);
   return header;
@@ -7557,9 +7558,9 @@ function getPublishCommandSteps(model = {}) {
   const published = model.publishSucceeded;
   return [
     {
-      label: 'Chuẩn bị nội dung',
+      label: 'Tạo/Cập nhật bản chuẩn bị',
       status: hasPreparedContent ? 'done' : 'current',
-      value: hasPreparedContent ? 'Đã có nội dung trong trình duyệt.' : 'Cần tải nội dung website hiện tại.',
+      value: hasPreparedContent ? 'Đã có bản chuẩn bị trong trình duyệt.' : 'Cần tạo bản chuẩn bị từ nội dung đã lưu trong CMS.',
     },
     {
       label: 'Lưu bản chuẩn bị',
@@ -7678,7 +7679,7 @@ function renderPublishDraftCard(model = {}) {
     ? 'Đã lưu'
     : model.hasDraftJson
       ? 'Chưa lưu'
-      : model.hasDraftIdentityWithoutJson ? 'Cần mở lại' : 'Chưa tải';
+      : model.hasDraftIdentityWithoutJson ? 'Cần mở lại' : 'Chưa có';
   card.appendChild(renderPanelTitle('Bản chuẩn bị', statusLabel));
   card.appendChild(createElement('p', {
     className: 'cms-admin-compact-copy',
@@ -7688,10 +7689,10 @@ function renderPublishDraftCard(model = {}) {
         ? 'Bản chuẩn bị đang mở nhưng chưa lưu. Hãy bấm “Lưu bản chuẩn bị” trước khi kiểm tra hoặc đưa lên website.'
         : model.hasDraftIdentityWithoutJson
           ? 'Không đọc được nội dung bản chuẩn bị đã lưu trong trình duyệt. Hãy mở lại bản nháp đã lưu; không nạp website đang chạy để tránh ghi đè nhầm.'
-          : 'Hãy nạp website đang chạy vào bản chuẩn bị mới nếu muốn bắt đầu từ nội dung public hiện tại.',
+          : 'Hãy tạo bản chuẩn bị từ nội dung đã lưu trong CMS. Website chưa thay đổi cho đến khi bạn kiểm tra và đưa lên website.',
   }));
   const facts = createElement('div', { className: 'cms-admin-publish-command-facts' });
-  facts.appendChild(renderInfoTile('Nội dung trong trình duyệt', model.hasDraftJson ? 'Đã tải' : 'Chưa tải'));
+  facts.appendChild(renderInfoTile('Nội dung trong trình duyệt', model.hasDraftJson ? 'Đã có' : 'Chưa có'));
   facts.appendChild(renderInfoTile('Bản chuẩn bị đã lưu', model.currentDraftId ? 'Có' : 'Chưa có'));
   facts.appendChild(renderInfoTile('Thay đổi chưa lưu', model.hasDirtyDraft ? 'Có' : 'Không'));
   facts.appendChild(renderInfoTile('Kiểm tra nội dung', getPublishValidationSummary(model)));
@@ -7967,6 +7968,19 @@ function renderPublishCommandPrimaryAction(model = {}) {
   if (button.disabled) {
     block.appendChild(createElement('small', { className: 'cms-admin-help-text', text: action.disabledReason || 'Bước này đang bị khóa cho đến khi đủ điều kiện.' }));
   }
+  const checkUnavailableReason = getPublishCheckUnavailableReason(model, action);
+  if (checkUnavailableReason) {
+    const checkButton = createElement('button', {
+      className: 'cms-admin-button cms-admin-button-secondary cms-admin-button-small',
+      type: 'button',
+      text: 'Kiểm tra bản chuẩn bị',
+      attrs: { 'aria-label': 'Kiểm tra bản chuẩn bị đang bị khóa' },
+    });
+    checkButton.disabled = true;
+    checkButton.title = checkUnavailableReason;
+    block.appendChild(checkButton);
+    block.appendChild(createElement('small', { className: 'cms-admin-help-text', text: checkUnavailableReason }));
+  }
   if (action.kind === 'blocked-content') {
     const fixButton = createElement('button', {
       className: 'cms-admin-button cms-admin-button-secondary cms-admin-button-small',
@@ -7980,9 +7994,48 @@ function renderPublishCommandPrimaryAction(model = {}) {
   return block;
 }
 
+
+function getPublishCheckUnavailableReason(model = {}, action = {}) {
+  const actionKind = action?.kind || '';
+  if (actionKind === 'dry-run' || actionKind === 'publish-live' || actionKind === 'public-link') return '';
+  if (model.isLoadingDraft || model.isSavingDraft || model.isComposingPreparationDraft || model.isPublishingCms) {
+    return action.disabledReason || 'Đang có thao tác khác, chưa thể kiểm tra bản chuẩn bị.';
+  }
+  if (model.hasDraftIdentityWithoutJson) {
+    return 'Không đọc được nội dung bản chuẩn bị đã lưu. Hãy mở lại bản nháp đã lưu trước khi kiểm tra.';
+  }
+  if (!model.hasDraftJson) {
+    return 'Chưa có bản chuẩn bị. Hãy tạo bản chuẩn bị từ nội dung đã lưu trong CMS trước.';
+  }
+  if (!model.hasSavedDraft) {
+    return 'Bản chuẩn bị đang mở nhưng chưa lưu. Hãy bấm “Lưu bản chuẩn bị”.';
+  }
+  if (model.hasDirtyDraft) {
+    return 'Bản chuẩn bị có thay đổi chưa lưu. Hãy lưu bản chuẩn bị trước khi kiểm tra.';
+  }
+  if (!model.validationOk) {
+    return model.validationKnown ? 'Nội dung còn lỗi hoặc cảnh báo. Hãy sửa nội dung trước khi kiểm tra.' : 'Chưa có kết quả kiểm tra nội dung cho bản chuẩn bị hiện tại.';
+  }
+  if (model.publishInclusion?.hasDifferent) {
+    const labels = safeArray(model.publishInclusion.blockedLabels).join(' / ') || 'một số khu vực';
+    return `Có nội dung đã lưu trong CMS chưa cập nhật vào bản chuẩn bị: ${labels}.`;
+  }
+  if (model.publishInclusion?.blocksPublish) {
+    const labels = safeArray(model.publishInclusion.blockedLabels).join(' / ') || 'một số khu vực';
+    return `Chưa xác minh được bản chuẩn bị cho: ${labels}.`;
+  }
+  if (model.access?.allowed === false) {
+    return model.access.reason || 'Tài khoản hiện tại chưa đủ quyền kiểm tra/công khai.';
+  }
+  return '';
+}
+
 async function executePublishCommandAction(action = {}) {
   const handlers = { onRerender: renderAdminShell };
   switch (action.kind) {
+    case 'create-preparation':
+      await handleCreateCmsPreparationDraftFromSavedContent({ handlers });
+      return;
     case 'load-baseline':
       await handleLoadStaticCmsBaseline({ onRerender: renderAdminShell });
       return;
@@ -8055,6 +8108,21 @@ function renderPublishCommandSecondaryActions(model = {}) {
     editButton.addEventListener('click', () => switchAdminTab('staticDraft'));
     wrap.appendChild(editButton);
   }
+  const baselineButton = createElement('button', {
+    className: 'cms-admin-button cms-admin-button-ghost',
+    type: 'button',
+    text: 'Tùy chọn: Nạp website đang chạy làm nền mới',
+    attrs: {
+      'aria-label': 'Tùy chọn nạp website đang chạy làm nền mới cho bản chuẩn bị',
+      title: 'Thao tác này thay thế bản chuẩn bị đang mở trong trình duyệt. Website chưa thay đổi. Các bản nháp đã lưu không bị xóa.',
+    },
+  });
+  if (model.operationBusy) {
+    baselineButton.disabled = true;
+  } else {
+    baselineButton.addEventListener('click', () => handleLoadStaticCmsBaseline({ onRerender: renderAdminShell }));
+  }
+  wrap.appendChild(baselineButton);
   return wrap;
 }
 
