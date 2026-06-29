@@ -808,6 +808,78 @@ export async function publishCmsJson(client, payload = {}) {
   }
 }
 
+const CMS_SCOPED_PUBLISH_SCOPES = new Set(['home', 'gate', 'rooms3d']);
+
+export async function publishScopedCmsJson(client, payload = {}) {
+  if (!client) {
+    return { data: null, error: new Error('Supabase client chưa sẵn sàng.') };
+  }
+
+  const scope = normalizeOptionalText(payload.scope).toLowerCase();
+  if (!CMS_SCOPED_PUBLISH_SCOPES.has(scope)) {
+    return { data: null, error: new Error('Phạm vi công khai không hợp lệ.') };
+  }
+
+  const { data: sessionData, error: sessionError } = await client.auth.getSession();
+  if (sessionError) return { data: null, error: sessionError };
+  const token = sessionData?.session?.access_token;
+  if (!token) {
+    return { data: null, error: new Error('Cần đăng nhập để công khai CMS JSON.') };
+  }
+
+  const bodyPayload = {
+    dryRun: payload.dryRun === true,
+    scope,
+  };
+
+  const expectedCurrentReleaseId = normalizeReleaseId(payload.expectedCurrentReleaseId);
+  if (expectedCurrentReleaseId) bodyPayload.expectedCurrentReleaseId = expectedCurrentReleaseId;
+  const expectedCurrentContentHash = normalizeOptionalText(payload.expectedCurrentContentHash);
+  if (expectedCurrentContentHash) bodyPayload.expectedCurrentContentHash = expectedCurrentContentHash.toLowerCase();
+
+  if (scope === 'rooms3d') {
+    const draftId = normalizeUuidLike(payload.draftId);
+    if (!draftId) {
+      return { data: null, error: new Error('Cần lưu bản nháp Nội dung phòng 3D trước khi kiểm tra.') };
+    }
+    const expectedDraftUpdatedAt = normalizeDraftRevisionToken(payload.expectedDraftUpdatedAt);
+    const expectedDraftVersion = normalizeOptionalText(payload.expectedDraftVersion);
+    if (!expectedDraftUpdatedAt || !expectedDraftVersion) {
+      return { data: null, error: new Error('Thiếu phiên bản bản nháp 3D đã lưu. Hãy lưu lại Nội dung phòng 3D rồi kiểm tra lại.') };
+    }
+    bodyPayload.draftId = draftId;
+    bodyPayload.expectedDraftUpdatedAt = expectedDraftUpdatedAt;
+    bodyPayload.expectedDraftVersion = expectedDraftVersion;
+  }
+
+  const expectedCandidateHash = normalizeOptionalText(payload.expectedCandidateHash);
+  if (expectedCandidateHash) bodyPayload.expectedCandidateHash = expectedCandidateHash.toLowerCase();
+  const confirmVersion = normalizeOptionalText(payload.confirmVersion);
+  if (confirmVersion) bodyPayload.confirmVersion = confirmVersion;
+
+  try {
+    const response = await fetch(CMS_PUBLISH_GATE_CONFIG.endpoint, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(bodyPayload),
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok || body?.ok === false) {
+      const error = new Error(body?.message || body?.error || `Publish scoped gate thất bại HTTP ${response.status}.`);
+      error.status = response.status;
+      error.code = body?.code || body?.errorCode || body?.error || '';
+      return { data: body || null, error };
+    }
+    return { data: body, error: null };
+  } catch (error) {
+    return { data: null, error };
+  }
+}
+
+
 
 
 // V6.11.21-B6-F_K_O_I_N_APPLY — publish history / rollback gate.

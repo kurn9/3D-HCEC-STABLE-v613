@@ -13,6 +13,7 @@ const initialState = {
   staticCmsDraft: createEmptyStaticCmsDraftState(),
   publishHistory: createEmptyPublishHistoryState(),
   releaseOperationGate: createEmptyReleaseOperationGateState(),
+  scopedPublish: createEmptyScopedPublishState(),
   pointerRepair: createEmptyPointerRepairState(),
   storageCleanup: createEmptyStorageCleanupState(),
   data: {
@@ -1076,6 +1077,121 @@ function normalizeHomeExperienceDraftForCompare(values = {}) {
 
 
 
+
+const SCOPED_CMS_PUBLISH_KEYS = ['home', 'gate', 'rooms3d'];
+
+export function createEmptyScopedPublishScopeState() {
+  return {
+    checking: false,
+    publishing: false,
+    checked: false,
+    candidateHash: '',
+    candidateSummary: null,
+    validationSummary: null,
+    warnings: null,
+    error: null,
+    result: null,
+    dryRunResult: null,
+    checkedAt: null,
+    publishedAt: null,
+    expectedCurrentReleaseId: '',
+    expectedCurrentContentHash: '',
+    draftId: '',
+    expectedDraftUpdatedAt: null,
+    expectedDraftVersion: '',
+    stale: false,
+    staleReason: '',
+    status: '',
+  };
+}
+
+export function createEmptyScopedPublishState() {
+  return SCOPED_CMS_PUBLISH_KEYS.reduce((acc, key) => {
+    acc[key] = createEmptyScopedPublishScopeState();
+    return acc;
+  }, {});
+}
+
+function normalizeScopedPublishKey(scopeKey) {
+  const key = String(scopeKey || '').trim().toLowerCase();
+  return SCOPED_CMS_PUBLISH_KEYS.includes(key) ? key : '';
+}
+
+function createScopedPublishPatchForInvalidation(scopeState = {}, reason = '') {
+  const text = String(reason || 'Nội dung hoặc website đang chạy đã thay đổi. Hãy kiểm tra lại trước khi đưa lên website.').trim();
+  return {
+    ...scopeState,
+    checking: false,
+    publishing: false,
+    checked: false,
+    candidateHash: '',
+    candidateSummary: null,
+    validationSummary: null,
+    error: null,
+    dryRunResult: null,
+    stale: true,
+    staleReason: text,
+    status: text,
+  };
+}
+
+export function setScopedCmsPublishState(scopeKey, patch = {}) {
+  const key = normalizeScopedPublishKey(scopeKey);
+  if (!key) return state;
+  const currentAll = state.scopedPublish || createEmptyScopedPublishState();
+  const current = currentAll[key] || createEmptyScopedPublishScopeState();
+  return setState({
+    scopedPublish: {
+      ...currentAll,
+      [key]: {
+        ...current,
+        ...patch,
+      },
+    },
+  });
+}
+
+export function resetScopedCmsPublishState(scopeKey) {
+  const key = normalizeScopedPublishKey(scopeKey);
+  if (!key) return state;
+  const currentAll = state.scopedPublish || createEmptyScopedPublishState();
+  return setState({
+    scopedPublish: {
+      ...currentAll,
+      [key]: createEmptyScopedPublishScopeState(),
+    },
+  });
+}
+
+export function invalidateScopedCmsPublishScope(scopeKey, reason = '') {
+  const key = normalizeScopedPublishKey(scopeKey);
+  if (!key) return state;
+  const currentAll = state.scopedPublish || createEmptyScopedPublishState();
+  const current = currentAll[key] || createEmptyScopedPublishScopeState();
+  if (!current.candidateHash && !current.checked && !current.publishing && !current.checking) return state;
+  return setState({
+    scopedPublish: {
+      ...currentAll,
+      [key]: createScopedPublishPatchForInvalidation(current, reason),
+    },
+  });
+}
+
+export function invalidateAllScopedCmsPublishCandidates(reason = '') {
+  const currentAll = state.scopedPublish || createEmptyScopedPublishState();
+  const nextAll = { ...currentAll };
+  let changed = false;
+  SCOPED_CMS_PUBLISH_KEYS.forEach((key) => {
+    const current = currentAll[key] || createEmptyScopedPublishScopeState();
+    if (current.candidateHash || current.checked || current.publishing || current.checking) {
+      nextAll[key] = createScopedPublishPatchForInvalidation(current, reason);
+      changed = true;
+    }
+  });
+  if (!changed) return state;
+  return setState({ scopedPublish: nextAll });
+}
+
 export function createEmptyStaticCmsDraftState() {
   return {
     baselineJson: null,
@@ -1242,7 +1358,7 @@ export function updateStaticCmsDraftItem(selectedItemCode) {
 
 export function updateStaticCmsDraftJson(draftJson, validation = null) {
   const current = state.staticCmsDraft || createEmptyStaticCmsDraftState();
-  return setStaticCmsDraftState({
+  setStaticCmsDraftState({
     draftJson: structuredCloneSafe(draftJson || {}),
     dirty: JSON.stringify(draftJson || {}) !== JSON.stringify(current.baselineJson || {}),
     validation: validation || current.validation,
@@ -1274,6 +1390,7 @@ export function updateStaticCmsDraftJson(draftJson, validation = null) {
     preparationCompositionStatus: '',
     preparationCompositionError: null,
   });
+  return invalidateScopedCmsPublishScope('rooms3d', 'Nội dung phòng 3D đã thay đổi. Hãy lưu và kiểm tra lại trước khi đưa lên website.');
 }
 
 export function resetStaticCmsDraftToBaseline(validation = null, options = {}) {

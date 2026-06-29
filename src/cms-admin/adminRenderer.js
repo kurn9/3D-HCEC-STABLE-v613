@@ -63,6 +63,8 @@ import {
   updateHomeHeroMediaDraftField,
   updateSiteSettingsDraftField,
   updateStaticCmsDraftJson,
+  invalidateScopedCmsPublishScope,
+  invalidateAllScopedCmsPublishCandidates,
 } from './adminState.js';
 import {
   ADMIN_COPY,
@@ -84,6 +86,9 @@ import {
   handleCreateCmsPreparationDraftFromSavedContent,
   handleSaveStaticCmsDraft,
   handlePublishStaticCmsDraft,
+  handleCheckScopedCmsPublish,
+  handlePublishScopedCmsPublish,
+  getScopedCmsPublishPanelModel,
   handleReconcileStaticCmsPublishPointer,
   handleComposeCmsPreparationDraft,
   buildCmsPublishInclusionStatus,
@@ -180,12 +185,25 @@ async function hydrateAuthorizedSession(client) {
   renderAdminShell();
 }
 
+function getCurrentReleaseSignatureForScopedPublish(state = getState()) {
+  const canonical = state.data?.canonicalCms || null;
+  const summary = canonical?.summary || state.data?.canonicalSummary || null;
+  const releaseId = String(canonical?.releaseId || summary?.releaseId || summary?.source?.releaseId || '').trim();
+  const contentHash = String(canonical?.contentHash || summary?.contentHash || summary?.source?.contentHash || '').trim().toLowerCase();
+  return releaseId || contentHash ? `${releaseId}:${contentHash}` : '';
+}
+
 async function loadDashboardData(client) {
   setCachedSupabaseClientForApi(client);
   setLoading(true);
   setError(null);
+  const previousReleaseSignature = getCurrentReleaseSignatureForScopedPublish(getState());
   const { data, errors } = await fetchDashboardData(client);
   setNestedData({ ...data, errors });
+  const nextReleaseSignature = getCurrentReleaseSignatureForScopedPublish(getState());
+  if (previousReleaseSignature && nextReleaseSignature && previousReleaseSignature !== nextReleaseSignature) {
+    invalidateAllScopedCmsPublishCandidates('Website đang chạy đã thay đổi. Hãy kiểm tra lại trước khi đưa lên website.');
+  }
   setLoading(false);
 }
 
@@ -1063,50 +1081,99 @@ function normalizeAdminMainTabKey(tabKey) {
   return key || 'dashboard';
 }
 
+function renderScopedPublishWarningList(warnings = null) {
+  if (!warnings || typeof warnings !== 'object') return null;
+  const entries = Object.entries(warnings).filter(([, value]) => value !== null && value !== undefined && String(value).trim());
+  if (!entries.length) return null;
+  const wrap = createElement('div', { className: 'cms-admin-scoped-publish-warning-list' });
+  wrap.appendChild(createElement('strong', { text: 'Cảnh báo không chặn:' }));
+  const list = createElement('ul', { className: 'cms-admin-operator-bullet-list' });
+  entries.slice(0, 6).forEach(([key, value]) => {
+    const raw = String(value || key || '');
+    const text = raw.includes('poster') || String(key || '').includes('poster')
+      ? 'Video chưa có poster; cảnh báo không chặn publish.'
+      : raw;
+    list.appendChild(createElement('li', { text }));
+  });
+  wrap.appendChild(list);
+  return wrap;
+}
+
 function renderScopedPublishShell(scopeKey, options = {}) {
-  const title = options.title || 'Đưa phần này lên website';
-  const eyebrow = options.eyebrow || 'CÔNG KHAI THEO KHU VỰC';
-  const includes = safeArray(options.includes);
-  const reason = options.reason || 'Chức năng đưa riêng khu vực này lên website sẽ được bật sau khi backend scoped publish hoàn tất.';
+  const model = getScopedCmsPublishPanelModel(scopeKey, getState()) || {};
+  const title = model.title || options.title || 'Đưa phần này lên website';
+  const includes = safeArray(model.updated || options.includes);
+  const preserved = safeArray(model.preserved || options.preserved);
   const panel = createElement('section', {
     className: `cms-admin-panel cms-admin-view-panel cms-admin-scoped-publish-shell cms-admin-scoped-publish-shell-${scopeKey}`,
     dataset: { cmsScopedPublishShell: scopeKey },
   });
   const header = createElement('header', { className: 'cms-admin-scoped-publish-header' });
   const copy = createElement('div');
-  copy.appendChild(createElement('span', { className: 'cms-admin-eyebrow', text: eyebrow }));
+  copy.appendChild(createElement('span', { className: 'cms-admin-eyebrow', text: options.eyebrow || 'CÔNG KHAI THEO KHU VỰC' }));
   copy.appendChild(createElement('h3', { text: title }));
   copy.appendChild(createElement('p', {
     className: 'cms-admin-compact-copy',
-    text: options.summary || 'Website chưa thay đổi. Panel này chỉ hiển thị trạng thái và hướng dẫn cho luồng publish riêng từng khu vực.',
+    text: options.summary || 'Kiểm tra và đưa riêng khu vực này lên website. Những khu vực khác được giữ nguyên từ website đang chạy.',
   }));
   const badges = createElement('div', { className: 'cms-admin-scoped-publish-badges' });
-  badges.appendChild(renderBadge('Đang chờ backend scoped publish', 'warning'));
-  badges.appendChild(renderBadge('Không gọi publish thật', 'success'));
+  badges.appendChild(renderBadge(model.statusLabel || 'Chưa kiểm tra', model.statusTone || 'neutral'));
+  badges.appendChild(renderBadge('Không dùng publish tổng', 'success'));
   appendChildren(header, [copy, badges]);
   panel.appendChild(header);
+
+  const listWrap = createElement('div', { className: 'cms-admin-scoped-publish-includes' });
   if (includes.length) {
-    const listWrap = createElement('div', { className: 'cms-admin-scoped-publish-includes' });
-    listWrap.appendChild(createElement('strong', { text: 'Khi bật ở phase sau, khu vực này sẽ gồm:' }));
+    listWrap.appendChild(createElement('strong', { text: 'Sẽ cập nhật:' }));
     const list = createElement('ul', { className: 'cms-admin-operator-bullet-list' });
     includes.forEach((item) => list.appendChild(createElement('li', { text: item })));
     listWrap.appendChild(list);
-    panel.appendChild(listWrap);
   }
+  if (preserved.length) {
+    listWrap.appendChild(createElement('strong', { text: 'Sẽ giữ nguyên:' }));
+    const list = createElement('ul', { className: 'cms-admin-operator-bullet-list' });
+    preserved.forEach((item) => list.appendChild(createElement('li', { text: item })));
+    listWrap.appendChild(list);
+  }
+  panel.appendChild(listWrap);
+
+  if (model.errorMessage) panel.appendChild(renderErrorBox(model.errorMessage, 'Không thể xử lý publish khu vực này'));
+  if (model.checkBlockedReason && !model.candidateHash) panel.appendChild(renderEmptyState(model.checkBlockedReason));
+  const warningList = renderScopedPublishWarningList(model.warnings);
+  if (warningList) panel.appendChild(warningList);
+  if (model.candidateHash) panel.appendChild(renderBadge(`Kiểm tra đạt — có thể đưa ${model.label || 'khu vực này'} lên website`, 'success'));
+  if (model.publishedAt) panel.appendChild(renderBadge(`Đã đưa lên website lúc ${formatDateTime(model.publishedAt)}`, 'success'));
+
   const action = createElement('div', { className: 'cms-admin-scoped-publish-action-row' });
-  const button = createElement('button', {
-    className: 'cms-admin-button cms-admin-button-primary',
-    text: options.buttonLabel || 'Kiểm tra & đưa phần này lên website',
+  const checkButton = createElement('button', {
+    className: 'cms-admin-button cms-admin-button-secondary',
+    text: model.checking ? 'Đang kiểm tra...' : (model.checkLabel || options.checkLabel || 'Kiểm tra'),
     type: 'button',
-    attrs: { disabled: 'disabled', 'aria-disabled': 'true' },
   });
-  button.disabled = true;
-  action.appendChild(button);
-  action.appendChild(createElement('p', { className: 'cms-admin-help-text', text: reason }));
+  checkButton.disabled = !model.canCheck;
+  checkButton.addEventListener('click', () => handleCheckScopedCmsPublish(scopeKey, { onRerender: renderAdminShell }));
+  const publishButton = createElement('button', {
+    className: 'cms-admin-button cms-admin-button-primary',
+    text: model.publishing ? 'Đang đưa lên website...' : (model.publishLabel || options.buttonLabel || 'Đưa lên website'),
+    type: 'button',
+  });
+  publishButton.disabled = !model.canPublish;
+  publishButton.addEventListener('click', () => {
+    if (!window.confirm(model.confirmMessage || 'Đưa khu vực này lên website?')) return;
+    handlePublishScopedCmsPublish(scopeKey, { onRerender: renderAdminShell });
+  });
+  action.appendChild(checkButton);
+  action.appendChild(publishButton);
+  action.appendChild(createElement('p', {
+    className: 'cms-admin-help-text',
+    text: model.canPublish
+      ? 'Sau khi kiểm tra đạt, hãy xác nhận để đưa riêng khu vực này lên website.'
+      : (model.publishBlockedReason || model.checkBlockedReason || 'Bấm kiểm tra trước, sau đó mới có thể đưa lên website.'),
+  }));
   panel.appendChild(action);
   panel.appendChild(createElement('p', {
     className: 'cms-admin-inline-note',
-    text: 'Bạn vẫn có thể lưu nội dung trong CMS. Không có thao tác nào ở panel này kiểm tra server hoặc đưa nội dung lên website.',
+    text: 'Website chỉ thay đổi sau khi bạn xác nhận đưa khu vực này lên website. Không quay lại tab publish tổng.',
   }));
   return panel;
 }
@@ -1114,23 +1181,24 @@ function renderScopedPublishShell(scopeKey, options = {}) {
 function renderHomeScopedPublishShell() {
   return renderScopedPublishShell('home', {
     title: 'Đưa Trang chủ lên website',
-    buttonLabel: 'Kiểm tra & đưa Trang chủ lên website',
-    summary: 'Dùng cho nội dung Trang chủ và thông tin website/liên hệ sau khi backend publish riêng Trang chủ được bật.',
+    buttonLabel: 'Đưa Trang chủ lên website',
+    checkLabel: 'Kiểm tra Trang chủ',
+    summary: 'Dùng cho nội dung Trang chủ và thông tin website/liên hệ. Cổng vào triển lãm và Nội dung phòng 3D được giữ nguyên.',
     includes: ['Trang chủ', 'Thông tin website / liên hệ', 'Tác phẩm tiêu biểu nếu thuộc Trang chủ'],
-    reason: 'Chức năng đưa riêng Trang chủ lên website sẽ được bật sau khi backend scoped publish hoàn tất. Hiện tại chỉ được lưu nội dung trong CMS.',
+    preserved: ['Cổng vào triển lãm', 'Nội dung phòng 3D'],
   });
 }
 
 function renderGateScopedPublishShell() {
   return renderScopedPublishShell('gate', {
     title: 'Đưa Cổng vào triển lãm lên website',
-    buttonLabel: 'Kiểm tra & đưa Cổng vào lên website',
-    summary: 'Dùng cho màn chào và các card chọn không gian sau khi backend publish riêng Cổng vào được bật.',
-    includes: ['Màn chào', 'Không gian trong nhà card', 'Không gian ngoài trời card'],
-    reason: 'Đang chờ backend scoped publish cho Cổng vào triển lãm. Không dùng tab publish tổng nữa.',
+    buttonLabel: 'Đưa Cổng vào lên website',
+    checkLabel: 'Kiểm tra Cổng vào',
+    summary: 'Dùng cho màn chào và các card chọn không gian. Trang chủ và Nội dung phòng 3D được giữ nguyên.',
+    includes: ['Màn chào', 'Thẻ Không gian trong nhà', 'Thẻ Không gian ngoài trời'],
+    preserved: ['Trang chủ', 'Nội dung phòng 3D'],
   });
 }
-
 
 function renderPostSaveSuccessBlock(message = 'Đã lưu ở màn này. Website đang hoạt động chưa thay đổi.') {
   const wrap = createElement('div', { className: 'cms-admin-post-save-success-block' });
@@ -9286,6 +9354,7 @@ async function handleSaveSiteSettingsDraft() {
 
   await loadDashboardData(latestState.supabase);
   invalidateStaticCmsPublishVerification('Thông tin website đã được lưu lại. Hãy cập nhật bản chuẩn bị và kiểm tra lại trước khi đưa lên website.');
+  invalidateScopedCmsPublishScope('home', 'Thông tin website / Liên hệ đã thay đổi. Hãy kiểm tra lại Trang chủ trước khi đưa lên website.');
   setSiteSettingsEditState({
     isEditing: false,
     draftValues: {},
@@ -9498,6 +9567,7 @@ async function handleSaveGateContentDraft() {
 
   await loadDashboardData(latestState.supabase);
   invalidateStaticCmsPublishVerification('Cổng vào triển lãm đã được lưu lại. Hãy cập nhật bản chuẩn bị và kiểm tra lại trước khi đưa lên website.');
+  invalidateScopedCmsPublishScope('gate', 'Cổng vào triển lãm đã thay đổi. Hãy kiểm tra lại Cổng vào trước khi đưa lên website.');
   setGateEditState({
     isEditing: false,
     draftValues: {},
@@ -10798,6 +10868,7 @@ async function handleSaveHomeGuideDraft() {
 
   await loadDashboardData(latestState.supabase);
   invalidateStaticCmsPublishVerification('Trang chủ đã được lưu lại. Hãy cập nhật bản chuẩn bị và kiểm tra lại trước khi đưa lên website.');
+  invalidateScopedCmsPublishScope('home', 'Trang chủ đã thay đổi. Hãy kiểm tra lại Trang chủ trước khi đưa lên website.');
   setHomeEditState({
     isEditing: false,
     editingSectionId: null,
@@ -11065,6 +11136,7 @@ async function handleSaveHomeExperienceDraft() {
 
   await loadDashboardData(latestState.supabase);
   invalidateStaticCmsPublishVerification('Trang chủ đã được lưu lại. Hãy cập nhật bản chuẩn bị và kiểm tra lại trước khi đưa lên website.');
+  invalidateScopedCmsPublishScope('home', 'Trang chủ đã thay đổi. Hãy kiểm tra lại Trang chủ trước khi đưa lên website.');
   setHomeEditState({
     isEditing: false,
     editingSectionId: null,
@@ -11150,6 +11222,7 @@ async function handleSaveHomeHeroDraft() {
 
   await loadDashboardData(latestState.supabase);
   invalidateStaticCmsPublishVerification('Trang chủ đã được lưu lại. Hãy cập nhật bản chuẩn bị và kiểm tra lại trước khi đưa lên website.');
+  invalidateScopedCmsPublishScope('home', 'Trang chủ đã thay đổi. Hãy kiểm tra lại Trang chủ trước khi đưa lên website.');
   setHomeEditState({
     isEditing: false,
     editingSectionId: null,

@@ -1,5 +1,5 @@
 import { ADMIN_COPY } from './adminCopy.js';
-import { createCmsDraft, discardCmsDraft, fetchDashboardData, getCmsDraft, listCmsDrafts, publishCmsJson, reconcileCmsReleasePointer, updateCmsDraft, uploadCmsMedia } from './adminApi.js';
+import { createCmsDraft, discardCmsDraft, fetchDashboardData, getCmsDraft, listCmsDrafts, publishCmsJson, publishScopedCmsJson, reconcileCmsReleasePointer, updateCmsDraft, uploadCmsMedia } from './adminApi.js';
 import { ADMIN_FEATURE_FLAGS, CMS_MEDIA_UPLOAD_CONFIG, CMS_PUBLISH_GATE_CONFIG, STATIC_CMS_DRAFT_CONFIG } from './adminConfig.js';
 import {
   appendChildren,
@@ -27,6 +27,7 @@ import {
   setStaticCmsFeaturedIndex,
   setStaticCmsMediaUploadState,
   setStaticCmsPublishState,
+  setScopedCmsPublishState,
   setStaticCmsSavedDrafts,
   updateStaticCmsDraftItem,
   updateStaticCmsDraftJson,
@@ -293,7 +294,367 @@ function renderStaticOperatorStepPanel(config = {}, options = {}) {
 }
 
 
-function renderRooms3dScopedPublishShell() {
+
+const SCOPED_CMS_PUBLISH_CONFIGS = Object.freeze({
+  home: {
+    label: 'Trang chủ',
+    title: 'Đưa Trang chủ lên website',
+    checkLabel: 'Kiểm tra Trang chủ',
+    publishLabel: 'Đưa Trang chủ lên website',
+    confirmMessage: 'Bạn sắp đưa Trang chủ và Thông tin website / Liên hệ lên website. Cổng vào triển lãm và Nội dung phòng 3D sẽ được giữ nguyên từ website đang chạy.',
+    updated: ['Trang chủ', 'Thông tin website / Liên hệ'],
+    preserved: ['Cổng vào triển lãm', 'Nội dung phòng 3D'],
+    success: 'Đã đưa Trang chủ lên website.',
+  },
+  gate: {
+    label: 'Cổng vào triển lãm',
+    title: 'Đưa Cổng vào triển lãm lên website',
+    checkLabel: 'Kiểm tra Cổng vào',
+    publishLabel: 'Đưa Cổng vào lên website',
+    confirmMessage: 'Bạn sắp đưa Cổng vào triển lãm lên website. Trang chủ và Nội dung phòng 3D sẽ được giữ nguyên từ website đang chạy.',
+    updated: ['Màn chào', 'Thẻ Không gian trong nhà', 'Thẻ Không gian ngoài trời'],
+    preserved: ['Trang chủ', 'Nội dung phòng 3D'],
+    success: 'Đã đưa Cổng vào triển lãm lên website.',
+  },
+  rooms3d: {
+    label: 'Nội dung phòng 3D',
+    title: 'Đưa Nội dung phòng 3D lên website',
+    checkLabel: 'Kiểm tra Nội dung phòng 3D',
+    publishLabel: 'Đưa Nội dung phòng 3D lên website',
+    confirmMessage: 'Bạn sắp đưa Nội dung phòng 3D lên website. Trang chủ và Cổng vào triển lãm sẽ được giữ nguyên từ website đang chạy.',
+    updated: ['Nội dung phòng 3D'],
+    preserved: ['Trang chủ', 'Cổng vào triển lãm'],
+    success: 'Đã đưa Nội dung phòng 3D lên website.',
+  },
+});
+
+function normalizeScopedPublishKey(scopeKey) {
+  const key = String(scopeKey || '').trim().toLowerCase();
+  return Object.prototype.hasOwnProperty.call(SCOPED_CMS_PUBLISH_CONFIGS, key) ? key : '';
+}
+
+function getCurrentReleaseIdentityForScopedPublish(appState = getState()) {
+  const canonical = appState.data?.canonicalCms || null;
+  const summary = canonical?.summary || appState.data?.canonicalSummary || null;
+  const gate = appState.releaseOperationGate || null;
+  const releaseId = String(
+    canonical?.releaseId
+    || summary?.releaseId
+    || summary?.source?.releaseId
+    || summary?.reference?.releaseId
+    || gate?.expectedReleaseId
+    || gate?.releaseId
+    || ''
+  ).trim();
+  const contentHash = normalizeSha256Hash(
+    canonical?.contentHash
+    || summary?.contentHash
+    || summary?.source?.contentHash
+    || summary?.reference?.contentHash
+    || gate?.contentHash
+    || ''
+  );
+  return { releaseId, contentHash };
+}
+
+async function refreshDashboardAndReleaseIdentity(client) {
+  const { data, errors } = await fetchDashboardData(client);
+  setNestedData({ ...data, errors });
+  return getCurrentReleaseIdentityForScopedPublish(getState());
+}
+
+function getRooms3dDraftIdentityForScopedPublish(draftState = {}) {
+  const draftId = String(draftState.currentDraftId || draftState.persistedDraftId || '').trim();
+  const expectedDraftUpdatedAt = draftState.persistedDraftUpdatedAt || draftState.draftLastSavedAt || null;
+  const expectedDraftVersion = String(draftState.persistedDraftVersion || draftState.draftJson?.version || '').trim();
+  return { draftId, expectedDraftUpdatedAt, expectedDraftVersion };
+}
+
+function getScopedPublishErrorMessage(error, data = null, scopeKey = '') {
+  const code = String(error?.code || data?.code || data?.error || '').trim();
+  const message = String(data?.message || error?.message || '').trim();
+  const config = SCOPED_CMS_PUBLISH_CONFIGS[scopeKey] || {};
+  const area = config.label || 'khu vực này';
+  const codeMap = {
+    current_release_unavailable: 'Không xác định được website đang chạy. Hãy tải lại trang hoặc thử lại sau.',
+    current_release_conflict: 'Website đang chạy đã thay đổi. Hãy kiểm tra lại trước khi đưa lên website.',
+    candidate_hash_mismatch: 'Nội dung hoặc website đang chạy đã thay đổi sau lần kiểm tra. Hãy kiểm tra lại.',
+    CANDIDATE_HASH_MISMATCH: 'Nội dung hoặc website đang chạy đã thay đổi sau lần kiểm tra. Hãy kiểm tra lại.',
+    scoped_publish_source_mismatch: `Nội dung ${area} đã thay đổi sau lần kiểm tra. Hãy kiểm tra lại.`,
+    scoped_publish_source_missing: `Chưa đọc được dữ liệu ${area}. Hãy tải lại dữ liệu CMS rồi thử lại.`,
+    scoped_publish_source_malformed: `Dữ liệu ${area} chưa hợp lệ. Hãy kiểm tra lại nội dung đã lưu trong CMS.`,
+    DRAFT_REVISION_CONFLICT: 'Bản nháp 3D đã thay đổi. Hãy mở hoặc lưu lại Nội dung phòng 3D rồi kiểm tra lại.',
+    ROOMS3D_DRAFT_UNAVAILABLE: 'Chưa đọc được bản nháp 3D đã lưu. Hãy lưu lại Nội dung phòng 3D rồi thử lại.',
+    db_first_inclusion_mismatch: 'Có nội dung đã lưu trong CMS nhưng chưa nằm trong bản chuẩn bị. Hãy cập nhật/lưu lại trước khi kiểm tra.',
+    unauthorized: 'Tài khoản không đủ quyền công khai nội dung.',
+    admin_required: 'Tài khoản không đủ quyền công khai nội dung.',
+  };
+  return codeMap[code] || message || 'Không thể xử lý yêu cầu công khai khu vực này. Hãy thử lại sau.';
+}
+
+function getScopedPublishCandidateHash(data = {}) {
+  return normalizeSha256Hash(data.candidateHash || data.plan?.candidateHash || '');
+}
+
+function getScopedPublishConfirmVersion(data = {}) {
+  return String(data.publishedVersion || data.draftVersion || data.plan?.publishedVersion || data.plan?.draftVersion || '').trim();
+}
+
+function buildScopedPublishPayload(scopeKey, { dryRun, candidateHash = '' } = {}) {
+  const appState = getState();
+  const identity = getCurrentReleaseIdentityForScopedPublish(appState);
+  const payload = {
+    dryRun: dryRun === true,
+    scope: scopeKey,
+    expectedCurrentReleaseId: identity.releaseId,
+    expectedCurrentContentHash: identity.contentHash,
+  };
+  if (scopeKey === 'rooms3d') {
+    const draftIdentity = getRooms3dDraftIdentityForScopedPublish(appState.staticCmsDraft || {});
+    payload.draftId = draftIdentity.draftId;
+    payload.expectedDraftUpdatedAt = draftIdentity.expectedDraftUpdatedAt;
+    payload.expectedDraftVersion = draftIdentity.expectedDraftVersion;
+  }
+  if (!dryRun) {
+    const scopedState = appState.scopedPublish?.[scopeKey] || {};
+    payload.expectedCandidateHash = normalizeSha256Hash(candidateHash || scopedState.candidateHash || scopedState.dryRunResult?.candidateHash || scopedState.dryRunResult?.plan?.candidateHash || '');
+    payload.confirmVersion = getScopedPublishConfirmVersion(scopedState.dryRunResult || {});
+  }
+  return payload;
+}
+
+function getScopedPublishPrerequisiteIssue(scopeKey, appState = getState()) {
+  if (!appState.supabase) return 'Supabase client chưa sẵn sàng.';
+  const identity = getCurrentReleaseIdentityForScopedPublish(appState);
+  if (!identity.releaseId || !identity.contentHash) {
+    return 'Không xác định được website đang chạy để kiểm tra khu vực này. Hãy tải lại trang hoặc thử lại sau.';
+  }
+  if (scopeKey === 'rooms3d') {
+    const draftState = appState.staticCmsDraft || {};
+    if (draftState.dirty) return 'Bạn cần lưu bản nháp Nội dung phòng 3D trước khi kiểm tra.';
+    const draftIdentity = getRooms3dDraftIdentityForScopedPublish(draftState);
+    if (!draftIdentity.draftId) return 'Chưa có bản nháp 3D đã lưu. Hãy lưu Nội dung phòng 3D trước.';
+    if (!draftIdentity.expectedDraftUpdatedAt || !draftIdentity.expectedDraftVersion) {
+      return 'Không xác định được phiên bản bản nháp 3D. Hãy mở lại hoặc lưu lại Nội dung phòng 3D.';
+    }
+  }
+  return '';
+}
+
+export function getScopedCmsPublishPanelModel(scopeKey, appState = getState()) {
+  const key = normalizeScopedPublishKey(scopeKey);
+  if (!key) return null;
+  const config = SCOPED_CMS_PUBLISH_CONFIGS[key];
+  const scopedState = appState.scopedPublish?.[key] || {};
+  const issue = getScopedPublishPrerequisiteIssue(key, appState);
+  const candidateHash = normalizeSha256Hash(scopedState.candidateHash || '');
+  const checking = Boolean(scopedState.checking);
+  const publishing = Boolean(scopedState.publishing);
+  const canCheck = !checking && !publishing && !issue;
+  const canPublish = !checking && !publishing && Boolean(candidateHash) && !issue && !scopedState.stale;
+  const statusLabel = publishing
+    ? 'Đang đưa lên website'
+    : checking
+      ? 'Đang kiểm tra'
+      : scopedState.publishedAt
+        ? 'Đã đưa lên website'
+        : scopedState.error
+          ? 'Kiểm tra lỗi'
+          : scopedState.stale
+            ? 'Cần kiểm tra lại'
+            : candidateHash
+              ? 'Kiểm tra đạt'
+              : issue
+                ? 'Chưa đủ điều kiện'
+                : 'Chưa kiểm tra';
+  const statusTone = publishing || checking
+    ? 'warning'
+    : scopedState.error || issue || scopedState.stale
+      ? 'warning'
+      : candidateHash || scopedState.publishedAt
+        ? 'success'
+        : 'neutral';
+  return {
+    scope: key,
+    ...config,
+    state: scopedState,
+    checking,
+    publishing,
+    canCheck,
+    canPublish,
+    checkBlockedReason: issue || '',
+    publishBlockedReason: scopedState.staleReason || issue || (!candidateHash ? 'Cần kiểm tra đạt trước khi đưa lên website.' : ''),
+    candidateHash,
+    statusLabel,
+    statusTone,
+    warnings: scopedState.warnings || scopedState.dryRunResult?.warnings || null,
+    errorMessage: scopedState.error || null,
+    checkedAt: scopedState.checkedAt || null,
+    publishedAt: scopedState.publishedAt || null,
+    dryRunResult: scopedState.dryRunResult || null,
+    result: scopedState.result || null,
+  };
+}
+
+export async function handleCheckScopedCmsPublish(scopeKey, handlers = {}) {
+  const key = normalizeScopedPublishKey(scopeKey);
+  if (!key) return;
+  let appState = getState();
+  if (!appState.supabase) return;
+
+  let issue = getScopedPublishPrerequisiteIssue(key, appState);
+  if (issue && issue.includes('Không xác định được website đang chạy')) {
+    setScopedCmsPublishState(key, { checking: true, error: null, status: 'Đang tải lại trạng thái website đang chạy...' });
+    handlers.onRerender?.();
+    try {
+      await refreshDashboardAndReleaseIdentity(appState.supabase);
+      appState = getState();
+      issue = getScopedPublishPrerequisiteIssue(key, appState);
+    } catch (error) {
+      issue = normalizeErrorMessage(error, issue);
+    }
+  }
+  if (issue) {
+    setScopedCmsPublishState(key, { checking: false, publishing: false, error: issue, status: issue });
+    handlers.onRerender?.();
+    return;
+  }
+
+  setScopedCmsPublishState(key, {
+    checking: true,
+    publishing: false,
+    checked: false,
+    candidateHash: '',
+    candidateSummary: null,
+    validationSummary: null,
+    warnings: null,
+    error: null,
+    result: null,
+    dryRunResult: null,
+    stale: false,
+    staleReason: '',
+    status: 'Đang kiểm tra khu vực này...',
+  });
+  handlers.onRerender?.();
+
+  const payload = buildScopedPublishPayload(key, { dryRun: true });
+  const { data, error } = await publishScopedCmsJson(appState.supabase, payload);
+  if (error) {
+    const message = getScopedPublishErrorMessage(error, data, key);
+    setScopedCmsPublishState(key, { checking: false, error: message, status: message, dryRunResult: data || null });
+    handlers.onRerender?.();
+    return;
+  }
+
+  const candidateHash = getScopedPublishCandidateHash(data || {});
+  setScopedCmsPublishState(key, {
+    checking: false,
+    checked: true,
+    candidateHash,
+    candidateSummary: data?.candidateSummary || null,
+    validationSummary: data?.validationSummary || null,
+    warnings: data?.warnings || data?.validationSummary?.warnings || null,
+    error: null,
+    result: null,
+    dryRunResult: data || null,
+    checkedAt: new Date().toISOString(),
+    expectedCurrentReleaseId: payload.expectedCurrentReleaseId || '',
+    expectedCurrentContentHash: payload.expectedCurrentContentHash || '',
+    draftId: payload.draftId || '',
+    expectedDraftUpdatedAt: payload.expectedDraftUpdatedAt || null,
+    expectedDraftVersion: payload.expectedDraftVersion || '',
+    stale: false,
+    staleReason: '',
+    status: candidateHash ? `Có thể đưa ${SCOPED_CMS_PUBLISH_CONFIGS[key].label} lên website.` : 'Kiểm tra không trả mã xác nhận. Hãy thử lại.',
+  });
+  handlers.onRerender?.();
+}
+
+export async function handlePublishScopedCmsPublish(scopeKey, handlers = {}) {
+  const key = normalizeScopedPublishKey(scopeKey);
+  if (!key) return;
+  const appState = getState();
+  if (!appState.supabase) return;
+  const scopedState = appState.scopedPublish?.[key] || {};
+  const candidateHash = normalizeSha256Hash(scopedState.candidateHash || '');
+  if (!candidateHash) {
+    setScopedCmsPublishState(key, { error: 'Cần kiểm tra đạt trước khi đưa lên website.', status: 'Cần kiểm tra lại.' });
+    handlers.onRerender?.();
+    return;
+  }
+  const issue = getScopedPublishPrerequisiteIssue(key, appState);
+  if (issue) {
+    setScopedCmsPublishState(key, { error: issue, status: issue });
+    handlers.onRerender?.();
+    return;
+  }
+
+  setScopedCmsPublishState(key, { publishing: true, error: null, status: 'Đang đưa khu vực này lên website...' });
+  handlers.onRerender?.();
+
+  const payload = buildScopedPublishPayload(key, { dryRun: false, candidateHash });
+  const { data, error } = await publishScopedCmsJson(appState.supabase, payload);
+  if (error) {
+    const message = getScopedPublishErrorMessage(error, data, key);
+    setScopedCmsPublishState(key, {
+      publishing: false,
+      error: message,
+      status: message,
+      result: data || null,
+      candidateHash: '',
+      stale: true,
+      staleReason: 'Nội dung hoặc website đang chạy đã thay đổi sau lần kiểm tra. Hãy kiểm tra lại.',
+    });
+    handlers.onRerender?.();
+    return;
+  }
+
+  try {
+    await refreshDashboardAndReleaseIdentity(appState.supabase);
+    await refreshAndApplyReleaseOperationGateStatus({
+      client: appState.supabase,
+      fallbackMessage: 'Đã publish scoped, nhưng chưa xác nhận được trạng thái release-operation sau publish.',
+    });
+  } catch (refreshError) {
+    console.error('[cms-admin] scoped publish refresh failed', refreshError);
+  }
+
+  setScopedCmsPublishState(key, {
+    publishing: false,
+    checked: false,
+    candidateHash: '',
+    candidateSummary: null,
+    validationSummary: data?.validationSummary || null,
+    warnings: data?.warnings || data?.validationSummary?.warnings || null,
+    error: null,
+    result: data || null,
+    publishedAt: new Date().toISOString(),
+    stale: false,
+    staleReason: '',
+    status: SCOPED_CMS_PUBLISH_CONFIGS[key].success,
+  });
+  handlers.onRerender?.();
+}
+
+function renderScopedPublishWarningList(warnings = null) {
+  if (!warnings || typeof warnings !== 'object') return null;
+  const entries = Object.entries(warnings).filter(([, value]) => value !== null && value !== undefined && String(value).trim());
+  if (!entries.length) return null;
+  const panel = createElement('div', { className: 'cms-admin-scoped-publish-warning-list' });
+  panel.appendChild(createElement('strong', { text: 'Cảnh báo không chặn:' }));
+  const list = createElement('ul', { className: 'cms-admin-operator-bullet-list' });
+  entries.slice(0, 6).forEach(([key, value]) => {
+    const text = String(value || '').includes('poster') || String(key || '').includes('poster')
+      ? 'Video chưa có poster; cảnh báo không chặn publish.'
+      : String(value || key);
+    list.appendChild(createElement('li', { text }));
+  });
+  panel.appendChild(list);
+  return panel;
+}
+
+function renderRooms3dScopedPublishShell(handlers = {}) {
+  const model = getScopedCmsPublishPanelModel('rooms3d', getState()) || {};
   const panel = createElement('section', {
     className: 'cms-admin-panel cms-admin-view-panel cms-admin-scoped-publish-shell cms-admin-scoped-publish-shell-rooms3d',
     dataset: { cmsScopedPublishShell: 'rooms3d' },
@@ -301,41 +662,63 @@ function renderRooms3dScopedPublishShell() {
   const header = createElement('header', { className: 'cms-admin-scoped-publish-header' });
   const copy = createElement('div');
   copy.appendChild(createElement('span', { className: 'cms-admin-eyebrow', text: 'CÔNG KHAI THEO KHU VỰC' }));
-  copy.appendChild(createElement('h3', { text: 'Đưa Nội dung phòng 3D lên website' }));
+  copy.appendChild(createElement('h3', { text: model.title || 'Đưa Nội dung phòng 3D lên website' }));
   copy.appendChild(createElement('p', {
     className: 'cms-admin-compact-copy',
-    text: 'Dùng cho nội dung phòng trong nhà, phòng ngoài trời, tác phẩm/item và media references trong phòng sau khi backend scoped publish được bật.',
+    text: 'Kiểm tra và đưa riêng nội dung phòng trong nhà, phòng ngoài trời, tác phẩm/item và media references trong phòng lên website.',
   }));
   const badges = createElement('div', { className: 'cms-admin-scoped-publish-badges' });
-  badges.appendChild(renderBadge('Đang chờ backend scoped publish', 'warning'));
-  badges.appendChild(renderBadge('Không gọi publish thật', 'success'));
+  badges.appendChild(renderBadge(model.statusLabel || 'Chưa kiểm tra', model.statusTone || 'neutral'));
+  badges.appendChild(renderBadge('Giữ nguyên Trang chủ/Cổng vào', 'success'));
   appendChildren(header, [copy, badges]);
   panel.appendChild(header);
 
   const listWrap = createElement('div', { className: 'cms-admin-scoped-publish-includes' });
-  listWrap.appendChild(createElement('strong', { text: 'Khi bật ở phase sau, khu vực này sẽ gồm:' }));
-  const list = createElement('ul', { className: 'cms-admin-operator-bullet-list' });
-  ['Phòng trong nhà', 'Phòng ngoài trời', 'Tác phẩm / item / media references trong phòng'].forEach((item) => list.appendChild(createElement('li', { text: item })));
-  listWrap.appendChild(list);
+  listWrap.appendChild(createElement('strong', { text: 'Sẽ cập nhật:' }));
+  const updated = createElement('ul', { className: 'cms-admin-operator-bullet-list' });
+  (model.updated || ['Nội dung phòng 3D']).forEach((item) => updated.appendChild(createElement('li', { text: item })));
+  listWrap.appendChild(updated);
+  listWrap.appendChild(createElement('strong', { text: 'Sẽ giữ nguyên:' }));
+  const preserved = createElement('ul', { className: 'cms-admin-operator-bullet-list' });
+  (model.preserved || ['Trang chủ', 'Cổng vào triển lãm']).forEach((item) => preserved.appendChild(createElement('li', { text: item })));
+  listWrap.appendChild(preserved);
   panel.appendChild(listWrap);
 
+  if (model.errorMessage) panel.appendChild(renderErrorBox(model.errorMessage, 'Không thể xử lý publish khu vực này'));
+  if (model.checkBlockedReason && !model.candidateHash) panel.appendChild(renderEmptyState(model.checkBlockedReason));
+  const warningList = renderScopedPublishWarningList(model.warnings);
+  if (warningList) panel.appendChild(warningList);
+  if (model.candidateHash) panel.appendChild(renderBadge('Kiểm tra đạt — có thể đưa Nội dung phòng 3D lên website', 'success'));
+  if (model.publishedAt) panel.appendChild(renderBadge(`Đã đưa lên website lúc ${formatDateTime(model.publishedAt)}`, 'success'));
+
   const action = createElement('div', { className: 'cms-admin-scoped-publish-action-row' });
-  const button = createElement('button', {
-    className: 'cms-admin-button cms-admin-button-primary',
-    text: 'Kiểm tra & đưa Nội dung phòng 3D lên website',
+  const checkButton = createElement('button', {
+    className: 'cms-admin-button cms-admin-button-secondary',
+    text: model.checking ? 'Đang kiểm tra...' : 'Kiểm tra Nội dung phòng 3D',
     type: 'button',
-    attrs: { disabled: 'disabled', 'aria-disabled': 'true' },
   });
-  button.disabled = true;
-  action.appendChild(button);
-  action.appendChild(createElement('p', {
-    className: 'cms-admin-help-text',
-    text: 'Đang chờ backend scoped publish cho scope rooms3d. Hãy tiếp tục lưu bản nháp 3D trong CMS, chưa publish thật.',
-  }));
+  checkButton.disabled = !model.canCheck;
+  checkButton.addEventListener('click', () => handleCheckScopedCmsPublish('rooms3d', handlers));
+  const publishButton = createElement('button', {
+    className: 'cms-admin-button cms-admin-button-primary',
+    text: model.publishing ? 'Đang đưa lên website...' : 'Đưa Nội dung phòng 3D lên website',
+    type: 'button',
+  });
+  publishButton.disabled = !model.canPublish;
+  publishButton.addEventListener('click', () => {
+    if (!window.confirm(SCOPED_CMS_PUBLISH_CONFIGS.rooms3d.confirmMessage)) return;
+    handlePublishScopedCmsPublish('rooms3d', handlers);
+  });
+  action.appendChild(checkButton);
+  action.appendChild(publishButton);
+  const help = model.canPublish
+    ? 'Sau khi kiểm tra đạt, bạn có thể xác nhận để đưa riêng Nội dung phòng 3D lên website.'
+    : (model.publishBlockedReason || model.checkBlockedReason || 'Bấm kiểm tra trước, sau đó mới có thể đưa lên website.');
+  action.appendChild(createElement('p', { className: 'cms-admin-help-text', text: help }));
   panel.appendChild(action);
   panel.appendChild(createElement('p', {
     className: 'cms-admin-inline-note',
-    text: 'Panel này chỉ là trạng thái tạm thời; chưa kiểm tra server và chưa đưa nội dung lên website.',
+    text: 'Không dùng workflow publish tổng. Trang chủ và Cổng vào được giữ nguyên từ website đang chạy.',
   }));
   return panel;
 }
@@ -378,7 +761,7 @@ export function renderStaticCmsDraftTab(state, handlers = {}) {
       text: 'Bấm “Nạp website đang chạy vào bản chuẩn bị mới” khi bạn muốn bắt đầu từ nội dung public hiện tại. Thao tác này sẽ rời bản chuẩn bị đang mở sau khi xác nhận và website chưa thay đổi.',
     }));
     panel.appendChild(empty);
-    panel.appendChild(renderRooms3dScopedPublishShell());
+    panel.appendChild(renderRooms3dScopedPublishShell(handlers));
     return panel;
   }
 
@@ -386,7 +769,7 @@ export function renderStaticCmsDraftTab(state, handlers = {}) {
     ? renderFeaturedWorkspaceShell(draftState, state, handlers, copy)
     : renderStaticWorkspaceShell(draftState, state, currentItem, handlers, copy, activeRoomKey));
   panel.appendChild(renderUtilityDrawers(draftState, state, currentItem, handlers, copy));
-  panel.appendChild(renderRooms3dScopedPublishShell());
+  panel.appendChild(renderRooms3dScopedPublishShell(handlers));
   return panel;
 }
 
