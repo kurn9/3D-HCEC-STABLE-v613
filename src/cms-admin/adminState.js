@@ -1,5 +1,7 @@
 import { ADMIN_UI } from './adminConfig.js';
 
+const SCOPED_CMS_PUBLISH_KEYS = ['home', 'gate', 'rooms3d'];
+
 const initialState = {
   supabase: null,
   session: null,
@@ -1077,8 +1079,6 @@ function normalizeHomeExperienceDraftForCompare(values = {}) {
 
 
 
-
-const SCOPED_CMS_PUBLISH_KEYS = ['home', 'gate', 'rooms3d'];
 
 export function createEmptyScopedPublishScopeState() {
   return {
