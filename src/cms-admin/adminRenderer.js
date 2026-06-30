@@ -54,6 +54,8 @@ import {
   updateGateDraftField,
   updateGateRoomDraftField,
   updateHomeExperienceDraftField,
+  updateHomeExperienceGateDraftField,
+  updateHomeExperienceGateRoomDraftField,
   updateHomeExperienceItemDraftField,
   updateHomeGuideDraftField,
   updateHomeGuideItemDraftField,
@@ -1495,7 +1497,8 @@ function renderActiveTab(state) {
     case 'gate':
       return renderWorkspaceShell('gate', null, state, {
         hideRail: true,
-        renderContent: ({ activeKey }) => renderGateWorkspaceContent(state, activeKey),
+        hideTabs: true,
+        renderContent: () => renderGateMovedToHomeExperienceGuide(state),
       });
     case 'media':
       return renderWorkspaceShell('media', null, state, {
@@ -2767,7 +2770,7 @@ function renderHomeContextualEditButton(state, section, sectionKey) {
     if (!guard.allowed) return;
     if (!guard.same) {
       if (sectionKey === 'hero') startHomeHeroEdit(section);
-      else if (sectionKey === 'experience') startHomeExperienceEdit(section);
+      else if (sectionKey === 'experience') startHomeExperienceEdit(section, state.data.gateContent || null);
       else if (sectionKey === 'guide') startHomeGuideEdit(section);
     }
     setWorkspaceTabState('home', sectionKey);
@@ -9697,7 +9700,49 @@ function renderHomeTab(state) {
 }
 
 function renderGateTab(state) {
-  return renderGateWorkspaceContent(state, getWorkspaceActiveTab('gate', getWorkspaceTabs('gate')));
+  return renderGateMovedToHomeExperienceGuide(state);
+}
+
+
+function renderGateMovedToHomeExperienceGuide(state = getState()) {
+  const panel = createElement('section', {
+    className: 'cms-admin-panel cms-admin-view-panel cms-admin-gate-moved-guide-panel',
+    dataset: { cmsReferenceTarget: 'gate', cmsReferenceId: state.data?.gateContent?.id || 'gate' },
+  });
+  panel.appendChild(renderPanelTitle('Cổng vào triển lãm đã chuyển vị trí chỉnh sửa', 'Mở tại Trang chủ → Khu vực trải nghiệm'));
+  panel.appendChild(createElement('p', {
+    className: 'cms-admin-operator-summary',
+    text: 'Các trường Màn chào, Không gian ngoài trời và Không gian trong nhà hiện điều khiển nội dung hiển thị trong khu Trải nghiệm trên website. Để tránh hai nơi chỉnh cùng một dữ liệu, form chỉnh sửa đã được gộp vào Trang chủ → Khu vực trải nghiệm.',
+  }));
+
+  const actions = createElement('div', { className: 'cms-admin-settings-edit-actions cms-admin-gate-moved-guide-actions' });
+  const openButton = createElement('button', {
+    className: 'cms-admin-button cms-admin-button-primary',
+    text: 'Mở Trang chủ → Khu vực trải nghiệm',
+    type: 'button',
+  });
+  openButton.addEventListener('click', () => {
+    resetGateEdit();
+    setActiveTab('home');
+    setWorkspaceTabState('home', 'experience');
+    renderAdminShell();
+  });
+  actions.appendChild(openButton);
+  actions.appendChild(createElement('span', {
+    className: 'cms-admin-inline-note',
+    text: 'Luồng publish Cổng vào vẫn giữ nguyên; sau khi lưu, hãy kiểm tra/publish scope liên quan theo quy trình hiện có.',
+  }));
+  panel.appendChild(actions);
+
+  const gate = state.data?.gateContent || {};
+  panel.appendChild(renderDataGroup('Dữ liệu Cổng vào hiện tại', renderKeyValueList(filterVisibleRows([
+    ['Tiêu đề', gate.title],
+    ['Mô tả', gate.description],
+    ['Cập nhật gần nhất', formatDateTime(gate.updated_at)],
+    ['Trạng thái', getActiveLabel(Boolean(gate.is_active))],
+  ]))));
+  panel.appendChild(renderGateScopedPublishShell());
+  return panel;
 }
 
 function renderHomeDataView(state) {
@@ -11016,7 +11061,7 @@ function renderHomeExperienceEditActions(state, section) {
       const editId = section.id || section.section_key || 'experience';
       const guard = requestStartEditSession({ type: 'home', id: editId });
       if (!guard.allowed) return;
-      if (!guard.same) startHomeExperienceEdit(section);
+      if (!guard.same) startHomeExperienceEdit(section, state.data.gateContent || null);
       setWorkspaceTabState('home', 'experience');
       queueEditPanelFocus('home-experience', editId, 'eyebrow');
       renderAdminShell();
@@ -11056,13 +11101,13 @@ function renderHomeExperienceEditPanel(state, section, editState = {}) {
   mainGroup.appendChild(mainFields);
   form.appendChild(mainGroup);
 
+  form.appendChild(renderHomeExperienceGateEditGroup(state.data.gateContent || {}, editState, copy || {}));
+  form.appendChild(renderHomeExperienceTechnicalReadonlyBlock(section, copy || {}));
+
   appendHomeEditActions(form, editState, copy, {
     onCancel: handleCancelHomeExperienceEdit,
     onReset: () => handleResetActiveDraft('home'),
   });
-
-  form.appendChild(renderHomeExperienceItemsEditGroup(section, editState, copy || {}));
-  form.appendChild(renderHomeExperienceTechnicalReadonlyBlock(section, copy || {}));
 
   form.addEventListener('input', () => updateHomeExperienceFormControls(form));
   form.addEventListener('change', () => updateHomeExperienceFormControls(form));
@@ -11091,6 +11136,113 @@ function renderHomeExperienceEditableTextField(fieldName, label, editState, opti
   input.addEventListener('input', () => updateHomeExperienceDraftField(fieldName, input.value));
   appendChildren(field, [input, renderFieldMessage(fieldName, editState)]);
   return field;
+}
+
+
+function renderHomeExperienceGateEditGroup(gate, editState = {}, copy = {}) {
+  const gateCopy = ADMIN_COPY.contentViews.gate.edit;
+  const group = renderHomeEditSectionGroup(
+    copy.groups?.gate || 'Cổng vào triển lãm',
+    copy.gateUnifiedNote || 'Các trường này đang điều khiển Màn chào và Thẻ chọn không gian hiển thị trong khu Trải nghiệm trên website.',
+    'cms-admin-home-experience-gate-edit-group'
+  );
+
+  if (!gate?.id) {
+    group.appendChild(renderNoticeBox('Chưa đọc được bản ghi Cổng vào triển lãm. Không thể lưu thống nhất Experience + Gate trong trạng thái này.', 'error'));
+    return group;
+  }
+
+  group.appendChild(renderFieldMessage('gate.rooms_json', editState));
+
+  const intro = createElement('section', { className: 'cms-admin-data-card cms-admin-home-experience-gate-intro-card' });
+  intro.appendChild(renderDataCardTitle('Màn chào / Cổng vào triển lãm', 'Sẽ hiển thị trong khu Trải nghiệm'));
+  const introFields = createElement('div', { className: 'cms-admin-edit-field-grid' });
+  introFields.appendChild(renderHomeExperienceGateTextField('eyebrow', gateCopy.fields.eyebrow, editState, { placeholder: gateCopy.placeholders.eyebrow }));
+  introFields.appendChild(renderHomeExperienceGateTextField('title', gateCopy.fields.title, editState, { required: true, placeholder: gateCopy.placeholders.title }));
+  introFields.appendChild(renderHomeExperienceGateTextField('description', gateCopy.fields.description, editState, { multiline: true, placeholder: gateCopy.placeholders.description }));
+  introFields.appendChild(renderHomeExperienceGateTextField('back_label', gateCopy.fields.back_label, editState, { placeholder: gateCopy.placeholders.back_label }));
+  intro.appendChild(introFields);
+  group.appendChild(intro);
+
+  const rooms = createElement('div', { className: 'cms-admin-gate-room-edit-grid cms-admin-home-experience-gate-room-grid' });
+  rooms.appendChild(renderHomeExperienceGateRoomEditCard('outdoor', 'Không gian ngoài trời', editState));
+  rooms.appendChild(renderHomeExperienceGateRoomEditCard('indoor', 'Không gian trong nhà', editState));
+  group.appendChild(rooms);
+
+  group.appendChild(renderCompactNotice('Sau khi lưu, cần kiểm tra/publish lại Trang chủ và Cổng vào nếu muốn website public đồng bộ. Không gộp workflow publish trong phase này.'));
+  return group;
+}
+
+function renderHomeExperienceGateTextField(fieldName, label, editState, options = {}) {
+  const gateDraft = editState.draftValues?.gate || {};
+  const field = createElement('label', { className: 'cms-admin-edit-field' });
+  field.appendChild(createElement('span', { className: 'cms-admin-edit-label', text: options.required ? `${label} *` : label }));
+  const value = gateDraft?.[fieldName] || '';
+  const input = options.multiline
+    ? createElement('textarea', {
+      className: 'cms-admin-edit-input cms-admin-edit-textarea',
+      value,
+      placeholder: options.placeholder || '',
+      attrs: { name: `gate.${fieldName}`, rows: '3', 'aria-label': `${label} của Cổng vào triển lãm` },
+    })
+    : createElement('input', {
+      className: 'cms-admin-edit-input',
+      type: 'text',
+      value,
+      placeholder: options.placeholder || '',
+      attrs: { name: `gate.${fieldName}`, autocomplete: 'off', 'aria-label': `${label} của Cổng vào triển lãm` },
+    });
+  input.addEventListener('input', () => updateHomeExperienceGateDraftField(fieldName, input.value));
+  appendChildren(field, [input, renderFieldMessage(`gate.${fieldName}`, editState)]);
+  return field;
+}
+
+function renderHomeExperienceGateRoomEditCard(roomKey, title, editState = {}) {
+  const gateCopy = ADMIN_COPY.contentViews.gate.edit;
+  const roomDraft = editState.draftValues?.gate?.rooms?.[roomKey] || {};
+  const card = createElement('section', { className: 'cms-admin-data-card cms-admin-gate-room-edit-card cms-admin-home-experience-gate-room-card' });
+  card.appendChild(renderDataCardTitle(title, roomKey));
+  card.appendChild(renderReadonlyField(gateCopy.fields.roomKey, roomKey, gateCopy.jsonSafeNote));
+  card.appendChild(renderReadonlyField(gateCopy.fields.route, `gallery.html?room=${roomKey}`, 'Đường dẫn kỹ thuật được giữ nguyên.'));
+
+  const fields = createElement('div', { className: 'cms-admin-edit-field-grid' });
+  fields.appendChild(renderHomeExperienceGateRoomTextField(roomKey, 'displayName', gateCopy.fields.displayName, roomDraft, editState, { required: true, placeholder: gateCopy.placeholders.displayName }));
+  fields.appendChild(renderHomeExperienceGateRoomTextField(roomKey, 'description', gateCopy.fields.roomDescription, roomDraft, editState, { multiline: true, placeholder: gateCopy.placeholders.roomDescription }));
+  if (roomDraft.ctaEditable) {
+    fields.appendChild(renderHomeExperienceGateRoomTextField(roomKey, 'ctaLabel', gateCopy.fields.ctaLabel, roomDraft, editState, { placeholder: gateCopy.placeholders.ctaLabel }));
+  } else {
+    fields.appendChild(createElement('p', { className: 'cms-admin-compact-copy cms-admin-gate-cta-note', text: gateCopy.noCtaLabel }));
+  }
+  card.appendChild(fields);
+  return card;
+}
+
+function renderHomeExperienceGateRoomTextField(roomKey, fieldName, label, roomDraft, editState, options = {}) {
+  const fullFieldName = `gate.rooms.${roomKey}.${fieldName}`;
+  const field = createElement('label', { className: 'cms-admin-edit-field' });
+  field.appendChild(createElement('span', { className: 'cms-admin-edit-label', text: options.required ? `${label} *` : label }));
+  const value = roomDraft?.[fieldName] || '';
+  const input = options.multiline
+    ? createElement('textarea', {
+      className: 'cms-admin-edit-input cms-admin-edit-textarea',
+      value,
+      placeholder: options.placeholder || '',
+      attrs: { name: fullFieldName, rows: '3', 'aria-label': `${label} của ${titleCaseGateRoom(roomKey)}` },
+    })
+    : createElement('input', {
+      className: 'cms-admin-edit-input',
+      type: 'text',
+      value,
+      placeholder: options.placeholder || '',
+      attrs: { name: fullFieldName, autocomplete: 'off', 'aria-label': `${label} của ${titleCaseGateRoom(roomKey)}` },
+    });
+  input.addEventListener('input', () => updateHomeExperienceGateRoomDraftField(roomKey, fieldName, input.value));
+  appendChildren(field, [input, renderFieldMessage(fullFieldName, editState)]);
+  return field;
+}
+
+function titleCaseGateRoom(roomKey = '') {
+  return roomKey === 'outdoor' ? 'Không gian ngoài trời' : 'Không gian trong nhà';
 }
 
 function renderHomeExperienceItemsEditGroup(section, editState, copy) {
@@ -11216,20 +11368,30 @@ function canEditHomeExperience(state, section) {
   const role = state.profile?.role;
   const active = state.profile?.is_active === true;
   const allowedRole = role === ADMIN_ROLES.admin || role === ADMIN_ROLES.editor;
-  return Boolean(!isMobileSafeModeViewport() && ADMIN_FEATURE_FLAGS.allowHomeExperienceEdit && state.supabase && allowedRole && active && section?.id && section?.section_key === 'experience');
+  return Boolean(!isMobileSafeModeViewport() && ADMIN_FEATURE_FLAGS.allowHomeExperienceEdit && ADMIN_FEATURE_FLAGS.allowGateContentEdit && state.supabase && allowedRole && active && section?.id && section?.section_key === 'experience' && state.data.gateContent?.id);
 }
 
 async function handleSaveHomeExperienceDraft() {
   const state = getState();
   const copy = ADMIN_COPY.contentViews.home.experienceEdit;
+  const gateCopy = ADMIN_COPY.contentViews.gate.edit;
   const section = safeArray(state.data.indexSections).find((item) => item.id === state.homeEdit?.editingSectionId && item.section_key === 'experience');
   if (!canEditHomeExperience(state, section)) return;
 
-  const validation = validateHomeExperienceSectionDraft(state.homeEdit?.draftValues || {}, copy);
-  if (!validation.valid) {
+  const experienceValidation = validateHomeExperienceSectionDraft(state.homeEdit?.draftValues || {}, copy);
+  const gateValidation = validateGateContentDraft(state.homeEdit?.draftValues?.gate || {}, gateCopy);
+  const validationErrors = {
+    ...experienceValidation.errors,
+    ...prefixGateValidationMessages(gateValidation.errors),
+  };
+  const validationWarnings = {
+    ...experienceValidation.warnings,
+    ...prefixGateValidationMessages(gateValidation.warnings),
+  };
+  if (!experienceValidation.valid || !gateValidation.valid) {
     setHomeEditState({
-      validationErrors: validation.errors,
-      validationWarnings: validation.warnings,
+      validationErrors,
+      validationWarnings,
       saveError: null,
       saveSuccess: null,
     });
@@ -11242,27 +11404,50 @@ async function handleSaveHomeExperienceDraft() {
     saveError: null,
     saveSuccess: null,
     validationErrors: {},
-    validationWarnings: validation.warnings,
+    validationWarnings,
   });
   renderAdminShell();
 
   const latestState = getState();
-  const { error } = await updateExperienceIndexSectionDraft(
+  const userId = latestState.session?.user?.id || null;
+  const experienceResult = await updateExperienceIndexSectionDraft(
     latestState.supabase,
     latestState.homeEdit?.editingSectionId,
-    validation.values,
-    latestState.session?.user?.id || null
+    experienceValidation.values,
+    userId
   );
 
-  if (error) {
-    setHomeEditState({ saving: false, saveError: error, validationWarnings: validation.warnings });
+  if (experienceResult.error) {
+    setHomeEditState({ saving: false, saveError: experienceResult.error, validationWarnings });
+    renderAdminShell();
+    return;
+  }
+
+  const gateResult = await updateGateContentDraft(
+    latestState.supabase,
+    latestState.data.gateContent?.id,
+    gateValidation.values,
+    userId
+  );
+
+  if (gateResult.error) {
+    await loadDashboardData(latestState.supabase);
+    invalidateStaticCmsPublishVerification('Khu vực trải nghiệm đã được lưu một phần. Hãy kiểm tra lại trước khi đưa lên website.');
+    invalidateScopedCmsPublishScope('home', 'Khu vực trải nghiệm đã thay đổi. Hãy kiểm tra lại Trang chủ trước khi đưa lên website.');
+    setHomeEditState({
+      saving: false,
+      saveError: new Error(`Đã lưu Khu vực trải nghiệm nhưng chưa lưu được Cổng vào triển lãm: ${normalizeErrorMessage(gateResult.error)}. Hãy tải lại dữ liệu và kiểm tra trước khi publish.`),
+      saveSuccess: null,
+      validationWarnings,
+    });
     renderAdminShell();
     return;
   }
 
   await loadDashboardData(latestState.supabase);
-  invalidateStaticCmsPublishVerification('Trang chủ đã được lưu lại. Hãy cập nhật bản chuẩn bị và kiểm tra lại trước khi đưa lên website.');
-  invalidateScopedCmsPublishScope('home', 'Trang chủ đã thay đổi. Hãy kiểm tra lại Trang chủ trước khi đưa lên website.');
+  invalidateStaticCmsPublishVerification('Khu vực trải nghiệm và Cổng vào triển lãm đã được lưu lại. Hãy cập nhật bản chuẩn bị và kiểm tra lại trước khi đưa lên website.');
+  invalidateScopedCmsPublishScope('home', 'Khu vực trải nghiệm đã thay đổi. Hãy kiểm tra lại Trang chủ trước khi đưa lên website.');
+  invalidateScopedCmsPublishScope('gate', 'Cổng vào triển lãm đã thay đổi. Hãy kiểm tra lại Cổng vào trước khi đưa lên website.');
   setHomeEditState({
     isEditing: false,
     editingSectionId: null,
@@ -11272,11 +11457,15 @@ async function handleSaveHomeExperienceDraft() {
     dirty: false,
     saving: false,
     saveError: null,
-    saveSuccess: copy.success,
+    saveSuccess: copy.combinedSuccess || 'Đã lưu Khu vực trải nghiệm và Cổng vào triển lãm. Website chưa thay đổi.',
     validationErrors: {},
     validationWarnings: {},
   });
   renderAdminShell();
+}
+
+function prefixGateValidationMessages(messages = {}) {
+  return Object.fromEntries(Object.entries(messages || {}).map(([key, value]) => [`gate.${key}`, value]));
 }
 
 function handleCancelHomeExperienceEdit() {

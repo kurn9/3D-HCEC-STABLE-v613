@@ -976,8 +976,8 @@ function normalizeHomeGuideDraftForCompare(values = {}) {
   };
 }
 
-export function startHomeExperienceEdit(section = {}) {
-  const draftValues = extractHomeExperienceEditableValues(section);
+export function startHomeExperienceEdit(section = {}, gateContent = null) {
+  const draftValues = extractHomeExperienceEditableValues(section, gateContent);
   return setState({
     homeEdit: {
       ...createEmptyHomeEditState(),
@@ -1030,8 +1030,59 @@ export function updateHomeExperienceItemDraftField(index, fieldName, value) {
   });
 }
 
-export function extractHomeExperienceEditableValues(section = {}) {
+export function updateHomeExperienceGateDraftField(fieldName, value) {
+  const current = state.homeEdit || createEmptyHomeEditState();
+  const currentGate = normalizeObjectValue(current.draftValues?.gate);
+  const draftValues = {
+    ...current.draftValues,
+    gate: {
+      ...currentGate,
+      [fieldName]: value,
+    },
+  };
+  return setState({
+    homeEdit: {
+      ...current,
+      draftValues,
+      dirty: hasHomeExperienceDraftChanged(draftValues, current.originalValues),
+      saveError: null,
+      saveSuccess: null,
+    },
+  });
+}
+
+export function updateHomeExperienceGateRoomDraftField(roomKey, fieldName, value) {
+  const current = state.homeEdit || createEmptyHomeEditState();
+  const currentGate = normalizeObjectValue(current.draftValues?.gate);
+  const currentRooms = normalizeObjectValue(currentGate.rooms);
+  const currentRoom = normalizeObjectValue(currentRooms[roomKey]);
+  const draftValues = {
+    ...current.draftValues,
+    gate: {
+      ...currentGate,
+      rooms: {
+        ...currentRooms,
+        [roomKey]: {
+          ...currentRoom,
+          [fieldName]: value,
+        },
+      },
+    },
+  };
+  return setState({
+    homeEdit: {
+      ...current,
+      draftValues,
+      dirty: hasHomeExperienceDraftChanged(draftValues, current.originalValues),
+      saveError: null,
+      saveSuccess: null,
+    },
+  });
+}
+
+export function extractHomeExperienceEditableValues(section = {}, gateContent = null) {
   const itemsJson = ensureHomeExperienceRouteCardDefaults(normalizeArrayValue(section.items_json));
+  const gateValues = gateContent ? extractGateEditableValues(gateContent) : null;
   return {
     section_key: section.section_key || '',
     eyebrow: section.eyebrow || '',
@@ -1041,6 +1092,7 @@ export function extractHomeExperienceEditableValues(section = {}) {
     body: section.body || '',
     items: extractHomeExperienceItemsEditableValues(itemsJson),
     originalItemsJson: structuredCloneSafe(itemsJson),
+    ...(gateValues ? { gate: gateValues } : {}),
   };
 }
 
@@ -1101,6 +1153,7 @@ function normalizeHomeExperienceDraftForCompare(values = {}) {
       title: normalizeDraftValue(item.title),
       description: normalizeDraftValue(item.description),
     })),
+    gate: values.gate ? normalizeGateDraftForCompare(values.gate) : null,
   };
 }
 
