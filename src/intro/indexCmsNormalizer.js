@@ -91,6 +91,17 @@ const DEFAULT_INDEX_CONTENT = Object.freeze({
   })
 });
 
+const DEFAULT_GATE_CONTENT = Object.freeze({
+  eyebrow: '',
+  title: '',
+  description: '',
+  backLabel: '',
+  rooms: Object.freeze({
+    indoor: Object.freeze({ roomKey: 'indoor', label: '', title: '', description: '', ctaLabel: '' }),
+    outdoor: Object.freeze({ roomKey: 'outdoor', label: '', title: '', description: '', ctaLabel: '' })
+  })
+});
+
 function getValidator() {
   return globalThis.cmsSchemaValidator || {};
 }
@@ -186,6 +197,19 @@ function cloneDefaults() {
   };
 }
 
+function cloneGateDefaults() {
+  return {
+    eyebrow: DEFAULT_GATE_CONTENT.eyebrow,
+    title: DEFAULT_GATE_CONTENT.title,
+    description: DEFAULT_GATE_CONTENT.description,
+    backLabel: DEFAULT_GATE_CONTENT.backLabel,
+    rooms: {
+      indoor: { ...DEFAULT_GATE_CONTENT.rooms.indoor },
+      outdoor: { ...DEFAULT_GATE_CONTENT.rooms.outdoor }
+    }
+  };
+}
+
 function getIndexObject(content) {
   if (isPlainObject(content?.index)) return content.index;
   if (isPlainObject(content) && ['hero', 'experience', 'guide', 'contact', 'featured', 'featuredArtworks'].some((key) => key in content)) return content;
@@ -194,6 +218,10 @@ function getIndexObject(content) {
 
 function getSiteObject(content) {
   return isPlainObject(content?.site) ? content.site : null;
+}
+
+function getGateObject(content) {
+  return isPlainObject(content?.gate) ? content.gate : null;
 }
 
 function getMediaOptions(cms, options = {}) {
@@ -299,6 +327,84 @@ function normalizeRoutes(value, diagnostics, path) {
     applyText(route, 'ctaLabel', item, ['ctaLabel', 'cta_label'], textLimits.ctaLabel, diagnostics, `${path}[${index}]`);
     return route;
   }).filter(Boolean);
+}
+
+function readNestedText(source, pathParts, maxLength, diagnostics, path) {
+  let current = source;
+  for (const part of pathParts) {
+    if (!isPlainObject(current)) return '';
+    current = current[part];
+  }
+  if (current === undefined || current === null) return '';
+  if (typeof current !== 'string') {
+    addWarning(diagnostics, `${path}.${pathParts.join('.')} ignored because it is not a string.`);
+    return '';
+  }
+  return sanitizeText(current, '', maxLength);
+}
+
+function readTextWithNestedAliases(source, aliases, maxLength, diagnostics, path) {
+  if (!isPlainObject(source)) return '';
+  for (const alias of aliases) {
+    const clean = Array.isArray(alias)
+      ? readNestedText(source, alias, maxLength, diagnostics, path)
+      : readText(source, [alias], maxLength, diagnostics, path);
+    if (clean) return clean;
+  }
+  return '';
+}
+
+function normalizeGateRoom(roomSource, roomKey, diagnostics, path) {
+  const textLimits = getTextLimits();
+  const room = {
+    roomKey,
+    label: '',
+    title: '',
+    description: '',
+    ctaLabel: ''
+  };
+  if (!isPlainObject(roomSource)) {
+    if (roomSource !== undefined) addWarning(diagnostics, `${path} ignored because it is not an object.`);
+    return room;
+  }
+  const label = readTextWithNestedAliases(roomSource, ['label', 'title', 'name'], textLimits.label, diagnostics, path);
+  const title = readTextWithNestedAliases(roomSource, ['title', 'name', 'label'], textLimits.title, diagnostics, path);
+  const description = readTextWithNestedAliases(roomSource, ['description', 'lead', 'subtitle'], textLimits.description, diagnostics, path);
+  const ctaLabel = readTextWithNestedAliases(
+    roomSource,
+    ['ctaLabel', 'cta_label', ['cta', 'label'], ['button', 'label'], ['action', 'label']],
+    textLimits.ctaLabel,
+    diagnostics,
+    path
+  );
+  if (label) room.label = label;
+  if (title) room.title = title;
+  if (description) room.description = description;
+  if (ctaLabel) room.ctaLabel = ctaLabel;
+  return room;
+}
+
+function applyGateLayer(target, content, diagnostics, sourceLabel) {
+  const gate = getGateObject(content);
+  if (!gate) return false;
+  const textLimits = getTextLimits();
+  applyText(target, 'eyebrow', gate, ['eyebrow'], textLimits.eyebrow, diagnostics, `${sourceLabel}.gate`);
+  applyText(target, 'title', gate, ['title'], textLimits.title, diagnostics, `${sourceLabel}.gate`);
+  applyText(target, 'description', gate, ['description'], textLimits.description, diagnostics, `${sourceLabel}.gate`);
+  applyText(target, 'backLabel', gate, ['backLabel', 'back_label'], textLimits.ctaLabel, diagnostics, `${sourceLabel}.gate`);
+
+  const rooms = isPlainObject(gate.rooms) ? gate.rooms : null;
+  if (rooms) {
+    target.rooms.indoor = {
+      ...target.rooms.indoor,
+      ...normalizeGateRoom(rooms.indoor, 'indoor', diagnostics, `${sourceLabel}.gate.rooms.indoor`)
+    };
+    target.rooms.outdoor = {
+      ...target.rooms.outdoor,
+      ...normalizeGateRoom(rooms.outdoor, 'outdoor', diagnostics, `${sourceLabel}.gate.rooms.outdoor`)
+    };
+  }
+  return true;
 }
 
 function normalizeSteps(value, diagnostics, path) {
@@ -583,12 +689,19 @@ export function normalizeCmsIndexContent(primaryContent, fallbackContent = null,
     mediaRemoteEnabled: mediaOptions.allowRemoteMedia === true
   };
   const canonical = cloneDefaults();
+  const gate = cloneGateDefaults();
 
   if (fallbackContent && applyIndexLayer(canonical, fallbackContent, mediaOptions, diagnostics, 'fallback')) {
     diagnostics.appliedSources.push('fallback');
   }
+  if (fallbackContent && applyGateLayer(gate, fallbackContent, diagnostics, 'fallback')) {
+    diagnostics.appliedSources.push('fallback.gate');
+  }
   if (primaryContent && primaryContent !== fallbackContent && applyIndexLayer(canonical, primaryContent, mediaOptions, diagnostics, 'primary')) {
     diagnostics.appliedSources.push('primary');
+  }
+  if (primaryContent && primaryContent !== fallbackContent && applyGateLayer(gate, primaryContent, diagnostics, 'primary')) {
+    diagnostics.appliedSources.push('primary.gate');
   }
   if (!primaryContent && !fallbackContent) addError(diagnostics, 'No usable CMS source was available; canonical safe defaults returned.');
 
@@ -598,7 +711,7 @@ export function normalizeCmsIndexContent(primaryContent, fallbackContent = null,
     addWarning(diagnostics, 'featuredArtworks.enabled was forced to false because no valid visible items remain.');
   }
 
-  return { index: canonical, diagnostics, mediaOptions };
+  return { index: canonical, gate, diagnostics, mediaOptions };
 }
 
 export async function loadNormalizedIndexCmsContent(cms, options = {}) {
@@ -629,4 +742,4 @@ export async function loadNormalizedIndexCmsContent(cms, options = {}) {
   return { ...result, source: cms.getCmsSource?.() || (selected ? 'selected' : 'legacy') };
 }
 
-export { DEFAULT_INDEX_CONTENT, DEFAULT_INDEX_CMS_LOADER_OPTIONS, getIndexCmsLoaderOptions };
+export { DEFAULT_INDEX_CONTENT, DEFAULT_GATE_CONTENT, DEFAULT_INDEX_CMS_LOADER_OPTIONS, getIndexCmsLoaderOptions };

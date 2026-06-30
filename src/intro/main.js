@@ -213,7 +213,45 @@ function setMultilineTextSafe(target, value) {
   return true;
 }
 
-function applyCmsIndexContent(indexContent, mediaOptions = {}) {
+function getGateRoomContent(gateContent = {}, roomKey = '') {
+  const key = String(roomKey || '').toLowerCase();
+  return key && gateContent?.rooms?.[key] ? gateContent.rooms[key] : null;
+}
+
+function getPreferredText(primaryValue, fallbackValue) {
+  const primary = window.cmsContentLoader?.sanitizeText?.(primaryValue) ?? String(primaryValue ?? '').trim();
+  if (primary) return primary;
+  return fallbackValue;
+}
+
+function applyCmsGateIntroContent(gateContent = {}) {
+  const surface = document.querySelector('[data-cms-gate-surface]');
+  if (!surface) return 0;
+  let changed = 0;
+  const eyebrowChanged = setOptionalTextContentSafe(surface.querySelector('[data-cms-gate-field="eyebrow"]'), gateContent.eyebrow);
+  const titleChanged = setOptionalTextContentSafe(surface.querySelector('[data-cms-gate-field="title"]'), gateContent.title);
+  const descriptionChanged = setOptionalTextContentSafe(surface.querySelector('[data-cms-gate-field="description"]'), gateContent.description);
+  changed += eyebrowChanged ? 1 : 0;
+  changed += titleChanged ? 1 : 0;
+  changed += descriptionChanged ? 1 : 0;
+  const hasVisibleCopy = Boolean(gateContent.eyebrow || gateContent.title || gateContent.description);
+  surface.hidden = !hasVisibleCopy;
+  if (hasVisibleCopy) surface.removeAttribute('aria-hidden');
+  else surface.setAttribute('aria-hidden', 'true');
+  return changed;
+}
+
+function applyRouteCardContent(card, route = {}, gateRoom = null) {
+  if (!card) return 0;
+  let changed = 0;
+  changed += setTextContentSafe(card.querySelector('.route-card-topline span'), getPreferredText(gateRoom?.label, route.label)) ? 1 : 0;
+  changed += setTextContentSafe(card.querySelector('h3'), getPreferredText(gateRoom?.title || gateRoom?.label, route.title)) ? 1 : 0;
+  changed += setTextContentSafe(card.querySelector('p'), getPreferredText(gateRoom?.description, route.description)) ? 1 : 0;
+  changed += setTextContentSafe(card.querySelector('.room-link span'), getPreferredText(gateRoom?.ctaLabel, route.ctaLabel)) ? 1 : 0;
+  return changed;
+}
+
+function applyCmsIndexContent(indexContent, mediaOptions = {}, gateContent = null) {
   const cms = window.cmsContentLoader;
   if (!indexContent) return 0;
 
@@ -269,16 +307,15 @@ function applyCmsIndexContent(indexContent, mediaOptions = {}) {
   changed += setTextContentSafe(document.querySelector('.stage-section--experience .section-header p:not(.section-subtitle):not(.section-body)'), experience.lead) ? 1 : 0;
   changed += setOptionalTextContentSafe(document.querySelector('[data-cms-experience-body]'), experience.body) ? 1 : 0;
 
+  changed += applyCmsGateIntroContent(gateContent || {}) ? 1 : 0;
+
   if (Array.isArray(experience.routes)) {
     experience.routes.forEach((route) => {
       const roomKey = String(route?.room_key || '').toLowerCase();
       if (!roomKey) return;
       const card = document.querySelector(`.route-card--${roomKey}`);
       if (!card) return;
-      changed += setTextContentSafe(card.querySelector('.route-card-topline span'), route.label) ? 1 : 0;
-      changed += setTextContentSafe(card.querySelector('h3'), route.title) ? 1 : 0;
-      changed += setTextContentSafe(card.querySelector('p'), route.description) ? 1 : 0;
-      changed += setTextContentSafe(card.querySelector('.room-link span'), route.ctaLabel) ? 1 : 0;
+      changed += applyRouteCardContent(card, route, getGateRoomContent(gateContent, roomKey));
     });
   }
 
@@ -351,14 +388,15 @@ async function initCmsIndexHydration() {
   try {
     const normalized = await loadNormalizedIndexCmsContent(cms, { context: 'index', timeoutMs: 1000 });
     if (!normalized?.index) return;
-    const changed = applyCmsIndexContent(normalized.index, normalized.mediaOptions);
+    const changed = applyCmsIndexContent(normalized.index, normalized.mediaOptions, normalized.gate);
     if (cms.isDebugCms?.()) {
       console.debug('[cms] index hydrated', {
         changed,
         source: normalized.source || cms.getCmsSource?.(),
         remoteStatus: normalized.remoteStatus,
         fallbackStatus: normalized.fallbackStatus,
-        warnings: normalized.diagnostics?.warnings || []
+        warnings: normalized.diagnostics?.warnings || [],
+        gate: normalized.gate || null
       });
     }
   } catch (error) {
