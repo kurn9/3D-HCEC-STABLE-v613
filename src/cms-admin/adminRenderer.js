@@ -11311,7 +11311,9 @@ async function handleSaveHomeHeroDraft() {
   const section = safeArray(state.data.indexSections).find((item) => item.id === state.homeEdit?.editingSectionId && item.section_key === 'hero');
   if (!canEditHomeHero(state, section)) return;
 
-  const validation = validateIndexSectionDraft(state.homeEdit?.draftValues || {}, copy);
+  const validation = validateIndexSectionDraft(state.homeEdit?.draftValues || {}, copy, {
+    mediaPolicy: STATIC_CMS_DRAFT_CONFIG,
+  });
   if (!validation.valid) {
     setHomeEditState({
       validationErrors: validation.errors,

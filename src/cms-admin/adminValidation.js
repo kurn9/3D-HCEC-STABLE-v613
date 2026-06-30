@@ -73,7 +73,7 @@ export function normalizeSiteSettingsValues(values = {}) {
   };
 }
 
-export function validateIndexSectionDraft(values = {}, copy = {}) {
+export function validateIndexSectionDraft(values = {}, copy = {}, options = {}) {
   const errors = {};
   const warnings = {};
   const normalized = normalizeIndexSectionValues(values);
@@ -89,6 +89,8 @@ export function validateIndexSectionDraft(values = {}, copy = {}) {
   if (values.originalMediaJson !== undefined && !isPlainObject(normalized.media_json)) {
     errors.media_json = copy.errors?.mediaInvalid || 'Dữ liệu ảnh/video giới thiệu không hợp lệ.';
   }
+
+  Object.assign(errors, validateHomeHeroMediaDraftUrls(normalized.mediaDraft, options.mediaPolicy || options));
 
   if (!Array.isArray(normalized.items_json)) {
     errors.items_json = copy.errors?.itemsInvalid || 'Dữ liệu nội dung con không hợp lệ.';
@@ -216,6 +218,123 @@ function normalizeHomeHeroMediaDraft(media = {}) {
     if (Object.prototype.hasOwnProperty.call(media || {}, key)) out[key] = normalizeText(media[key]);
   });
   return out;
+}
+
+
+const HOME_HERO_VIDEO_MEDIA_FIELDS = new Set(['videoUrl', 'video_url', 'video', 'mp4']);
+const HOME_HERO_IMAGE_MEDIA_FIELDS = new Set(['posterUrl', 'poster_url', 'poster', 'thumbnailUrl', 'thumbnail_url', 'thumbnail', 'imageUrl', 'image_url', 'image']);
+const HOME_HERO_MIXED_MEDIA_FIELDS = new Set(['src', 'url', 'path']);
+const HOME_HERO_VIDEO_EXTENSIONS = new Set(['mp4', 'webm', 'ogg', 'ogv', 'mov', 'm4v']);
+const HOME_HERO_IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'webp', 'avif', 'gif']);
+const HOME_HERO_SIGNED_QUERY_KEYS = ['token', 'signature', 'expires', 'awsaccesskeyid', 'googleaccessid', 'policy', 'key-pair-id'];
+
+function validateHomeHeroMediaDraftUrls(mediaDraft = {}, mediaPolicy = {}) {
+  const errors = {};
+  HOME_HERO_MEDIA_PATH_KEYS.forEach((fieldName) => {
+    if (!Object.prototype.hasOwnProperty.call(mediaDraft || {}, fieldName)) return;
+    const value = normalizeText(mediaDraft[fieldName]);
+    const check = validateHomeHeroMediaUrl(value, fieldName, mediaPolicy);
+    if (!check.valid) errors[`media.${fieldName}`] = getHomeHeroMediaUrlErrorMessage(fieldName, check.reason);
+  });
+  return errors;
+}
+
+function validateHomeHeroMediaUrl(value = '', fieldName = '', mediaPolicy = {}) {
+  const raw = String(value ?? '').trim();
+  if (!raw) return { valid: true, reason: 'empty' };
+  if (/^(javascript|data|blob|file):/i.test(raw)) return { valid: false, reason: 'blocked-protocol' };
+  if (raw.startsWith('//')) return { valid: false, reason: 'protocol-relative' };
+  if (raw.includes('\\')) return { valid: false, reason: 'unsafe-path' };
+  if (containsTraversal(raw)) return { valid: false, reason: 'path-traversal' };
+  if (hasSignedOrSensitiveQuery(raw)) return { valid: false, reason: 'signed-query' };
+
+  const requiredKind = getHomeHeroMediaRequiredKind(fieldName);
+  if (isAllowedHomeHeroRelativeMediaPath(raw, mediaPolicy)) {
+    return validateHomeHeroMediaExtension(raw, requiredKind);
+  }
+  if (raw.startsWith('./') || raw.startsWith('/') || !/^[a-z][a-z0-9+.-]*:/i.test(raw)) {
+    return { valid: false, reason: 'relative-path-not-allowed' };
+  }
+
+  let url;
+  try {
+    url = new URL(raw);
+  } catch {
+    return { valid: false, reason: 'malformed-url' };
+  }
+  if (url.protocol !== 'https:') return { valid: false, reason: 'remote-protocol' };
+  if (!isAllowedHomeHeroRemoteMediaUrl(url, mediaPolicy)) return { valid: false, reason: 'remote-host-not-allowlisted' };
+  if (hasSignedOrSensitiveQuery(url.search)) return { valid: false, reason: 'signed-query' };
+  return validateHomeHeroMediaExtension(url.pathname, requiredKind);
+}
+
+function containsTraversal(value = '') {
+  const raw = String(value || '');
+  if (raw.includes('..')) return true;
+  try {
+    return decodeURIComponent(raw).includes('..');
+  } catch {
+    return false;
+  }
+}
+
+function hasSignedOrSensitiveQuery(value = '') {
+  const raw = String(value || '');
+  const query = raw.includes('?') ? raw.slice(raw.indexOf('?') + 1).split('#')[0] : raw.replace(/^\?/, '').split('#')[0];
+  if (!query) return false;
+  return query.split('&').some((part) => {
+    const key = part.split('=')[0] || '';
+    const normalized = key.trim().toLowerCase();
+    if (!normalized) return false;
+    if (normalized.startsWith('x-amz-')) return true;
+    return HOME_HERO_SIGNED_QUERY_KEYS.includes(normalized);
+  });
+}
+
+function getHomeHeroMediaRequiredKind(fieldName = '') {
+  if (HOME_HERO_VIDEO_MEDIA_FIELDS.has(fieldName)) return 'video';
+  if (HOME_HERO_IMAGE_MEDIA_FIELDS.has(fieldName)) return 'image';
+  if (HOME_HERO_MIXED_MEDIA_FIELDS.has(fieldName)) return 'mixed';
+  return 'mixed';
+}
+
+function validateHomeHeroMediaExtension(value = '', requiredKind = 'mixed') {
+  const extension = getMediaPathExtension(value);
+  if (!extension) return { valid: false, reason: 'missing-extension' };
+  const isVideo = HOME_HERO_VIDEO_EXTENSIONS.has(extension);
+  const isImage = HOME_HERO_IMAGE_EXTENSIONS.has(extension);
+  if (requiredKind === 'video' && !isVideo) return { valid: false, reason: 'video-extension-required' };
+  if (requiredKind === 'image' && !isImage) return { valid: false, reason: 'image-extension-required' };
+  if (requiredKind === 'mixed' && !isVideo && !isImage) return { valid: false, reason: 'media-extension-required' };
+  return { valid: true, reason: 'valid-media-url' };
+}
+
+function getMediaPathExtension(value = '') {
+  const path = String(value || '').split('#')[0].split('?')[0];
+  const match = path.match(/\.([A-Za-z0-9]+)$/);
+  return match ? match[1].toLowerCase() : '';
+}
+
+function isAllowedHomeHeroRelativeMediaPath(value = '', mediaPolicy = {}) {
+  const raw = String(value || '').trim();
+  const prefixes = safeArray(mediaPolicy.allowedMediaPathPrefixes).map((prefix) => String(prefix || '').trim()).filter(Boolean);
+  return prefixes.some((prefix) => raw.startsWith(prefix));
+}
+
+function isAllowedHomeHeroRemoteMediaUrl(url, mediaPolicy = {}) {
+  const origins = new Set(safeArray(mediaPolicy.allowedMediaOrigins).map((entry) => String(entry || '').trim()).filter(Boolean));
+  const hosts = new Set(safeArray(mediaPolicy.allowedMediaHosts).map((entry) => String(entry || '').trim().toLowerCase()).filter(Boolean));
+  const originOk = origins.size > 0 && origins.has(url.origin);
+  const hostOk = hosts.size > 0 && (hosts.has(url.host.toLowerCase()) || hosts.has(url.hostname.toLowerCase()));
+  return originOk || hostOk;
+}
+
+function getHomeHeroMediaUrlErrorMessage(fieldName = '', reason = '') {
+  const kind = getHomeHeroMediaRequiredKind(fieldName);
+  if (kind === 'video') return 'URL video Trang chủ không hợp lệ hoặc không thuộc nguồn media được phép.';
+  if (kind === 'image') return 'Poster/thumbnail Trang chủ chỉ nhận ảnh jpg/png/webp/avif/gif từ nguồn được phép.';
+  if (reason === 'missing-extension' || reason === 'media-extension-required') return 'URL media Trang chủ phải là ảnh hoặc video có phần mở rộng hợp lệ từ nguồn được phép.';
+  return 'URL media Trang chủ không hợp lệ hoặc không thuộc nguồn media được phép.';
 }
 
 function normalizeHomeHeroItemDrafts(items = []) {
