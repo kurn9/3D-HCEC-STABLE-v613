@@ -400,6 +400,49 @@ function getScopedPublishConfirmVersion(data = {}) {
   return String(data.publishedVersion || data.draftVersion || data.plan?.publishedVersion || data.plan?.draftVersion || '').trim();
 }
 
+function isTerminalAuditIdentityMessage(value = '') {
+  const text = String(value || '').trim();
+  return /TERMINAL_AUDIT_IDENTITY_INVALID|terminal_audit_identity_invalid|terminal audit identity|audit identity|lịch sử vận hành/i.test(text);
+}
+
+function isReleaseLineageCleanForScopedPublish(appState = getState()) {
+  const gate = appState.releaseOperationGate || {};
+  const result = gate.result || {};
+  const classification = String(result.classification || gate.classification || '').trim().toLowerCase();
+  const code = String(result.code || gate.code || '').trim().toUpperCase();
+  const blocked = Boolean(gate.blocked === true || result.blocked === true);
+  const terminalInvalid = Boolean(
+    gate.terminalAuditIdentityInvalid === true
+    || result.terminalAuditIdentityInvalid === true
+    || classification === 'terminal_audit_identity_invalid'
+    || code === 'TERMINAL_AUDIT_IDENTITY_INVALID'
+  );
+  const terminalConflict = Boolean(
+    gate.terminalAuditConflict === true
+    || result.terminalAuditConflict === true
+    || classification === 'terminal_audit_conflict'
+    || code === 'TERMINAL_AUDIT_CONFLICT'
+  );
+  const repairRequired = Boolean(
+    gate.repairRequired === true
+    || gate.lineageRepairRequired === true
+    || gate.pointerRepairRequired === true
+    || result.repairRequired === true
+    || result.lineageRepairRequired === true
+    || result.pointerRepairRequired === true
+  );
+  if (terminalInvalid || terminalConflict || repairRequired) return false;
+  if (blocked && classification !== 'clean' && code !== 'OK') return false;
+  return classification === 'clean' || classification === 'idle' || code === 'OK' || gate.state === 'idle';
+}
+
+function getScopedPublishActiveError(scopedState = {}, appState = getState()) {
+  const errorText = String(scopedState.error || '').trim();
+  if (!errorText) return '';
+  if (isTerminalAuditIdentityMessage(errorText) && isReleaseLineageCleanForScopedPublish(appState)) return '';
+  return errorText;
+}
+
 function buildScopedPublishPayload(scopeKey, { dryRun, candidateHash = '' } = {}) {
   const appState = getState();
   const identity = getCurrentReleaseIdentityForScopedPublish(appState);
@@ -446,6 +489,7 @@ export function getScopedCmsPublishPanelModel(scopeKey, appState = getState()) {
   if (!key) return null;
   const config = SCOPED_CMS_PUBLISH_CONFIGS[key];
   const scopedState = appState.scopedPublish?.[key] || {};
+  const activeError = getScopedPublishActiveError(scopedState, appState);
   const issue = getScopedPublishPrerequisiteIssue(key, appState);
   const candidateHash = normalizeSha256Hash(scopedState.candidateHash || '');
   const checking = Boolean(scopedState.checking);
@@ -458,7 +502,7 @@ export function getScopedCmsPublishPanelModel(scopeKey, appState = getState()) {
       ? 'Đang kiểm tra'
       : scopedState.publishedAt
         ? 'Đã đưa lên website'
-        : scopedState.error
+        : activeError
           ? 'Kiểm tra lỗi'
           : scopedState.stale
             ? 'Cần kiểm tra lại'
@@ -469,7 +513,7 @@ export function getScopedCmsPublishPanelModel(scopeKey, appState = getState()) {
                 : 'Chưa kiểm tra';
   const statusTone = publishing || checking
     ? 'warning'
-    : scopedState.error || issue || scopedState.stale
+    : activeError || issue || scopedState.stale
       ? 'warning'
       : candidateHash || scopedState.publishedAt
         ? 'success'
@@ -488,7 +532,7 @@ export function getScopedCmsPublishPanelModel(scopeKey, appState = getState()) {
     statusLabel,
     statusTone,
     warnings: scopedState.warnings || scopedState.dryRunResult?.warnings || null,
-    errorMessage: scopedState.error || null,
+    errorMessage: activeError || null,
     checkedAt: scopedState.checkedAt || null,
     publishedAt: scopedState.publishedAt || null,
     dryRunResult: scopedState.dryRunResult || null,
@@ -501,24 +545,7 @@ export async function handleCheckScopedCmsPublish(scopeKey, handlers = {}) {
   if (!key) return;
   let appState = getState();
   if (!appState.supabase) return;
-
-  let issue = getScopedPublishPrerequisiteIssue(key, appState);
-  if (issue && issue.includes('Không xác định được website đang chạy')) {
-    setScopedCmsPublishState(key, { checking: true, error: null, status: 'Đang tải lại trạng thái website đang chạy...' });
-    handlers.onRerender?.();
-    try {
-      await refreshDashboardAndReleaseIdentity(appState.supabase);
-      appState = getState();
-      issue = getScopedPublishPrerequisiteIssue(key, appState);
-    } catch (error) {
-      issue = normalizeErrorMessage(error, issue);
-    }
-  }
-  if (issue) {
-    setScopedCmsPublishState(key, { checking: false, publishing: false, error: issue, status: issue });
-    handlers.onRerender?.();
-    return;
-  }
+  let completed = false;
 
   setScopedCmsPublishState(key, {
     checking: true,
@@ -537,43 +564,98 @@ export async function handleCheckScopedCmsPublish(scopeKey, handlers = {}) {
   });
   handlers.onRerender?.();
 
-  const payload = buildScopedPublishPayload(key, { dryRun: true });
-  const { data, error } = await publishScopedCmsJson(appState.supabase, payload);
-  if (error) {
-    const message = getScopedPublishErrorMessage(error, data, key);
-    setScopedCmsPublishState(key, { checking: false, error: message, status: message, dryRunResult: data || null });
-    handlers.onRerender?.();
-    return;
-  }
+  try {
+    let issue = getScopedPublishPrerequisiteIssue(key, appState);
+    if (issue && issue.includes('Không xác định được website đang chạy')) {
+      setScopedCmsPublishState(key, { status: 'Đang tải lại trạng thái website đang chạy...' });
+      handlers.onRerender?.();
+      try {
+        await refreshDashboardAndReleaseIdentity(appState.supabase);
+        appState = getState();
+        issue = getScopedPublishPrerequisiteIssue(key, appState);
+      } catch (error) {
+        issue = normalizeErrorMessage(error, issue);
+      }
+    }
+    if (issue) {
+      setScopedCmsPublishState(key, {
+        checking: false,
+        publishing: false,
+        error: issue,
+        status: issue,
+      });
+      completed = true;
+      handlers.onRerender?.();
+      return;
+    }
 
-  const candidateHash = getScopedPublishCandidateHash(data || {});
-  setScopedCmsPublishState(key, {
-    checking: false,
-    checked: true,
-    candidateHash,
-    candidateSummary: data?.candidateSummary || null,
-    validationSummary: data?.validationSummary || null,
-    warnings: data?.warnings || data?.validationSummary?.warnings || null,
-    error: null,
-    result: null,
-    dryRunResult: data || null,
-    checkedAt: new Date().toISOString(),
-    expectedCurrentReleaseId: payload.expectedCurrentReleaseId || '',
-    expectedCurrentContentHash: payload.expectedCurrentContentHash || '',
-    draftId: payload.draftId || '',
-    expectedDraftUpdatedAt: payload.expectedDraftUpdatedAt || null,
-    expectedDraftVersion: payload.expectedDraftVersion || '',
-    stale: false,
-    staleReason: '',
-    status: candidateHash ? `Có thể đưa ${SCOPED_CMS_PUBLISH_CONFIGS[key].label} lên website.` : 'Kiểm tra không trả mã xác nhận. Hãy thử lại.',
-  });
-  handlers.onRerender?.();
+    const payload = buildScopedPublishPayload(key, { dryRun: true });
+    const { data, error } = await publishScopedCmsJson(appState.supabase, payload);
+    if (error) {
+      const message = getScopedPublishErrorMessage(error, data, key);
+      setScopedCmsPublishState(key, {
+        checking: false,
+        publishing: false,
+        error: message,
+        status: message,
+        dryRunResult: data || null,
+      });
+      completed = true;
+      handlers.onRerender?.();
+      return;
+    }
+
+    const candidateHash = getScopedPublishCandidateHash(data || {});
+    setScopedCmsPublishState(key, {
+      checking: false,
+      publishing: false,
+      checked: true,
+      candidateHash,
+      candidateSummary: data?.candidateSummary || null,
+      validationSummary: data?.validationSummary || null,
+      warnings: data?.warnings || data?.validationSummary?.warnings || null,
+      error: null,
+      result: null,
+      dryRunResult: data || null,
+      checkedAt: new Date().toISOString(),
+      expectedCurrentReleaseId: payload.expectedCurrentReleaseId || '',
+      expectedCurrentContentHash: payload.expectedCurrentContentHash || '',
+      draftId: payload.draftId || '',
+      expectedDraftUpdatedAt: payload.expectedDraftUpdatedAt || null,
+      expectedDraftVersion: payload.expectedDraftVersion || '',
+      stale: false,
+      staleReason: '',
+      status: candidateHash ? `Có thể đưa ${SCOPED_CMS_PUBLISH_CONFIGS[key].label} lên website.` : 'Kiểm tra không trả mã xác nhận. Hãy thử lại.',
+    });
+    completed = true;
+    handlers.onRerender?.();
+  } catch (error) {
+    const message = normalizeErrorMessage(error, 'Không thể kiểm tra khu vực này. Hãy thử lại sau.');
+    setScopedCmsPublishState(key, {
+      checking: false,
+      publishing: false,
+      error: message,
+      status: message,
+    });
+    completed = true;
+    handlers.onRerender?.();
+  } finally {
+    const current = getState().scopedPublish?.[key] || {};
+    if (!completed && current.checking) {
+      setScopedCmsPublishState(key, {
+        checking: false,
+        publishing: false,
+        status: current.status || 'Đã dừng kiểm tra. Hãy thử lại.',
+      });
+      handlers.onRerender?.();
+    }
+  }
 }
 
 export async function handlePublishScopedCmsPublish(scopeKey, handlers = {}) {
   const key = normalizeScopedPublishKey(scopeKey);
   if (!key) return;
-  const appState = getState();
+  let appState = getState();
   if (!appState.supabase) return;
   const scopedState = appState.scopedPublish?.[key] || {};
   const candidateHash = normalizeSha256Hash(scopedState.candidateHash || '');
@@ -589,51 +671,89 @@ export async function handlePublishScopedCmsPublish(scopeKey, handlers = {}) {
     return;
   }
 
-  setScopedCmsPublishState(key, { publishing: true, error: null, status: 'Đang đưa khu vực này lên website...' });
+  let completed = false;
+  setScopedCmsPublishState(key, { publishing: true, checking: false, error: null, status: 'Đang đưa khu vực này lên website...' });
   handlers.onRerender?.();
 
-  const payload = buildScopedPublishPayload(key, { dryRun: false, candidateHash });
-  const { data, error } = await publishScopedCmsJson(appState.supabase, payload);
-  if (error) {
-    const message = getScopedPublishErrorMessage(error, data, key);
+  try {
+    const payload = buildScopedPublishPayload(key, { dryRun: false, candidateHash });
+    const { data, error } = await publishScopedCmsJson(appState.supabase, payload);
+    if (error) {
+      const message = getScopedPublishErrorMessage(error, data, key);
+      setScopedCmsPublishState(key, {
+        publishing: false,
+        checking: false,
+        error: message,
+        status: message,
+        result: data || null,
+        candidateHash: '',
+        stale: true,
+        staleReason: 'Nội dung hoặc website đang chạy đã thay đổi sau lần kiểm tra. Hãy kiểm tra lại.',
+      });
+      completed = true;
+      handlers.onRerender?.();
+      return;
+    }
+
+    let refreshWarning = '';
+    try {
+      await refreshDashboardAndReleaseIdentity(appState.supabase);
+      appState = getState();
+    } catch (refreshError) {
+      console.error('[cms-admin] scoped publish dashboard refresh failed', refreshError);
+      refreshWarning = 'Đã đưa lên website, nhưng chưa tải lại được trạng thái website đang chạy. Hãy kiểm tra lại hoặc tải lại trang.';
+    }
+    try {
+      await refreshAndApplyReleaseOperationGateStatus({
+        client: appState.supabase,
+        fallbackMessage: 'Đã publish scoped, nhưng chưa xác nhận được trạng thái release-operation sau publish.',
+      });
+    } catch (gateError) {
+      console.error('[cms-admin] scoped publish release gate refresh failed', gateError);
+      refreshWarning = refreshWarning || 'Đã đưa lên website, nhưng chưa xác nhận được trạng thái vận hành sau publish. Hãy kiểm tra lại.';
+    }
+
     setScopedCmsPublishState(key, {
       publishing: false,
+      checking: false,
+      checked: false,
+      candidateHash: '',
+      candidateSummary: null,
+      validationSummary: data?.validationSummary || null,
+      warnings: refreshWarning ? { postPublishRefresh: refreshWarning, ...(data?.warnings || data?.validationSummary?.warnings || {}) } : (data?.warnings || data?.validationSummary?.warnings || null),
+      error: null,
+      result: data || null,
+      publishedAt: new Date().toISOString(),
+      stale: false,
+      staleReason: '',
+      status: refreshWarning || SCOPED_CMS_PUBLISH_CONFIGS[key].success,
+    });
+    completed = true;
+    handlers.onRerender?.();
+  } catch (error) {
+    const message = normalizeErrorMessage(error, 'Không thể đưa khu vực này lên website. Hãy thử lại sau.');
+    setScopedCmsPublishState(key, {
+      publishing: false,
+      checking: false,
       error: message,
       status: message,
-      result: data || null,
       candidateHash: '',
       stale: true,
       staleReason: 'Nội dung hoặc website đang chạy đã thay đổi sau lần kiểm tra. Hãy kiểm tra lại.',
     });
+    completed = true;
     handlers.onRerender?.();
-    return;
+  } finally {
+    const current = getState().scopedPublish?.[key] || {};
+    if (!completed && current.publishing) {
+      setScopedCmsPublishState(key, {
+        publishing: false,
+        checking: false,
+        status: current.status || 'Đã dừng publish. Hãy kiểm tra lại trước khi thử tiếp.',
+      });
+      handlers.onRerender?.();
+    }
   }
-
-  try {
-    await refreshDashboardAndReleaseIdentity(appState.supabase);
-    await refreshAndApplyReleaseOperationGateStatus({
-      client: appState.supabase,
-      fallbackMessage: 'Đã publish scoped, nhưng chưa xác nhận được trạng thái release-operation sau publish.',
-    });
-  } catch (refreshError) {
-    console.error('[cms-admin] scoped publish refresh failed', refreshError);
-  }
-
-  setScopedCmsPublishState(key, {
-    publishing: false,
-    checked: false,
-    candidateHash: '',
-    candidateSummary: null,
-    validationSummary: data?.validationSummary || null,
-    warnings: data?.warnings || data?.validationSummary?.warnings || null,
-    error: null,
-    result: data || null,
-    publishedAt: new Date().toISOString(),
-    stale: false,
-    staleReason: '',
-    status: SCOPED_CMS_PUBLISH_CONFIGS[key].success,
-  });
-  handlers.onRerender?.();
 }
 
 function renderScopedPublishWarningList(warnings = null) {
