@@ -815,7 +815,7 @@ export async function publishScopedCmsJson(client, payload = {}) {
     return { data: null, error: new Error('Supabase client chưa sẵn sàng.') };
   }
 
-  const scope = normalizeOptionalText(payload.scope).toLowerCase();
+  const scope = String(normalizeOptionalText(payload.scope) || '').toLowerCase();
   if (!CMS_SCOPED_PUBLISH_SCOPES.has(scope)) {
     return { data: null, error: new Error('Phạm vi công khai không hợp lệ.') };
   }

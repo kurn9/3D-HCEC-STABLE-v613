@@ -376,6 +376,8 @@ function getScopedPublishErrorMessage(error, data = null, scopeKey = '') {
   const config = SCOPED_CMS_PUBLISH_CONFIGS[scopeKey] || {};
   const area = config.label || 'khu vực này';
   const codeMap = {
+    TERMINAL_AUDIT_IDENTITY_INVALID: 'Backend hiện vẫn trả TERMINAL_AUDIT_IDENTITY_INVALID cho request mới. Dừng publish và kiểm tra backend/lineage contract.',
+    terminal_audit_identity_invalid: 'Backend hiện vẫn trả TERMINAL_AUDIT_IDENTITY_INVALID cho request mới. Dừng publish và kiểm tra backend/lineage contract.',
     current_release_unavailable: 'Không xác định được website đang chạy. Hãy tải lại trang hoặc thử lại sau.',
     current_release_conflict: 'Website đang chạy đã thay đổi. Hãy kiểm tra lại trước khi đưa lên website.',
     candidate_hash_mismatch: 'Nội dung hoặc website đang chạy đã thay đổi sau lần kiểm tra. Hãy kiểm tra lại.',
@@ -403,6 +405,102 @@ function getScopedPublishConfirmVersion(data = {}) {
 function isTerminalAuditIdentityMessage(value = '') {
   const text = String(value || '').trim();
   return /TERMINAL_AUDIT_IDENTITY_INVALID|terminal_audit_identity_invalid|terminal audit identity|audit identity|lịch sử vận hành/i.test(text);
+}
+
+function getScopedPublishResponseCode(data = null, error = null) {
+  return String(
+    data?.code
+    || data?.errorCode
+    || data?.error
+    || error?.code
+    || ''
+  ).trim();
+}
+
+function isScopedReleaseLineageCleanPayload(data = {}) {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return false;
+  const classification = String(data.classification || data.state || data.operationState || '').trim().toLowerCase();
+  const code = String(data.code || data.error || '').trim().toUpperCase();
+  const blocked = data.blocked === true;
+  const repairable = data.repairable === true;
+  const hasTerminalBlocker = Boolean(
+    data.terminalAuditIdentityInvalid === true
+    || data.terminalAuditConflict === true
+    || classification === 'terminal_audit_identity_invalid'
+    || classification === 'terminal_audit_conflict'
+    || code === 'TERMINAL_AUDIT_IDENTITY_INVALID'
+    || code === 'TERMINAL_AUDIT_CONFLICT'
+  );
+  const hasRepairBlocker = Boolean(
+    data.lineageRepairRequired === true
+    || data.repairRequired === true
+    || data.pointerRepairRequired === true
+    || data.reconciliationRequired === true
+  );
+  if (blocked || repairable || hasTerminalBlocker || hasRepairBlocker) return false;
+  return classification === 'clean' || classification === 'idle' || code === 'OK';
+}
+
+function markReleaseLineageCleanForScopedPublish(data = {}) {
+  setReleaseOperationGateState({
+    loading: false,
+    blocked: false,
+    operationId: '',
+    operationType: '',
+    state: 'idle',
+    phase: '',
+    code: String(data?.code || 'OK'),
+    classification: String(data?.classification || 'clean'),
+    expectedReleaseId: String(data?.expectedReleaseId || data?.releaseId || ''),
+    targetReleaseId: String(data?.targetReleaseId || ''),
+    contentHash: String(data?.contentHash || ''),
+    contentPath: String(data?.contentPath || ''),
+    message: '',
+    reconciliationRequired: false,
+    lineageRepairRequired: false,
+    repairRequired: false,
+    pointerRepairRequired: false,
+    terminalAuditIdentityInvalid: false,
+    terminalAuditConflict: false,
+    reconciling: false,
+    lastCheckedAt: new Date().toISOString(),
+    error: null,
+    result: data || null,
+  });
+}
+
+async function refreshScopedReleaseLineageBeforeCheck(client, scopeKey, handlers = {}) {
+  if (!client) return { clean: false, skipped: true };
+  try {
+    const result = await reconcileCmsReleasePointer(client, { mode: 'status' });
+    const data = result.data || {};
+    if (!result.error && isScopedReleaseLineageCleanPayload(data)) {
+      markReleaseLineageCleanForScopedPublish(data);
+      setScopedCmsPublishState(scopeKey, {
+        error: null,
+        errorCode: '',
+        errorSource: '',
+        stale: false,
+        staleReason: '',
+        warnings: null,
+        status: 'Trạng thái vận hành đã sạch. Đang kiểm tra khu vực này...',
+      });
+      handlers.onRerender?.();
+      return { clean: true, data };
+    }
+    if (!result.error) {
+      applyReleaseOperationGateFromServer(data || {}, 'Backend chưa xác nhận lineage sạch cho scoped publish.');
+      const code = getScopedPublishResponseCode(data, null);
+      if (code === 'TERMINAL_AUDIT_IDENTITY_INVALID' || String(data?.classification || '').toLowerCase() === 'terminal_audit_identity_invalid') {
+        return { clean: false, currentTerminalError: true, data };
+      }
+      return { clean: false, data };
+    }
+    return { clean: false, error: result.error, data };
+  } catch (error) {
+    console.error('[cms-admin] scoped publish lineage status refresh failed', error);
+    return { clean: false, error };
+  }
 }
 
 function isReleaseLineageCleanForScopedPublish(appState = getState()) {
@@ -439,8 +537,32 @@ function isReleaseLineageCleanForScopedPublish(appState = getState()) {
 function getScopedPublishActiveError(scopedState = {}, appState = getState()) {
   const errorText = String(scopedState.error || '').trim();
   if (!errorText) return '';
-  if (isTerminalAuditIdentityMessage(errorText) && isReleaseLineageCleanForScopedPublish(appState)) return '';
+  const errorCode = String(scopedState.errorCode || '').trim().toUpperCase();
+  const errorSource = String(scopedState.errorSource || '').trim();
+  const currentBackendTerminal = errorSource === 'current-backend' && (
+    errorCode === 'TERMINAL_AUDIT_IDENTITY_INVALID'
+    || isTerminalAuditIdentityMessage(errorText)
+  );
+  if (isTerminalAuditIdentityMessage(errorText) && !currentBackendTerminal) {
+    const gate = appState.releaseOperationGate || {};
+    const gateResult = gate.result || {};
+    const gateHasActiveTerminal = Boolean(
+      gate.terminalAuditIdentityInvalid === true
+      || gateResult.terminalAuditIdentityInvalid === true
+      || String(gate.classification || gateResult.classification || '').trim().toLowerCase() === 'terminal_audit_identity_invalid'
+      || String(gate.code || gateResult.code || '').trim().toUpperCase() === 'TERMINAL_AUDIT_IDENTITY_INVALID'
+    );
+    if (!gateHasActiveTerminal || isReleaseLineageCleanForScopedPublish(appState)) return '';
+  }
   return errorText;
+}
+
+function getScopedPublishActiveWarnings(scopedState = {}, appState = getState()) {
+  const warnings = scopedState.warnings || scopedState.dryRunResult?.warnings || null;
+  if (!warnings || typeof warnings !== 'object') return warnings;
+  if (!isReleaseLineageCleanForScopedPublish(appState)) return warnings;
+  const entries = Object.entries(warnings).filter(([, value]) => !isTerminalAuditIdentityMessage(value));
+  return entries.length ? Object.fromEntries(entries) : null;
 }
 
 function buildScopedPublishPayload(scopeKey, { dryRun, candidateHash = '' } = {}) {
@@ -531,7 +653,7 @@ export function getScopedCmsPublishPanelModel(scopeKey, appState = getState()) {
     candidateHash,
     statusLabel,
     statusTone,
-    warnings: scopedState.warnings || scopedState.dryRunResult?.warnings || null,
+    warnings: getScopedPublishActiveWarnings(scopedState, appState),
     errorMessage: activeError || null,
     checkedAt: scopedState.checkedAt || null,
     publishedAt: scopedState.publishedAt || null,
@@ -556,6 +678,9 @@ export async function handleCheckScopedCmsPublish(scopeKey, handlers = {}) {
     validationSummary: null,
     warnings: null,
     error: null,
+    errorCode: '',
+    errorSource: '',
+    lastErrorAt: null,
     result: null,
     dryRunResult: null,
     stale: false,
@@ -582,7 +707,32 @@ export async function handleCheckScopedCmsPublish(scopeKey, handlers = {}) {
         checking: false,
         publishing: false,
         error: issue,
+        errorCode: '',
+        errorSource: 'prerequisite',
+        lastErrorAt: new Date().toISOString(),
         status: issue,
+      });
+      completed = true;
+      handlers.onRerender?.();
+      return;
+    }
+
+    setScopedCmsPublishState(key, { status: 'Đang kiểm tra trạng thái vận hành hiện tại...' });
+    handlers.onRerender?.();
+    const lineageStatus = await refreshScopedReleaseLineageBeforeCheck(appState.supabase, key, handlers);
+    appState = getState();
+    if (lineageStatus.currentTerminalError) {
+      const code = getScopedPublishResponseCode(lineageStatus.data, null) || 'TERMINAL_AUDIT_IDENTITY_INVALID';
+      const message = getScopedPublishErrorMessage({ code, message: code }, lineageStatus.data, key);
+      setScopedCmsPublishState(key, {
+        checking: false,
+        publishing: false,
+        error: message,
+        errorCode: code,
+        errorSource: 'current-backend',
+        lastErrorAt: new Date().toISOString(),
+        dryRunResult: lineageStatus.data || null,
+        status: message,
       });
       completed = true;
       handlers.onRerender?.();
@@ -597,6 +747,9 @@ export async function handleCheckScopedCmsPublish(scopeKey, handlers = {}) {
         checking: false,
         publishing: false,
         error: message,
+        errorCode: getScopedPublishResponseCode(data, error),
+        errorSource: 'current-backend',
+        lastErrorAt: new Date().toISOString(),
         status: message,
         dryRunResult: data || null,
       });
@@ -615,6 +768,9 @@ export async function handleCheckScopedCmsPublish(scopeKey, handlers = {}) {
       validationSummary: data?.validationSummary || null,
       warnings: data?.warnings || data?.validationSummary?.warnings || null,
       error: null,
+      errorCode: '',
+      errorSource: '',
+      lastErrorAt: null,
       result: null,
       dryRunResult: data || null,
       checkedAt: new Date().toISOString(),
@@ -635,6 +791,9 @@ export async function handleCheckScopedCmsPublish(scopeKey, handlers = {}) {
       checking: false,
       publishing: false,
       error: message,
+      errorCode: '',
+      errorSource: 'exception',
+      lastErrorAt: new Date().toISOString(),
       status: message,
     });
     completed = true;
@@ -672,7 +831,15 @@ export async function handlePublishScopedCmsPublish(scopeKey, handlers = {}) {
   }
 
   let completed = false;
-  setScopedCmsPublishState(key, { publishing: true, checking: false, error: null, status: 'Đang đưa khu vực này lên website...' });
+  setScopedCmsPublishState(key, {
+    publishing: true,
+    checking: false,
+    error: null,
+    errorCode: '',
+    errorSource: '',
+    lastErrorAt: null,
+    status: 'Đang đưa khu vực này lên website...',
+  });
   handlers.onRerender?.();
 
   try {
@@ -684,6 +851,9 @@ export async function handlePublishScopedCmsPublish(scopeKey, handlers = {}) {
         publishing: false,
         checking: false,
         error: message,
+        errorCode: getScopedPublishResponseCode(data, error),
+        errorSource: 'current-backend',
+        lastErrorAt: new Date().toISOString(),
         status: message,
         result: data || null,
         candidateHash: '',
@@ -722,6 +892,9 @@ export async function handlePublishScopedCmsPublish(scopeKey, handlers = {}) {
       validationSummary: data?.validationSummary || null,
       warnings: refreshWarning ? { postPublishRefresh: refreshWarning, ...(data?.warnings || data?.validationSummary?.warnings || {}) } : (data?.warnings || data?.validationSummary?.warnings || null),
       error: null,
+      errorCode: '',
+      errorSource: '',
+      lastErrorAt: null,
       result: data || null,
       publishedAt: new Date().toISOString(),
       stale: false,
@@ -736,6 +909,9 @@ export async function handlePublishScopedCmsPublish(scopeKey, handlers = {}) {
       publishing: false,
       checking: false,
       error: message,
+      errorCode: '',
+      errorSource: 'exception',
+      lastErrorAt: new Date().toISOString(),
       status: message,
       candidateHash: '',
       stale: true,

@@ -1101,6 +1101,10 @@ export function createEmptyScopedPublishScopeState() {
     expectedDraftVersion: '',
     stale: false,
     staleReason: '',
+    errorCode: '',
+    errorSource: '',
+    lastErrorAt: null,
+    lastBackendResponseAt: null,
     status: '',
   };
 }
@@ -1128,6 +1132,9 @@ function createScopedPublishPatchForInvalidation(scopeState = {}, reason = '') {
     candidateSummary: null,
     validationSummary: null,
     error: null,
+    errorCode: '',
+    errorSource: '',
+    lastErrorAt: null,
     dryRunResult: null,
     stale: true,
     staleReason: text,
