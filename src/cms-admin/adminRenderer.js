@@ -2939,17 +2939,108 @@ function renderHomeIntegratedSiteSettingsPanel(state, section, meta = getHomeSec
   header.appendChild(renderPanelTitle('Thông tin website / Liên hệ', 'Trong Trang chủ'));
   header.appendChild(createElement('p', {
     className: 'cms-admin-operator-summary',
-    text: 'Thông tin này thuộc Trang chủ và phần liên hệ của website. Lưu ở đây chưa làm đổi website public.',
+    text: 'Panel nhẹ này chỉ chỉnh các field contact public của Trang chủ. Lưu ở đây chưa làm đổi website public cho đến khi chạy scoped publish Trang chủ.',
   }));
   if (section) {
     header.appendChild(createElement('p', {
       className: 'cms-admin-home-section-focus',
-      text: 'Section Contact cũ vẫn được giữ để đối chiếu, nhưng form Thông tin website bên dưới là nơi thao tác chính.',
+      text: 'Section Contact cũ vẫn được giữ để đối chiếu; form bên dưới là nguồn thao tác chính cho organization/address/phone/fax/email.',
     }));
   }
   wrap.appendChild(header);
-  wrap.appendChild(renderSettingsTab(state));
+  wrap.appendChild(renderHomeContactLightweightSettingsPanel(state));
   return wrap;
+}
+
+function renderHomeContactLightweightSettingsPanel(state) {
+  const siteSettings = state.data.siteSettings;
+  const editState = state.siteSettingsEdit || {};
+  const canEdit = canEditSiteSettings(state);
+  const panel = createElement('section', { className: 'cms-admin-data-card cms-admin-home-contact-lightweight-panel' });
+  panel.appendChild(renderDataCardTitle('Field public contact', editState.isEditing ? 'Đang chỉnh' : 'Nguồn site_settings'));
+  panel.appendChild(createElement('p', {
+    className: 'cms-admin-operator-summary',
+    text: 'Các field này được publish vào index.contact và hiển thị ở dải liên hệ public của Trang chủ.',
+  }));
+
+  const feedback = renderSiteSettingsFeedback(editState);
+  if (feedback) panel.appendChild(feedback);
+
+  if (!siteSettings) {
+    panel.appendChild(renderEmptyState('Chưa đọc được dữ liệu Thông tin website.'));
+    return panel;
+  }
+
+  if (!editState.isEditing) {
+    panel.appendChild(renderHomeContactOfficialInfoCard(state, ADMIN_COPY.contentViews.home));
+    panel.appendChild(renderSiteSettingsReadOnlyGroup('Metadata website giữ nguyên', [
+      [ADMIN_COPY.settings.websiteFields.siteTitle, siteSettings.site_title || '—'],
+      [ADMIN_COPY.settings.websiteFields.language, getLanguageLabel(siteSettings.default_language)],
+    ]));
+    const actions = createElement('div', { className: 'cms-admin-settings-edit-actions cms-admin-home-contact-lightweight-actions' });
+    const editButton = createElement('button', {
+      className: 'cms-admin-button cms-admin-button-primary',
+      text: ADMIN_COPY.settings.edit.start || 'Chỉnh sửa thông tin liên hệ',
+      type: 'button',
+    });
+    editButton.disabled = !canEdit;
+    editButton.addEventListener('click', () => handleStartSiteSettingsEdit(siteSettings));
+    actions.appendChild(editButton);
+    actions.appendChild(createElement('span', { className: 'cms-admin-inline-note', text: getSiteSettingsDisabledReason(siteSettings, editState, canEdit) }));
+    panel.appendChild(actions);
+    return panel;
+  }
+
+  const validation = getSiteSettingsValidationForState(siteSettings, editState);
+  const form = createElement('form', { className: 'cms-admin-edit-form cms-admin-home-contact-lightweight-form', attrs: { novalidate: 'true' } });
+  form.addEventListener('submit', (event) => {
+    event.preventDefault();
+    handleSaveSiteSettingsDraft();
+  });
+
+  form.appendChild(renderSiteSettingsEditGroup('Thông tin public contact', [
+    renderEditableTextField('organization_name', ADMIN_COPY.settings.edit.fields.organization_name, editState, { required: true, placeholder: ADMIN_COPY.settings.edit.placeholders.organization_name }),
+    renderEditableTextField('address', ADMIN_COPY.settings.edit.fields.address, editState, { multiline: true, placeholder: ADMIN_COPY.settings.edit.placeholders.address }),
+    renderEditableTextField('phone', ADMIN_COPY.settings.edit.fields.phone, editState, { placeholder: ADMIN_COPY.settings.edit.placeholders.phone }),
+    renderEditableTextField('fax', ADMIN_COPY.settings.edit.fields.fax, editState, { placeholder: ADMIN_COPY.settings.edit.placeholders.fax }),
+    renderEditableTextField('email', ADMIN_COPY.settings.edit.fields.email, editState, { inputType: 'email', placeholder: ADMIN_COPY.settings.edit.placeholders.email }),
+  ]));
+
+  const dirtyNotice = createElement('p', {
+    className: `cms-admin-dirty-notice${editState.dirty ? '' : ' cms-admin-hidden'}`,
+    text: ADMIN_COPY.settings.edit.dirty,
+    attrs: { role: 'status' },
+  });
+  form.appendChild(dirtyNotice);
+
+  const actions = createElement('div', { className: 'cms-admin-settings-edit-actions cms-admin-home-contact-lightweight-actions' });
+  const saveButton = createElement('button', {
+    className: 'cms-admin-button cms-admin-button-primary',
+    text: editState.saving ? (ADMIN_COPY.settings.edit.saving || 'Đang lưu...') : (ADMIN_COPY.settings.edit.save || 'Lưu thay đổi'),
+    type: 'submit',
+  });
+  saveButton.disabled = Boolean(editState.saving) || !Boolean(editState.dirty) || !validation.valid || !canEdit;
+  const resetButton = createElement('button', {
+    className: 'cms-admin-button cms-admin-button-secondary',
+    text: ADMIN_COPY.settings.edit.reset,
+    type: 'button',
+  });
+  resetButton.disabled = Boolean(editState.saving) || !Boolean(editState.dirty);
+  resetButton.addEventListener('click', () => handleResetActiveDraft('site-settings'));
+  const cancelButton = createElement('button', {
+    className: 'cms-admin-button cms-admin-button-ghost',
+    text: ADMIN_COPY.settings.edit.cancel,
+    type: 'button',
+  });
+  cancelButton.disabled = Boolean(editState.saving);
+  cancelButton.addEventListener('click', () => handleCancelSiteSettingsEdit());
+  appendChildren(actions, [saveButton, resetButton, cancelButton]);
+  form.appendChild(actions);
+  form.appendChild(renderCompactNotice(getSiteSettingsDisabledReason(siteSettings, editState, canEdit, validation)));
+  form.addEventListener('input', () => updateSiteSettingsFormControls(form));
+  form.addEventListener('change', () => updateSiteSettingsFormControls(form));
+  panel.appendChild(form);
+  return panel;
 }
 
 function renderHomeContactReferencePanel(state, section, meta = getHomeSectionPriorityMeta('contact'), copy = ADMIN_COPY.contentViews.home) {
@@ -10232,12 +10323,16 @@ function getMediaReadonlyRows(media = {}, copy) {
   return rows;
 }
 
-const HOME_MEDIA_PATH_FIELD_KEYS = ['videoUrl', 'video_url', 'video', 'mp4', 'src', 'url', 'imageUrl', 'image_url', 'image', 'poster', 'posterUrl', 'poster_url', 'thumbnail', 'path'];
+const HOME_MEDIA_PATH_FIELD_KEYS = ['videoUrl', 'video_url', 'video', 'mp4', 'src', 'url', 'imageUrl', 'image_url', 'image', 'poster', 'posterUrl', 'poster_url', 'thumbnail', 'thumbnailUrl', 'thumbnail_url', 'path'];
+const HOME_MEDIA_CANONICAL_FIELD_KEYS = ['videoUrl', 'posterUrl', 'thumbnailUrl'];
 
 function getHomeHeroMediaFieldDescriptors(media = {}, editState = {}) {
   const draftMedia = editState.draftValues?.media || {};
-  return HOME_MEDIA_PATH_FIELD_KEYS
-    .filter((fieldName) => Object.prototype.hasOwnProperty.call(media || {}, fieldName) || Object.prototype.hasOwnProperty.call(draftMedia || {}, fieldName))
+  const fieldNames = Array.from(new Set([
+    ...HOME_MEDIA_CANONICAL_FIELD_KEYS,
+    ...HOME_MEDIA_PATH_FIELD_KEYS.filter((fieldName) => Object.prototype.hasOwnProperty.call(media || {}, fieldName) || Object.prototype.hasOwnProperty.call(draftMedia || {}, fieldName)),
+  ]));
+  return fieldNames
     .map((fieldName) => {
       const currentValue = !isBlank(draftMedia?.[fieldName]) || Object.prototype.hasOwnProperty.call(draftMedia || {}, fieldName)
         ? draftMedia[fieldName]
@@ -10273,6 +10368,19 @@ function renderHomeHeroMediaLibraryField(descriptor = {}) {
   button.addEventListener('click', () => handleToggleHomeMediaPicker(descriptor));
   appendChildren(header, [title, button]);
   card.appendChild(header);
+
+  const urlField = createElement('label', { className: 'cms-admin-edit-field cms-admin-home-media-url-field' });
+  urlField.appendChild(createElement('span', { className: 'cms-admin-edit-label', text: `${descriptor.label} URL` }));
+  const input = createElement('input', {
+    className: 'cms-admin-edit-input',
+    type: 'url',
+    value: descriptor.currentValue || '',
+    placeholder: descriptor.allowedKind === 'video' ? 'Dán URL video hợp lệ hoặc chọn từ thư viện' : 'Dán URL poster/thumbnail hợp lệ hoặc chọn từ thư viện',
+    attrs: { name: `media.${descriptor.fieldName}`, autocomplete: 'off' },
+  });
+  input.addEventListener('input', () => updateHomeHeroMediaDraftField(descriptor.fieldName, input.value));
+  appendChildren(urlField, [input, renderFieldMessage(`media.${descriptor.fieldName}`, getState().homeEdit || {})]);
+  card.appendChild(urlField);
 
   const value = createElement('div', { className: 'cms-admin-home-media-library-current' });
   value.appendChild(renderHomeMediaCurrentPreview(descriptor));
@@ -11008,8 +11116,8 @@ function renderHomeExperienceItemsEditGroup(section, editState, copy) {
 }
 
 function renderHomeExperienceItemEditCard(item, originalItem, index, copy, editState) {
-  const card = createElement('section', { className: 'cms-admin-data-card cms-admin-home-item-edit-card cms-admin-home-experience-item-edit-card' });
-  card.appendChild(renderDataCardTitle(`${copy.fields?.card || 'Card'} ${index + 1}`));
+  const card = createElement('section', { className: 'cms-admin-data-card cms-admin-home-item-edit-card cms-admin-home-experience-item-edit-card cms-admin-home-experience-dedicated-route-card' });
+  card.appendChild(renderDataCardTitle(getHomeExperienceCardDisplayTitle(item, originalItem, index, copy), getHomeExperienceCardBadge(item, originalItem, index)));
   const fields = createElement('div', { className: 'cms-admin-edit-field-grid' });
   if (!item || (item.kind !== 'string' && item.kind !== 'object')) {
     card.appendChild(renderCompactNotice(copy.unsupportedItems || 'Cấu trúc card trải nghiệm chưa hỗ trợ chỉnh sửa ở bước này.'));
@@ -11027,6 +11135,24 @@ function renderHomeExperienceItemEditCard(item, originalItem, index, copy, editS
   const details = renderHomeItemReadonlyDetails(readonlyRows, copy, 'Thông tin kỹ thuật của card');
   if (details) card.appendChild(details);
   return card;
+}
+
+function getHomeExperienceCardRoomKey(item = {}, originalItem = {}) {
+  return String(item?.roomKey || firstValue(originalItem, ['room_key', 'roomKey', 'room', 'key']) || '').trim().toLowerCase();
+}
+
+function getHomeExperienceCardDisplayTitle(item = {}, originalItem = {}, index = 0, copy = {}) {
+  const roomKey = getHomeExperienceCardRoomKey(item, originalItem);
+  if (roomKey === 'outdoor') return 'Khu vực ngoài trời';
+  if (roomKey === 'indoor') return 'Phòng trưng bày';
+  return `${copy.fields?.card || 'Card'} ${index + 1}`;
+}
+
+function getHomeExperienceCardBadge(item = {}, originalItem = {}, index = 0) {
+  const roomKey = getHomeExperienceCardRoomKey(item, originalItem);
+  if (roomKey === 'outdoor') return 'Outdoor card';
+  if (roomKey === 'indoor') return 'Indoor card';
+  return `Card ${index + 1}`;
 }
 
 function renderHomeExperienceItemTextField(index, fieldName, label, item, editState, options = {}) {

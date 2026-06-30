@@ -3,6 +3,13 @@ import '../shared/cmsSchemaValidator.js';
 const SITE_SETTINGS_ALLOWED_LANGUAGES = ['vi'];
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_PATTERN = /^[0-9\s+\-.()]+$/;
+const HOME_HERO_MEDIA_PATH_KEYS = [
+  'videoUrl', 'video_url', 'video', 'mp4', 'src', 'url',
+  'imageUrl', 'image_url', 'image',
+  'poster', 'posterUrl', 'poster_url',
+  'thumbnail', 'thumbnailUrl', 'thumbnail_url',
+  'path',
+];
 
 export function validateSiteSettingsDraft(values = {}, copy = {}) {
   const labels = copy.fields || {};
@@ -204,7 +211,11 @@ function normalizeHomeHeroCtaJson(value) {
 }
 
 function normalizeHomeHeroMediaDraft(media = {}) {
-  return { caption: normalizeText(media?.caption) };
+  const out = { caption: normalizeText(media?.caption) };
+  HOME_HERO_MEDIA_PATH_KEYS.forEach((key) => {
+    if (Object.prototype.hasOwnProperty.call(media || {}, key)) out[key] = normalizeText(media[key]);
+  });
+  return out;
 }
 
 function normalizeHomeHeroItemDrafts(items = []) {
@@ -226,6 +237,14 @@ function normalizeHomeHeroCtaDraft(cta = {}) {
 export function patchHomeMediaTextFields(originalMediaJson = {}, draftMedia = {}) {
   const mediaJson = normalizeHomeHeroMediaJson(originalMediaJson);
   patchEquivalentTextKeys(mediaJson, ['caption', 'alt', 'title', 'label'], draftMedia.caption, 'caption');
+  HOME_HERO_MEDIA_PATH_KEYS.forEach((key) => {
+    if (Object.prototype.hasOwnProperty.call(draftMedia || {}, key)) {
+      mediaJson[key] = normalizeText(draftMedia[key]);
+    }
+  });
+  if (Object.prototype.hasOwnProperty.call(draftMedia || {}, 'videoUrl')) mediaJson.videoUrl = normalizeText(draftMedia.videoUrl);
+  if (Object.prototype.hasOwnProperty.call(draftMedia || {}, 'posterUrl')) mediaJson.posterUrl = normalizeText(draftMedia.posterUrl);
+  if (Object.prototype.hasOwnProperty.call(draftMedia || {}, 'thumbnailUrl')) mediaJson.thumbnailUrl = normalizeText(draftMedia.thumbnailUrl);
   return mediaJson;
 }
 

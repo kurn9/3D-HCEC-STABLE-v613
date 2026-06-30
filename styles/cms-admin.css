@@ -13013,3 +13013,22 @@ body.cms-admin-page * {
     padding: 0.75rem;
   }
 }
+
+/* v6.14.066.036.28 — Home contact/media editor polish */
+.cms-admin-home-contact-lightweight-panel,
+.cms-admin-home-experience-dedicated-route-card {
+  min-width: 0;
+}
+
+.cms-admin-home-contact-lightweight-form,
+.cms-admin-home-media-url-field {
+  margin-top: 12px;
+}
+
+.cms-admin-home-contact-lightweight-actions {
+  margin-top: 14px;
+}
+
+.cms-admin-home-experience-dedicated-route-card .cms-admin-data-card-title-row {
+  align-items: flex-start;
+}

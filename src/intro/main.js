@@ -173,6 +173,22 @@ function applyIndexVideoConfig() {
 applyIndexVideoConfig();
 
 
+
+function setOptionalTextContentSafe(target, value) {
+  if (!target) return false;
+  const text = window.cmsContentLoader?.sanitizeText?.(value) ?? String(value ?? '').trim();
+  if (!text) {
+    target.textContent = '';
+    target.hidden = true;
+    target.setAttribute('aria-hidden', 'true');
+    return false;
+  }
+  target.textContent = text;
+  target.hidden = false;
+  target.removeAttribute('aria-hidden');
+  return true;
+}
+
 function setTextContentSafe(target, value) {
   if (!target || value === null || value === undefined) return false;
   const text = window.cmsContentLoader?.sanitizeText?.(value) ?? String(value).trim();
@@ -210,8 +226,9 @@ function applyCmsIndexContent(indexContent, mediaOptions = {}) {
 
   changed += setTextContentSafe(document.querySelector('.hero-content .eyebrow'), hero.eyebrow) ? 1 : 0;
   changed += setTextContentSafe(document.getElementById('heroTitle'), hero.title) ? 1 : 0;
+  changed += setOptionalTextContentSafe(document.querySelector('[data-cms-hero-subtitle]'), hero.subtitle) ? 1 : 0;
   changed += setMultilineTextSafe(document.querySelector('.hero-lead'), hero.lead) ? 1 : 0;
-  changed += setTextContentSafe(document.querySelector('.experience-note'), hero.recommendation) ? 1 : 0;
+  changed += setTextContentSafe(document.querySelector('.experience-note'), hero.recommendation || hero.body) ? 1 : 0;
   changed += setTextContentSafe(document.querySelector('.display-case-caption'), hero.media?.caption) ? 1 : 0;
 
   if (Array.isArray(hero.proofChips) && hero.proofChips.length) {
@@ -234,9 +251,23 @@ function applyCmsIndexContent(indexContent, mediaOptions = {}) {
     });
   }
 
+  if (hero.media?.poster && cms?.isSafeMediaUrl?.(hero.media.poster, {
+    ...mediaOptions,
+    allowedMediaExtensions: ['jpg', 'jpeg', 'png', 'webp', 'avif', 'gif'],
+    disallowSignedMediaUrls: true
+  })) {
+    [heroVideo, introModalVideo].forEach((video) => {
+      if (!video || video.getAttribute('poster') === hero.media.poster) return;
+      video.setAttribute('poster', hero.media.poster);
+      changed += 1;
+    });
+  }
+
   changed += setTextContentSafe(document.querySelector('.stage-section--experience .section-kicker'), experience.kicker) ? 1 : 0;
   changed += setTextContentSafe(document.getElementById('visitTitle'), experience.title) ? 1 : 0;
-  changed += setTextContentSafe(document.querySelector('.stage-section--experience .section-header p'), experience.lead) ? 1 : 0;
+  changed += setOptionalTextContentSafe(document.querySelector('[data-cms-experience-subtitle]'), experience.subtitle) ? 1 : 0;
+  changed += setTextContentSafe(document.querySelector('.stage-section--experience .section-header p:not(.section-subtitle):not(.section-body)'), experience.lead) ? 1 : 0;
+  changed += setOptionalTextContentSafe(document.querySelector('[data-cms-experience-body]'), experience.body) ? 1 : 0;
 
   if (Array.isArray(experience.routes)) {
     experience.routes.forEach((route) => {
@@ -253,7 +284,9 @@ function applyCmsIndexContent(indexContent, mediaOptions = {}) {
 
   changed += setTextContentSafe(document.querySelector('.stage-section--guide .section-kicker'), guide.kicker) ? 1 : 0;
   changed += setTextContentSafe(document.getElementById('visitorGuideTitle'), guide.title) ? 1 : 0;
-  changed += setTextContentSafe(document.querySelector('.guide-detail-heading p'), guide.lead) ? 1 : 0;
+  changed += setOptionalTextContentSafe(document.querySelector('[data-cms-guide-subtitle]'), guide.subtitle) ? 1 : 0;
+  changed += setTextContentSafe(document.querySelector('.guide-detail-heading p:not(.section-subtitle):not(.section-body)'), guide.lead) ? 1 : 0;
+  changed += setOptionalTextContentSafe(document.querySelector('[data-cms-guide-body]'), guide.body) ? 1 : 0;
 
   if (Array.isArray(guide.steps)) {
     const stepCards = Array.from(document.querySelectorAll('.journey-rail article'));
@@ -277,6 +310,21 @@ function applyCmsIndexContent(indexContent, mediaOptions = {}) {
   if (contactRows[2]) {
     changed += setTextContentSafe(contactRows[2].querySelector('span'), 'Điện thoại / Fax') ? 1 : 0;
     changed += setTextContentSafe(contactRows[2].querySelector('strong'), contact.phoneFax) ? 1 : 0;
+  }
+  const emailRow = document.querySelector('[data-cms-contact-email]');
+  if (emailRow) {
+    const emailValue = String(contact.email || '').trim();
+    if (emailValue) {
+      changed += setTextContentSafe(emailRow.querySelector('span'), 'Email') ? 1 : 0;
+      changed += setTextContentSafe(emailRow.querySelector('strong'), emailValue) ? 1 : 0;
+      emailRow.hidden = false;
+      emailRow.removeAttribute('aria-hidden');
+    } else {
+      emailRow.hidden = true;
+      emailRow.setAttribute('aria-hidden', 'true');
+      const strong = emailRow.querySelector('strong');
+      if (strong) strong.textContent = '';
+    }
   }
 
   const featuredResult = initFeaturedArtworks(

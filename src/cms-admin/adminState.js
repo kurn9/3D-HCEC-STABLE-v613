@@ -52,6 +52,8 @@ const HOME_HERO_MEDIA_PATH_KEYS = [
   'posterUrl',
   'poster_url',
   'thumbnail',
+  'thumbnailUrl',
+  'thumbnail_url',
   'path',
 ];
 
@@ -784,6 +786,9 @@ function extractHomeHeroMediaEditableValues(media = {}) {
   const object = normalizeObjectValue(media);
   const out = {
     caption: firstText(object, ['caption', 'alt', 'title', 'label']),
+    videoUrl: firstText(object, ['videoUrl', 'video_url', 'video', 'mp4', 'src', 'url']),
+    posterUrl: firstText(object, ['posterUrl', 'poster_url', 'poster', 'thumbnailUrl', 'thumbnail_url', 'thumbnail', 'imageUrl', 'image_url', 'image']),
+    thumbnailUrl: firstText(object, ['thumbnailUrl', 'thumbnail_url', 'thumbnail', 'posterUrl', 'poster_url', 'poster']),
   };
   HOME_HERO_MEDIA_PATH_KEYS.forEach((key) => {
     if (hasOwn(object, key)) out[key] = normalizeDraftValue(object[key]);
@@ -1026,7 +1031,7 @@ export function updateHomeExperienceItemDraftField(index, fieldName, value) {
 }
 
 export function extractHomeExperienceEditableValues(section = {}) {
-  const itemsJson = normalizeArrayValue(section.items_json);
+  const itemsJson = ensureHomeExperienceRouteCardDefaults(normalizeArrayValue(section.items_json));
   return {
     section_key: section.section_key || '',
     eyebrow: section.eyebrow || '',
@@ -1044,7 +1049,7 @@ export function hasHomeExperienceDraftChanged(draftValues = {}, originalValues =
 }
 
 function extractHomeExperienceItemsEditableValues(items = []) {
-  const list = normalizeArrayValue(items);
+  const list = ensureHomeExperienceRouteCardDefaults(normalizeArrayValue(items));
   return list.map((item) => {
     if (typeof item === 'string') {
       return { kind: 'string', text: item };
@@ -1054,10 +1059,32 @@ function extractHomeExperienceItemsEditableValues(items = []) {
       kind: 'object',
       title: firstText(object, ['title', 'label', 'name', 'heading', 'text']),
       description: firstText(object, ['description', 'lead', 'body', 'note']),
-      roomKey: firstText(object, ['room_key', 'room', 'key']),
+      roomKey: firstText(object, ['room_key', 'roomKey', 'room', 'key']),
       ctaLabel: firstText(object, ['ctaLabel']),
     };
   });
+}
+
+function ensureHomeExperienceRouteCardDefaults(items = []) {
+  const list = normalizeArrayValue(items);
+  const byRoom = new Map();
+  list.forEach((item) => {
+    const object = normalizeObjectValue(item);
+    const roomKey = firstText(object, ['room_key', 'roomKey', 'room', 'key']).toLowerCase();
+    if (roomKey === 'outdoor' || roomKey === 'indoor') byRoom.set(roomKey, item);
+  });
+  const defaults = {
+    outdoor: { room_key: 'outdoor', label: 'Toàn cảnh', title: 'Khu vực ngoài trời', description: '', ctaLabel: 'Bắt đầu' },
+    indoor: { room_key: 'indoor', label: 'Chiều sâu nội dung', title: 'Phòng trưng bày', description: '', ctaLabel: 'Vào xem' },
+  };
+  const result = [];
+  ['outdoor', 'indoor'].forEach((roomKey) => result.push(byRoom.get(roomKey) || defaults[roomKey]));
+  list.forEach((item) => {
+    const object = normalizeObjectValue(item);
+    const roomKey = firstText(object, ['room_key', 'roomKey', 'room', 'key']).toLowerCase();
+    if (roomKey !== 'outdoor' && roomKey !== 'indoor') result.push(item);
+  });
+  return result;
 }
 
 function normalizeHomeExperienceDraftForCompare(values = {}) {

@@ -4408,3 +4408,47 @@ body.is-video-modal-open .webgl-liquid-cursor {
     cursor: auto;
   }
 }
+
+/* v6.14.066.036.28 — Home public field contract text bindings */
+.hero-subtitle {
+  max-width: 660px;
+  margin: -10px 0 16px;
+  color: rgba(232,192,109,.90);
+  font-size: clamp(18px, 1.26vw, 23px);
+  line-height: 1.48;
+  font-weight: 650;
+  text-wrap: balance;
+}
+
+.section-subtitle,
+.section-body {
+  max-width: 940px;
+  color: rgba(247,244,237,.70);
+  line-height: 1.62;
+}
+
+.section-subtitle {
+  margin: -2px 0 12px;
+  color: rgba(232,192,109,.86);
+  font-size: clamp(17px, 1.12vw, 20px);
+  font-weight: 680;
+  text-wrap: balance;
+}
+
+.section-body {
+  margin: 12px 0 0;
+  font-size: clamp(15px, 1vw, 18px);
+}
+
+@media (max-width: 760px) {
+  .hero-subtitle {
+    margin: -6px 0 14px;
+    font-size: 17px;
+  }
+
+  .section-subtitle,
+  .section-body {
+    font-size: 15px;
+    line-height: 1.58;
+  }
+}

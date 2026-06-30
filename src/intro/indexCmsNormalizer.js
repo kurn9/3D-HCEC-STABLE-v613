@@ -50,28 +50,35 @@ const DEFAULT_INDEX_CONTENT = Object.freeze({
   hero: Object.freeze({
     eyebrow: '',
     title: '',
+    subtitle: '',
     lead: '',
+    body: '',
     proofChips: Object.freeze([]),
     recommendation: '',
-    media: Object.freeze({ videoUrl: '', caption: '' })
+    media: Object.freeze({ videoUrl: '', poster: '', caption: '' })
   }),
   experience: Object.freeze({
     kicker: '',
     title: '',
+    subtitle: '',
     lead: '',
+    body: '',
     routes: Object.freeze([])
   }),
   guide: Object.freeze({
     kicker: '',
     title: '',
+    subtitle: '',
     lead: '',
+    body: '',
     steps: Object.freeze([])
   }),
   contact: Object.freeze({
     label: '',
     organizationName: '',
     address: '',
-    phoneFax: ''
+    phoneFax: '',
+    email: ''
   }),
   featuredArtworks: Object.freeze({
     enabled: false,
@@ -143,7 +150,9 @@ function cloneDefaults() {
     hero: {
       eyebrow: DEFAULT_INDEX_CONTENT.hero.eyebrow,
       title: DEFAULT_INDEX_CONTENT.hero.title,
+      subtitle: DEFAULT_INDEX_CONTENT.hero.subtitle,
       lead: DEFAULT_INDEX_CONTENT.hero.lead,
+      body: DEFAULT_INDEX_CONTENT.hero.body,
       proofChips: [],
       recommendation: DEFAULT_INDEX_CONTENT.hero.recommendation,
       media: { ...DEFAULT_INDEX_CONTENT.hero.media }
@@ -151,13 +160,17 @@ function cloneDefaults() {
     experience: {
       kicker: DEFAULT_INDEX_CONTENT.experience.kicker,
       title: DEFAULT_INDEX_CONTENT.experience.title,
+      subtitle: DEFAULT_INDEX_CONTENT.experience.subtitle,
       lead: DEFAULT_INDEX_CONTENT.experience.lead,
+      body: DEFAULT_INDEX_CONTENT.experience.body,
       routes: []
     },
     guide: {
       kicker: DEFAULT_INDEX_CONTENT.guide.kicker,
       title: DEFAULT_INDEX_CONTENT.guide.title,
+      subtitle: DEFAULT_INDEX_CONTENT.guide.subtitle,
       lead: DEFAULT_INDEX_CONTENT.guide.lead,
+      body: DEFAULT_INDEX_CONTENT.guide.body,
       steps: []
     },
     contact: { ...DEFAULT_INDEX_CONTENT.contact },
@@ -438,6 +451,7 @@ function applySiteContactLayer(target, content, diagnostics, sourceLabel) {
   const textLimits = getTextLimits();
   applyText(target, 'organizationName', site, ['organizationName'], textLimits.organizationName, diagnostics, `${sourceLabel}.site`);
   applyText(target, 'address', site, ['address'], textLimits.address, diagnostics, `${sourceLabel}.site`);
+  applyText(target, 'email', site, ['email'], textLimits.label, diagnostics, `${sourceLabel}.site`);
   const phone = readText(site, ['phone'], textLimits.phoneFax, diagnostics, `${sourceLabel}.site`);
   const fax = readText(site, ['fax'], textLimits.phoneFax, diagnostics, `${sourceLabel}.site`);
   const phoneFax = [phone, fax ? `Fax: ${fax}` : ''].filter(Boolean).join(' - ');
@@ -462,8 +476,11 @@ function applyIndexLayer(target, content, mediaOptions, diagnostics, sourceLabel
     const hero = index.hero;
     applyText(target.hero, 'eyebrow', hero, ['eyebrow'], textLimits.eyebrow, diagnostics, `${sourceLabel}.index.hero`);
     applyText(target.hero, 'title', hero, ['title'], textLimits.title, diagnostics, `${sourceLabel}.index.hero`);
+    applyText(target.hero, 'subtitle', hero, ['subtitle'], textLimits.subtitle, diagnostics, `${sourceLabel}.index.hero`);
     applyText(target.hero, 'lead', hero, ['lead'], textLimits.lead, diagnostics, `${sourceLabel}.index.hero`);
-    applyText(target.hero, 'recommendation', hero, ['recommendation'], textLimits.recommendation, diagnostics, `${sourceLabel}.index.hero`);
+    applyText(target.hero, 'body', hero, ['body'], textLimits.description, diagnostics, `${sourceLabel}.index.hero`);
+    const heroRecommendation = readText(hero, ['recommendation', 'body'], textLimits.recommendation, diagnostics, `${sourceLabel}.index.hero`);
+    if (heroRecommendation) target.hero.recommendation = heroRecommendation;
 
     const chipsSource = Array.isArray(hero.proofChips) ? hero.proofChips : hero.items;
     const chips = normalizeTextArray(chipsSource, limits.proofChips, textLimits.label, diagnostics, `${sourceLabel}.index.hero.${Array.isArray(hero.proofChips) ? 'proofChips' : 'items'}`);
@@ -476,6 +493,11 @@ function applyIndexLayer(target, content, mediaOptions, diagnostics, sourceLabel
         if (isSafeMediaUrl(videoUrl, mediaOptions, VIDEO_EXTENSIONS)) target.hero.media.videoUrl = videoUrl;
         else addWarning(diagnostics, `${sourceLabel}.index.hero.media.videoUrl ignored by media policy.`);
       }
+      const poster = readText(hero.media, ['poster', 'posterUrl', 'poster_url', 'thumbnail', 'thumbnailUrl', 'thumbnail_url'], textLimits.imageUrl, diagnostics, `${sourceLabel}.index.hero.media`);
+      if (poster) {
+        if (isSafeMediaUrl(poster, mediaOptions, IMAGE_EXTENSIONS)) target.hero.media.poster = poster;
+        else addWarning(diagnostics, `${sourceLabel}.index.hero.media.poster ignored by media policy.`);
+      }
     }
   }
 
@@ -483,7 +505,9 @@ function applyIndexLayer(target, content, mediaOptions, diagnostics, sourceLabel
     const experience = index.experience;
     applyText(target.experience, 'kicker', experience, ['kicker', 'eyebrow'], textLimits.kicker, diagnostics, `${sourceLabel}.index.experience`);
     applyText(target.experience, 'title', experience, ['title'], textLimits.title, diagnostics, `${sourceLabel}.index.experience`);
+    applyText(target.experience, 'subtitle', experience, ['subtitle'], textLimits.subtitle, diagnostics, `${sourceLabel}.index.experience`);
     applyText(target.experience, 'lead', experience, ['lead'], textLimits.lead, diagnostics, `${sourceLabel}.index.experience`);
+    applyText(target.experience, 'body', experience, ['body'], textLimits.description, diagnostics, `${sourceLabel}.index.experience`);
     const routeSource = Array.isArray(experience.routes) ? experience.routes : experience.items;
     const routes = normalizeRoutes(routeSource, diagnostics, `${sourceLabel}.index.experience.${Array.isArray(experience.routes) ? 'routes' : 'items'}`);
     if (routes.length) target.experience.routes = mergeObjectByKey(target.experience.routes, routes, 'room_key', limits.routes);
@@ -493,7 +517,9 @@ function applyIndexLayer(target, content, mediaOptions, diagnostics, sourceLabel
     const guide = index.guide;
     applyText(target.guide, 'kicker', guide, ['kicker', 'eyebrow'], textLimits.kicker, diagnostics, `${sourceLabel}.index.guide`);
     applyText(target.guide, 'title', guide, ['title'], textLimits.title, diagnostics, `${sourceLabel}.index.guide`);
+    applyText(target.guide, 'subtitle', guide, ['subtitle'], textLimits.subtitle, diagnostics, `${sourceLabel}.index.guide`);
     applyText(target.guide, 'lead', guide, ['lead'], textLimits.lead, diagnostics, `${sourceLabel}.index.guide`);
+    applyText(target.guide, 'body', guide, ['body'], textLimits.description, diagnostics, `${sourceLabel}.index.guide`);
     const stepSource = Array.isArray(guide.steps) ? guide.steps : guide.items;
     const steps = normalizeSteps(stepSource, diagnostics, `${sourceLabel}.index.guide.${Array.isArray(guide.steps) ? 'steps' : 'items'}`);
     if (steps.length) target.guide.steps = mergeObjectByKey(target.guide.steps, steps, 'number', limits.steps);
@@ -505,6 +531,7 @@ function applyIndexLayer(target, content, mediaOptions, diagnostics, sourceLabel
     applyText(target.contact, 'organizationName', contact, ['organizationName'], textLimits.organizationName, diagnostics, `${sourceLabel}.index.contact`);
     applyText(target.contact, 'address', contact, ['address'], textLimits.address, diagnostics, `${sourceLabel}.index.contact`);
     applyText(target.contact, 'phoneFax', contact, ['phoneFax'], textLimits.phoneFax, diagnostics, `${sourceLabel}.index.contact`);
+    applyText(target.contact, 'email', contact, ['email'], textLimits.label, diagnostics, `${sourceLabel}.index.contact`);
   }
 
   const featured = isPlainObject(index.featuredArtworks)
