@@ -226,7 +226,7 @@ const HOME_HERO_IMAGE_MEDIA_FIELDS = new Set(['posterUrl', 'poster_url', 'poster
 const HOME_HERO_MIXED_MEDIA_FIELDS = new Set(['src', 'url', 'path']);
 const HOME_HERO_VIDEO_EXTENSIONS = new Set(['mp4', 'webm', 'ogg', 'ogv', 'mov', 'm4v']);
 const HOME_HERO_IMAGE_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'webp', 'avif', 'gif']);
-const HOME_HERO_SIGNED_QUERY_KEYS = ['token', 'signature', 'expires', 'awsaccesskeyid', 'googleaccessid', 'policy', 'key-pair-id'];
+const HOME_HERO_SIGNED_QUERY_KEYS = new Set(['token', 'signature', 'expires', 'awsaccesskeyid', 'googleaccessid', 'policy', 'key-pair-id']);
 
 function validateHomeHeroMediaDraftUrls(mediaDraft = {}, mediaPolicy = {}) {
   const errors = {};
@@ -244,8 +244,7 @@ function validateHomeHeroMediaUrl(value = '', fieldName = '', mediaPolicy = {}) 
   if (!raw) return { valid: true, reason: 'empty' };
   if (/^(javascript|data|blob|file):/i.test(raw)) return { valid: false, reason: 'blocked-protocol' };
   if (raw.startsWith('//')) return { valid: false, reason: 'protocol-relative' };
-  if (raw.includes('\\')) return { valid: false, reason: 'unsafe-path' };
-  if (containsTraversal(raw)) return { valid: false, reason: 'path-traversal' };
+  if (containsUnsafeMediaPath(raw)) return { valid: false, reason: 'unsafe-path' };
   if (hasSignedOrSensitiveQuery(raw)) return { valid: false, reason: 'signed-query' };
 
   const requiredKind = getHomeHeroMediaRequiredKind(fieldName);
@@ -263,31 +262,75 @@ function validateHomeHeroMediaUrl(value = '', fieldName = '', mediaPolicy = {}) 
     return { valid: false, reason: 'malformed-url' };
   }
   if (url.protocol !== 'https:') return { valid: false, reason: 'remote-protocol' };
+  if (hasRemoteUrlUserInfo(url)) return { valid: false, reason: 'remote-userinfo' };
   if (!isAllowedHomeHeroRemoteMediaUrl(url, mediaPolicy)) return { valid: false, reason: 'remote-host-not-allowlisted' };
+  if (containsUnsafeMediaPath(url.pathname)) return { valid: false, reason: 'unsafe-path' };
   if (hasSignedOrSensitiveQuery(url.search)) return { valid: false, reason: 'signed-query' };
   return validateHomeHeroMediaExtension(url.pathname, requiredKind);
 }
 
-function containsTraversal(value = '') {
-  const raw = String(value || '');
-  if (raw.includes('..')) return true;
-  try {
-    return decodeURIComponent(raw).includes('..');
-  } catch {
-    return false;
+function decodeUrlComponentSafe(value = '') {
+  let text = String(value || '');
+  for (let index = 0; index < 3; index += 1) {
+    try {
+      const decoded = decodeURIComponent(text);
+      if (decoded === text) return { ok: true, value: decoded };
+      text = decoded;
+    } catch {
+      return { ok: false, value: '' };
+    }
   }
+  return { ok: true, value: text };
+}
+
+function normalizeQueryKey(value = '') {
+  const decoded = decodeUrlComponentSafe(String(value || '').replace(/\+/g, ' '));
+  if (!decoded.ok) return null;
+  return decoded.value.replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+function isSensitiveHomeHeroQueryKey(value = '') {
+  const key = String(value || '').trim().toLowerCase();
+  if (!key) return false;
+  if (HOME_HERO_SIGNED_QUERY_KEYS.has(key)) return true;
+  if (key.startsWith('x-amz-') || key.startsWith('x-goog-')) return true;
+  if (key.includes('credential') || key.includes('signed') || key.includes('accesskey')) return true;
+  if (key === 'sig' || key.endsWith('-sig') || key.endsWith('_sig') || key.includes('-sig-') || key.includes('_sig_')) return true;
+  return false;
+}
+
+function containsUnsafeMediaPath(value = '') {
+  const raw = String(value || '');
+  if (!raw) return false;
+  if (raw.includes('\\') || raw.includes('..')) return true;
+  if (/%(?:5c|2f)/i.test(raw)) return true;
+  const decoded = decodeUrlComponentSafe(raw);
+  if (!decoded.ok) return true;
+  return decoded.value.includes('\\') || decoded.value.includes('..');
+}
+
+function hasRemoteUrlUserInfo(url) {
+  return Boolean(url?.username || url?.password);
 }
 
 function hasSignedOrSensitiveQuery(value = '') {
   const raw = String(value || '');
   const query = raw.includes('?') ? raw.slice(raw.indexOf('?') + 1).split('#')[0] : raw.replace(/^\?/, '').split('#')[0];
   if (!query) return false;
+  try {
+    const params = new URLSearchParams(query);
+    for (const key of params.keys()) {
+      const normalized = normalizeQueryKey(key);
+      if (normalized === null || isSensitiveHomeHeroQueryKey(normalized)) return true;
+    }
+  } catch {
+    return true;
+  }
   return query.split('&').some((part) => {
-    const key = part.split('=')[0] || '';
-    const normalized = key.trim().toLowerCase();
-    if (!normalized) return false;
-    if (normalized.startsWith('x-amz-')) return true;
-    return HOME_HERO_SIGNED_QUERY_KEYS.includes(normalized);
+    const key = (part.split('=')[0] || '').trim();
+    if (!key) return false;
+    const normalized = normalizeQueryKey(key);
+    return normalized === null || isSensitiveHomeHeroQueryKey(normalized);
   });
 }
 
