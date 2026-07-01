@@ -2399,8 +2399,24 @@ function renderDashboardNavigationAction(action = {}) {
   });
   button.appendChild(createElement('strong', { text: action.label || 'Mở màn' }));
   button.appendChild(createElement('span', { text: action.note || 'Chỉ điều hướng' }));
-  button.addEventListener('click', () => switchAdminTab(action.key));
+  button.addEventListener('click', () => handleDashboardNavigationAction(action));
   return button;
+}
+
+function handleDashboardNavigationAction(action = {}) {
+  const targetTab = normalizeAdminMainTabKey(action.key || 'dashboard');
+  const workspaceKey = String(action.workspaceKey || '').trim();
+  const workspaceTab = String(action.workspaceTab || '').trim();
+  const currentTab = normalizeAdminMainTabKey(getState().activeTab);
+  const shouldSetWorkspace = Boolean(workspaceKey && workspaceTab);
+  if (targetTab !== currentTab && !requestLeaveEditSession('dashboard-quick-action')) return;
+  if (shouldSetWorkspace) setWorkspaceTabState(workspaceKey, workspaceTab);
+  if (targetTab !== currentTab) {
+    setActiveTab(targetTab);
+    renderAdminShell();
+    return;
+  }
+  if (shouldSetWorkspace) renderAdminShell();
 }
 
 function renderDashboardReferenceDetails({ published, siteSettings, dashboardSummary = {}, usingPublicContent = false, publicReadError = null } = {}) {
@@ -11945,7 +11961,7 @@ function renderQuickActionsPanel() {
     });
     button.appendChild(createElement('strong', { text: action.label }));
     button.appendChild(createElement('span', { text: action.note }));
-    button.addEventListener('click', () => switchAdminTab(action.key));
+    button.addEventListener('click', () => handleDashboardNavigationAction(action));
     grid.appendChild(button);
   });
 

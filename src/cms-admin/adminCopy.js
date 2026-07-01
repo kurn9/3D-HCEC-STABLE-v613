@@ -100,12 +100,12 @@ export const ADMIN_COPY = Object.freeze({
       title: 'Vì sao chưa chỉnh sửa được?',
       paragraphs: [
         'Chức năng chỉnh sửa đang được khóa cho phần lớn nội dung để bảo vệ dữ liệu.',
-        'Thông tin website hiện nằm trong Trang chủ; Cổng vào triển lãm và Khu vực đầu trang vẫn được bật chỉnh sửa bản nháp khi đủ quyền.',
+        'Thông tin website và Cổng vào triển lãm hiện được chỉnh trong Trang chủ. Riêng Cổng vào/Thẻ chọn không gian nằm tại Trang chủ → Khu vực trải nghiệm khi tài khoản đủ quyền.',
       ],
       listTitle: 'Các chức năng sẽ được bật ở bước sau:',
       bullets: [
         'Chỉnh sửa thông tin website ở phạm vi hẹp',
-        'Chỉnh sửa chữ hiển thị của Cổng vào triển lãm',
+        'Chỉnh Cổng vào/Thẻ chọn không gian tại Trang chủ → Khu vực trải nghiệm',
         'Chỉnh sửa Khu vực đầu trang của Trang chủ',
         'Chỉnh sửa tác phẩm',
         'Tải ảnh/video',
@@ -126,7 +126,7 @@ export const ADMIN_COPY = Object.freeze({
     },
     gate: {
       title: 'Cổng vào triển lãm',
-      subtitle: 'Kiểm tra nội dung màn chọn không gian trước khi người xem vào tham quan.',
+      subtitle: 'Màn chỉnh sửa Cổng vào đã chuyển sang Trang chủ → Khu vực trải nghiệm. Trang này chỉ còn là fallback an toàn cho liên kết hoặc trạng thái cũ.',
     },
     media: {
       title: 'Ảnh & video',
@@ -236,7 +236,7 @@ export const ADMIN_COPY = Object.freeze({
       title: 'Đi nhanh',
       actions: [
         { key: 'home', label: 'Mở Trang chủ', note: 'Chỉnh nội dung trang giới thiệu đầu tiên' },
-        { key: 'gate', label: 'Mở Cổng vào triển lãm', note: 'Chỉnh màn chọn không gian tham quan' },
+        { key: 'home', workspaceKey: 'home', workspaceTab: 'experience', label: 'Mở Khu vực trải nghiệm', note: 'Chỉnh Experience và Cổng vào trong Trang chủ' },
         { key: 'staticDraft', label: 'Mở Nội dung phòng 3D', note: 'Chỉnh nội dung, ảnh và video cho các phòng 3D' },
       ],
       website: {
@@ -623,9 +623,9 @@ export const ADMIN_COPY = Object.freeze({
     },
     gate: {
       operatorSteps: {
-        title: 'Các bước chỉnh Cổng vào triển lãm',
-        subtitle: 'Chỉ sửa chữ hiển thị và nút vào phòng; đường dẫn kỹ thuật vẫn được khóa.',
-        note: 'Lưu thay đổi chưa làm đổi website.',
+        title: 'Cổng vào triển lãm đã chuyển vị trí chỉnh sửa',
+        subtitle: 'Sửa Cổng vào/Thẻ chọn không gian tại Trang chủ → Khu vực trải nghiệm; đường dẫn kỹ thuật vẫn được khóa.',
+        note: 'Lưu trong CMS chưa làm đổi website. Sau khi lưu cần kiểm tra và đưa scope liên quan lên website.',
         steps: [
           'Sửa tiêu đề, mô tả và nút vào phòng.',
           'Kiểm tra nội dung hai không gian.',
@@ -1082,7 +1082,7 @@ export const ADMIN_COPY = Object.freeze({
     },
     missingEmail: 'Chưa khai báo thư điện tử.',
     cmsStatusNote: 'Đây là trạng thái bản ghi quản trị trong CMS, không phải trạng thái phiên bản website đang chạy.',
-    notice: 'Thông tin website đã được nhập vào Trang chủ; Cổng vào triển lãm và Khu vực đầu trang của Trang chủ vẫn giữ quyền chỉnh sửa hiện có.',
+    notice: 'Thông tin website và các trường Cổng vào/Thẻ chọn không gian được quản lý trong Trang chủ. Cổng vào nằm tại Trang chủ → Khu vực trải nghiệm; lưu trong CMS chưa làm đổi website public.',
     edit: {
       title: 'Chỉnh sửa thông tin website',
       enabledScope: 'Chỉ bật chỉnh sửa Thông tin website',
@@ -1175,7 +1175,7 @@ export const ADMIN_COPY = Object.freeze({
       locked: 'Chưa bật chỉnh sửa',
       enabled: 'Đã bật chỉnh sửa',
       siteSettingsOnly: 'Chỉ bật Thông tin website',
-      siteSettingsAndGate: 'Chỉ bật Thông tin website và Cổng vào',
+      siteSettingsAndGate: 'Bật Thông tin website và Cổng vào trong Trang chủ',
     },
     viewMode: {
       on: 'Đang bật',
