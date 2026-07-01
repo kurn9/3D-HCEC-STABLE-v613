@@ -1202,6 +1202,49 @@ function renderGateScopedPublishShell() {
   });
 }
 
+function renderHomeExperiencePublishClarityPanel(options = {}) {
+  const includeShells = options.includeShells === true;
+  const panel = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel cms-admin-experience-publish-clarity-panel' });
+  panel.appendChild(renderPanelTitle('Sau khi lưu, cần đưa 2 phần lên website', 'Lưu không tự công khai'));
+  panel.appendChild(createElement('p', {
+    className: 'cms-admin-operator-summary',
+    text: 'Form Khu vực trải nghiệm lưu dữ liệu vào CMS. Website public chưa đổi sau khi lưu; operator cần kiểm tra và đưa lên website đúng từng phạm vi bên dưới.',
+  }));
+
+  const steps = createElement('ol', { className: 'cms-admin-operator-step-list cms-admin-experience-publish-step-list' });
+  [
+    'Kiểm tra Trang chủ để đưa phần nội dung Experience lên website.',
+    'Đưa Trang chủ lên website sau khi kiểm tra đạt.',
+    'Kiểm tra Cổng vào để đưa Màn chào và Thẻ chọn không gian lên website.',
+    'Đưa Cổng vào lên website sau khi kiểm tra đạt.',
+  ].forEach((text, index) => {
+    const item = createElement('li');
+    item.appendChild(createElement('span', { className: 'cms-admin-operator-step-number', text: String(index + 1) }));
+    item.appendChild(createElement('span', { className: 'cms-admin-operator-step-body', text }));
+    steps.appendChild(item);
+  });
+  panel.appendChild(steps);
+
+  if (includeShells) {
+    const shells = createElement('div', { className: 'cms-admin-experience-publish-shell-grid' });
+    shells.appendChild(renderHomeScopedPublishShell());
+    shells.appendChild(renderGateScopedPublishShell());
+    panel.appendChild(shells);
+  }
+  return panel;
+}
+
+function renderHomeExperienceSavePublishClarityBlock() {
+  const block = createElement('section', { className: 'cms-admin-home-form-section cms-admin-home-experience-publish-note' });
+  block.appendChild(renderDataCardTitle('Lưu chưa làm đổi website public', 'Cần publish 2 phạm vi'));
+  block.appendChild(createElement('p', {
+    className: 'cms-admin-operator-summary',
+    text: 'Lưu ở đây chỉ cập nhật dữ liệu CMS. Phần Experience thuộc Trang chủ; Màn chào và Thẻ chọn không gian thuộc Cổng vào triển lãm.',
+  }));
+  block.appendChild(renderCompactNotice('Sau khi lưu thành công, hãy kiểm tra/đưa Trang chủ lên website và kiểm tra/đưa Cổng vào lên website nếu muốn public đồng bộ. Không có thao tác auto-publish trong form này.'));
+  return block;
+}
+
 function renderPostSaveSuccessBlock(message = 'Đã lưu ở màn này. Website đang hoạt động chưa thay đổi.') {
   const wrap = createElement('div', { className: 'cms-admin-post-save-success-block' });
   wrap.appendChild(renderNoticeBox(message, 'success'));
@@ -2424,7 +2467,11 @@ function renderHomeWorkspaceContent(state, activeKey = 'hero') {
   }
 
   wrap.appendChild(renderHomeSectionWorkspacePanel(state, sections, normalizedActiveKey, copy, editState));
-  wrap.appendChild(renderHomeScopedPublishShell());
+  if (normalizedActiveKey === 'experience') {
+    wrap.appendChild(renderHomeExperiencePublishClarityPanel({ includeShells: true }));
+  } else {
+    wrap.appendChild(renderHomeScopedPublishShell());
+  }
   return wrap;
 }
 
@@ -11103,6 +11150,7 @@ function renderHomeExperienceEditPanel(state, section, editState = {}) {
 
   form.appendChild(renderHomeExperienceGateEditGroup(state.data.gateContent || {}, editState, copy || {}));
   form.appendChild(renderHomeExperienceTechnicalReadonlyBlock(section, copy || {}));
+  form.appendChild(renderHomeExperienceSavePublishClarityBlock());
 
   appendHomeEditActions(form, editState, copy, {
     onCancel: handleCancelHomeExperienceEdit,
@@ -11169,7 +11217,7 @@ function renderHomeExperienceGateEditGroup(gate, editState = {}, copy = {}) {
   rooms.appendChild(renderHomeExperienceGateRoomEditCard('indoor', 'Không gian trong nhà', editState));
   group.appendChild(rooms);
 
-  group.appendChild(renderCompactNotice('Sau khi lưu, cần kiểm tra/publish lại Trang chủ và Cổng vào nếu muốn website public đồng bộ. Không gộp workflow publish trong phase này.'));
+  group.appendChild(renderCompactNotice('Sau khi lưu, website public chưa đổi. Cần kiểm tra/đưa Trang chủ lên website cho phần Experience và kiểm tra/đưa Cổng vào lên website cho Màn chào/Thẻ chọn không gian.'));
   return group;
 }
 

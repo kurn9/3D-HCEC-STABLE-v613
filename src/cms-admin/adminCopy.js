@@ -32,7 +32,6 @@ export const ADMIN_COPY = Object.freeze({
       label: 'Nội dung website',
       items: [
         { key: 'home', label: 'Trang chủ' },
-        { key: 'gate', label: 'Cổng vào triển lãm' },
       ],
     },
     {
@@ -552,10 +551,10 @@ export const ADMIN_COPY = Object.freeze({
         saveAria: 'Lưu Khu vực trải nghiệm và Cổng vào triển lãm vào CMS',
         saving: 'Đang lưu...',
         dirty: 'Có thay đổi chưa lưu.',
-        success: 'Đã lưu Khu vực trải nghiệm. Website chưa thay đổi.',
+        success: 'Đã lưu Khu vực trải nghiệm trong CMS. Website public chưa thay đổi. Hãy kiểm tra và đưa Trang chủ lên website trước khi public phần Experience.',
         error: 'Không thể lưu, vui lòng kiểm tra lại thông tin.',
-        safeNote: 'Lưu một lần cho Khu vực trải nghiệm và phần Cổng vào/Thẻ chọn không gian liên quan. Website đang hoạt động chưa thay đổi.',
-        publicNote: 'Sau khi lưu, cần kiểm tra/publish lại Trang chủ và Cổng vào nếu muốn public đồng bộ.',
+        safeNote: 'Lưu một lần cho Khu vực trải nghiệm và phần Cổng vào/Thẻ chọn không gian liên quan. Lưu chỉ cập nhật CMS, website public chưa thay đổi.',
+        publicNote: 'Sau khi lưu, cần kiểm tra và đưa lên website cả Trang chủ cho phần Experience lẫn Cổng vào cho Màn chào/Thẻ chọn không gian nếu muốn public đồng bộ.',
         jsonSafeNote: 'Bạn chỉ sửa chữ hiển thị của Khu vực trải nghiệm. Mã phòng, đường dẫn tham quan, nút và ảnh/video được khóa ở bước này.',
         leaveConfirm: 'Bạn có thay đổi chưa lưu. Rời màn này sẽ mất thay đổi. Tiếp tục?',
         noPermission: 'Tài khoản hiện tại chỉ được xem hoặc chưa đủ điều kiện chỉnh sửa thống nhất Khu vực trải nghiệm + Cổng vào triển lãm.',
@@ -602,7 +601,7 @@ export const ADMIN_COPY = Object.freeze({
           cardTitle: 'Nhập tên card',
           cardDescription: 'Nhập mô tả card',
         },
-        combinedSuccess: 'Đã lưu Khu vực trải nghiệm và Cổng vào triển lãm. Website chưa thay đổi.',
+        combinedSuccess: 'Đã lưu Khu vực trải nghiệm và Cổng vào triển lãm trong CMS. Website public chưa thay đổi. Hãy kiểm tra và đưa lên website cả Trang chủ và Cổng vào nếu muốn public đồng bộ.',
         gateUnifiedNote: 'Các trường này đang điều khiển phần Cổng vào/Thẻ chọn không gian hiển thị trong khu Trải nghiệm trên website.',
         errors: {
           titleRequired: 'Tiêu đề Khu vực trải nghiệm không được để trống.',
