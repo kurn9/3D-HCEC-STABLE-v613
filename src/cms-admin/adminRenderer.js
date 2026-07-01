@@ -214,6 +214,7 @@ async function loadDashboardData(client) {
   const nextReleaseSignature = getCurrentReleaseSignatureForScopedPublish(getState());
   if (previousReleaseSignature && nextReleaseSignature && previousReleaseSignature !== nextReleaseSignature) {
     invalidateAllScopedCmsPublishCandidates('Website đang chạy đã thay đổi. Hãy kiểm tra lại trước khi đưa lên website.');
+    clearExperienceCombinedPublishProgress('Website đang chạy đã thay đổi. Hãy kiểm tra lại Khu vực trải nghiệm trước khi đưa lên website.');
   }
   setLoading(false);
 }
@@ -1252,6 +1253,26 @@ function patchExperienceCombinedPublishState(patch = {}) {
   Object.assign(experienceCombinedPublishState, patch);
 }
 
+function clearExperienceCombinedPublishProgress(reason = '') {
+  if (experienceCombinedPublishState.checking || experienceCombinedPublishState.publishing) return;
+  resetExperienceCombinedPublishState({
+    status: reason,
+    lastStep: reason ? 'content-changed' : '',
+  });
+}
+
+function isScopedPublishModelStale(model = {}) {
+  return Boolean(model?.state?.stale === true || model?.stale === true);
+}
+
+function hasScopedPublishModelBlockingState(model = {}) {
+  return Boolean(
+    model?.errorMessage
+    || model?.checkBlockedReason
+    || isScopedPublishModelStale(model)
+  );
+}
+
 function getExperienceCombinedPublishModel(appState = getState()) {
   const homeModel = getScopedCmsPublishPanelModel('home', appState) || {};
   const gateModel = getScopedCmsPublishPanelModel('gate', appState) || {};
@@ -1266,7 +1287,19 @@ function getExperienceCombinedPublishModel(appState = getState()) {
   const canCheck = !busy && Boolean(homeModel.canCheck || gateModel.canCheck);
   const canPublish = !busy && Boolean(homeModel.canPublish && gateModel.canPublish);
   const checkedReady = Boolean(homeModel.canPublish && gateModel.canPublish);
-  const status = experienceCombinedPublishState.status
+  const homeStale = isScopedPublishModelStale(homeModel);
+  const gateStale = isScopedPublishModelStale(gateModel);
+  const scopedNeedsAttention = Boolean(
+    homeStale
+    || gateStale
+    || hasScopedPublishModelBlockingState(homeModel)
+    || hasScopedPublishModelBlockingState(gateModel)
+  );
+  const staleStatus = homeStale || gateStale
+    ? 'Nội dung đã thay đổi. Hãy kiểm tra lại Khu vực trải nghiệm trước khi đưa lên website.'
+    : '';
+  const status = staleStatus
+    || experienceCombinedPublishState.status
     || (checkedReady
       ? 'Đã kiểm tra đủ 2 phần, có thể đưa Khu vực trải nghiệm lên website.'
       : 'Chưa kiểm tra đủ 2 phần. Bấm kiểm tra tổng trước khi đưa lên website.');
@@ -1280,7 +1313,7 @@ function getExperienceCombinedPublishModel(appState = getState()) {
     checkedReady,
     status,
     error,
-    success: experienceCombinedPublishState.success || '',
+    success: scopedNeedsAttention ? '' : (experienceCombinedPublishState.success || ''),
     checking: Boolean(experienceCombinedPublishState.checking),
     publishing: Boolean(experienceCombinedPublishState.publishing),
   };
@@ -3059,7 +3092,10 @@ function renderHomeContextualEditButton(state, section, sectionKey) {
     if (!guard.allowed) return;
     if (!guard.same) {
       if (sectionKey === 'hero') startHomeHeroEdit(section);
-      else if (sectionKey === 'experience') startHomeExperienceEdit(section, state.data.gateContent || null);
+      else if (sectionKey === 'experience') {
+        clearExperienceCombinedPublishProgress('Đang chỉnh sửa Khu vực trải nghiệm. Hãy lưu và kiểm tra lại trước khi đưa lên website.');
+        startHomeExperienceEdit(section, state.data.gateContent || null);
+      }
       else if (sectionKey === 'guide') startHomeGuideEdit(section);
     }
     setWorkspaceTabState('home', sectionKey);
@@ -11350,7 +11386,10 @@ function renderHomeExperienceEditActions(state, section) {
       const editId = section.id || section.section_key || 'experience';
       const guard = requestStartEditSession({ type: 'home', id: editId });
       if (!guard.allowed) return;
-      if (!guard.same) startHomeExperienceEdit(section, state.data.gateContent || null);
+      if (!guard.same) {
+        clearExperienceCombinedPublishProgress('Đang chỉnh sửa Khu vực trải nghiệm. Hãy lưu và kiểm tra lại trước khi đưa lên website.');
+        startHomeExperienceEdit(section, state.data.gateContent || null);
+      }
       setWorkspaceTabState('home', 'experience');
       queueEditPanelFocus('home-experience', editId, 'eyebrow');
       renderAdminShell();
@@ -11662,6 +11701,7 @@ function canEditHomeExperience(state, section) {
 }
 
 async function handleSaveHomeExperienceDraft() {
+  clearExperienceCombinedPublishProgress('Đang lưu Khu vực trải nghiệm trong CMS. Website public chưa thay đổi.');
   const state = getState();
   const copy = ADMIN_COPY.contentViews.home.experienceEdit;
   const gateCopy = ADMIN_COPY.contentViews.gate.edit;
@@ -11679,6 +11719,7 @@ async function handleSaveHomeExperienceDraft() {
     ...prefixGateValidationMessages(gateValidation.warnings),
   };
   if (!experienceValidation.valid || !gateValidation.valid) {
+    clearExperienceCombinedPublishProgress('Nội dung chưa lưu vì còn lỗi. Hãy sửa lỗi rồi kiểm tra lại Khu vực trải nghiệm trước khi đưa lên website.');
     setHomeEditState({
       validationErrors,
       validationWarnings,
@@ -11708,6 +11749,7 @@ async function handleSaveHomeExperienceDraft() {
   );
 
   if (experienceResult.error) {
+    clearExperienceCombinedPublishProgress('Khu vực trải nghiệm chưa lưu thành công. Hãy xử lý lỗi rồi kiểm tra lại trước khi đưa lên website.');
     setHomeEditState({ saving: false, saveError: experienceResult.error, validationWarnings });
     renderAdminShell();
     return;
@@ -11724,6 +11766,7 @@ async function handleSaveHomeExperienceDraft() {
     await loadDashboardData(latestState.supabase);
     invalidateStaticCmsPublishVerification('Khu vực trải nghiệm đã được lưu một phần. Hãy kiểm tra lại trước khi đưa lên website.');
     invalidateScopedCmsPublishScope('home', 'Khu vực trải nghiệm đã thay đổi. Hãy kiểm tra lại Trang chủ trước khi đưa lên website.');
+    clearExperienceCombinedPublishProgress('Khu vực trải nghiệm đã lưu một phần. Hãy xử lý lỗi Cổng vào và kiểm tra lại trước khi đưa lên website.');
     setHomeEditState({
       saving: false,
       saveError: new Error(`Đã lưu Khu vực trải nghiệm nhưng chưa lưu được Cổng vào triển lãm: ${normalizeErrorMessage(gateResult.error)}. Hãy tải lại dữ liệu và kiểm tra trước khi publish.`),
@@ -11738,6 +11781,7 @@ async function handleSaveHomeExperienceDraft() {
   invalidateStaticCmsPublishVerification('Khu vực trải nghiệm và Cổng vào triển lãm đã được lưu lại. Hãy cập nhật bản chuẩn bị và kiểm tra lại trước khi đưa lên website.');
   invalidateScopedCmsPublishScope('home', 'Khu vực trải nghiệm đã thay đổi. Hãy kiểm tra lại Trang chủ trước khi đưa lên website.');
   invalidateScopedCmsPublishScope('gate', 'Cổng vào triển lãm đã thay đổi. Hãy kiểm tra lại Cổng vào trước khi đưa lên website.');
+  clearExperienceCombinedPublishProgress('Đã lưu Khu vực trải nghiệm và Cổng vào triển lãm trong CMS. Hãy kiểm tra lại Khu vực trải nghiệm trước khi đưa lên website.');
   setHomeEditState({
     isEditing: false,
     editingSectionId: null,
@@ -11747,7 +11791,7 @@ async function handleSaveHomeExperienceDraft() {
     dirty: false,
     saving: false,
     saveError: null,
-    saveSuccess: copy.combinedSuccess || 'Đã lưu Khu vực trải nghiệm và Cổng vào triển lãm. Website chưa thay đổi.',
+    saveSuccess: 'Đã lưu Khu vực trải nghiệm và Cổng vào triển lãm trong CMS. Hãy kiểm tra lại Khu vực trải nghiệm trước khi đưa lên website.',
     validationErrors: {},
     validationWarnings: {},
   });
