@@ -119,6 +119,15 @@ const homeMediaPickerState = {
   error: '',
 };
 
+const experienceCombinedPublishState = {
+  checking: false,
+  publishing: false,
+  status: '',
+  error: '',
+  lastStep: '',
+  success: '',
+};
+
 const mediaWorkspaceState = {
   selectedAssetId: '',
   inspectorTab: 'overview',
@@ -1205,18 +1214,17 @@ function renderGateScopedPublishShell() {
 function renderHomeExperiencePublishClarityPanel(options = {}) {
   const includeShells = options.includeShells === true;
   const panel = createElement('section', { className: 'cms-admin-panel cms-admin-view-panel cms-admin-experience-publish-clarity-panel' });
-  panel.appendChild(renderPanelTitle('Sau khi lưu, cần đưa 2 phần lên website', 'Lưu không tự công khai'));
+  panel.appendChild(renderPanelTitle('Sau khi lưu, đưa Khu vực trải nghiệm lên website', 'Lưu không tự công khai'));
   panel.appendChild(createElement('p', {
     className: 'cms-admin-operator-summary',
-    text: 'Form Khu vực trải nghiệm lưu dữ liệu vào CMS. Website public chưa đổi sau khi lưu; operator cần kiểm tra và đưa lên website đúng từng phạm vi bên dưới.',
+    text: 'Form Khu vực trải nghiệm lưu dữ liệu vào CMS. Website public chưa đổi sau khi lưu; hãy dùng thao tác tổng bên dưới để kiểm tra và đưa cả Trang chủ/Experience lẫn Cổng vào/Thẻ chọn không gian lên website.',
   }));
 
   const steps = createElement('ol', { className: 'cms-admin-operator-step-list cms-admin-experience-publish-step-list' });
   [
-    'Kiểm tra Trang chủ để đưa phần nội dung Experience lên website.',
-    'Đưa Trang chủ lên website sau khi kiểm tra đạt.',
-    'Kiểm tra Cổng vào để đưa Màn chào và Thẻ chọn không gian lên website.',
-    'Đưa Cổng vào lên website sau khi kiểm tra đạt.',
+    'Bấm “Kiểm tra Khu vực trải nghiệm” để kiểm tra lần lượt Trang chủ và Cổng vào.',
+    'Khi cả 2 phần kiểm tra đạt, bấm “Đưa Khu vực trải nghiệm lên website”.',
+    'CMS sẽ đưa Trang chủ lên trước, rồi đưa Cổng vào lên sau; bạn không cần bấm từng khu vực riêng.',
   ].forEach((text, index) => {
     const item = createElement('li');
     item.appendChild(createElement('span', { className: 'cms-admin-operator-step-number', text: String(index + 1) }));
@@ -1226,13 +1234,231 @@ function renderHomeExperiencePublishClarityPanel(options = {}) {
   panel.appendChild(steps);
 
   if (includeShells) {
-    const shells = createElement('div', { className: 'cms-admin-experience-publish-shell-grid' });
-    shells.appendChild(renderHomeScopedPublishShell());
-    shells.appendChild(renderGateScopedPublishShell());
-    panel.appendChild(shells);
+    panel.appendChild(renderExperienceCombinedPublishPanel());
   }
   return panel;
 }
+
+function resetExperienceCombinedPublishState(patch = {}) {
+  experienceCombinedPublishState.checking = patch.checking === true;
+  experienceCombinedPublishState.publishing = patch.publishing === true;
+  experienceCombinedPublishState.status = String(patch.status || '');
+  experienceCombinedPublishState.error = String(patch.error || '');
+  experienceCombinedPublishState.lastStep = String(patch.lastStep || '');
+  experienceCombinedPublishState.success = String(patch.success || '');
+}
+
+function patchExperienceCombinedPublishState(patch = {}) {
+  Object.assign(experienceCombinedPublishState, patch);
+}
+
+function getExperienceCombinedPublishModel(appState = getState()) {
+  const homeModel = getScopedCmsPublishPanelModel('home', appState) || {};
+  const gateModel = getScopedCmsPublishPanelModel('gate', appState) || {};
+  const busy = Boolean(
+    experienceCombinedPublishState.checking
+    || experienceCombinedPublishState.publishing
+    || homeModel.checking
+    || homeModel.publishing
+    || gateModel.checking
+    || gateModel.publishing
+  );
+  const canCheck = !busy && Boolean(homeModel.canCheck || gateModel.canCheck);
+  const canPublish = !busy && Boolean(homeModel.canPublish && gateModel.canPublish);
+  const checkedReady = Boolean(homeModel.canPublish && gateModel.canPublish);
+  const status = experienceCombinedPublishState.status
+    || (checkedReady
+      ? 'Đã kiểm tra đủ 2 phần, có thể đưa Khu vực trải nghiệm lên website.'
+      : 'Chưa kiểm tra đủ 2 phần. Bấm kiểm tra tổng trước khi đưa lên website.');
+  const error = experienceCombinedPublishState.error || homeModel.errorMessage || gateModel.errorMessage || '';
+  return {
+    homeModel,
+    gateModel,
+    busy,
+    canCheck,
+    canPublish,
+    checkedReady,
+    status,
+    error,
+    success: experienceCombinedPublishState.success || '',
+    checking: Boolean(experienceCombinedPublishState.checking),
+    publishing: Boolean(experienceCombinedPublishState.publishing),
+  };
+}
+
+function renderExperienceCombinedPublishPanel() {
+  const model = getExperienceCombinedPublishModel(getState());
+  const panel = createElement('section', {
+    className: 'cms-admin-panel cms-admin-view-panel cms-admin-scoped-publish-shell cms-admin-experience-combined-publish-panel',
+    dataset: { cmsScopedPublishShell: 'experience-combined' },
+  });
+  const header = createElement('header', { className: 'cms-admin-scoped-publish-header' });
+  const copy = createElement('div');
+  copy.appendChild(createElement('span', { className: 'cms-admin-eyebrow', text: 'CÔNG KHAI THEO KHU VỰC' }));
+  copy.appendChild(createElement('h3', { text: 'Đưa Khu vực trải nghiệm lên website' }));
+  copy.appendChild(createElement('p', {
+    className: 'cms-admin-compact-copy',
+    text: 'Khu vực này gồm 2 phần kỹ thuật: Trang chủ / Experience và Cổng vào / Thẻ chọn không gian. CMS sẽ kiểm tra và đưa cả 2 phần lên website theo đúng thứ tự; bạn không cần bấm từng khu vực riêng.',
+  }));
+  const badges = createElement('div', { className: 'cms-admin-scoped-publish-badges' });
+  badges.appendChild(renderBadge(model.checkedReady ? 'Đủ điều kiện publish' : 'Cần kiểm tra tổng', model.checkedReady ? 'success' : 'warning'));
+  badges.appendChild(renderBadge('Không tự công khai khi lưu', 'neutral'));
+  appendChildren(header, [copy, badges]);
+  panel.appendChild(header);
+
+  panel.appendChild(renderExperienceCombinedPublishScopeStatus('Trang chủ / Experience', model.homeModel));
+  panel.appendChild(renderExperienceCombinedPublishScopeStatus('Cổng vào / Thẻ chọn không gian', model.gateModel));
+
+  if (model.error) panel.appendChild(renderErrorBox(model.error, 'Không thể hoàn tất thao tác tổng'));
+  if (model.success) panel.appendChild(renderNoticeBox(model.success, 'success'));
+  if (model.status) panel.appendChild(renderCompactNotice(model.status));
+
+  const action = createElement('div', { className: 'cms-admin-scoped-publish-action-row cms-admin-experience-combined-publish-actions' });
+  const checkButton = createElement('button', {
+    className: 'cms-admin-button cms-admin-button-secondary',
+    text: model.checking ? 'Đang kiểm tra Khu vực trải nghiệm...' : 'Kiểm tra Khu vực trải nghiệm',
+    type: 'button',
+  });
+  checkButton.disabled = !model.canCheck;
+  checkButton.addEventListener('click', () => handleCheckExperienceCombinedPublish());
+
+  const publishButton = createElement('button', {
+    className: 'cms-admin-button cms-admin-button-primary',
+    text: model.publishing ? 'Đang đưa Khu vực trải nghiệm lên website...' : 'Đưa Khu vực trải nghiệm lên website',
+    type: 'button',
+  });
+  publishButton.disabled = !model.canPublish;
+  publishButton.addEventListener('click', () => handlePublishExperienceCombinedPublish());
+
+  action.appendChild(checkButton);
+  action.appendChild(publishButton);
+  action.appendChild(createElement('p', {
+    className: 'cms-admin-help-text',
+    text: model.canPublish
+      ? 'Cả Trang chủ và Cổng vào đã kiểm tra đạt. Bạn có thể đưa toàn bộ Khu vực trải nghiệm lên website.'
+      : 'Cần kiểm tra đạt cả Trang chủ và Cổng vào trước khi đưa Khu vực trải nghiệm lên website.',
+  }));
+  panel.appendChild(action);
+  panel.appendChild(createElement('p', {
+    className: 'cms-admin-inline-note',
+    text: 'Không có auto-publish: CMS chỉ gọi kiểm tra/publish khi bạn bấm nút trong panel này.',
+  }));
+  return panel;
+}
+
+function renderExperienceCombinedPublishScopeStatus(label, model = {}) {
+  const row = createElement('div', { className: 'cms-admin-scoped-publish-includes cms-admin-experience-combined-scope-status' });
+  row.appendChild(createElement('strong', { text: label }));
+  const statusText = model.errorMessage
+    ? `Lỗi: ${model.errorMessage}`
+    : model.candidateHash
+      ? 'Kiểm tra đạt, đã có mã xác nhận.'
+      : (model.statusLabel || 'Chưa kiểm tra');
+  row.appendChild(renderBadge(model.statusLabel || 'Chưa kiểm tra', model.statusTone || 'neutral'));
+  row.appendChild(createElement('p', { className: 'cms-admin-help-text', text: statusText }));
+  return row;
+}
+
+async function handleCheckExperienceCombinedPublish() {
+  resetExperienceCombinedPublishState({ checking: true, status: 'Đang kiểm tra Trang chủ...', lastStep: 'home-check' });
+  renderAdminShell();
+  await handleCheckScopedCmsPublish('home', { onRerender: renderAdminShell });
+  let model = getExperienceCombinedPublishModel(getState());
+  if (!model.homeModel?.canPublish) {
+    resetExperienceCombinedPublishState({
+      error: model.homeModel?.errorMessage || model.homeModel?.publishBlockedReason || 'Trang chủ chưa kiểm tra đạt. Hãy xử lý lỗi Trang chủ trước khi kiểm tra Cổng vào.',
+      status: 'Kiểm tra Khu vực trải nghiệm chưa đạt ở bước Trang chủ.',
+      lastStep: 'home-check-failed',
+    });
+    renderAdminShell();
+    return;
+  }
+
+  patchExperienceCombinedPublishState({ status: 'Đang kiểm tra Cổng vào...', lastStep: 'gate-check' });
+  renderAdminShell();
+  await handleCheckScopedCmsPublish('gate', { onRerender: renderAdminShell });
+  model = getExperienceCombinedPublishModel(getState());
+  if (!model.gateModel?.canPublish) {
+    resetExperienceCombinedPublishState({
+      error: model.gateModel?.errorMessage || model.gateModel?.publishBlockedReason || 'Cổng vào chưa kiểm tra đạt. Hãy xử lý lỗi Cổng vào trước khi đưa lên website.',
+      status: 'Kiểm tra Khu vực trải nghiệm chưa đạt ở bước Cổng vào.',
+      lastStep: 'gate-check-failed',
+    });
+    renderAdminShell();
+    return;
+  }
+
+  resetExperienceCombinedPublishState({
+    success: 'Đã kiểm tra đủ 2 phần, có thể đưa Khu vực trải nghiệm lên website.',
+    status: 'Đã kiểm tra đủ 2 phần, có thể đưa Khu vực trải nghiệm lên website.',
+    lastStep: 'check-complete',
+  });
+  renderAdminShell();
+}
+
+async function handlePublishExperienceCombinedPublish() {
+  let model = getExperienceCombinedPublishModel(getState());
+  if (!model.homeModel?.canPublish || !model.gateModel?.canPublish) {
+    resetExperienceCombinedPublishState({
+      error: 'Cần kiểm tra đạt cả Trang chủ và Cổng vào trước khi đưa Khu vực trải nghiệm lên website.',
+      status: 'Chưa đủ điều kiện publish tổng.',
+      lastStep: 'publish-blocked',
+    });
+    renderAdminShell();
+    return;
+  }
+  if (!window.confirm('Thao tác này sẽ đưa cả phần Trang chủ/Experience và Cổng vào/Thẻ chọn không gian lên website. Tiếp tục?')) return;
+
+  resetExperienceCombinedPublishState({ publishing: true, status: 'Đang đưa Trang chủ lên website...', lastStep: 'home-publish' });
+  renderAdminShell();
+  await handlePublishScopedCmsPublish('home', { onRerender: renderAdminShell });
+  model = getExperienceCombinedPublishModel(getState());
+  if (model.homeModel?.errorMessage || model.homeModel?.state?.stale || model.homeModel?.candidateHash) {
+    resetExperienceCombinedPublishState({
+      error: model.homeModel?.errorMessage || 'Trang chủ chưa publish thành công. Cổng vào chưa được publish.',
+      status: 'Dừng publish tổng ở bước Trang chủ.',
+      lastStep: 'home-publish-failed',
+    });
+    renderAdminShell();
+    return;
+  }
+
+  patchExperienceCombinedPublishState({ status: 'Đang kiểm tra lại Cổng vào sau khi Trang chủ đã đổi...', lastStep: 'gate-recheck-after-home-publish' });
+  renderAdminShell();
+  await handleCheckScopedCmsPublish('gate', { onRerender: renderAdminShell });
+  model = getExperienceCombinedPublishModel(getState());
+  if (!model.gateModel?.canPublish) {
+    resetExperienceCombinedPublishState({
+      error: model.gateModel?.errorMessage || model.gateModel?.publishBlockedReason || 'Trang chủ đã publish nhưng Cổng vào chưa kiểm tra lại thành công sau khi Trang chủ đổi.',
+      status: 'Trang chủ đã publish nhưng Cổng vào chưa đủ điều kiện publish. Hãy kiểm tra lỗi Cổng vào rồi chạy lại thao tác tổng.',
+      lastStep: 'gate-recheck-after-home-publish-failed',
+    });
+    renderAdminShell();
+    return;
+  }
+
+  patchExperienceCombinedPublishState({ status: 'Đang đưa Cổng vào lên website...', lastStep: 'gate-publish' });
+  renderAdminShell();
+  await handlePublishScopedCmsPublish('gate', { onRerender: renderAdminShell });
+  model = getExperienceCombinedPublishModel(getState());
+  if (model.gateModel?.errorMessage || model.gateModel?.state?.stale || model.gateModel?.candidateHash) {
+    resetExperienceCombinedPublishState({
+      error: model.gateModel?.errorMessage || 'Trang chủ đã publish nhưng Cổng vào chưa publish thành công.',
+      status: 'Trang chủ đã publish nhưng Cổng vào chưa publish thành công. Hãy kiểm tra lại Cổng vào rồi chạy lại thao tác tổng.',
+      lastStep: 'gate-publish-failed',
+    });
+    renderAdminShell();
+    return;
+  }
+
+  resetExperienceCombinedPublishState({
+    success: 'Đã đưa Khu vực trải nghiệm lên website.',
+    status: 'Đã đưa Khu vực trải nghiệm lên website.',
+    lastStep: 'publish-complete',
+  });
+  renderAdminShell();
+}
+
 
 function renderHomeExperienceSavePublishClarityBlock() {
   const block = createElement('section', { className: 'cms-admin-home-form-section cms-admin-home-experience-publish-note' });
